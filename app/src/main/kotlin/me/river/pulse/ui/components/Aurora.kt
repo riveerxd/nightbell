@@ -59,9 +59,11 @@ fun AuroraBackground(
 
     val blobs = remember(tint, secondary) {
         listOf(
-            Blob(tint, 0.18f, 0.12f, 0.62f, 0.04f, 0.03f, 0f, 0.18f),
-            Blob(PulseColors.Indigo, 0.86f, 0.24f, 0.58f, 0.03f, 0.04f, 1.9f, 0.13f),
-            Blob(PulseColors.Aqua, 0.30f, 0.78f, 0.70f, 0.04f, 0.03f, 3.4f, 0.10f),
+            // Kept faint on purpose: the backdrop should suggest depth, not
+            // announce itself. Anything brighter and every screen glows.
+            Blob(tint, 0.18f, 0.12f, 0.62f, 0.04f, 0.03f, 0f, 0.10f),
+            Blob(PulseColors.Indigo, 0.86f, 0.24f, 0.58f, 0.03f, 0.04f, 1.9f, 0.075f),
+            Blob(PulseColors.Aqua, 0.30f, 0.78f, 0.70f, 0.04f, 0.03f, 3.4f, 0.055f),
         )
     }
     val grain = remember {

@@ -75,6 +75,7 @@ import me.river.pulse.ui.components.PullToRefreshLayout
 import me.river.pulse.ui.components.PulseButton
 import me.river.pulse.ui.components.Sparkline
 import me.river.pulse.ui.components.StaggeredEntrance
+import me.river.pulse.ui.components.rememberEntranceLog
 import me.river.pulse.ui.components.StatusOrb
 import me.river.pulse.ui.components.StatusPill
 import me.river.pulse.ui.components.UptimeRing
@@ -82,10 +83,10 @@ import me.river.pulse.ui.components.formatLatency
 import me.river.pulse.ui.components.formatRelative
 import me.river.pulse.ui.icons.PulseIcons
 import me.river.pulse.ui.rememberDashboardViewModel
-import me.river.pulse.ui.theme.LocalPulseMotion
 import me.river.pulse.ui.theme.PulseColors
 import me.river.pulse.ui.theme.accentFor
 import me.river.pulse.ui.theme.healthColor
+import me.river.pulse.ui.theme.healthRim
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -109,6 +110,7 @@ fun DashboardScreen(
     val cards by viewModel.cards.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    val entrance = rememberEntranceLog()
 
     val toast = viewModel.toast
     if (toast != null) {
@@ -148,7 +150,7 @@ fun DashboardScreen(
 
                 if (cards.isNotEmpty()) {
                     item(key = "overview") {
-                        StaggeredEntrance(index = 0, key = cards.size) {
+                        StaggeredEntrance(index = 0, key = "overview", log = entrance) {
                             OverviewCard(
                                 cards = cards,
                                 refreshing = viewModel.refreshing,
@@ -177,7 +179,7 @@ fun DashboardScreen(
                 } else {
                     items(cards, key = { it.monitor.id }) { card ->
                         val index = cards.indexOfFirst { it.monitor.id == card.monitor.id }
-                        StaggeredEntrance(index = index + 1, key = card.monitor.id) {
+                        StaggeredEntrance(index = index + 1, key = card.monitor.id, log = entrance) {
                             MonitorRowCard(
                                 card = card,
                                 onOpen = { onOpenMonitor(card.monitor.id) },
@@ -306,7 +308,7 @@ private fun OverviewCard(
     val incidents = cards.count { it.runtime.health == Health.DOWN }
     val checked = cards.count { it.runtime.lastCheckedAt > 0 }
 
-    GlassCard(accent = if (incidents > 0) PulseColors.Rose else PulseColors.Mint) {
+    GlassCard(accent = if (incidents > 0) PulseColors.Rose else Color.Transparent) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             UptimeRing(
                 percent = uptime,
@@ -371,7 +373,7 @@ private fun MonitorRowCard(
     val statusColor = if (card.checking) PulseColors.Aqua else healthColor(health)
 
     GlassCard(
-        accent = statusColor,
+        accent = healthRim(health),
         onClick = onOpen,
         modifier = Modifier
             .fillMaxWidth()
@@ -522,12 +524,11 @@ private fun me.river.pulse.domain.MonitorRuntime.ok(enabled: Boolean): Boolean =
 // ------------------------------------------------------------------------ fab
 
 /**
- * The plus button: an orbiting halo, a spring-loaded press, and a quarter-turn
- * morph as it hands off to the setup flow.
+ * The plus button: a spring-loaded press and a quarter-turn morph as it hands
+ * off to the setup flow.
  */
 @Composable
 fun MorphingFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val motion = LocalPulseMotion.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     var launching by androidx.compose.runtime.remember {
@@ -548,13 +549,6 @@ fun MorphingFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
         animationSpec = spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium),
         label = "fabRotate",
     )
-    val halo by rememberLoopingFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        durationMillis = 2_600,
-        label = "halo",
-    )
-
     androidx.compose.runtime.LaunchedEffect(launching) {
         if (launching) {
             delay(140)
@@ -565,28 +559,19 @@ fun MorphingFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
     }
 
     Box(modifier.size(96.dp), contentAlignment = Alignment.Center) {
+        // One faint pool of light so the button doesn't float on nothing. The
+        // pulsing halo that used to live here read as decoration, not affordance.
         Canvas(Modifier.fillMaxSize()) {
             val center = Offset(size.width / 2f, size.height / 2f)
             drawCircle(
                 brush = Brush.radialGradient(
-                    listOf(PulseColors.Aqua.copy(alpha = 0.28f), Color.Transparent),
+                    listOf(PulseColors.Aqua.copy(alpha = 0.10f), Color.Transparent),
                     center = center,
                     radius = size.minDimension / 2f,
                 ),
                 radius = size.minDimension / 2f,
                 center = center,
             )
-            if (motion.enabled) {
-                listOf(0f, 0.5f).forEach { phase ->
-                    val p = (halo + phase) % 1f
-                    drawCircle(
-                        color = PulseColors.Aqua.copy(alpha = (1f - p) * 0.32f),
-                        radius = 30.dp.toPx() + p * 18.dp.toPx(),
-                        center = center,
-                        style = Stroke(width = 1.4.dp.toPx()),
-                    )
-                }
-            }
         }
         Box(
             Modifier

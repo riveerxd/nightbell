@@ -10,19 +10,20 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,7 +34,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -45,12 +47,11 @@ import me.river.pulse.data.Pulse
 import me.river.pulse.ui.components.AuroraBackground
 import me.river.pulse.ui.dashboard.DashboardScreen
 import me.river.pulse.ui.detail.DetailScreen
-import me.river.pulse.ui.icons.PulseIcons
 import me.river.pulse.ui.settings.SettingsScreen
 import me.river.pulse.ui.setup.SetupScreen
 import me.river.pulse.ui.theme.PulseColors
 import me.river.pulse.ui.theme.PulseTheme
-import me.river.pulse.ui.theme.glass
+import me.river.pulse.ui.theme.softShadow
 import kotlinx.coroutines.delay
 
 object Routes {
@@ -169,7 +170,14 @@ private fun PulseNavHost(navController: NavHostController, onToast: (String) -> 
     }
 }
 
-/** Glass toast that slides in from the top and fades itself out. */
+/**
+ * Confirmation capsule. Slides down from the top and fades itself out.
+ *
+ * Sized to its text rather than to the screen, and parked just under the
+ * wordmark: a transient "saved" message has no business covering the app's name
+ * or its "N systems operational" verdict, which is the one line on the screen
+ * someone opened Pulse to read.
+ */
 @Composable
 private fun GlassToast(
     message: String?,
@@ -183,45 +191,42 @@ private fun GlassToast(
         }
     }
     val topInset = WindowInsets.systemBars.asPaddingValues().calculateTopPadding()
+    val shape = RoundedCornerShape(100)
     AnimatedVisibility(
         visible = message != null,
         enter = slideInVertically(tween(280)) { -it } + fadeIn(tween(200)),
         exit = slideOutVertically(tween(220)) { -it } + fadeOut(tween(180)),
         modifier = modifier
             .zIndex(Float.MAX_VALUE)
-            .padding(top = topInset + 10.dp, start = 20.dp, end = 20.dp),
+            .padding(top = topInset + TOAST_TOP_GAP, start = 20.dp, end = 20.dp),
     ) {
         Row(
             Modifier
-                .fillMaxWidth()
-                .shadow(18.dp, RoundedCornerShape(18.dp), clip = false)
-                .glass(
-                    RoundedCornerShape(18.dp),
-                    corner = 18.dp,
-                    fill = PulseColors.GlassFillStrong,
-                    fillEnd = PulseColors.Ink,
-                    strokeTop = PulseColors.Aqua,
-                    strokeBottom = PulseColors.GlassStroke,
-                    elevation = 24.dp,
-                    glow = PulseColors.Aqua,
-                    specular = false,
-                )
-                .padding(horizontal = 16.dp, vertical = 13.dp),
+                // Deliberately heavier than a card's shadow. The capsule floats
+                // over lighter glass surfaces, and without a real pool of dark
+                // underneath it reads as part of whatever it happens to cover.
+                .softShadow(corner = 100.dp, radius = 26.dp, strength = 2.4f)
+                .clip(shape)
+                .background(PulseColors.ToastFill)
+                .border(1.dp, Color.White.copy(alpha = 0.14f), shape)
+                .padding(start = 15.dp, end = 20.dp, top = 11.dp, bottom = 11.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Start,
         ) {
-            Icon(
-                imageVector = PulseIcons.Sparkle,
-                contentDescription = null,
-                tint = PulseColors.Aqua,
-                modifier = Modifier.size(16.dp),
+            Box(
+                Modifier
+                    .size(7.dp)
+                    .clip(CircleShape)
+                    .background(PulseColors.Mint),
             )
             Spacer(Modifier.width(11.dp))
             Text(
                 text = message.orEmpty(),
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.titleMedium,
                 color = PulseColors.TextPrimary,
             )
         }
     }
 }
+
+/** Clears the wordmark and the status line beneath it. */
+private val TOAST_TOP_GAP = 66.dp

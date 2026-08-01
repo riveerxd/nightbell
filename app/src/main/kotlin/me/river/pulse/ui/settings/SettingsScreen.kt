@@ -33,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -46,6 +47,7 @@ import me.river.pulse.ui.components.IconBadge
 import me.river.pulse.ui.components.PulseButton
 import me.river.pulse.ui.components.SectionHeader
 import me.river.pulse.ui.components.StaggeredEntrance
+import me.river.pulse.ui.components.rememberEntranceLog
 import me.river.pulse.ui.components.StepperRow
 import me.river.pulse.ui.components.ToggleRow
 import me.river.pulse.ui.icons.PulseIcons
@@ -61,6 +63,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
     var notificationsAllowed by remember {
         mutableStateOf(Pulse.install(context).alerts.hasNotificationPermission())
     }
+    val entrance = rememberEntranceLog()
 
     val toast = viewModel.toast
     LaunchedEffect(toast) {
@@ -143,8 +146,8 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         }
 
         item(key = "master") {
-            StaggeredEntrance(index = 0) {
-                GlassCard(accent = if (settings.masterAlertsEnabled) PulseColors.Aqua else PulseColors.Rose) {
+            StaggeredEntrance(index = 0, key = "master", log = entrance) {
+                GlassCard(accent = if (settings.masterAlertsEnabled) Color.Transparent else PulseColors.Rose) {
                     ToggleRow(
                         title = "All alerts",
                         subtitle = if (settings.masterAlertsEnabled) {
@@ -164,7 +167,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         }
 
         item(key = "defaults") {
-            StaggeredEntrance(index = 1) {
+            StaggeredEntrance(index = 1, key = "defaults", log = entrance) {
                 GlassCard {
                     SectionHeader("Default alert policy", icon = PulseIcons.Shield, accent = PulseColors.Aqua)
                     Text(
@@ -188,7 +191,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         }
 
         item(key = "scheduling") {
-            StaggeredEntrance(index = 2) {
+            StaggeredEntrance(index = 2, key = "scheduling", log = entrance) {
                 GlassCard {
                     SectionHeader("Background checks", icon = PulseIcons.Radar, accent = PulseColors.Violet)
                     ToggleRow(
@@ -240,7 +243,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         }
 
         item(key = "motion") {
-            StaggeredEntrance(index = 3) {
+            StaggeredEntrance(index = 3, key = "motion", log = entrance) {
                 GlassCard {
                     SectionHeader("Motion", icon = PulseIcons.Sparkle, accent = PulseColors.Mint)
                     Text(
@@ -269,7 +272,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         }
 
         item(key = "about") {
-            StaggeredEntrance(index = 4) {
+            StaggeredEntrance(index = 4, key = "about", log = entrance) {
                 GlassCard {
                     SectionHeader("About", icon = PulseIcons.Info, accent = PulseColors.Sky)
                     AboutRow("Version", "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")

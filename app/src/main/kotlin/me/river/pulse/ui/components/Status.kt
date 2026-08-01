@@ -150,30 +150,30 @@ fun StatusOrb(
         val center = Offset(this.size.width / 2f, this.size.height / 2f)
         val core = size.toPx() / 2f
 
-        // Bloom
+        // A tight halo, just enough to lift the dot off the card.
         drawCircle(
             brush = Brush.radialGradient(
-                colors = listOf(color.copy(alpha = 0.42f), Color.Transparent),
+                colors = listOf(color.copy(alpha = 0.20f), Color.Transparent),
                 center = center,
-                radius = core * 3.6f,
+                radius = core * 2.4f,
             ),
-            radius = core * 3.6f,
+            radius = core * 2.4f,
             center = center,
         )
         if (alive && motion.enabled) {
             listOf(0f, 0.5f).forEach { phase ->
                 val p = (ping + phase) % 1f
                 drawCircle(
-                    color = color.copy(alpha = (1f - p) * 0.5f),
-                    radius = core * (1f + p * 2.4f),
+                    color = color.copy(alpha = (1f - p) * 0.26f),
+                    radius = core * (1f + p * 2.0f),
                     center = center,
-                    style = Stroke(width = 1.4.dp.toPx()),
+                    style = Stroke(width = 1.2.dp.toPx()),
                 )
             }
         }
         drawCircle(color = color, radius = core, center = center)
         drawCircle(
-            color = Color.White.copy(alpha = 0.55f),
+            color = Color.White.copy(alpha = 0.40f),
             radius = core * 0.4f,
             center = center.copy(x = center.x - core * 0.25f, y = center.y - core * 0.25f),
         )
@@ -363,8 +363,10 @@ fun UptimeRing(
                 style = Stroke(width = stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round),
             )
             drawArc(
+                // Stays in one hue: a green dial that fades through brand blue
+                // reads as a gradient, not as "93% up".
                 brush = Brush.sweepGradient(
-                    listOf(accent.copy(alpha = 0.4f), accent, PulseColors.Aqua, accent),
+                    listOf(accent.copy(alpha = 0.45f), accent, accent),
                 ),
                 startAngle = 135f,
                 sweepAngle = 270f * (animated / 100f),
@@ -460,7 +462,7 @@ fun EmptyState(
                 val center = Offset(size.width / 2f, size.height / 2f)
                 drawCircle(
                     brush = Brush.radialGradient(
-                        listOf(accent.copy(alpha = 0.22f), Color.Transparent),
+                        listOf(accent.copy(alpha = 0.13f), Color.Transparent),
                         center = center,
                         radius = size.minDimension / 2f,
                     ),
@@ -481,7 +483,7 @@ fun EmptyState(
                 rotate(spin, center) {
                     drawArc(
                         brush = Brush.sweepGradient(
-                            listOf(Color.Transparent, accent.copy(alpha = 0.55f), Color.Transparent),
+                            listOf(Color.Transparent, accent.copy(alpha = 0.30f), Color.Transparent),
                             center = center,
                         ),
                         startAngle = 0f,

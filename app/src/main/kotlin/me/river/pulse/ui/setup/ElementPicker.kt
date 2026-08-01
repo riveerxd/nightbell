@@ -352,7 +352,7 @@ private fun PickerContent(
                         Modifier
                             .align(Alignment.TopCenter)
                             .padding(16.dp)
-                            .glass(RoundedCornerShape(16.dp), corner = 16.dp, glow = PulseColors.Rose)
+                            .glass(RoundedCornerShape(16.dp), corner = 16.dp, accent = PulseColors.Rose)
                             .padding(14.dp),
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -405,8 +405,7 @@ private fun PickerBottomBar(
             .glass(
                 shape = RoundedCornerShape(topStart = PulseRadii.sheet, topEnd = PulseRadii.sheet),
                 corner = PulseRadii.sheet,
-                elevation = 28.dp,
-                glow = PulseColors.Indigo,
+                elevation = 16.dp,
             )
             .padding(start = 18.dp, end = 18.dp, top = 16.dp)
             .padding(bottom = bottomInset + 16.dp),

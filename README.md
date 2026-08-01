@@ -78,14 +78,27 @@ functions, which is why it can be exhaustively unit-tested without a device.
 **Design notes**
 
 - `Modifier.glass()` composes the house style: translucent pane, light-catching
-  top edge, diagonal specular sweep, and a hand-drawn accent bloom.
+  top edge, diagonal specular sweep, and an optional accent rim.
+- **Colour is reserved for health.** Chrome is one brand blue; red, amber and
+  green only ever mean down, degraded and up. `healthRim()` tints a card's edge
+  for the states worth interrupting someone for and returns transparent for the
+  rest — if every card is outlined, the broken one stops standing out.
 - `softShadow()` replaces `Modifier.shadow`. Platform elevation shadows are
   rasterised by the GPU driver and degenerate into a hard dark rectangle behind
   translucent surfaces on software renderers. The drawn version renders
-  identically everywhere and can take the card's accent colour.
+  identically everywhere. It stays black: tinting a drop shadow with the card's
+  accent is what turns a dashboard into a wall of neon.
 - `rememberLoopingFloat()` drives every looping animation and genuinely *stops*
   at reduced motion instead of speeding up — better for battery, and it lets the
   Compose frame clock go idle.
+- **Entrances play once.** `StaggeredEntrance` records itself in a screen-scoped
+  `EntranceLog`, because a `LazyColumn` discards an item's composition when it
+  scrolls out of view — state kept inside the item resets, and the animation
+  fires again on every pass.
+- Confirmations are a **capsule sized to its text**, parked below the wordmark
+  and carrying a genuine drop shadow. A full-width banner at the top edge covers
+  the app's name and its "N systems operational" verdict, which is the one line
+  people open Pulse to read.
 - Icons are hand-authored `ImageVector`s on a 24-unit grid with 1.7px round
   strokes, so the whole app shares one optical weight and the APK carries only
   the glyphs it uses.

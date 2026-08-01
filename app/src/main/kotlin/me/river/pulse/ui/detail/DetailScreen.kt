@@ -55,6 +55,7 @@ import me.river.pulse.ui.components.MicroTag
 import me.river.pulse.ui.components.PulseButton
 import me.river.pulse.ui.components.SectionHeader
 import me.river.pulse.ui.components.StaggeredEntrance
+import me.river.pulse.ui.components.rememberEntranceLog
 import me.river.pulse.ui.components.StatusOrb
 import me.river.pulse.ui.components.UptimeRing
 import me.river.pulse.ui.components.formatLatency
@@ -65,6 +66,7 @@ import me.river.pulse.ui.rememberDetailViewModel
 import me.river.pulse.ui.theme.PulseColors
 import me.river.pulse.ui.theme.accentFor
 import me.river.pulse.ui.theme.healthColor
+import me.river.pulse.ui.theme.healthRim
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -80,6 +82,7 @@ fun DetailScreen(
     val viewModel = rememberDetailViewModel(monitorId)
     val card by viewModel.card.collectAsStateWithLifecycle()
     var confirmDelete by remember { mutableStateOf(false) }
+    val entrance = rememberEntranceLog()
 
     val toast = viewModel.toast
     if (toast != null) {
@@ -159,13 +162,13 @@ fun DetailScreen(
         }
 
         item(key = "hero") {
-            StaggeredEntrance(index = 0, key = monitor.id) {
+            StaggeredEntrance(index = 0, key = "hero-${monitor.id}", log = entrance) {
                 HeroCard(monitor, runtime, health, current.checking, accent, accentEnd)
             }
         }
 
         item(key = "actions") {
-            StaggeredEntrance(index = 1, key = monitor.id) {
+            StaggeredEntrance(index = 1, key = "actions-${monitor.id}", log = entrance) {
                 ActionsRow(
                     enabled = monitor.enabled,
                     busy = viewModel.busy || current.checking,
@@ -181,8 +184,8 @@ fun DetailScreen(
 
         if (runtime.samples.isNotEmpty()) {
             item(key = "chart") {
-                StaggeredEntrance(index = 2, key = monitor.id) {
-                    GlassCard(accent = accentEnd) {
+                StaggeredEntrance(index = 2, key = "chart-${monitor.id}", log = entrance) {
+                    GlassCard {
                         SectionHeader("Response time", icon = PulseIcons.Chart, accent = accentEnd)
                         LatencyBars(
                             samples = runtime.samples.takeLast(40),
@@ -216,7 +219,7 @@ fun DetailScreen(
         }
 
         item(key = "config") {
-            StaggeredEntrance(index = 3, key = monitor.id) {
+            StaggeredEntrance(index = 3, key = "config-${monitor.id}", log = entrance) {
                 ConfigCard(monitor, accent)
             }
         }
@@ -312,7 +315,7 @@ private fun HeroCard(
     accent: Color,
     accentEnd: Color,
 ) {
-    GlassCard(accent = healthColor(health), contentPadding = 20.dp) {
+    GlassCard(accent = healthRim(health), contentPadding = 20.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             UptimeRing(
                 percent = runtime.uptimePercent,

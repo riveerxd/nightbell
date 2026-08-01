@@ -18,15 +18,13 @@ smoke-tested on an emulator; 100 automated tests pass (68 JVM + 32 on-device).
 SHA-256:
 
 ```
-e6288107f4feb3c04fb600d843a763fd4b6ce8d77f405e1d92713153f3082e0d  Pulse-1.0.0-release.apk
-2b2344cc1681d515f9bba603c410bda36346cc78e27d089c7e9a1f352f34fae2  Pulse-1.0.0-debug.apk
+2129ae2b0c00e65fb1414e035e7e61677d1b3a23fcd668c79c257f7822f1fa23  Pulse-1.0.0-release.apk
+3efb74fd54afaa4dd73bedc1eb475f3b9d9ae1ddaf52b819a3732e1189c205a8  Pulse-1.0.0-debug.apk
 ```
 
-**Download link (release APK, ~72 h retention):**
-<https://litter.catbox.moe/uv5d8b.apk> — verified by re-downloading; SHA-256
-matches the local file exactly.
-Secondary (browser interstitial, not a direct link):
-<https://tmpfiles.org/w4wPRhcCcxRV/pulse-1.0.0-release.apk>
+Rebuilt after the colour/glow/toast pass. The upload links from the first build
+have expired and pointed at the pre-fix APK — re-upload from `artifacts/` if a
+download link is needed again.
 
 Both artifacts come from a `./gradlew clean` rebuild and were re-verified after
 it: the debug APK re-ran all 32 on-device tests green, and the release APK was
@@ -112,6 +110,33 @@ done
    sparkline rendering as a lone dot, and a `—` placeholder leaking into the
    picker's "currently watching" line.
 
+## Design pass — colour, glow, motion, toast
+
+A later pass fixed four things. All 68 JVM and 32 on-device tests still pass;
+the screenshots in `artifacts/screenshots/` were re-captured from the result.
+
+1. **Health colours had been flattened to monochrome.** `PulseColors.Rose` and
+   `Mint` were both `#FFFFFF` and `Amber` was `#EDEDED`, so `healthColor(DOWN)`
+   returned white — a dead monitor rendered identically to a healthy one.
+   Restored as real semantic colours. Everything routes through those constants,
+   so one edit fixed orbs, pills, sparkline failure markers, latency bars, the
+   history strip, error banners and the Danger button.
+2. **The bloom was accent-tinted.** `softShadow()` stacked translucent rounded
+   rects in the *card's* colour, giving every surface a neon halo. It is black
+   now, and status colour moved to a 1 dp rim via `healthRim()` — applied only
+   to DOWN and DEGRADED, so the broken card is the only one that stands out.
+   The FAB's pulsing halo, the orb bloom and the aurora were all dialled back.
+3. **Entrance animations replayed on every scroll.** See the `EntranceLog` note
+   under Gotchas.
+4. **The toast was a full-width banner** that covered the wordmark, led with a
+   sparkle icon and glowed. It is now a text-width capsule below the header with
+   a status dot, an opaque fill and a real drop shadow.
+
+Known rough edge: all eight toast messages share one style, so the warning
+("Notifications are blocked — enable them in system settings") shows the same
+green dot as the confirmations. Needs a tone parameter threaded through
+`PulseViewModels.toast`.
+
 ## What is *not* done
 
 - No CI config, no Play Store metadata, no ProGuard/R8 shrinking
@@ -120,7 +145,7 @@ done
   present in `proguard-rules.pro`).
 - No baseline profile tuning beyond what AGP generated.
 - Screenshots were captured with motion intensity 0 (see below) — the animated
-  aurora, sonar rings and FAB halo are not visible in stills.
+  aurora drift and sonar rings are not visible in stills.
 
 ## Gotchas for the next session
 
@@ -140,6 +165,19 @@ done
   header button that has been recycled.
 - **`Assertions` and `AlertDecider` are pure** — put new decision logic there,
   not in `CheckEngine`, so it stays unit-testable.
+- **`StaggeredEntrance` needs a unique key and the screen's `EntranceLog`.**
+  Reusing a key across call sites makes those items share one "already played"
+  entry; dropping the log brings back the bug where every item re-animates each
+  time it scrolls back into view. The suites run at `motionIntensity = 0`, so
+  they will *not* catch a regression here — check it by hand.
+- **Colour means health, nothing else.** `healthColor()` for content,
+  `healthRim()` for card edges (transparent unless DOWN/DEGRADED). Don't reach
+  for `Rose`/`Mint`/`Amber` as decoration, and don't tint `softShadow` — an
+  accent-coloured shadow is what made the redesign read as AI-generated.
+- **Run the on-device suites one class at a time.** Instrumenting all 32 in a
+  single `am instrument` reliably kills this emulator partway through
+  `PulseE2ETest`. Confirmed environmental, not a code regression: the same run
+  dies identically on a build of the pre-change commit.
 
 ## Next polish ideas
 

@@ -275,8 +275,7 @@ private fun SetupFooter(
             .glass(
                 shape = RoundedCornerShape(topStart = PulseRadii.sheet, topEnd = PulseRadii.sheet),
                 corner = PulseRadii.sheet,
-                elevation = 26.dp,
-                glow = accent,
+                elevation = 16.dp,
             )
             .padding(horizontal = 18.dp, vertical = 16.dp)
             .padding(bottom = bottomInset),
@@ -472,7 +471,7 @@ private fun ElementCaptureCard(
     val captured = element?.isCaptured == true
     val urlUsable = Validation.urlNote(draft.url)?.severity != Validation.Severity.ERROR
 
-    GlassCard(accent = if (captured) PulseColors.Mint else accent) {
+    GlassCard(accent = if (captured) PulseColors.Mint else Color.Transparent) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconBadge(
                 icon = if (captured) PulseIcons.Target else PulseIcons.Pointer,

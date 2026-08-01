@@ -36,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.Stable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -65,7 +66,7 @@ fun GlassCard(
     shape: Shape = RoundedCornerShape(PulseRadii.card),
     corner: Dp = PulseRadii.card,
     accent: Color = Color.Transparent,
-    elevation: Dp = 18.dp,
+    elevation: Dp = 12.dp,
     contentPadding: Dp = 18.dp,
     onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
@@ -85,7 +86,7 @@ fun GlassCard(
                 scaleX = scale
                 scaleY = scale
             }
-            .glass(shape = shape, corner = corner, elevation = elevation, glow = accent.copy(alpha = 0.6f))
+            .glass(shape = shape, corner = corner, elevation = elevation, accent = accent)
             .then(
                 if (onClick != null) {
                     Modifier.clickable(
@@ -168,23 +169,54 @@ fun GlassDivider(modifier: Modifier = Modifier, alpha: Float = 0.10f) {
 }
 
 /**
+ * Remembers which entrance animations have already run on a screen.
+ *
+ * A `LazyColumn` throws an item's composition away the moment it scrolls out of
+ * view, so state held with `remember` *inside* the item resets and its entrance
+ * replays every time it scrolls back. This log lives above the list — the
+ * nearest scope that outlives recycling — so an item animates the first time it
+ * is seen and stays put on every pass after that.
+ */
+@Stable
+class EntranceLog {
+    private val played = mutableSetOf<Any>()
+
+    fun hasPlayed(key: Any): Boolean = key in played
+
+    fun markPlayed(key: Any) {
+        played += key
+    }
+}
+
+@Composable
+fun rememberEntranceLog(): EntranceLog = remember { EntranceLog() }
+
+/**
  * Staggered entrance: each item drifts up, scales in and fades on a short delay
  * derived from its index, capped so long lists never feel sluggish.
+ *
+ * [key] identifies the item within its screen and has to be unique per call
+ * site — the entrance plays once per distinct value, and changing it replays.
  */
 @Composable
 fun StaggeredEntrance(
     index: Int,
+    key: Any,
+    log: EntranceLog,
     modifier: Modifier = Modifier,
-    key: Any? = Unit,
     content: @Composable () -> Unit,
 ) {
     val motion = LocalPulseMotion.current
-    var shown by remember(key) { mutableStateOf(!motion.enabled) }
+    // Read while composing, before the effect below records it: the first pass
+    // animates, every later one — including after recycling — does not.
+    val animate = remember(key) { motion.enabled && !log.hasPlayed(key) }
+    var shown by remember(key) { mutableStateOf(!animate) }
     LaunchedEffect(key) {
-        if (motion.enabled) {
-            delay((index.coerceAtMost(9) * 55L))
-            shown = true
-        }
+        // Recorded up front, not after the delay, so scrolling away mid-flight
+        // doesn't leave the item eligible to animate again.
+        log.markPlayed(key)
+        if (animate) delay(index.coerceAtMost(9) * 55L)
+        shown = true
     }
     val progress by animateFloatAsState(
         targetValue = if (shown) 1f else 0f,

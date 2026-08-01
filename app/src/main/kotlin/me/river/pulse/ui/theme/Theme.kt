@@ -23,32 +23,40 @@ object PulseColors {
     val Ink = Color(0xFF090909)
     val Slate = Color(0xFF141414)
 
+    // Brand. One blue family — chrome, charts and per-monitor identity.
     val Aqua = Color(0xFF2F6BFF)
     val Violet = Color(0xFF2F6BFF)
     val Indigo = Color(0xFF1647C7)
-    val Mint = Color(0xFFFFFFFF)
-    val Amber = Color(0xFFEDEDED)
-    val Rose = Color(0xFFFFFFFF)
-    val Coral = Color(0xFF2F6BFF)
-    val Sky = Color(0xFF2F6BFF)
+
+    // Status. These carry *meaning*, so they must never be folded into the brand
+    // blue: a monitor that is down has to read as red from across the room, and
+    // "degraded" has to be distinguishable from both.
+    val Mint = Color(0xFF2FD98A) // UP / passing
+    val Amber = Color(0xFFFFB020) // DEGRADED / warnings / non-2xx codes
+    val Rose = Color(0xFFFF4D57) // DOWN / errors / destructive actions
+    val Sky = Color(0xFF6AA8FF) // UNKNOWN — never checked yet
+    val Coral = Color(0xFFFF7A59)
 
     val TextPrimary = Color(0xFFFFFFFF)
     val TextSecondary = Color(0xFFD6D6D6)
     val TextTertiary = Color(0xFF8A8A8A)
 
+    // Opaque on purpose: the toast capsule floats over cards and charts, and a
+    // translucent fill lets whatever it covers show through as noise.
+    val ToastFill = Color(0xFF171717)
+
     val GlassFill = Color(0xF20A0A0A)
     val GlassFillStrong = Color(0xFF111111)
-    val GlassStroke = Color(0x66FFFFFF)
+    val GlassStroke = Color(0x40FFFFFF)
     val GlassStrokeSoft = Color(0x22FFFFFF)
 }
 
-/** Per-monitor accent pairs, cycled so a dashboard never looks monotone. */
+/**
+ * Per-monitor accent pairs. The palette is deliberately monochrome here —
+ * monitor identity is carried by name and icon, and colour is reserved for
+ * health, so a red card always means one thing.
+ */
 val AccentPairs: List<Pair<Color, Color>> = listOf(
-    PulseColors.Aqua to PulseColors.Indigo,
-    PulseColors.Aqua to PulseColors.Indigo,
-    PulseColors.Aqua to PulseColors.Indigo,
-    PulseColors.Aqua to PulseColors.Indigo,
-    PulseColors.Aqua to PulseColors.Indigo,
     PulseColors.Aqua to PulseColors.Indigo,
 )
 
@@ -60,6 +68,19 @@ fun healthColor(health: Health): Color = when (health) {
     Health.DEGRADED -> PulseColors.Amber
     Health.PAUSED -> PulseColors.TextTertiary
     Health.UNKNOWN -> PulseColors.Sky
+}
+
+/**
+ * Rim colour for a card representing [health].
+ *
+ * Only the states worth interrupting someone for get a tint. If every card in
+ * the list is outlined, the one that is actually broken stops standing out —
+ * healthy monitors already say so with their pill and orb.
+ */
+fun healthRim(health: Health): Color = when (health) {
+    Health.DOWN -> PulseColors.Rose
+    Health.DEGRADED -> PulseColors.Amber
+    else -> Color.Transparent
 }
 
 @Immutable
