@@ -32,12 +32,15 @@ android {
         // sparklines carry failures in the stroke instead of as dots.
         // 1.4.0 shows the site favicon on page-element cards (cached in memory
         // and on disk, with ICO unwrapping) instead of a generic cursor glyph.
+        // 1.5.0 times a known-good endpoint alongside the checks and discounts
+        // whatever the phone's own connection is adding, so bad wifi no longer
+        // reports every monitor as slow at once.
         // 1.3.0 stops checking entirely while the device has no connectivity —
         // losing signal is not an outage, and reporting it as one was spamming
         // real users. Both are UI/behaviour only; the store schema is untouched,
         // so 1.1.x and 1.2.x installs update in place.
-        versionCode = 7
-        versionName = "1.4.0"
+        versionCode = 8
+        versionName = "1.5.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

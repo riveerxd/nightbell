@@ -1,5 +1,91 @@
 # Pulse — handoff
 
+## 1.5.0 — discount the phone's own connection before calling anything slow
+
+**Reported from real use:** DEGRADED alerts for services that were fine. The
+cause is arithmetic, not a bug: a latency measured from a phone is the network
+round trip *plus* the server's time, and those are indistinguishable from one
+measurement. So a bad connection makes **every** monitor breach its SLO at once,
+and every one of those alerts is wrong.
+
+The fix is a control. `data/check/LatencyReference` times an endpoint that is
+always up, and `domain/NetworkBaseline` uses it to estimate what the network is
+contributing.
+
+### The maths, and why it is the *excess*
+
+```
+floor    = 25th percentile of the reference window   (its good-conditions cost)
+current  = median of the last three readings         (what it costs right now)
+excess   = current − floor
+adjusted = measured latency − excess
+```
+
+Subtracting the reference's **total** would be wrong: a connection with a 300 ms
+floor is not slow, that is simply what it costs, and the SLO was chosen while
+living with it. Only the reference being slower *than it usually is* has nothing
+to do with the server.
+
+Estimator choices, both of which matter:
+
+- **Floor is the 25th percentile, not the median.** If the connection has been
+  poor for most of the window the median is poor too, the excess collapses to
+  zero, and the compensation stops working exactly when it is needed. Not the
+  minimum either — one lucky round trip would drag the floor down and start
+  suppressing real alerts.
+- **Current is the median of three, not the latest.** One unlucky round trip
+  would otherwise wipe out a genuine degradation.
+
+Four trust states. `UNKNOWN` (too few readings, all stale, or the reference is
+unreachable) means judge the raw number exactly as before this existed;
+`UNRELIABLE` means the reference is so far off its floor that nothing measured
+through this link means anything, and no degradation is claimed. `UNRELIABLE`
+needs a large absolute excess **and** a large relative jump: 4× a 30 ms floor is
+still only 120 ms, and 750 ms may be normal variation on a satellite link.
+
+Every threshold errs toward *reporting* slowness. A missed "slow" alert costs
+less than a real degradation written off as bad wifi.
+
+### Things worth knowing
+
+- **It only ever touches the latency verdict.** A bad connection is a reason to
+  doubt a *slow* reading, never a reason to stay quiet about an outage — DOWN is
+  untouched. Suppressing that would risk hiding a real failure, which is the one
+  thing this app exists to catch. (Timeout-driven DOWN on a terrible connection
+  is a real remaining gap; see below.)
+- **`lastLatencyMs` still records what was measured.** The adjustment is an
+  interpretation and overwriting the observation with it would make the history
+  lie. The excess is stored beside it so the card can show `−300 ms`, because an
+  invisible correction to a number the user is reading is indistinguishable from
+  a bug.
+- **The window is persisted, not in memory.** WorkManager can run each pass in a
+  fresh process, so an in-memory window would never reach the minimum size and
+  the compensation would silently never engage.
+- **One probe per pass, not per check.** It was in `runLocked` first, which meant
+  a reference the network blocks added its whole timeout to every check — the
+  measurement was unaffected, but the pass got slower for nothing. This showed up
+  as a flaky `PulseE2ETest`, not as an obvious failure. Probes also back off
+  exponentially while failing, so a network that blocks the endpoint costs one
+  wasted request per half hour.
+- **Not ICMP.** Raw sockets need root on Android. This is HTTP round trip to
+  first byte, which is *better* for the purpose: it includes DNS, TCP and TLS —
+  exactly the costs a monitor's own request pays.
+
+**Verified:** 138 JVM (`NetworkBaselineTest`, 19 — including the reported
+scenario and its counter-case, that a genuinely slow server still gets flagged
+through a mediocre link) + 84 on-device (`LatencyBaselineInstrumentedTest`, 8,
+driving the real engine with a seeded window). On this emulator the default
+reference is unreachable, and that path was confirmed end to end: the stored
+window stays `[]`, checks run normally and the raw verdict stands.
+
+**Known gap:** a connection bad enough to time a request out still produces a
+false DOWN. Fixing that means suppressing outage alerts on evidence about the
+network, which needs more care than this did.
+
+APK: `artifacts/Pulse-1.5.0-release.apk` · versionName `1.5.0` · versionCode `8`.
+
+---
+
 ## 1.4.0 — favicons on page-element cards
 
 A page-element monitor *is* the page it watches, so the site's own mark
