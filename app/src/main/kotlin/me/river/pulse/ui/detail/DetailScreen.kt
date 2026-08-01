@@ -161,6 +161,15 @@ fun DetailScreen(
             }
         }
 
+        if (monitor.urgent && runtime.urgentState.nagging) {
+            item(key = "urgent") {
+                UrgentBanner(
+                    repeatMinutes = monitor.urgentRepeatMinutes,
+                    onAcknowledge = viewModel::acknowledgeUrgent,
+                )
+            }
+        }
+
         item(key = "hero") {
             StaggeredEntrance(index = 0, key = "hero-${monitor.id}", log = entrance) {
                 HeroCard(monitor, runtime, health, current.checking, accent, accentEnd)
@@ -334,10 +343,14 @@ private fun HeroCard(
                 }
                 Text(
                     text = runtime.lastMessage.ifBlank {
-                        if (runtime.lastCheckedAt > 0) {
-                            "Last response ${formatLatency(runtime.lastLatencyMs)}"
-                        } else {
-                            "Not checked yet"
+                        when {
+                            runtime.lastCheckedAt <= 0 -> "Not checked yet"
+                            // DEGRADED is a pass, so lastMessage is empty — spell
+                            // out why the card is amber rather than green.
+                            health == Health.DEGRADED ->
+                                "Responded in ${formatLatency(runtime.lastLatencyMs)} — " +
+                                    "over its latency budget"
+                            else -> "Last response ${formatLatency(runtime.lastLatencyMs)}"
                         }
                     },
                     style = MaterialTheme.typography.bodySmall,
@@ -417,6 +430,47 @@ private fun ActionsRow(
     }
 }
 
+/**
+ * Sits above the hero card because it is the only thing on this screen that
+ * needs an action rather than a read.
+ */
+@Composable
+private fun UrgentBanner(repeatMinutes: Int, onAcknowledge: () -> Unit) {
+    GlassCard(accent = PulseColors.Rose, contentPadding = 18.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconBadge(PulseIcons.Zap, PulseColors.Rose, size = 40.dp)
+            Spacer(Modifier.width(13.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "Urgent alert active",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = PulseColors.Rose,
+                )
+                Text(
+                    text = "Repeating every $repeatMinutes min until acknowledged.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = PulseColors.TextSecondary,
+                )
+            }
+        }
+        Spacer(Modifier.height(13.dp))
+        PulseButton(
+            text = "I've got it — acknowledge",
+            onClick = onAcknowledge,
+            icon = PulseIcons.Check,
+            tone = ButtonTone.Danger,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = "The monitor stays down until it recovers. Acknowledging only stops " +
+                "the repeats for this outage — the next one will shout again.",
+            style = MaterialTheme.typography.bodySmall,
+            color = PulseColors.TextTertiary,
+        )
+    }
+}
+
 @Composable
 private fun ConfigCard(monitor: Monitor, accent: Color) {
     GlassCard {
@@ -438,18 +492,29 @@ private fun ConfigCard(monitor: Monitor, accent: Color) {
                 ConfigRow("Body", "${monitor.body.length} chars · ${monitor.contentType}")
             }
         } else {
-            val element = monitor.element
-            ConfigRow("Expectation", element?.mode?.label.orEmpty())
-            ConfigRow("Selector", element?.displaySelector.orEmpty())
-            if (!element?.expectedText.isNullOrBlank()) {
-                ConfigRow("Expected text", element?.expectedText.orEmpty())
-            }
-            if (!element?.attribute.isNullOrBlank()) {
-                ConfigRow("Attribute", element?.attribute.orEmpty())
+            val elements = monitor.targets
+            ConfigRow("Watching", "${elements.size} element${if (elements.size == 1) "" else "s"} on one page load")
+            elements.forEachIndexed { index, element ->
+                val prefix = if (elements.size == 1) "Element" else "Element ${index + 1}"
+                ConfigRow(prefix, "${element.displayLabel} · ${element.mode.label}")
+                ConfigRow("  Selector", element.displaySelector)
+                if (element.expectedText.isNotBlank()) {
+                    ConfigRow("  Expected", element.expectedText)
+                }
+                if (element.attribute.isNotBlank()) {
+                    ConfigRow("  Attribute", element.attribute)
+                }
             }
         }
         ConfigRow("Interval", "every ${monitor.intervalMinutes} min")
         ConfigRow("Timeout", "${monitor.timeoutSeconds}s")
+        ConfigRow(
+            "Latency budget",
+            if (monitor.latencySloMs > 0) "${monitor.latencySloMs} ms" else "Global default",
+        )
+        if (monitor.urgent) {
+            ConfigRow("Urgent", "repeats every ${monitor.urgentRepeatMinutes} min until acknowledged")
+        }
         ConfigRow(
             "Alerts",
             if (monitor.useGlobalAlerts) "Global policy" else monitor.alert.summary,

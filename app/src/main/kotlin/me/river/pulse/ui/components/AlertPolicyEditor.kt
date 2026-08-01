@@ -101,6 +101,85 @@ fun AlertPolicyEditor(
                 )
 
                 Spacer(Modifier.height(10.dp))
+                SectionHeader("Latency", icon = PulseIcons.Gauge, accent = PulseColors.Amber)
+                Text(
+                    text = "Degraded is up-but-slow: the check passed, it just blew its " +
+                        "latency budget. It has its own cooldown so a slow morning never " +
+                        "eats the cooldown an outage needs.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = PulseColors.TextTertiary,
+                    modifier = Modifier.padding(bottom = 6.dp),
+                )
+                ToggleRow(
+                    title = "Notify when it goes slow",
+                    subtitle = if (policy.alertOnDegraded) {
+                        "Alerts on a latency-budget breach, separately from outages"
+                    } else {
+                        "Degraded shows on the dashboard but stays silent"
+                    },
+                    checked = policy.alertOnDegraded,
+                    onCheckedChange = { onChange(policy.copy(alertOnDegraded = it)) },
+                    icon = PulseIcons.Activity,
+                    accent = PulseColors.Amber,
+                )
+                AnimatedVisibility(
+                    visible = policy.alertOnDegraded,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically(),
+                ) {
+                    Column {
+                        ToggleRow(
+                            title = "Notify when it speeds up again",
+                            subtitle = "All-clear when latency drops back under budget",
+                            checked = policy.alertOnDegradedRecovery,
+                            onCheckedChange = { onChange(policy.copy(alertOnDegradedRecovery = it)) },
+                            icon = PulseIcons.Check,
+                            accent = PulseColors.Amber,
+                        )
+                        StepperRow(
+                            title = "Latency cooldown",
+                            value = policy.degradedCooldownMinutes,
+                            onValueChange = { onChange(policy.copy(degradedCooldownMinutes = it)) },
+                            range = 0..720,
+                            step = 5,
+                            suffix = "m",
+                            icon = PulseIcons.Clock,
+                            accent = PulseColors.Amber,
+                        )
+                        ToggleRow(
+                            title = "Keep reminding me it's slow",
+                            subtitle = if (policy.degradedRepeatEnabled) {
+                                "Re-alerts every ${policy.degradedRepeatEveryMinutes} minutes"
+                            } else {
+                                "One latency alert per slow spell"
+                            },
+                            checked = policy.degradedRepeatEnabled,
+                            onCheckedChange = { onChange(policy.copy(degradedRepeatEnabled = it)) },
+                            icon = PulseIcons.History,
+                            accent = PulseColors.Amber,
+                        )
+                        AnimatedVisibility(
+                            visible = policy.degradedRepeatEnabled,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically(),
+                        ) {
+                            StepperRow(
+                                title = "Repeat every",
+                                value = policy.degradedRepeatEveryMinutes,
+                                onValueChange = {
+                                    onChange(policy.copy(degradedRepeatEveryMinutes = it))
+                                },
+                                range = 5..1440,
+                                step = 5,
+                                suffix = "m",
+                                icon = PulseIcons.Refresh,
+                                accent = PulseColors.Amber,
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(10.dp))
                 SectionHeader("Sound", icon = PulseIcons.Volume, accent = accent)
                 ChipSelector(
                     options = SoundChoice.entries.toList(),

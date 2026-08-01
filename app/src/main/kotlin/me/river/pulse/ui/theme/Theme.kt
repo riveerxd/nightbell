@@ -45,6 +45,10 @@ object PulseColors {
     // translucent fill lets whatever it covers show through as noise.
     val ToastFill = Color(0xFF171717)
 
+    // Painted over a real backdrop blur. Translucent enough to see the blur
+    // move underneath, opaque enough that body text on top never fights it.
+    val SheetScrim = Color(0xD40C0C0C)
+
     val GlassFill = Color(0xF20A0A0A)
     val GlassFillStrong = Color(0xFF111111)
     val GlassStroke = Color(0x40FFFFFF)

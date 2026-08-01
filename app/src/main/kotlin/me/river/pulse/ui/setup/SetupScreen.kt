@@ -40,12 +40,17 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
@@ -81,10 +86,13 @@ import me.river.pulse.ui.components.formatLatency
 import me.river.pulse.ui.dashboard.kindIcon
 import me.river.pulse.ui.icons.PulseIcons
 import me.river.pulse.ui.rememberSetupViewModel
+import me.river.pulse.ui.theme.BackdropHost
+import me.river.pulse.ui.theme.BackdropScope
 import me.river.pulse.ui.theme.PulseColors
 import me.river.pulse.ui.theme.PulseRadii
 import me.river.pulse.ui.theme.accentFor
-import me.river.pulse.ui.theme.glass
+import me.river.pulse.ui.theme.sheetSurface
+import me.river.pulse.ui.theme.softShadow
 import androidx.compose.ui.platform.testTag
 
 private val stepTitles = listOf("What to watch", "Target", "Expectations", "Cadence & alerts")
@@ -106,78 +114,97 @@ fun SetupScreen(
 
     val topInset = WindowInsets.systemBars.asPaddingValues().calculateTopPadding()
     val bottomInset = WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
+    val blurEnabled = viewModel.realBlurEnabled
+    val density = LocalDensity.current
+    // The footer floats over the form instead of sitting under it, so there is
+    // something real for it to frost. Its measured height becomes the scroll
+    // area's bottom padding, so nothing ever hides behind it.
+    var footerHeight by remember { mutableStateOf(0.dp) }
 
     Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().imePadding()) {
-            SetupHeader(
-                step = viewModel.step,
-                editing = viewModel.isEditing,
-                accent = accent,
-                onClose = onClose,
-            )
+        BackdropHost(
+            modifier = Modifier.fillMaxSize().imePadding(),
+            enabled = blurEnabled,
+            content = {
+                Column(Modifier.fillMaxSize().recordBackdrop()) {
+                    SetupHeader(
+                        step = viewModel.step,
+                        editing = viewModel.isEditing,
+                        accent = accent,
+                        onClose = onClose,
+                    )
 
-            AnimatedContent(
-                targetState = viewModel.step,
-                transitionSpec = {
-                    val forward = targetState > initialState
-                    (
-                        slideInHorizontally(tween(280)) { if (forward) it / 3 else -it / 3 } +
-                            fadeIn(tween(220))
-                        ) togetherWith (
-                        slideOutHorizontally(tween(240)) { if (forward) -it / 4 else it / 4 } +
-                            fadeOut(tween(160))
-                        )
-                },
-                label = "setupStep",
-                modifier = Modifier.weight(1f),
-            ) { step ->
-                Column(
-                    Modifier
-                        .fillMaxSize()
-                        .testTag("setup-scroll")
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 18.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    when (step) {
-                        0 -> StepKind(draft, viewModel::setKind)
-                        1 -> StepTarget(viewModel, draft, report, accent)
-                        2 -> StepExpectations(viewModel, draft, report, accent)
-                        else -> StepSchedule(viewModel, draft, report, accent)
-                    }
+                    AnimatedContent(
+                        targetState = viewModel.step,
+                        transitionSpec = {
+                            val forward = targetState > initialState
+                            (
+                                slideInHorizontally(tween(280)) { if (forward) it / 3 else -it / 3 } +
+                                    fadeIn(tween(220))
+                                ) togetherWith (
+                                slideOutHorizontally(tween(240)) { if (forward) -it / 4 else it / 4 } +
+                                    fadeOut(tween(160))
+                                )
+                        },
+                        label = "setupStep",
+                        modifier = Modifier.weight(1f),
+                    ) { step ->
+                        Column(
+                            Modifier
+                                .fillMaxSize()
+                                .testTag("setup-scroll")
+                                .verticalScroll(rememberScrollState())
+                                .padding(horizontal = 18.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                        ) {
+                            when (step) {
+                                0 -> StepKind(draft, viewModel::setKind)
+                                1 -> StepTarget(viewModel, draft, report, accent)
+                                2 -> StepExpectations(viewModel, draft, report, accent)
+                                else -> StepSchedule(viewModel, draft, report, accent)
+                            }
 
-                    if (viewModel.step > 0) {
-                        TestPanel(
-                            testing = viewModel.testing,
-                            result = viewModel.testResult,
-                            canTest = report.isValid,
-                            blockingMessage = report.blockingMessage,
-                            accent = accent,
-                            onTest = viewModel::runTest,
-                        )
+                            if (viewModel.step > 0) {
+                                TestPanel(
+                                    testing = viewModel.testing,
+                                    result = viewModel.testResult,
+                                    canTest = report.isValid,
+                                    blockingMessage = report.blockingMessage,
+                                    accent = accent,
+                                    onTest = viewModel::runTest,
+                                )
+                            }
+                            Spacer(Modifier.height(footerHeight + 8.dp))
+                        }
                     }
-                    Spacer(Modifier.height(8.dp))
                 }
-            }
-
-            SetupFooter(
-                step = viewModel.step,
-                canContinue = canLeaveStep(viewModel.step, draft, report),
-                canSave = report.isValid,
-                editing = viewModel.isEditing,
-                accent = accent,
-                accentEnd = accentEnd,
-                bottomInset = bottomInset,
-                onBack = { if (viewModel.step == 0) onClose() else viewModel.back() },
-                onNext = viewModel::next,
-                onSave = viewModel::save,
-            )
-        }
+            },
+            overlay = { backdrop ->
+                SetupFooter(
+                    step = viewModel.step,
+                    canContinue = canLeaveStep(viewModel.step, draft, report),
+                    canSave = report.isValid,
+                    editing = viewModel.isEditing,
+                    accent = accent,
+                    accentEnd = accentEnd,
+                    bottomInset = bottomInset,
+                    backdrop = backdrop,
+                    onBack = { if (viewModel.step == 0) onClose() else viewModel.back() },
+                    onNext = viewModel::next,
+                    onSave = viewModel::save,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .onSizeChanged { footerHeight = with(density) { it.height.toDp() } },
+                )
+            },
+        )
 
         ElementPickerOverlay(
             visible = viewModel.pickerOpen,
             url = draft.url.trim(),
-            existingSelector = draft.element?.displaySelector.orEmpty(),
+            existingSelector = draft.targets.getOrNull(viewModel.pickingIndex)
+                ?.displaySelector.orEmpty(),
+            alreadyWatching = draft.targets.size,
             onDismiss = viewModel::closePicker,
             onConfirm = { picked ->
                 viewModel.applyPick(
@@ -265,18 +292,19 @@ private fun SetupFooter(
     accent: Color,
     accentEnd: Color,
     bottomInset: androidx.compose.ui.unit.Dp,
+    backdrop: BackdropScope,
     onBack: () -> Unit,
     onNext: () -> Unit,
     onSave: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
-            .glass(
-                shape = RoundedCornerShape(topStart = PulseRadii.sheet, topEnd = PulseRadii.sheet),
-                corner = PulseRadii.sheet,
-                elevation = 16.dp,
-            )
+            // Real frosted glass on API 31+: the form scrolls visibly out of
+            // focus underneath. Falls back to the opaque pane below that.
+            .softShadow(corner = PulseRadii.sheet, radius = 20.dp, strength = 1.6f)
+            .sheetSurface(backdrop)
             .padding(horizontal = 18.dp, vertical = 16.dp)
             .padding(bottom = bottomInset),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -460,6 +488,13 @@ private fun StepTarget(
     }
 }
 
+/**
+ * The watched-element list.
+ *
+ * A page monitor watches N elements resolved against **one** page load, so
+ * adding a second element is nearly free — the expensive part is rendering the
+ * page. The list is a conjunction: any element failing fails the check.
+ */
 @Composable
 private fun ElementCaptureCard(
     viewModel: SetupViewModel,
@@ -467,62 +502,62 @@ private fun ElementCaptureCard(
     report: Validation.Report,
     accent: Color,
 ) {
-    val element = draft.element
-    val captured = element?.isCaptured == true
+    val elements = draft.targets
     val urlUsable = Validation.urlNote(draft.url)?.severity != Validation.Severity.ERROR
 
-    GlassCard(accent = if (captured) PulseColors.Mint else Color.Transparent) {
+    GlassCard(accent = if (elements.isNotEmpty()) PulseColors.Mint else Color.Transparent) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconBadge(
-                icon = if (captured) PulseIcons.Target else PulseIcons.Pointer,
-                accent = if (captured) PulseColors.Mint else accent,
+                icon = if (elements.isNotEmpty()) PulseIcons.Target else PulseIcons.Pointer,
+                accent = if (elements.isNotEmpty()) PulseColors.Mint else accent,
                 size = 40.dp,
             )
             Spacer(Modifier.width(13.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = if (captured) "Element captured" else "Pick the element to watch",
+                    text = when (elements.size) {
+                        0 -> "Pick the elements to watch"
+                        1 -> "1 element captured"
+                        else -> "${elements.size} elements captured"
+                    },
                     style = MaterialTheme.typography.titleMedium,
                     color = PulseColors.TextPrimary,
                 )
                 Text(
-                    text = if (captured) {
-                        element?.displaySelector.orEmpty()
-                    } else {
+                    text = if (elements.isEmpty()) {
                         "Opens the page in-app; tap what you care about."
+                    } else {
+                        "All checked on one page load. Any mismatch fails the check."
                     },
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (captured) PulseColors.Mint else PulseColors.TextTertiary,
+                    color = if (elements.isEmpty()) PulseColors.TextTertiary else PulseColors.Mint,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
         }
-        if (captured && !element?.textSnippet.isNullOrBlank()) {
+
+        elements.forEachIndexed { index, element ->
             Spacer(Modifier.height(11.dp))
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(13.dp))
-                    .background(Color.White.copy(alpha = 0.05f))
-                    .padding(11.dp),
-            ) {
-                Text(
-                    text = "“${element?.textSnippet?.take(160)}”",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = PulseColors.TextSecondary,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+            CapturedElementRow(
+                index = index,
+                total = elements.size,
+                element = element,
+                accent = accent,
+                onRePick = { viewModel.openPicker(index) },
+                onRemove = { viewModel.removeElement(index) },
+                onMoveUp = { viewModel.moveElement(index, -1) },
+                onMoveDown = { viewModel.moveElement(index, 1) },
+            )
         }
+
         Spacer(Modifier.height(13.dp))
         PulseButton(
-            text = if (captured) "Re-pick element" else "Open live preview",
-            onClick = viewModel::openPicker,
+            text = if (elements.isEmpty()) "Open live preview" else "Add another element",
+            onClick = { viewModel.openPicker(-1) },
             enabled = urlUsable,
-            icon = PulseIcons.Eye,
-            tone = if (captured) ButtonTone.Secondary else ButtonTone.Primary,
+            icon = if (elements.isEmpty()) PulseIcons.Eye else PulseIcons.Plus,
+            tone = if (elements.isEmpty()) ButtonTone.Primary else ButtonTone.Secondary,
             accent = accent,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -540,6 +575,95 @@ private fun ElementCaptureCard(
                 text = it.message,
                 style = MaterialTheme.typography.bodySmall,
                 color = PulseColors.Rose,
+            )
+        }
+    }
+}
+
+@Composable
+private fun CapturedElementRow(
+    index: Int,
+    total: Int,
+    element: me.river.pulse.domain.ElementTarget,
+    accent: Color,
+    onRePick: () -> Unit,
+    onRemove: () -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(15.dp))
+            .background(Color.White.copy(alpha = 0.05f))
+            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(15.dp))
+            .padding(12.dp)
+            .semantics { contentDescription = "Element ${index + 1}: ${element.displayLabel}" },
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            MicroTag("${index + 1}", color = accent)
+            Spacer(Modifier.width(8.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = element.displayLabel,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = PulseColors.TextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = element.displaySelector,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = PulseColors.TextTertiary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (total > 1) {
+                GlassIconButton(
+                    icon = PulseIcons.ChevronDown,
+                    onClick = onMoveUp,
+                    contentDescription = "Move element ${index + 1} up",
+                    size = 30.dp,
+                    accent = PulseColors.TextTertiary,
+                    enabled = index > 0,
+                    modifier = Modifier.graphicsLayer { rotationZ = 180f },
+                )
+                Spacer(Modifier.width(6.dp))
+                GlassIconButton(
+                    icon = PulseIcons.ChevronDown,
+                    onClick = onMoveDown,
+                    contentDescription = "Move element ${index + 1} down",
+                    size = 30.dp,
+                    accent = PulseColors.TextTertiary,
+                    enabled = index < total - 1,
+                )
+                Spacer(Modifier.width(6.dp))
+            }
+            GlassIconButton(
+                icon = PulseIcons.Eye,
+                onClick = onRePick,
+                contentDescription = "Re-pick element ${index + 1}",
+                size = 30.dp,
+                accent = accent,
+            )
+            Spacer(Modifier.width(6.dp))
+            GlassIconButton(
+                icon = PulseIcons.Trash,
+                onClick = onRemove,
+                contentDescription = "Remove element ${index + 1}",
+                size = 30.dp,
+                accent = PulseColors.Rose,
+            )
+        }
+        if (element.textSnippet.isNotBlank()) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "“${element.textSnippet.take(120)}”",
+                style = MaterialTheme.typography.bodySmall,
+                color = PulseColors.TextSecondary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -635,46 +759,35 @@ private fun StepExpectations(
     accent: Color,
 ) {
     if (draft.kind == MonitorKind.WEBSITE_ELEMENT) {
-        val element = draft.element ?: me.river.pulse.domain.ElementTarget()
-        SectionHeader("Element expectation", icon = PulseIcons.Target, accent = accent)
-        ChipSelector(
-            options = ElementMode.entries.toList(),
-            selected = element.mode,
-            onSelect = { mode -> viewModel.update { it.copy(element = element.copy(mode = mode)) } },
-            label = { it.label },
-            accent = accent,
-        )
-        AnimatedVisibility(
-            visible = element.mode == ElementMode.TEXT_EQUALS || element.mode == ElementMode.TEXT_CONTAINS,
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically(),
-        ) {
-            GlassField(
-                value = element.expectedText,
-                onValueChange = { value ->
-                    viewModel.update { it.copy(element = element.copy(expectedText = value)) }
-                },
-                label = "Expected text",
-                placeholder = element.textSnippet.take(40).ifBlank { "In stock" },
-                note = report.of(Validation.Field.ELEMENT_TEXT),
-                leadingIcon = PulseIcons.Search,
+        val elements = draft.targets
+        if (elements.isEmpty()) {
+            GlassCard(accent = PulseColors.Amber, contentPadding = 16.dp) {
+                Text(
+                    text = "Go back a step and capture at least one element first.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = PulseColors.TextSecondary,
+                )
+            }
+            return
+        }
+        elements.forEachIndexed { index, element ->
+            ElementExpectationCard(
+                index = index,
+                total = elements.size,
+                element = element,
                 accent = accent,
-                singleLine = false,
-                minLines = 2,
+                note = if (index == 0) report.of(Validation.Field.ELEMENT_TEXT) else null,
+                onChange = { transform -> viewModel.updateElement(index, transform) },
             )
         }
-        GlassField(
-            value = element.attribute,
-            onValueChange = { value ->
-                viewModel.update { it.copy(element = element.copy(attribute = value.trim())) }
-            },
-            label = "Compare an attribute instead (optional)",
-            placeholder = "href, value, data-state…",
-            helper = "Leave empty to compare the element's visible text.",
-            leadingIcon = PulseIcons.Braces,
-            accent = accent,
-        )
-        SelectorSummary(element, accent)
+        if (elements.size > 1) {
+            Text(
+                text = "Every element has to match. One mismatch marks the whole monitor down, " +
+                    "and the alert names the first thing that broke.",
+                style = MaterialTheme.typography.bodySmall,
+                color = PulseColors.TextTertiary,
+            )
+        }
         return
     }
 
@@ -799,6 +912,86 @@ private fun StepExpectations(
     }
 }
 
+/** Everything one watched element asserts, in its own card. */
+@Composable
+private fun ElementExpectationCard(
+    index: Int,
+    total: Int,
+    element: me.river.pulse.domain.ElementTarget,
+    accent: Color,
+    note: Validation.Note?,
+    onChange: ((me.river.pulse.domain.ElementTarget) -> me.river.pulse.domain.ElementTarget) -> Unit,
+) {
+    GlassCard(contentPadding = 16.dp) {
+        SectionHeader(
+            title = if (total == 1) "Element expectation" else "Element ${index + 1}",
+            icon = PulseIcons.Target,
+            accent = accent,
+        )
+        Text(
+            text = element.displaySelector,
+            style = MaterialTheme.typography.bodySmall,
+            color = PulseColors.TextTertiary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Spacer(Modifier.height(12.dp))
+
+        if (total > 1) {
+            GlassField(
+                value = element.label,
+                onValueChange = { value -> onChange { it.copy(label = value) } },
+                label = "Nickname",
+                placeholder = element.tagName.ifBlank { "price, stock badge…" },
+                helper = "Shown in alerts so you know which element broke.",
+                leadingIcon = PulseIcons.Sparkle,
+                accent = accent,
+            )
+            Spacer(Modifier.height(12.dp))
+        }
+
+        ChipSelector(
+            options = ElementMode.entries.toList(),
+            selected = element.mode,
+            onSelect = { mode -> onChange { it.copy(mode = mode) } },
+            label = { it.label },
+            accent = accent,
+        )
+        AnimatedVisibility(
+            visible = element.mode == ElementMode.TEXT_EQUALS || element.mode == ElementMode.TEXT_CONTAINS,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically(),
+        ) {
+            Column {
+                Spacer(Modifier.height(12.dp))
+                GlassField(
+                    value = element.expectedText,
+                    onValueChange = { value -> onChange { it.copy(expectedText = value) } },
+                    label = "Expected text",
+                    placeholder = element.textSnippet.take(40).ifBlank { "In stock" },
+                    note = note,
+                    leadingIcon = PulseIcons.Search,
+                    accent = accent,
+                    singleLine = false,
+                    minLines = 2,
+                )
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        GlassField(
+            value = element.attribute,
+            onValueChange = { value -> onChange { it.copy(attribute = value.trim()) } },
+            label = "Compare an attribute instead (optional)",
+            placeholder = "href, value, data-state…",
+            helper = "Leave empty to compare the element's visible text.",
+            leadingIcon = PulseIcons.Braces,
+            accent = accent,
+        )
+        Spacer(Modifier.height(8.dp))
+        SelectorSummary(element, accent)
+    }
+}
+
 @Composable
 private fun SelectorSummary(element: me.river.pulse.domain.ElementTarget, accent: Color) {
     if (!element.isCaptured) return
@@ -897,6 +1090,22 @@ private fun StepSchedule(
     )
 
     Spacer(Modifier.height(12.dp))
+    SectionHeader("Latency budget", icon = PulseIcons.Gauge, accent = PulseColors.Amber)
+    LatencySloEditor(
+        value = draft.latencySloMs,
+        onChange = { v -> viewModel.update { it.copy(latencySloMs = v) } },
+    )
+
+    Spacer(Modifier.height(12.dp))
+    SectionHeader("Urgent", icon = PulseIcons.Zap, accent = PulseColors.Rose)
+    UrgentEditor(
+        urgent = draft.urgent,
+        repeatMinutes = draft.urgentRepeatMinutes,
+        onUrgentChange = { v -> viewModel.update { it.copy(urgent = v) } },
+        onRepeatChange = { v -> viewModel.update { it.copy(urgentRepeatMinutes = v) } },
+    )
+
+    Spacer(Modifier.height(12.dp))
     SectionHeader("Alerts", icon = PulseIcons.Bell, accent = accent)
     ToggleRow(
         title = "Use my global alert settings",
@@ -922,6 +1131,125 @@ private fun StepSchedule(
         )
     }
 }
+
+/**
+ * Per-monitor latency SLO. 0 means "inherit the global budget", which is what
+ * almost everyone wants — the override exists for the one endpoint that is
+ * legitimately slow, or the one that must never be.
+ */
+@Composable
+private fun LatencySloEditor(value: Int, onChange: (Int) -> Unit) {
+    ToggleRow(
+        title = "Custom latency budget",
+        subtitle = if (value > 0) {
+            "Slower than $value ms counts as degraded"
+        } else {
+            "Using the global budget from Settings"
+        },
+        checked = value > 0,
+        onCheckedChange = { on -> onChange(if (on) DEFAULT_SLO_MS else 0) },
+        icon = PulseIcons.Gauge,
+        accent = PulseColors.Amber,
+    )
+    AnimatedVisibility(
+        visible = value > 0,
+        enter = fadeIn() + expandVertically(),
+        exit = fadeOut() + shrinkVertically(),
+    ) {
+        Column {
+            Spacer(Modifier.height(6.dp))
+            StepperRow(
+                title = "Degraded above",
+                value = value.coerceAtLeast(100),
+                onValueChange = onChange,
+                range = 100..60_000,
+                step = 100,
+                suffix = "ms",
+                icon = PulseIcons.Activity,
+                accent = PulseColors.Amber,
+            )
+            ChipSelector(
+                options = listOf(500, 1_000, 2_500, 5_000, 10_000),
+                selected = value,
+                onSelect = onChange,
+                label = { if (it >= 1_000) "${it / 1000}s" else "${it}ms" },
+                accent = PulseColors.Amber,
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "A response slower than this is DEGRADED — up, but not well. " +
+                    "Turn on latency alerts under Alerts to hear about it.",
+                style = MaterialTheme.typography.bodySmall,
+                color = PulseColors.TextTertiary,
+            )
+        }
+    }
+}
+
+/**
+ * URGENT mode. Distinct from "keep reminding me": that repeats on a schedule
+ * and stops when you mute it, this one repeats until you explicitly say you've
+ * seen it, and re-arms itself on the next outage.
+ */
+@Composable
+private fun UrgentEditor(
+    urgent: Boolean,
+    repeatMinutes: Int,
+    onUrgentChange: (Boolean) -> Unit,
+    onRepeatChange: (Int) -> Unit,
+) {
+    ToggleRow(
+        title = "URGENT",
+        subtitle = if (urgent) {
+            "Repeats every $repeatMinutes min while down until you acknowledge it"
+        } else {
+            "Normal alerting — one notification per outage"
+        },
+        checked = urgent,
+        onCheckedChange = onUrgentChange,
+        icon = PulseIcons.Zap,
+        accent = PulseColors.Rose,
+    )
+    AnimatedVisibility(
+        visible = urgent,
+        enter = fadeIn() + expandVertically(),
+        exit = fadeOut() + shrinkVertically(),
+    ) {
+        Column {
+            Spacer(Modifier.height(6.dp))
+            StepperRow(
+                title = "Repeat every",
+                value = repeatMinutes,
+                onValueChange = onRepeatChange,
+                range = 1..120,
+                suffix = "m",
+                icon = PulseIcons.History,
+                accent = PulseColors.Rose,
+            )
+            Spacer(Modifier.height(8.dp))
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(PulseColors.Rose.copy(alpha = 0.09f))
+                    .padding(13.dp),
+            ) {
+                Text(
+                    text = "Acknowledge from the notification or the monitor screen. " +
+                        "The card stays red until it recovers, and the next outage " +
+                        "shouts again.\n\nWhile an urgent outage is unacknowledged Pulse " +
+                        "runs a foreground service to keep the interval — expect a " +
+                        "persistent notification and extra battery use until you confirm it.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = PulseColors.TextSecondary,
+                )
+            }
+        }
+    }
+}
+
+/** Starting point when someone switches a per-monitor budget on. */
+private const val DEFAULT_SLO_MS = 2_500
 
 // ---------------------------------------------------------------- test panel
 

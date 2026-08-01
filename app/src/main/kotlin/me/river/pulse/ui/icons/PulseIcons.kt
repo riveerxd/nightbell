@@ -182,6 +182,18 @@ object PulseIcons {
         "M2.6 9.4 A13.4 13.4 0 0 1 21.4 9.4 M6 12.9 A8.6 8.6 0 0 1 18 12.9 " +
             "M9.5 16.4 A4.3 4.3 0 0 1 14.5 16.4 M12 19.9 L12.1 19.9",
     )
+    /**
+     * The wifi arcs, struck through.
+     *
+     * Same arcs as [Wifi] rather than the truncated-arc treatment other sets
+     * use: at the 19dp this renders at, broken arcs plus a slash turn into
+     * confetti, while one clean diagonal reads instantly.
+     */
+    val WifiOff = stroke(
+        "WifiOff",
+        "M2.6 9.4 A13.4 13.4 0 0 1 21.4 9.4 M6 12.9 A8.6 8.6 0 0 1 18 12.9 " +
+            "M9.5 16.4 A4.3 4.3 0 0 1 14.5 16.4 M12 19.9 L12.1 19.9 M4.4 4.4 L19.6 19.6",
+    )
     val Gauge = stroke("Gauge", "M12 19.6 A8.6 8.6 0 1 1 20.6 11 M12 12 L16.8 8.2")
     val Power = stroke("Power", "M12 3 L12 11.4 M7.3 6.1 A7.2 7.2 0 1 0 16.7 6.1")
     val Save = stroke(

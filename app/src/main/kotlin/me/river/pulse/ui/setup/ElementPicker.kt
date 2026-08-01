@@ -143,13 +143,14 @@ fun ElementPickerOverlay(
     existingSelector: String,
     onDismiss: () -> Unit,
     onConfirm: (PickedElement) -> Unit,
+    alreadyWatching: Int = 0,
 ) {
     AnimatedVisibility(
         visible = visible,
         enter = slideInVertically(spring(dampingRatio = 0.85f)) { it } + fadeIn(),
         exit = slideOutVertically(spring(dampingRatio = 0.9f)) { it } + fadeOut(),
     ) {
-        PickerContent(url, existingSelector, onDismiss, onConfirm)
+        PickerContent(url, existingSelector, alreadyWatching, onDismiss, onConfirm)
     }
 }
 
@@ -157,6 +158,7 @@ fun ElementPickerOverlay(
 private fun PickerContent(
     url: String,
     existingSelector: String,
+    alreadyWatching: Int,
     onDismiss: () -> Unit,
     onConfirm: (PickedElement) -> Unit,
 ) {
@@ -379,6 +381,7 @@ private fun PickerContent(
                 onPickModeChange = { pickMode = it },
                 picked = picked,
                 existingSelector = existingSelector,
+                alreadyWatching = alreadyWatching,
                 onClear = {
                     picked = null
                     webView?.evaluateJavascript(PickerScripts.CLEAR_SELECTION, null)
@@ -395,6 +398,7 @@ private fun PickerBottomBar(
     onPickModeChange: (Boolean) -> Unit,
     picked: PickedElement?,
     existingSelector: String,
+    alreadyWatching: Int,
     onClear: () -> Unit,
     onConfirm: () -> Unit,
 ) {
@@ -508,10 +512,19 @@ private fun PickerBottomBar(
 
         if (picked == null && existingSelector.isNotBlank() && existingSelector != "—") {
             Text(
-                text = "Currently watching: $existingSelector",
+                text = "Replacing: $existingSelector",
                 style = MaterialTheme.typography.bodySmall,
                 color = PulseColors.TextTertiary,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        } else if (picked == null && alreadyWatching > 0) {
+            Text(
+                text = "$alreadyWatching element${if (alreadyWatching == 1) "" else "s"} already " +
+                    "watched on this page — all checked in one load.",
+                style = MaterialTheme.typography.bodySmall,
+                color = PulseColors.TextTertiary,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
         }
