@@ -148,9 +148,10 @@ APK: `artifacts/Pulse-1.3.0-release.apk` · versionName `1.3.0` · versionCode `
 
 **What changed.** The dashboard's top block — wordmark line plus overview card —
 is now one state-coloured banner (`ui/dashboard/FleetBanner.kt`). Ten candidate
-redesigns were built as live Compose and screenshotted on a device
-(`artifacts/header-lab/`, 20 PNGs: each design in a healthy and an alerting
-state); this one was chosen. The other nine and the lab harness are deleted.
+redesigns were built as live Compose and reviewed as device screenshots, each in
+a healthy and an alerting state; this one was chosen. The other nine, the lab
+harness and the comparison screenshots are deleted — the chosen design is the
+record that matters, and the rejects were 11 MB of PNGs.
 
 **`Sparkline` lost its failure dots.** The stroke now carries the health itself:
 one `Brush.horizontalGradient` stop per sample, which — because the stops are
