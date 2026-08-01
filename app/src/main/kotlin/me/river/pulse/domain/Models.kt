@@ -419,6 +419,14 @@ data class MonitorRuntime(
     val lastElementTexts: List<String> = emptyList(),
 
     // ---- degraded track -----------------------------------------------------
+    /**
+     * What the phone's own connection appeared to be adding on the last check,
+     * per [NetworkBaseline]. Kept so the UI can explain a discounted reading;
+     * [lastLatencyMs] stays the number actually measured.
+     */
+    val lastNetworkExcessMs: Long = 0L,
+    /** The connection was in no state to judge slowness through. */
+    val lastLatencySuspect: Boolean = false,
     val degradedAlerting: Boolean = false,
     val lastDegradedAlertAt: Long = 0L,
 
@@ -560,4 +568,33 @@ data class GlobalSettings(
      * re-post whatever is genuinely current.
      */
     val notificationsRepairedForVersion: Int = 0,
+    /**
+     * Time a known-good endpoint alongside the checks, and discount whatever the
+     * phone's own connection is adding before calling a monitor slow.
+     *
+     * On by default: without it, bad wifi makes every monitor breach its SLO at
+     * once, and every one of those alerts is wrong. See [NetworkBaseline].
+     */
+    val latencyBaselineEnabled: Boolean = true,
+    /**
+     * The control endpoint. Wants to be something always up, close to every
+     * network, and cheap: a 204 has no body, so the round trip is connect plus
+     * TLS plus first byte rather than transfer time.
+     *
+     * If a network blocks it the probe simply fails, no readings accumulate, and
+     * latency is judged raw exactly as it was before this existed.
+     */
+    val latencyReferenceUrl: String = "https://www.gstatic.com/generate_204",
+)
+
+/**
+ * One timing of [GlobalSettings.latencyReferenceUrl].
+ *
+ * Timestamped because readings age out: a phone that moved from office wifi to
+ * cellular must not be held to the office's floor.
+ */
+@Serializable
+data class ReferenceSample(
+    val at: Long = 0L,
+    val rttMs: Long = 0L,
 )

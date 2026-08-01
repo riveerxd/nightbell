@@ -392,6 +392,25 @@ private fun MonitorRowCard(
                 )
                 Spacer(Modifier.width(6.dp))
             }
+            // Says why a number that looks slow was not treated as slow. Without
+            // this the compensation is invisible, and an invisible correction to a
+            // number the user is reading is indistinguishable from a bug.
+            if (runtime.lastLatencySuspect) {
+                MicroTag(
+                    text = "connection",
+                    color = PulseColors.Sky,
+                    background = PulseColors.Sky.copy(alpha = 0.14f),
+                    icon = PulseIcons.Wifi,
+                )
+                Spacer(Modifier.width(6.dp))
+            } else if (runtime.lastNetworkExcessMs > 0) {
+                MicroTag(
+                    text = "−${formatLatency(runtime.lastNetworkExcessMs)}",
+                    color = PulseColors.Sky,
+                    icon = PulseIcons.Wifi,
+                )
+                Spacer(Modifier.width(6.dp))
+            }
             if (runtime.lastCode > 0) {
                 MicroTag(
                     text = runtime.lastCode.toString(),

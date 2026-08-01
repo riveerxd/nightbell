@@ -12,6 +12,7 @@ import me.river.pulse.domain.Health
 import me.river.pulse.domain.Monitor
 import me.river.pulse.domain.MonitorCard
 import me.river.pulse.domain.MonitorRuntime
+import me.river.pulse.domain.ReferenceSample
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,6 +32,14 @@ data class PulseSnapshot(
     val monitors: List<Monitor> = emptyList(),
     val runtimes: Map<String, MonitorRuntime> = emptyMap(),
     val settings: GlobalSettings = GlobalSettings(),
+    /**
+     * Rolling timings of the latency reference, newest last.
+     *
+     * Persisted rather than held in memory because the WorkManager path can run
+     * each check pass in a fresh process — an in-memory window would never reach
+     * the minimum size and the compensation would silently never engage.
+     */
+    val reference: List<ReferenceSample> = emptyList(),
 ) {
     companion object {
         const val SCHEMA_VERSION = 1
@@ -123,6 +132,9 @@ class PulseStore(
         val current = snap.runtimes[id] ?: MonitorRuntime()
         snap.copy(runtimes = snap.runtimes + (id to transform(current)))
     }
+
+    suspend fun updateReference(transform: (List<ReferenceSample>) -> List<ReferenceSample>) =
+        mutate { snap -> snap.copy(reference = transform(snap.reference)) }
 
     suspend fun updateSettings(transform: (GlobalSettings) -> GlobalSettings) = mutate { snap ->
         snap.copy(settings = transform(snap.settings))

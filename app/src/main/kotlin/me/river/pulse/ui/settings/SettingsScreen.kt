@@ -51,6 +51,9 @@ import me.river.pulse.ui.components.GlassCard
 import me.river.pulse.ui.components.GlassIconButton
 import me.river.pulse.ui.components.IconBadge
 import me.river.pulse.ui.components.PulseButton
+import me.river.pulse.ui.components.GlassField
+import me.river.pulse.ui.components.GlassDivider
+import androidx.compose.ui.text.input.KeyboardType
 import me.river.pulse.ui.components.SectionHeader
 import me.river.pulse.ui.components.StaggeredEntrance
 import me.river.pulse.ui.components.rememberEntranceLog
@@ -342,6 +345,62 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                             icon = PulseIcons.Gauge,
                             accent = PulseColors.Amber,
                         )
+                    }
+
+                    AnimatedVisibility(
+                        visible = settings.defaultLatencySloMs > 0,
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically(),
+                    ) {
+                        Column {
+                            GlassDivider(Modifier.padding(vertical = 12.dp))
+                            Text(
+                                text = "A latency measured from this phone is your connection " +
+                                    "plus the server. On bad wifi that makes everything look " +
+                                    "slow at once. Pulse can time a known-good endpoint " +
+                                    "alongside the checks and subtract whatever your " +
+                                    "connection is adding.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = PulseColors.TextTertiary,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            ToggleRow(
+                                title = "Discount my connection",
+                                subtitle = if (settings.latencyBaselineEnabled) {
+                                    "Slow readings are checked against a reference first"
+                                } else {
+                                    "Off — a slow connection will read as slow services"
+                                },
+                                checked = settings.latencyBaselineEnabled,
+                                onCheckedChange = { on ->
+                                    viewModel.update { it.copy(latencyBaselineEnabled = on) }
+                                },
+                                icon = PulseIcons.Wifi,
+                                accent = PulseColors.Aqua,
+                            )
+                            AnimatedVisibility(
+                                visible = settings.latencyBaselineEnabled,
+                                enter = fadeIn() + expandVertically(),
+                                exit = fadeOut() + shrinkVertically(),
+                            ) {
+                                Column {
+                                    Spacer(Modifier.height(8.dp))
+                                    GlassField(
+                                        value = settings.latencyReferenceUrl,
+                                        onValueChange = { v ->
+                                            viewModel.update { it.copy(latencyReferenceUrl = v.trim()) }
+                                        },
+                                        label = "Reference endpoint",
+                                        placeholder = "https://www.gstatic.com/generate_204",
+                                        helper = "Wants to be always up and cheap to answer. If your " +
+                                            "network blocks it, latency is judged raw — nothing breaks.",
+                                        leadingIcon = PulseIcons.Globe,
+                                        accent = PulseColors.Aqua,
+                                        keyboardType = KeyboardType.Uri,
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }

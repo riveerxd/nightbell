@@ -12,6 +12,7 @@ import me.river.pulse.domain.Health
 import me.river.pulse.domain.Monitor
 import me.river.pulse.domain.MonitorKind
 import me.river.pulse.domain.MonitorRuntime
+import me.river.pulse.domain.NetworkBaseline
 import me.river.pulse.domain.UrgentAlerts
 import java.util.Calendar
 import java.util.concurrent.ConcurrentHashMap
@@ -35,6 +36,12 @@ class CheckEngine(
     private val http: HttpChecker,
     private val element: ElementChecker,
     private val alerts: AlertCenter,
+    /**
+     * Times a known-good endpoint so a slow *connection* is not reported as a
+     * slow service. Null disables the compensation entirely, which is what the
+     * unit-level tests want.
+     */
+    private val reference: LatencyReference? = null,
     private val nowMs: () -> Long = System::currentTimeMillis,
     private val minuteOfDay: () -> Int = {
         Calendar.getInstance().let { it.get(Calendar.HOUR_OF_DAY) * 60 + it.get(Calendar.MINUTE) }
@@ -124,13 +131,29 @@ class CheckEngine(
         }
 
         val slo = monitor.sloMs(settings)
+
+        // Discount whatever this phone's own connection is adding before calling
+        // anything slow. Only consulted for the latency verdict: a bad connection
+        // is a reason to doubt a *slow* reading, never a reason to stay quiet
+        // about an outage.
+        val verdict = NetworkBaseline.judge(
+            observedMs = result.latencyMs,
+            readings = if (settings.latencyBaselineEnabled) snapshot.reference else emptyList(),
+            nowMs = result.at,
+        )
+        val judgedLatency = if (settings.latencyBaselineEnabled) verdict.adjustedMs else result.latencyMs
+        val suspect = settings.latencyBaselineEnabled && verdict.unreliable
+
         val after = AlertDecider.advance(
             previous = before,
             result = result,
             historyDepth = settings.historyDepth,
-            degradedAboveMs = if (slo > 0) slo.toLong() else Long.MAX_VALUE,
+            // The health tint follows the same judgement as the alert, or a card
+            // would sit amber explaining nothing while no notification arrived.
+            degradedAboveMs = if (slo > 0 && !suspect) slo.toLong() else Long.MAX_VALUE,
+            judgedLatencyMs = judgedLatency,
         )
-        val degraded = AlertDecider.isDegraded(result.ok, result.latencyMs, slo.toLong())
+        val degraded = !suspect && AlertDecider.isDegraded(result.ok, judgedLatency, slo.toLong())
         val policy: AlertPolicy = if (monitor.useGlobalAlerts) settings.defaultAlert else monitor.alert
         val muted = before.mutedUntil > nowMs()
         val minute = minuteOfDay()
@@ -248,6 +271,8 @@ class CheckEngine(
         store.updateRuntime(monitorId) {
             after
                 .copy(
+                    lastNetworkExcessMs = if (settings.latencyBaselineEnabled) verdict.excessMs else 0L,
+                    lastLatencySuspect = suspect,
                     alerting = alertingNow,
                     lastAlertAt = if (decision.shouldNotify) result.at else before.lastAlertAt,
                     degradedAlerting = degradedAlertingNow,
@@ -263,6 +288,46 @@ class CheckEngine(
         }
         onStateChanged?.invoke()
         return result
+    }
+
+    /** Serialises probing so a burst of passes shares one round trip. */
+    private val referenceLock = Mutex()
+
+    /**
+     * Consecutive failed probes, for backing off.
+     *
+     * In memory on purpose: a fresh process retrying sooner is harmless, and this
+     * has no business in the persisted store.
+     */
+    private var referenceFailures = 0
+
+    /**
+     * Times the reference endpoint if the newest reading has gone stale.
+     *
+     * Called once per **pass**, never per check. It used to run inside
+     * `runLocked`, which meant a reference the network blocks added its whole
+     * timeout to a check — the measurement itself was unaffected, but the pass
+     * got slower for no benefit. One timing per pass is all the maths wants
+     * anyway, since the window is a rolling estimate and tolerates a reading a
+     * little older than the check it informs.
+     *
+     * Backs off exponentially while probes fail, so a network that blocks the
+     * endpoint costs one wasted request every half hour rather than one per pass.
+     */
+    private suspend fun refreshReference() {
+        val settings = store.currentSnapshot().settings
+        if (!settings.latencyBaselineEnabled) return
+        val probe = reference ?: return
+        if (!isOnline()) return
+
+        referenceLock.withLock {
+            val interval = REFERENCE_MIN_INTERVAL_MS shl referenceFailures.coerceAtMost(6)
+            val readings = store.currentSnapshot().reference
+            if (!NetworkBaseline.needsProbe(readings, nowMs(), interval)) return
+            val rtt = probe.probe(settings.latencyReferenceUrl)
+            referenceFailures = if (rtt == null) (referenceFailures + 1).coerceAtMost(6) else 0
+            store.updateReference { NetworkBaseline.record(it, rtt, nowMs()) }
+        }
     }
 
     /**
@@ -448,6 +513,8 @@ class CheckEngine(
             Log.i(TAG, "Offline — check pass skipped")
             return 0
         }
+        // Once, before the loop: the whole pass shares one reading of the control.
+        refreshReference()
         val snapshot = store.currentSnapshot()
         val now = nowMs()
         var ran = 0
@@ -522,5 +589,8 @@ class CheckEngine(
 
         /** Wake at least this often so a store edit made elsewhere is picked up. */
         const val MAX_IDLE_MS = 60_000L
+
+        /** Shortest gap between two timings of the latency reference. */
+        const val REFERENCE_MIN_INTERVAL_MS = 45_000L
     }
 }

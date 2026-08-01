@@ -5,6 +5,7 @@ import me.river.pulse.data.alerts.AlertCenter
 import me.river.pulse.data.check.CheckEngine
 import me.river.pulse.data.check.ElementChecker
 import me.river.pulse.data.check.HttpChecker
+import me.river.pulse.data.check.LatencyReference
 import me.river.pulse.data.icons.FaviconStore
 import me.river.pulse.data.net.NetworkMonitor
 import me.river.pulse.data.work.MonitorScheduler
@@ -30,7 +31,8 @@ object Pulse {
         val alerts = AlertCenter(context)
         val http = HttpChecker()
         val element = ElementChecker(context)
-        val engine = CheckEngine(store, http, element, alerts)
+        val reference = LatencyReference()
+        val engine = CheckEngine(store, http, element, alerts, reference)
         val scheduler = MonitorScheduler(context)
         val network = NetworkMonitor(context)
         val favicons = FaviconStore(context, isOnline = network::isOnline)

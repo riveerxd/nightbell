@@ -195,11 +195,20 @@ object AlertDecider {
         ok && sloMs > 0L && latencyMs > sloMs
 
     /** Folds a check outcome into the persisted runtime state for a monitor. */
+    /**
+     * @param judgedLatencyMs the latency the *health* decision should use. Defaults
+     *   to what was measured; [me.river.pulse.domain.NetworkBaseline]
+     *   passes a value with the local connection's excess removed. The sample and
+     *   `lastLatencyMs` always record what was actually measured — the adjustment
+     *   is an interpretation, and overwriting the observation with it would make
+     *   the history lie.
+     */
     fun advance(
         previous: MonitorRuntime,
         result: CheckResult,
         historyDepth: Int,
         degradedAboveMs: Long = 2_500L,
+        judgedLatencyMs: Long = result.latencyMs,
     ): MonitorRuntime {
         val sample = Sample(
             at = result.at,
@@ -214,7 +223,7 @@ object AlertDecider {
         return previous.copy(
             health = when {
                 !result.ok -> Health.DOWN
-                isDegraded(true, result.latencyMs, degradedAboveMs) -> Health.DEGRADED
+                isDegraded(true, judgedLatencyMs, degradedAboveMs) -> Health.DEGRADED
                 else -> Health.UP
             },
             lastCheckedAt = result.at,
