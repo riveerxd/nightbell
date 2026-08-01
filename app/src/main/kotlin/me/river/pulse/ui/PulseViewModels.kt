@@ -25,6 +25,13 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+/**
+ * Shown when a human asks for a check with no connectivity. Worth saying out
+ * loud: silently doing nothing would read as the app being broken, and running
+ * the check would produce a false outage.
+ */
+private const val OFFLINE_TOAST = "You're offline — checks are paused"
+
 // ------------------------------------------------------------------ dashboard
 
 class DashboardViewModel(private val graph: Pulse.Graph) : ViewModel() {
@@ -42,8 +49,19 @@ class DashboardViewModel(private val graph: Pulse.Graph) : ViewModel() {
     var toast by mutableStateOf<String?>(null)
         private set
 
+    /** Drives the banner's paused state. See [me.river.pulse.data.net.NetworkMonitor]. */
+    val offline: StateFlow<Boolean> = graph.network.online
+        .map { !it }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), !graph.network.isOnline())
+
     fun checkAll() {
         if (refreshing) return
+        // Say so rather than reporting "nothing to check yet", which is what the
+        // engine's honest 0 would otherwise be translated into.
+        if (!graph.network.isOnline()) {
+            toast = OFFLINE_TOAST
+            return
+        }
         refreshing = true
         viewModelScope.launch {
             try {
@@ -60,6 +78,10 @@ class DashboardViewModel(private val graph: Pulse.Graph) : ViewModel() {
     }
 
     fun check(monitorId: String) {
+        if (!graph.network.isOnline()) {
+            toast = OFFLINE_TOAST
+            return
+        }
         viewModelScope.launch { graph.engine.run(monitorId) }
     }
 
@@ -78,7 +100,10 @@ class DashboardViewModel(private val graph: Pulse.Graph) : ViewModel() {
         viewModelScope.launch {
             graph.store.delete(monitorId)
             graph.scheduler.cancel(monitorId)
-            graph.alerts.cancel(monitorId)
+            // All three id spaces. Cancelling only the down one used to strand
+            // the monitor's urgent notification forever: it is `ongoing`, and
+            // once the monitor is gone no per-monitor loop ever visits it again.
+            graph.alerts.cancelAll(monitorId)
             toast = "Monitor deleted"
         }
     }
@@ -94,6 +119,13 @@ class DashboardViewModel(private val graph: Pulse.Graph) : ViewModel() {
         viewModelScope.launch {
             graph.engine.unmute(monitorId)
             toast = "Alerts un-muted"
+        }
+    }
+
+    fun acknowledgeUrgent(monitorId: String) {
+        viewModelScope.launch {
+            graph.engine.acknowledgeUrgent(monitorId)
+            toast = "Urgent alert acknowledged"
         }
     }
 
@@ -132,23 +164,38 @@ class SetupViewModel(
     var pickerOpen by mutableStateOf(false)
         private set
 
+    /**
+     * Which element slot the picker is filling. `-1` means "append a new one" —
+     * the picker itself is identical either way, only the commit differs.
+     */
+    var pickingIndex by mutableStateOf(-1)
+        private set
+
     var saved by mutableStateOf(false)
         private set
 
     var isEditing by mutableStateOf(editingId != null)
         private set
 
+    var realBlurEnabled by mutableStateOf(true)
+        private set
+
     val report: Validation.Report get() = Validation.report(draft)
+
+    /** Always the list, never the legacy single field. */
+    val elements: List<ElementTarget> get() = draft.targets
 
     init {
         viewModelScope.launch {
             val snapshot = graph.store.currentSnapshot()
+            realBlurEnabled = snapshot.settings.realBlurEnabled
             if (editingId != null) {
-                snapshot.monitors.firstOrNull { it.id == editingId }?.let { draft = it }
+                snapshot.monitors.firstOrNull { it.id == editingId }?.let { draft = it.migrated }
             } else {
                 draft = draft.copy(
                     intervalMinutes = snapshot.settings.defaultIntervalMinutes,
                     timeoutSeconds = snapshot.settings.defaultTimeoutSeconds,
+                    latencySloMs = 0,
                     accent = snapshot.monitors.size,
                 )
             }
@@ -167,17 +214,40 @@ class SetupViewModel(
                 kind = kind,
                 method = me.river.pulse.domain.HttpMethod.GET,
                 assertion = draft.assertion.copy(mode = AssertionMode.NONE),
-                element = null,
-            )
+            ).withTargets(emptyList())
 
-            MonitorKind.ADVANCED_REQUEST -> draft.copy(kind = kind, element = null)
+            MonitorKind.ADVANCED_REQUEST -> draft.copy(kind = kind).withTargets(emptyList())
 
             MonitorKind.WEBSITE_ELEMENT -> draft.copy(
                 kind = kind,
                 method = me.river.pulse.domain.HttpMethod.GET,
-                element = draft.element ?: ElementTarget(),
             )
         }
+        testResult = null
+    }
+
+    // ---- multi-element editing ---------------------------------------------
+
+    fun updateElement(index: Int, transform: (ElementTarget) -> ElementTarget) {
+        val current = draft.targets
+        if (index !in current.indices) return
+        draft = draft.withTargets(current.toMutableList().also { it[index] = transform(it[index]) })
+        testResult = null
+    }
+
+    fun removeElement(index: Int) {
+        val current = draft.targets
+        if (index !in current.indices) return
+        draft = draft.withTargets(current.filterIndexed { i, _ -> i != index })
+        testResult = null
+    }
+
+    fun moveElement(index: Int, delta: Int) {
+        val current = draft.targets.toMutableList()
+        val target = index + delta
+        if (index !in current.indices || target !in current.indices) return
+        current.add(target, current.removeAt(index))
+        draft = draft.withTargets(current)
         testResult = null
     }
 
@@ -189,12 +259,16 @@ class SetupViewModel(
 
     fun back() = goTo(step - 1)
 
-    fun openPicker() {
-        pickerOpen = Validation.urlNote(draft.url)?.severity != Validation.Severity.ERROR
+    /** @param index element slot to overwrite, or -1 to append a new one. */
+    fun openPicker(index: Int = -1) {
+        if (Validation.urlNote(draft.url)?.severity == Validation.Severity.ERROR) return
+        pickingIndex = index
+        pickerOpen = true
     }
 
     fun closePicker() {
         pickerOpen = false
+        pickingIndex = -1
     }
 
     fun applyPick(
@@ -205,20 +279,24 @@ class SetupViewModel(
         classSignature: String,
         text: String,
     ) {
-        val existing = draft.element ?: ElementTarget()
-        draft = draft.copy(
-            element = existing.copy(
-                cssSelector = cssSelector,
-                xpath = xpath,
-                elementId = elementId,
-                tagName = tagName,
-                classSignature = classSignature,
-                textSnippet = text,
-                expectedText = existing.expectedText.ifBlank { text },
-            ),
-            name = draft.name.ifBlank { "" },
+        val current = draft.targets.toMutableList()
+        val index = pickingIndex
+        // Re-picking keeps the slot's mode/label/attribute — the user is
+        // repairing a broken selector, not starting over.
+        val existing = current.getOrNull(index) ?: ElementTarget()
+        val updated = existing.copy(
+            cssSelector = cssSelector,
+            xpath = xpath,
+            elementId = elementId,
+            tagName = tagName,
+            classSignature = classSignature,
+            textSnippet = text,
+            expectedText = existing.expectedText.ifBlank { text },
         )
+        if (index in current.indices) current[index] = updated else current += updated
+        draft = draft.withTargets(current)
         pickerOpen = false
+        pickingIndex = -1
         testResult = null
     }
 
@@ -244,7 +322,7 @@ class SetupViewModel(
                 url = draft.url.trim(),
                 name = draft.name.trim(),
                 headers = draft.headers.filterNot { it.isBlank },
-            )
+            ).migrated
             graph.store.upsert(clean)
             val snapshot = graph.store.currentSnapshot()
             graph.scheduler.scheduleNext(clean, snapshot.settings)
@@ -277,6 +355,10 @@ class DetailViewModel(
 
     fun checkNow() {
         if (busy) return
+        if (!graph.network.isOnline()) {
+            toast = OFFLINE_TOAST
+            return
+        }
         busy = true
         viewModelScope.launch {
             try {
@@ -311,11 +393,22 @@ class DetailViewModel(
         }
     }
 
+    /**
+     * In-app acknowledgement of an urgent outage. Same path as the notification
+     * action, so the two can't drift apart.
+     */
+    fun acknowledgeUrgent() {
+        viewModelScope.launch {
+            graph.engine.acknowledgeUrgent(monitorId)
+            toast = "Acknowledged — no more urgent alerts for this outage"
+        }
+    }
+
     fun delete(onDone: () -> Unit) {
         viewModelScope.launch {
             graph.store.delete(monitorId)
             graph.scheduler.cancel(monitorId)
-            graph.alerts.cancel(monitorId)
+            graph.alerts.cancelAll(monitorId)
             onDone()
         }
     }
@@ -341,6 +434,9 @@ class SettingsViewModel(private val graph: Pulse.Graph) : ViewModel() {
             graph.store.updateSettings(transform)
             val snapshot = graph.store.currentSnapshot()
             graph.scheduler.syncAll(snapshot.monitors, snapshot.settings)
+            // Strict mode is a setting, so flipping it has to start or stop the
+            // service right away rather than at the next check.
+            graph.notifyStateChanged()
         }
     }
 
