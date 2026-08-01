@@ -30,7 +30,7 @@ class MainActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
         Pulse.install(applicationContext)
-        pendingMonitorId = intent?.getStringExtra(EXTRA_MONITOR_ID)
+        pendingMonitorId = monitorIdFrom(intent)
         requestNotificationPermissionIfNeeded()
 
         setContent {
@@ -42,7 +42,20 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        pendingMonitorId = intent.getStringExtra(EXTRA_MONITOR_ID)
+        pendingMonitorId = monitorIdFrom(intent)
+    }
+
+    /**
+     * Notifications pass the id as an extra; widget rows use a `pulse://monitor/<id>`
+     * URI, because [android.app.PendingIntent] equality ignores extras and every
+     * row would otherwise collapse onto one intent.
+     */
+    private fun monitorIdFrom(intent: Intent?): String? {
+        if (intent == null) return null
+        intent.getStringExtra(EXTRA_MONITOR_ID)?.takeIf { it.isNotBlank() }?.let { return it }
+        val data = intent.data ?: return null
+        if (data.scheme != "pulse" || data.host != "monitor") return null
+        return data.lastPathSegment?.takeIf { it.isNotBlank() }
     }
 
     private fun requestNotificationPermissionIfNeeded() {

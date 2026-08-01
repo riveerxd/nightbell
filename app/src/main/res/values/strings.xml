@@ -2,4 +2,6 @@
 <resources>
     <string name="app_name">Pulse</string>
     <string name="notif_channel_group_alerts">Monitor alerts</string>
+    <string name="widget_name">Pulse status</string>
+    <string name="widget_description">Monitor health at a glance, worst first.</string>
 </resources>
