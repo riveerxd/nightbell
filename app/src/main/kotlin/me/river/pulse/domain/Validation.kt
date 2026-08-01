@@ -10,8 +10,11 @@ object Validation {
 
     enum class Field {
         NAME, URL, METHOD, HEADERS, BODY, STATUS, ASSERTION, JSON_PATH,
-        INTERVAL, TIMEOUT, ELEMENT, ELEMENT_TEXT,
+        INTERVAL, TIMEOUT, ELEMENT, ELEMENT_TEXT, LATENCY_SLO, URGENT,
     }
+
+    /** Past this many watched elements the settle loop is worth warning about. */
+    private const val MANY_ELEMENTS = 8
 
     data class Note(val field: Field, val severity: Severity, val message: String)
 
@@ -137,21 +140,61 @@ object Validation {
             notes += Note(Field.TIMEOUT, Severity.WARNING, "Timeout is longer than the check interval")
         }
 
-        // Element monitor
-        if (monitor.kind == MonitorKind.WEBSITE_ELEMENT) {
-            val element = monitor.element
-            if (element == null || !element.isCaptured) {
-                notes += Note(Field.ELEMENT, Severity.ERROR, "Open the preview and tap an element to watch")
-            } else if (
-                element.mode == ElementMode.TEXT_EQUALS || element.mode == ElementMode.TEXT_CONTAINS
-            ) {
-                if (element.expectedText.isBlank()) {
-                    notes += Note(Field.ELEMENT_TEXT, Severity.ERROR, "${element.mode.label} needs text to compare")
-                }
-            } else if (element.mode == ElementMode.TEXT_MATCHES_SNAPSHOT && element.textSnippet.isBlank()) {
+        // Latency SLO
+        if (monitor.latencySloMs != 0) {
+            if (monitor.latencySloMs < 0) {
+                notes += Note(Field.LATENCY_SLO, Severity.ERROR, "A latency budget can't be negative")
+            } else if (monitor.latencySloMs > monitor.timeoutSeconds * 1000) {
                 notes += Note(
-                    Field.ELEMENT_TEXT, Severity.WARNING,
-                    "No text was captured — re-pick the element to snapshot it",
+                    Field.LATENCY_SLO, Severity.WARNING,
+                    "Budget is longer than the timeout — the check fails before it can go degraded",
+                )
+            }
+        }
+
+        // Urgent
+        if (monitor.urgent && monitor.urgentRepeatMinutes < 1) {
+            notes += Note(Field.URGENT, Severity.ERROR, "Urgent repeats must be at least a minute apart")
+        }
+
+        // Element monitor — one page load, N assertions.
+        if (monitor.kind == MonitorKind.WEBSITE_ELEMENT) {
+            val elements = monitor.targets
+            if (elements.isEmpty()) {
+                notes += Note(Field.ELEMENT, Severity.ERROR, "Open the preview and tap an element to watch")
+            }
+            elements.forEachIndexed { index, element ->
+                val where = if (elements.size == 1) "" else " (${element.displayLabel})"
+                if (element.mode == ElementMode.TEXT_EQUALS || element.mode == ElementMode.TEXT_CONTAINS) {
+                    if (element.expectedText.isBlank()) {
+                        notes += Note(
+                            Field.ELEMENT_TEXT, Severity.ERROR,
+                            "${element.mode.label}$where needs text to compare",
+                        )
+                    }
+                } else if (element.mode == ElementMode.TEXT_MATCHES_SNAPSHOT && element.textSnippet.isBlank()) {
+                    notes += Note(
+                        Field.ELEMENT_TEXT, Severity.WARNING,
+                        "No text was captured$where — re-pick the element to snapshot it",
+                    )
+                }
+                // Two slots resolving to the same node is almost always a
+                // double-tap, and it doubles the work for nothing.
+                val duplicate = elements.subList(0, index).any {
+                    it.displaySelector == element.displaySelector && element.isCaptured
+                }
+                if (duplicate) {
+                    notes += Note(
+                        Field.ELEMENT, Severity.WARNING,
+                        "Element ${index + 1} watches the same node as an earlier one",
+                    )
+                }
+            }
+            if (elements.size > MANY_ELEMENTS) {
+                notes += Note(
+                    Field.ELEMENT, Severity.HINT,
+                    "${elements.size} elements on one page — still a single load, but the " +
+                        "check gets slower to settle",
                 )
             }
         }

@@ -157,6 +157,8 @@ data class ElementTarget(
     val attribute: String = "",
     val mode: ElementMode = ElementMode.EXISTS,
     val expectedText: String = "",
+    /** User-supplied nickname, shown wherever several elements are listed. */
+    val label: String = "",
 ) {
     val isCaptured: Boolean
         get() = cssSelector.isNotBlank() || xpath.isNotBlank() || elementId.isNotBlank()
@@ -167,6 +169,15 @@ data class ElementTarget(
             cssSelector.isNotBlank() -> cssSelector
             xpath.isNotBlank() -> xpath
             else -> "—"
+        }
+
+    /** What to call this element in a list: label → tag → selector. */
+    val displayLabel: String
+        get() = label.ifBlank {
+            when {
+                tagName.isNotBlank() -> "<$tagName>"
+                else -> displaySelector
+            }
         }
 }
 
@@ -253,6 +264,19 @@ data class AlertPolicy(
     val quietEndMinute: Int = 7 * 60,
     /** When true, a down alert still fires during quiet hours (muted sound). */
     val criticalBypassesQuiet: Boolean = false,
+
+    // ---- degraded / latency-SLO track ---------------------------------------
+    // Deliberately independent of the down track: "slow" and "broken" are
+    // different incidents, and someone who wants to know about a 3-second API
+    // usually does not want that alert on the same cooldown as an outage.
+    /** Fire an alert when a monitor is UP but slower than its latency SLO. */
+    val alertOnDegraded: Boolean = false,
+    /** All-clear when latency drops back under the SLO. */
+    val alertOnDegradedRecovery: Boolean = true,
+    /** Minimum gap between two degraded alerts for the same monitor. */
+    val degradedCooldownMinutes: Int = 30,
+    val degradedRepeatEnabled: Boolean = false,
+    val degradedRepeatEveryMinutes: Int = 60,
 ) {
     val summary: String
         get() = buildList {
@@ -261,6 +285,7 @@ data class AlertPolicy(
             if (vibrate) add(vibrationStyle.label)
             if (repeatEnabled) add("repeat ${repeatEveryMinutes}m")
             if (failureThreshold > 1) add("after $failureThreshold fails")
+            if (alertOnDegraded) add("degraded alerts")
         }.joinToString(" · ")
 }
 
@@ -276,7 +301,16 @@ data class Monitor(
     val contentType: String = "application/json",
     val status: StatusExpectation = StatusExpectation(),
     val assertion: BodyAssertion = BodyAssertion(),
+    /**
+     * The first watched element.
+     *
+     * Kept as its own field — rather than folded into [elements] — so a store
+     * written by 1.0.0 still decodes. [migrated] lifts it into the list; the
+     * list is what every checker and screen reads.
+     */
     val element: ElementTarget? = null,
+    /** Every element watched on one page load. See [targets]. */
+    val elements: List<ElementTarget> = emptyList(),
     val timeoutSeconds: Int = 15,
     val intervalMinutes: Int = 15,
     val followRedirects: Boolean = true,
@@ -284,6 +318,18 @@ data class Monitor(
     /** When true this monitor inherits the global alert policy. */
     val useGlobalAlerts: Boolean = true,
     val alert: AlertPolicy = AlertPolicy(),
+    /**
+     * Nag until acknowledged while this monitor is down. See
+     * [UrgentAlerts] for the state machine.
+     */
+    val urgent: Boolean = false,
+    /** Gap between two urgent re-alerts for an unacknowledged outage. */
+    val urgentRepeatMinutes: Int = 5,
+    /**
+     * Latency budget in millis. A successful response slower than this is
+     * [Health.DEGRADED]. 0 means "inherit [GlobalSettings.defaultLatencySloMs]".
+     */
+    val latencySloMs: Int = 0,
     val accent: Int = 0,
     val createdAt: Long = 0L,
 ) {
@@ -295,6 +341,35 @@ data class Monitor(
             .removePrefix("http://")
             .removeSuffix("/")
             .ifBlank { "new monitor" }
+
+    /** Every captured element this monitor watches, oldest store format included. */
+    val targets: List<ElementTarget>
+        get() = when {
+            elements.isNotEmpty() -> elements.filter { it.isCaptured }
+            element != null && element.isCaptured -> listOf(element)
+            else -> emptyList()
+        }
+
+    /**
+     * Normalised copy: [elements] is authoritative and [element] mirrors its
+     * head so an older build reading the same store still finds a target.
+     */
+    val migrated: Monitor
+        get() {
+            val list = targets
+            return if (list == elements && element == list.firstOrNull()) {
+                this
+            } else {
+                copy(elements = list, element = list.firstOrNull())
+            }
+        }
+
+    fun withTargets(list: List<ElementTarget>): Monitor =
+        copy(elements = list, element = list.firstOrNull())
+
+    /** Effective latency budget, or 0 when neither monitor nor global sets one. */
+    fun sloMs(settings: GlobalSettings): Int =
+        if (latencySloMs > 0) latencySloMs else settings.defaultLatencySloMs
 }
 
 @Serializable
@@ -340,8 +415,32 @@ data class MonitorRuntime(
     /** Epoch millis until which alerts for this monitor are snoozed. */
     val mutedUntil: Long = 0L,
     val lastElementText: String = "",
+    /** One entry per watched element, aligned with [Monitor.targets]. */
+    val lastElementTexts: List<String> = emptyList(),
+
+    // ---- degraded track -----------------------------------------------------
+    val degradedAlerting: Boolean = false,
+    val lastDegradedAlertAt: Long = 0L,
+
+    // ---- urgent track -------------------------------------------------------
+    /** An urgent outage is in progress and has *not* been acknowledged. */
+    val urgentActive: Boolean = false,
+    /** The user acknowledged the current outage; stays true until recovery. */
+    val urgentAcknowledged: Boolean = false,
+    val lastUrgentAlertAt: Long = 0L,
+
     val samples: List<Sample> = emptyList(),
 ) {
+    /** Pure-domain view of the urgent state machine's inputs. */
+    val urgentState: UrgentAlerts.State
+        get() = UrgentAlerts.State(urgentActive, urgentAcknowledged, lastUrgentAlertAt)
+
+    fun withUrgentState(state: UrgentAlerts.State): MonitorRuntime = copy(
+        urgentActive = state.active,
+        urgentAcknowledged = state.acknowledged,
+        lastUrgentAlertAt = state.lastAlertAt,
+    )
+
     val uptimePercent: Float
         get() = if (samples.isEmpty()) 0f else samples.count { it.ok } * 100f / samples.size
 
@@ -423,6 +522,8 @@ data class CheckResult(
     val detail: String = "",
     val bodyPreview: String = "",
     val elementText: String = "",
+    /** One entry per watched element, in [Monitor.targets] order. */
+    val elementTexts: List<String> = emptyList(),
     val at: Long = 0L,
 )
 
@@ -437,4 +538,26 @@ data class GlobalSettings(
     val historyDepth: Int = 60,
     val motionIntensity: Float = 1f,
     val hasSeenOnboarding: Boolean = false,
+    /**
+     * Run a foreground service so checks keep their cadence in Doze.
+     * Costs a persistent notification and real battery — see the README.
+     */
+    val strictForegroundMonitoring: Boolean = false,
+    /**
+     * Fallback latency budget for monitors that don't set their own.
+     * 2500 ms matches the behaviour shipped in 1.0.0; 0 disables DEGRADED.
+     */
+    val defaultLatencySloMs: Int = 2_500,
+    /** Real backdrop blur on API 31+. Falls back to opaque glass when off. */
+    val realBlurEnabled: Boolean = true,
+    /**
+     * Highest `versionCode` whose one-time notification repair has run.
+     *
+     * 1.1.0 could strand alert notifications that no longer matched any
+     * monitor — and urgent ones are `ongoing`, so the user could not clear them
+     * by hand. The repair cannot find those by reasoning about state, so on
+     * first launch after upgrading it wipes the slate and lets the next check
+     * re-post whatever is genuinely current.
+     */
+    val notificationsRepairedForVersion: Int = 0,
 )
