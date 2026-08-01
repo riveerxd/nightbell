@@ -1,0 +1,308 @@
+package me.river.pulse.ui.components
+
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import me.river.pulse.ui.theme.LocalPulseMotion
+import me.river.pulse.ui.theme.PulseColors
+import me.river.pulse.ui.theme.PulseRadii
+import me.river.pulse.ui.theme.glass
+import kotlinx.coroutines.delay
+import me.river.pulse.ui.theme.rememberLoopingFloat
+
+/** The workhorse surface. Optionally pressable, with a springy scale response. */
+@Composable
+fun GlassCard(
+    modifier: Modifier = Modifier,
+    shape: Shape = RoundedCornerShape(PulseRadii.card),
+    corner: Dp = PulseRadii.card,
+    accent: Color = Color.Transparent,
+    elevation: Dp = 18.dp,
+    contentPadding: Dp = 18.dp,
+    onClick: (() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val motion = LocalPulseMotion.current
+    val scale by animateFloatAsState(
+        targetValue = if (pressed && motion.enabled) 0.975f else 1f,
+        animationSpec = spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow),
+        label = "cardScale",
+    )
+
+    Column(
+        modifier = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .glass(shape = shape, corner = corner, elevation = elevation, glow = accent.copy(alpha = 0.6f))
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(
+                        interactionSource = interaction,
+                        indication = ripple(color = if (accent == Color.Transparent) PulseColors.Aqua else accent),
+                        onClick = onClick,
+                    )
+                } else {
+                    Modifier
+                },
+            )
+            .padding(contentPadding),
+        content = content,
+    )
+}
+
+/** Section heading with a hairline rule that fades out to the right. */
+@Composable
+fun SectionHeader(
+    title: String,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    accent: Color = PulseColors.Aqua,
+    trailing: @Composable (() -> Unit)? = null,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth().padding(bottom = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = accent,
+                modifier = Modifier.size(15.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(
+            text = title.uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            color = PulseColors.TextSecondary,
+            // Screen readers spell out ALL-CAPS strings; announce the real title.
+            modifier = Modifier.semantics { contentDescription = title },
+        )
+        Spacer(Modifier.width(12.dp))
+        Box(
+            Modifier
+                .weight(1f)
+                .height(1.dp)
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(accent.copy(alpha = 0.35f), Color.Transparent),
+                    ),
+                ),
+        )
+        if (trailing != null) {
+            Spacer(Modifier.width(12.dp))
+            trailing()
+        }
+    }
+}
+
+@Composable
+fun GlassDivider(modifier: Modifier = Modifier, alpha: Float = 0.10f) {
+    Box(
+        modifier
+            .fillMaxWidth()
+            .height(1.dp)
+            .background(
+                Brush.horizontalGradient(
+                    listOf(
+                        Color.Transparent,
+                        Color.White.copy(alpha = alpha),
+                        Color.Transparent,
+                    ),
+                ),
+            ),
+    )
+}
+
+/**
+ * Staggered entrance: each item drifts up, scales in and fades on a short delay
+ * derived from its index, capped so long lists never feel sluggish.
+ */
+@Composable
+fun StaggeredEntrance(
+    index: Int,
+    modifier: Modifier = Modifier,
+    key: Any? = Unit,
+    content: @Composable () -> Unit,
+) {
+    val motion = LocalPulseMotion.current
+    var shown by remember(key) { mutableStateOf(!motion.enabled) }
+    LaunchedEffect(key) {
+        if (motion.enabled) {
+            delay((index.coerceAtMost(9) * 55L))
+            shown = true
+        }
+    }
+    val progress by animateFloatAsState(
+        targetValue = if (shown) 1f else 0f,
+        animationSpec = spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessLow),
+        label = "entrance",
+    )
+    Box(
+        modifier.graphicsLayer {
+            alpha = progress
+            translationY = (1f - progress) * 46f
+            scaleX = 0.94f + progress * 0.06f
+            scaleY = 0.94f + progress * 0.06f
+        },
+    ) { content() }
+}
+
+@Composable
+private fun rememberShimmerProgress(): Float {
+    val value by rememberLoopingFloat(
+        initialValue = -1f,
+        targetValue = 2f,
+        durationMillis = 1_500,
+        label = "shimmerSweep",
+    )
+    return value
+}
+
+/** Skeleton block used while the first check is still running. */
+@Composable
+fun ShimmerBlock(
+    modifier: Modifier = Modifier,
+    shape: Shape = RoundedCornerShape(10.dp),
+) {
+    val progress = rememberShimmerProgress()
+    Box(
+        modifier
+            .clip(shape)
+            .background(Color.White.copy(alpha = 0.06f))
+            .drawWithContent {
+                drawContent()
+                val width = size.width
+                drawRect(
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color.White.copy(alpha = 0.14f),
+                            Color.Transparent,
+                        ),
+                        start = Offset(progress * width - width * 0.4f, 0f),
+                        end = Offset(progress * width + width * 0.4f, size.height),
+                    ),
+                )
+            }
+            .clearAndSetSemantics { },
+    )
+}
+
+/** Small uppercase tag used for kinds, methods and codes. */
+@Composable
+fun MicroTag(
+    text: String,
+    modifier: Modifier = Modifier,
+    color: Color = PulseColors.TextSecondary,
+    background: Color = Color.White.copy(alpha = 0.07f),
+    icon: ImageVector? = null,
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(PulseRadii.chip))
+            .background(background)
+            .padding(horizontal = 9.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        if (icon != null) {
+            Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(11.dp))
+        }
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            color = color,
+        )
+    }
+}
+
+@Composable
+fun IconBadge(
+    icon: ImageVector,
+    accent: Color,
+    modifier: Modifier = Modifier,
+    size: Dp = 40.dp,
+    contentDescription: String? = null,
+) {
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(RoundedCornerShape(size / 2.9f))
+            .background(
+                Brush.linearGradient(
+                    listOf(accent.copy(alpha = 0.30f), accent.copy(alpha = 0.08f)),
+                ),
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = accent,
+            modifier = Modifier.size(size * 0.48f),
+        )
+    }
+}
+
+/** Local content colour helper so callers can theme icon rows in one place. */
+@Composable
+fun ProvideMutedContent(content: @Composable () -> Unit) {
+    androidx.compose.runtime.CompositionLocalProvider(
+        LocalContentColor provides PulseColors.TextSecondary,
+        content = content,
+    )
+}

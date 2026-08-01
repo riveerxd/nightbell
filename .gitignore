@@ -1,0 +1,14 @@
+# Build output
+build/
+app/build/
+.gradle/
+local.properties
+
+# Signing material — regenerate with the command in HANDOFF.md
+keystore/*.jks
+keystore/keystore.properties
+
+# Scratch
+*.log
+.idea/
+.DS_Store

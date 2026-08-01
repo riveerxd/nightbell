@@ -1,0 +1,364 @@
+package me.river.pulse.ui.components
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
+import me.river.pulse.domain.AlertPolicy
+import me.river.pulse.domain.SoundChoice
+import me.river.pulse.domain.VibrationStyle
+import me.river.pulse.ui.icons.PulseIcons
+import me.river.pulse.ui.theme.PulseColors
+
+/** Renders a minute-of-day as 24h wall clock. */
+fun formatMinuteOfDay(minute: Int): String {
+    val safe = ((minute % 1440) + 1440) % 1440
+    return "%02d:%02d".format(safe / 60, safe % 60)
+}
+
+private fun soundIcon(choice: SoundChoice) = when (choice) {
+    SoundChoice.SILENT -> PulseIcons.VolumeOff
+    SoundChoice.DEFAULT_NOTIFICATION -> PulseIcons.Bell
+    SoundChoice.ALARM -> PulseIcons.Warning
+    SoundChoice.RINGTONE -> PulseIcons.Volume
+}
+
+/**
+ * The full alert-policy surface, shared by global settings and per-monitor
+ * overrides so both always stay in lockstep.
+ */
+@Composable
+fun AlertPolicyEditor(
+    policy: AlertPolicy,
+    onChange: (AlertPolicy) -> Unit,
+    modifier: Modifier = Modifier,
+    accent: Color = PulseColors.Aqua,
+    onPreviewVibration: (VibrationStyle) -> Unit = {},
+    onSendTestAlert: (() -> Unit)? = null,
+    showMasterToggle: Boolean = true,
+) {
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+
+        if (showMasterToggle) {
+            ToggleRow(
+                title = "Alerts for this monitor",
+                subtitle = if (policy.enabled) policy.summary else "You won't be notified at all",
+                checked = policy.enabled,
+                onCheckedChange = { onChange(policy.copy(enabled = it)) },
+                icon = if (policy.enabled) PulseIcons.Bell else PulseIcons.BellOff,
+                accent = accent,
+            )
+        }
+
+        AnimatedVisibility(
+            visible = policy.enabled,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically(),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+
+                ToggleRow(
+                    title = "Notify when it goes down",
+                    subtitle = "The main event",
+                    checked = policy.alertOnDown,
+                    onCheckedChange = { onChange(policy.copy(alertOnDown = it)) },
+                    icon = PulseIcons.Warning,
+                    accent = PulseColors.Rose,
+                )
+
+                ToggleRow(
+                    title = "Notify when it recovers",
+                    subtitle = "A quiet all-clear once it's healthy again",
+                    checked = policy.alertOnRecovery,
+                    onCheckedChange = { onChange(policy.copy(alertOnRecovery = it)) },
+                    icon = PulseIcons.Check,
+                    accent = PulseColors.Mint,
+                )
+
+                Spacer(Modifier.height(10.dp))
+                SectionHeader("Sound", icon = PulseIcons.Volume, accent = accent)
+                ChipSelector(
+                    options = SoundChoice.entries.toList(),
+                    selected = policy.sound,
+                    onSelect = { onChange(policy.copy(sound = it)) },
+                    label = { it.label },
+                    icon = { soundIcon(it) },
+                    accent = accent,
+                )
+                Text(
+                    text = "Android freezes sound and vibration onto a notification " +
+                        "channel, so Pulse creates one channel per combination. Long-press " +
+                        "any Pulse notification to fine-tune it in system settings.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = PulseColors.TextTertiary,
+                    modifier = Modifier.padding(top = 8.dp, start = 2.dp),
+                )
+
+                Spacer(Modifier.height(14.dp))
+                SectionHeader("Haptics", icon = PulseIcons.Vibrate, accent = accent)
+                ToggleRow(
+                    title = "Vibrate",
+                    subtitle = if (policy.vibrate) {
+                        "Style: ${policy.vibrationStyle.label} — tap a style to feel it"
+                    } else {
+                        "No haptic feedback"
+                    },
+                    checked = policy.vibrate,
+                    onCheckedChange = { onChange(policy.copy(vibrate = it)) },
+                    icon = PulseIcons.Vibrate,
+                    accent = accent,
+                )
+                AnimatedVisibility(
+                    visible = policy.vibrate,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically(),
+                ) {
+                    Column {
+                        Spacer(Modifier.height(6.dp))
+                        ChipSelector(
+                            options = VibrationStyle.entries.toList(),
+                            selected = policy.vibrationStyle,
+                            onSelect = {
+                                onChange(policy.copy(vibrationStyle = it))
+                                onPreviewVibration(it)
+                            },
+                            label = { it.label },
+                            accent = PulseColors.Violet,
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(14.dp))
+                SectionHeader("Escalation", icon = PulseIcons.Zap, accent = accent)
+
+                StepperRow(
+                    title = "Failures before alerting",
+                    value = policy.failureThreshold,
+                    onValueChange = { onChange(policy.copy(failureThreshold = it)) },
+                    range = 1..10,
+                    icon = PulseIcons.Filter,
+                    accent = accent,
+                )
+                Text(
+                    text = if (policy.failureThreshold == 1) {
+                        "Alerts on the very first failed check."
+                    } else {
+                        "Ignores blips: needs ${policy.failureThreshold} failures in a row."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = PulseColors.TextTertiary,
+                    modifier = Modifier.padding(start = 2.dp, bottom = 8.dp),
+                )
+
+                StepperRow(
+                    title = "Cooldown",
+                    value = policy.cooldownMinutes,
+                    onValueChange = { onChange(policy.copy(cooldownMinutes = it)) },
+                    range = 0..240,
+                    step = 5,
+                    suffix = "m",
+                    icon = PulseIcons.Clock,
+                    accent = accent,
+                )
+                Text(
+                    text = "Minimum gap between two alerts for the same monitor.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = PulseColors.TextTertiary,
+                    modifier = Modifier.padding(start = 2.dp, bottom = 8.dp),
+                )
+
+                ToggleRow(
+                    title = "Keep reminding me",
+                    subtitle = if (policy.repeatEnabled) {
+                        "Re-alerts every ${policy.repeatEveryMinutes} minutes while down"
+                    } else {
+                        "One alert per outage"
+                    },
+                    checked = policy.repeatEnabled,
+                    onCheckedChange = { onChange(policy.copy(repeatEnabled = it)) },
+                    icon = PulseIcons.History,
+                    accent = PulseColors.Amber,
+                )
+                AnimatedVisibility(
+                    visible = policy.repeatEnabled,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically(),
+                ) {
+                    StepperRow(
+                        title = "Repeat every",
+                        value = policy.repeatEveryMinutes,
+                        onValueChange = { onChange(policy.copy(repeatEveryMinutes = it)) },
+                        range = 5..720,
+                        step = 5,
+                        suffix = "m",
+                        icon = PulseIcons.Refresh,
+                        accent = PulseColors.Amber,
+                    )
+                }
+
+                Spacer(Modifier.height(14.dp))
+                SectionHeader("Quiet hours", icon = PulseIcons.Moon, accent = accent)
+                ToggleRow(
+                    title = "Silence overnight",
+                    subtitle = if (policy.quietHoursEnabled) {
+                        "${formatMinuteOfDay(policy.quietStartMinute)} → " +
+                            formatMinuteOfDay(policy.quietEndMinute)
+                    } else {
+                        "Alerts can fire at any hour"
+                    },
+                    checked = policy.quietHoursEnabled,
+                    onCheckedChange = { onChange(policy.copy(quietHoursEnabled = it)) },
+                    icon = PulseIcons.Moon,
+                    accent = PulseColors.Violet,
+                )
+                AnimatedVisibility(
+                    visible = policy.quietHoursEnabled,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically(),
+                ) {
+                    Column {
+                        TimeRangeRow(
+                            startMinute = policy.quietStartMinute,
+                            endMinute = policy.quietEndMinute,
+                            onStartChange = { onChange(policy.copy(quietStartMinute = it)) },
+                            onEndChange = { onChange(policy.copy(quietEndMinute = it)) },
+                        )
+                        ToggleRow(
+                            title = "Still notify, but silently",
+                            subtitle = "Posts the alert with no sound or vibration",
+                            checked = policy.criticalBypassesQuiet,
+                            onCheckedChange = { onChange(policy.copy(criticalBypassesQuiet = it)) },
+                            icon = PulseIcons.Shield,
+                            accent = PulseColors.Violet,
+                        )
+                    }
+                }
+
+                if (onSendTestAlert != null) {
+                    Spacer(Modifier.height(16.dp))
+                    PulseButton(
+                        text = "Send a test alert",
+                        onClick = onSendTestAlert,
+                        icon = PulseIcons.Bell,
+                        tone = ButtonTone.Secondary,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TimeRangeRow(
+    startMinute: Int,
+    endMinute: Int,
+    onStartChange: (Int) -> Unit,
+    onEndChange: (Int) -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        TimeStepper(
+            label = "From",
+            minute = startMinute,
+            onChange = onStartChange,
+            modifier = Modifier.weight(1f),
+        )
+        TimeStepper(
+            label = "Until",
+            minute = endMinute,
+            onChange = onEndChange,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
+private fun TimeStepper(
+    label: String,
+    minute: Int,
+    onChange: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.White.copy(alpha = 0.05f))
+            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(16.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+    ) {
+        Text(
+            text = label.uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            color = PulseColors.TextTertiary,
+        )
+        Spacer(Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SmallStep(PulseIcons.ChevronLeft, "$label earlier") {
+                onChange(((minute - 30) + 1440) % 1440)
+            }
+            Text(
+                text = formatMinuteOfDay(minute),
+                style = MaterialTheme.typography.titleLarge,
+                color = PulseColors.TextPrimary,
+                modifier = Modifier.weight(1f),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+            SmallStep(PulseIcons.ChevronRight, "$label later") {
+                onChange((minute + 30) % 1440)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SmallStep(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        Modifier
+            .size(30.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color.White.copy(alpha = 0.06f))
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = description },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = PulseColors.TextSecondary,
+            modifier = Modifier.size(14.dp),
+        )
+    }
+}
