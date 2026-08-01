@@ -41,8 +41,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -50,6 +53,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
@@ -59,8 +63,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -79,6 +85,7 @@ import me.river.pulse.ui.theme.PulseColors
 import me.river.pulse.ui.theme.PulseRadii
 import me.river.pulse.ui.theme.healthColor
 import kotlin.math.abs
+import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -209,8 +216,42 @@ fun StatusPill(
 // --------------------------------------------------------------------- charts
 
 /**
- * Latency sparkline with a gradient underfill. Failures are punched out as
- * rose-coloured markers so an outage is visible at a glance.
+ * How many samples the sparkline and the tick strip both render.
+ *
+ * They are stacked on a dashboard card and read as one chart, so they have to
+ * cover the *same* checks — showing 28 above 40 put a red tick under a blue
+ * stretch of line and made the pair look broken.
+ */
+const val SAMPLE_WINDOW = 40
+
+/** Gap between ticks, and so the inset that positions every sample. */
+private val SAMPLE_GAP = 2.dp
+
+private fun sampleTickWidth(count: Int, width: Float, gap: Float): Float =
+    ((width - gap * (count - 1)) / count).coerceAtLeast(1.2f)
+
+/**
+ * Horizontal centre of sample [index] of [count] across [width].
+ *
+ * The single source of truth for both charts' x axis. They used to derive it
+ * separately — the strip laying out cells and the line spanning edge to edge —
+ * which put every point up to half a cell away from its own tick. Two formulas
+ * that merely agree in the common case is exactly how they drifted apart.
+ */
+private fun sampleCenterX(index: Int, count: Int, width: Float, gap: Float): Float {
+    val tick = sampleTickWidth(count, width, gap)
+    return index * (tick + gap) + tick / 2f
+}
+
+/**
+ * Latency sparkline with a gradient underfill.
+ *
+ * Failures are carried by the stroke's own colour rather than by markers on top
+ * of it: the line bleeds to rose at a failed check and interpolates back to
+ * [accent] at the next passing one. Dots made every outage the same size no
+ * matter how long it lasted, and stacked up into noise on a bad run.
+ *
+ * Pass the same list to [HistoryStrip] — see [SAMPLE_WINDOW].
  */
 @Composable
 fun Sparkline(
@@ -236,11 +277,14 @@ fun Sparkline(
     Canvas(modifier.semantics { contentDescription = "Response time trend" }) {
         val w = size.width
         val h = size.height
-        val stepX = if (samples.size <= 1) w else w / (samples.size - 1)
+        val gap = SAMPLE_GAP.toPx()
         fun pointAt(index: Int): Offset {
             val sample = samples[index]
             val normalized = (sample.latencyMs.toFloat() / maxLatency).coerceIn(0f, 1f)
-            return Offset(index * stepX, h - (normalized * (h * 0.78f)) - h * 0.11f)
+            return Offset(
+                x = sampleCenterX(index, samples.size, w, gap),
+                y = h - (normalized * (h * 0.78f)) - h * 0.11f,
+            )
         }
 
         val line = Path()
@@ -269,25 +313,33 @@ fun Sparkline(
                 listOf(accent.copy(alpha = 0.30f), accent.copy(alpha = 0.02f), Color.Transparent),
             ),
         )
+        // The line carries the failures itself: one gradient stop per sample,
+        // pinned to that sample's own x so the reddest part of the stroke sits
+        // exactly above its tick below. The interpolation walks back to brand
+        // blue as soon as the next check passes, so a single blip reads as a
+        // blip and a run of them reads as a red plateau.
+        //
+        // Stops must be positioned explicitly, not spread evenly: the points sit
+        // at cell centres, which are inset by half a cell at each end.
+        val healthStops = samples.mapIndexed { index, sample ->
+            (sampleCenterX(index, samples.size, w, gap) / w) to
+                if (sample.ok) accent else PulseColors.Rose
+        }
         drawPath(
             path = line,
-            brush = Brush.horizontalGradient(
-                listOf(accent.copy(alpha = 0.55f), accent, accent.copy(alpha = 0.85f)),
-            ),
+            brush = if (healthStops.size < 2) {
+                SolidColor(healthStops.first().second)
+            } else {
+                Brush.horizontalGradient(*healthStops.toTypedArray())
+            },
             style = Stroke(width = 2.2.dp.toPx()),
         )
 
-        samples.forEachIndexed { index, sample ->
-            if (index >= visibleCount) return@forEachIndexed
-            if (!sample.ok) {
-                val point = pointAt(index)
-                drawCircle(PulseColors.Rose.copy(alpha = 0.28f), radius = 5.dp.toPx(), center = point)
-                drawCircle(PulseColors.Rose, radius = 2.4.dp.toPx(), center = point)
-            }
-        }
-        // Leading dot
-        val head = pointAt(min(visibleCount, samples.size) - 1)
-        drawCircle(accent.copy(alpha = 0.3f), radius = 6.dp.toPx(), center = head)
+        // Leading dot — "now", tinted by whether now is healthy.
+        val lastIndex = min(visibleCount, samples.size) - 1
+        val head = pointAt(lastIndex)
+        val headTone = if (samples[lastIndex].ok) accent else PulseColors.Rose
+        drawCircle(headTone.copy(alpha = 0.3f), radius = 6.dp.toPx(), center = head)
         drawCircle(Color.White, radius = 2.6.dp.toPx(), center = head)
     }
 }
@@ -410,12 +462,15 @@ fun HistoryStrip(
             return@Canvas
         }
         val count = samples.size
-        val gap = 2.dp.toPx()
-        val tickWidth = ((size.width - gap * (count - 1)) / count).coerceAtLeast(1.2f)
+        val gap = SAMPLE_GAP.toPx()
+        val tickWidth = sampleTickWidth(count, size.width, gap)
         samples.forEachIndexed { index, sample ->
+            // Positioned from the shared centre so the sparkline above can pin a
+            // gradient stop to the same x.
+            val centerX = sampleCenterX(index, count, size.width, gap)
             drawRoundRect(
                 color = if (sample.ok) accent.copy(alpha = 0.85f) else PulseColors.Rose,
-                topLeft = Offset(index * (tickWidth + gap), 0f),
+                topLeft = Offset(centerX - tickWidth / 2f, 0f),
                 size = Size(tickWidth, size.height),
                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(tickWidth / 2f),
             )
@@ -525,8 +580,28 @@ fun EmptyState(
 // ------------------------------------------------------------ pull to refresh
 
 /**
- * Bespoke pull-to-refresh. Rolling our own keeps the indicator on-brand (a glass
- * puck with a sweeping arc) and avoids depending on an experimental API.
+ * Bespoke pull-to-refresh with a **hold to confirm** commit.
+ *
+ * Re-checking every monitor is not free — it fires real network requests at
+ * every endpoint at once — so it should not be reachable by an accidental
+ * over-scroll. Two changes make the gesture deliberate without making it
+ * annoying:
+ *
+ *  1. **The pull is rubber-banded, not linear.** Travel maps through
+ *     `maxPull · (1 − e^(−raw/maxPull))`, so the sheet moves freely at first
+ *     and asymptotically stiffens. Every visual — puck scale, ring sweep,
+ *     glyph rotation, label — is a pure function of that one distance, so the
+ *     indicator tracks the finger exactly rather than animating on its own
+ *     schedule.
+ *  2. **Past the threshold you have to hold.** Releasing early springs back
+ *     and cancels. A ring fills over [HOLD_TO_CONFIRM_MS]; only when it closes
+ *     does the refresh fire, with a haptic thump to confirm.
+ *
+ * The hold timer keys off "finger still down", which nested scroll reports
+ * implicitly: [NestedScrollConnection.onPostScroll] marks the drag live and
+ * `onPreFling`/`onPostFling` (both delivered on release) end it. A finger held
+ * perfectly still sends no events at all, which is exactly the case that has to
+ * keep counting.
  */
 @Composable
 fun PullToRefreshLayout(
@@ -538,27 +613,65 @@ fun PullToRefreshLayout(
 ) {
     val density = LocalDensity.current
     val threshold = with(density) { 78.dp.toPx() }
-    val maxPull = threshold * 1.7f
+    val maxPull = threshold * 1.9f
     val offset = remember { Animatable(0f) }
+    val hold = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
+    val motion = LocalPulseMotion.current
+
+    // Raw finger travel. The rubber band is a pure function of it, so the
+    // mapping stays reversible when the user drags back up mid-pull.
+    var raw by remember { mutableFloatStateOf(0f) }
+    var dragging by remember { mutableStateOf(false) }
+
+    val rubberBand = remember(maxPull) {
+        { travel: Float -> maxPull * (1f - exp(-travel.coerceAtLeast(0f) / maxPull)) }
+    }
+
+    val armed = offset.value >= threshold && !refreshing
 
     LaunchedEffect(refreshing) {
         if (refreshing) {
             offset.animateTo(threshold * 0.72f, spring(dampingRatio = 0.7f))
         } else {
+            raw = 0f
             offset.animateTo(0f, spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessLow))
         }
     }
 
-    val connection = remember(refreshing) {
+    // Crossing the threshold is the moment the gesture changes meaning, so it
+    // gets its own light tick before the heavier confirmation thump.
+    LaunchedEffect(armed) {
+        if (armed) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+    }
+
+    LaunchedEffect(armed, dragging, refreshing) {
+        if (armed && dragging) {
+            // Resumes from wherever a previous, cancelled hold left off, so
+            // wobbling around the threshold doesn't reset your progress.
+            val remaining = ((1f - hold.value) * HOLD_TO_CONFIRM_MS).toInt().coerceAtLeast(1)
+            hold.animateTo(1f, tween(if (motion.enabled) remaining else 1, easing = LinearEasing))
+            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+            hold.snapTo(0f)
+            raw = 0f
+            onRefresh()
+        } else if (hold.value > 0f) {
+            hold.animateTo(0f, tween(260, easing = FastOutSlowInEasing))
+        }
+    }
+
+    val connection = remember(refreshing, maxPull) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                if (available.y < 0 && offset.value > 0f) {
-                    val consumed = min(-available.y, offset.value)
-                    scope.launch { offset.snapTo(offset.value - consumed) }
-                    return Offset(0f, -consumed)
-                }
-                return Offset.Zero
+                if (available.y >= 0f || raw <= 0f) return Offset.Zero
+                // Collapse the pull before letting the list scroll, and consume
+                // only the part we actually absorbed.
+                val nextRaw = (raw + available.y).coerceAtLeast(0f)
+                val consumedRaw = nextRaw - raw
+                raw = nextRaw
+                scope.launch { offset.snapTo(rubberBand(raw)) }
+                return Offset(0f, consumedRaw)
             }
 
             override fun onPostScroll(
@@ -566,20 +679,20 @@ fun PullToRefreshLayout(
                 available: Offset,
                 source: NestedScrollSource,
             ): Offset {
-                if (available.y > 0 && source == NestedScrollSource.UserInput && !refreshing) {
-                    val resistance = 1f - (offset.value / maxPull).coerceIn(0f, 0.85f)
-                    val next = (offset.value + available.y * 0.55f * resistance).coerceAtMost(maxPull)
-                    scope.launch { offset.snapTo(next) }
+                if (available.y > 0f && source == NestedScrollSource.UserInput && !refreshing) {
+                    dragging = true
+                    raw += available.y
+                    scope.launch { offset.snapTo(rubberBand(raw)) }
                     return Offset(0f, available.y)
                 }
                 return Offset.Zero
             }
 
             override suspend fun onPreFling(available: Velocity): Velocity {
-                if (!refreshing && offset.value >= threshold) {
-                    onRefresh()
-                } else if (!refreshing) {
-                    offset.animateTo(0f, spring(dampingRatio = 0.7f))
+                dragging = false
+                if (!refreshing) {
+                    raw = 0f
+                    offset.animateTo(0f, spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessLow))
                 }
                 return Velocity.Zero
             }
@@ -588,12 +701,13 @@ fun PullToRefreshLayout(
 
     Box(modifier.nestedScroll(connection)) {
         RefreshIndicator(
-            progress = (offset.value / threshold).coerceIn(0f, 1.4f),
+            progress = offset.value / threshold,
+            holdProgress = hold.value,
             refreshing = refreshing,
             accent = accent,
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .offset { IntOffset(0, (offset.value - with(density) { 54.dp.toPx() }).roundToInt()) },
+                .offset { IntOffset(0, (offset.value - with(density) { 62.dp.toPx() }).roundToInt()) },
         )
         Box(Modifier.offset { IntOffset(0, offset.value.roundToInt()) }) {
             content()
@@ -601,9 +715,13 @@ fun PullToRefreshLayout(
     }
 }
 
+/** How long the user has to keep holding past the threshold before it commits. */
+const val HOLD_TO_CONFIRM_MS = 2_000f
+
 @Composable
 private fun RefreshIndicator(
     progress: Float,
+    holdProgress: Float,
     refreshing: Boolean,
     accent: Color,
     modifier: Modifier = Modifier,
@@ -614,35 +732,96 @@ private fun RefreshIndicator(
         durationMillis = 950,
         label = "refreshSpin",
     )
+    val pull = progress.coerceIn(0f, 1f)
     val armed = progress >= 1f
-    val scale = (0.55f + progress * 0.45f).coerceIn(0.55f, 1.05f)
+    val holding = holdProgress > 0.01f
+    // Everything below is driven by `pull`, so the puck is welded to the finger.
+    val scale = 0.62f + pull * 0.38f + holdProgress * 0.06f
+    val ringColor = if (armed) accent else PulseColors.TextTertiary
 
-    Box(
-        modifier = modifier
-            .size(46.dp)
-            .graphicsLayer {
-                alpha = progress.coerceIn(0f, 1f)
-                scaleX = scale
-                scaleY = scale
-            }
-            .clip(CircleShape)
-            .background(Color.White.copy(alpha = 0.09f))
-            .border(1.dp, Color.White.copy(alpha = 0.16f), CircleShape),
-        contentAlignment = Alignment.Center,
+    Column(
+        modifier = modifier.graphicsLayer { alpha = (progress * 1.6f).coerceIn(0f, 1f) },
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Canvas(
-            Modifier
-                .size(22.dp)
-                .rotate(if (refreshing) spin else progress * 220f),
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                }
+                .clip(CircleShape)
+                .background(PulseColors.ToastFill)
+                .border(
+                    1.dp,
+                    Color.White.copy(alpha = 0.10f + holdProgress * 0.20f),
+                    CircleShape,
+                ),
+            contentAlignment = Alignment.Center,
         ) {
-            drawArc(
-                color = if (armed || refreshing) accent else PulseColors.TextTertiary,
-                startAngle = -90f,
-                sweepAngle = if (refreshing) 250f else (progress.coerceAtMost(1f) * 300f),
-                useCenter = false,
-                style = Stroke(width = 2.4.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round),
-            )
+            Canvas(Modifier.size(26.dp)) {
+                val stroke = Stroke(
+                    width = 2.4.dp.toPx(),
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                )
+                // Track — how far through the pull you are.
+                drawArc(
+                    color = ringColor.copy(alpha = if (holding) 0.22f else 0.85f),
+                    startAngle = -90f,
+                    sweepAngle = if (refreshing) 0f else pull * 300f,
+                    useCenter = false,
+                    style = stroke,
+                )
+                // Confirmation ring — closes over the two-second hold.
+                if (holding) {
+                    drawArc(
+                        color = accent,
+                        startAngle = -90f,
+                        sweepAngle = holdProgress * 360f,
+                        useCenter = false,
+                        style = Stroke(
+                            width = 3.2.dp.toPx(),
+                            cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                        ),
+                    )
+                }
+                if (refreshing) {
+                    rotate(spin) {
+                        drawArc(
+                            color = accent,
+                            startAngle = -90f,
+                            sweepAngle = 250f,
+                            useCenter = false,
+                            style = stroke,
+                        )
+                    }
+                }
+            }
+            if (!refreshing) {
+                Icon(
+                    imageVector = PulseIcons.ArrowLeft,
+                    contentDescription = null,
+                    tint = if (armed) accent else PulseColors.TextTertiary,
+                    modifier = Modifier
+                        .size(13.dp)
+                        // Points down while pulling, rotates to up as it arms:
+                        // the glyph itself says "you've gone far enough".
+                        .rotate(-90f + pull * 180f),
+                )
+            }
         }
+        Spacer(Modifier.height(7.dp))
+        Text(
+            text = when {
+                refreshing -> "Checking everything…"
+                holding -> "Keep holding…"
+                armed -> "Hold to confirm"
+                else -> "Pull to re-check"
+            },
+            style = MaterialTheme.typography.labelMedium,
+            color = if (armed) accent else PulseColors.TextTertiary,
+            maxLines = 1,
+        )
     }
 }
 
