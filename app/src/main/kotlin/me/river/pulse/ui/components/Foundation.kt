@@ -9,6 +9,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -44,9 +45,11 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -302,6 +305,14 @@ fun MicroTag(
     }
 }
 
+/**
+ * The rounded tile that fronts a monitor row.
+ *
+ * [image], when supplied, replaces [icon] — used for site favicons. It is drawn
+ * untinted and a little larger than the glyph it stands in for: a real logo
+ * carries its own colour, and the accent tint that makes a monochrome stroke
+ * icon read would destroy it.
+ */
 @Composable
 fun IconBadge(
     icon: ImageVector,
@@ -309,6 +320,7 @@ fun IconBadge(
     modifier: Modifier = Modifier,
     size: Dp = 40.dp,
     contentDescription: String? = null,
+    image: ImageBitmap? = null,
 ) {
     Box(
         modifier = modifier
@@ -321,12 +333,25 @@ fun IconBadge(
             ),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = accent,
-            modifier = Modifier.size(size * 0.48f),
-        )
+        if (image != null) {
+            Image(
+                bitmap = image,
+                contentDescription = contentDescription,
+                // Fit, not crop: favicons are already square-ish, and cropping a
+                // wordmark logo cuts the word in half.
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .size(size * 0.62f)
+                    .clip(RoundedCornerShape(size / 6f)),
+            )
+        } else {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = accent,
+                modifier = Modifier.size(size * 0.48f),
+            )
+        }
     }
 }
 

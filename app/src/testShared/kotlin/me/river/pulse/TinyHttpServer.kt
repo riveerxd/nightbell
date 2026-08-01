@@ -30,6 +30,13 @@ class TinyHttpServer(private val handler: (Request) -> Response) : AutoCloseable
         val contentType: String = "text/plain; charset=utf-8",
         val delayMs: Long = 0,
         val extraHeaders: Map<String, String> = emptyMap(),
+        /**
+         * Raw payload, taking precedence over [body] when set.
+         *
+         * Needed for anything that is not text: [body] is encoded as UTF-8, which
+         * silently mangles binary — a PNG served through it never decodes.
+         */
+        val bytes: ByteArray? = null,
     )
 
     private val server = ServerSocket(0)
@@ -97,7 +104,7 @@ class TinyHttpServer(private val handler: (Request) -> Response) : AutoCloseable
 
             if (response.delayMs > 0) Thread.sleep(response.delayMs)
 
-            val payload = response.body.toByteArray(Charsets.UTF_8)
+            val payload = response.bytes ?: response.body.toByteArray(Charsets.UTF_8)
             val head = buildString {
                 append("HTTP/1.1 ${response.code} ${response.reason}\r\n")
                 append("Content-Type: ${response.contentType}\r\n")

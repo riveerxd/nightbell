@@ -1,6 +1,8 @@
 package me.river.pulse
 
 import android.Manifest
+import android.graphics.Bitmap
+import java.io.ByteArrayOutputStream
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
@@ -308,6 +310,87 @@ class ScreenshotTest {
                 .getSystemService(android.app.NotificationManager::class.java)
                 .activeNotifications.isNotEmpty()
         }
+    }
+
+    /**
+     * Favicon badges on the dashboard.
+     *
+     * Two monitors on the same local site — one page-element, one status check —
+     * so the screenshot shows both that the icon is used *and* that it is scoped
+     * to the kind that benefits from it.
+     */
+    @Test
+    fun capturesFaviconBadges() {
+        val icon = ByteArrayOutputStream().use { out ->
+            val size = 96
+            val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+            android.graphics.Canvas(bitmap).apply {
+                drawColor(android.graphics.Color.rgb(255, 92, 0))
+                val paint = android.graphics.Paint().apply {
+                    isAntiAlias = true
+                    color = android.graphics.Color.WHITE
+                }
+                drawCircle(size / 2f, size / 2f, size * 0.30f, paint)
+                paint.color = android.graphics.Color.rgb(255, 92, 0)
+                drawCircle(size / 2f, size / 2f, size * 0.14f, paint)
+            }
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+            out.toByteArray()
+        }
+
+        server = TinyHttpServer { request ->
+            when (request.path) {
+                "/brand.png" -> TinyHttpServer.Response(contentType = "image/png", bytes = icon)
+                else -> TinyHttpServer.Response(
+                    contentType = "text/html; charset=utf-8",
+                    body = """
+                        <!doctype html><html><head><title>Example Shop</title>
+                        <link rel="icon" href="/brand.png" sizes="96x96"></head>
+                        <body><span data-testid="price">&pound;42.00</span></body></html>
+                    """.trimIndent(),
+                )
+            }
+        }
+
+        PulseTestSupport.resetApp()
+        val graph = Pulse.install(PulseTestSupport.appContext)
+        val now = System.currentTimeMillis()
+        runBlocking {
+            graph.store.upsert(
+                Monitor(
+                    id = "favicon-element",
+                    name = "Price watch · Widget Deluxe",
+                    kind = MonitorKind.WEBSITE_ELEMENT,
+                    url = server.url("/widget-deluxe"),
+                    element = ElementTarget(
+                        cssSelector = "span[data-testid=\"price\"]",
+                        tagName = "span",
+                        textSnippet = "£42.00",
+                        mode = ElementMode.TEXT_MATCHES_SNAPSHOT,
+                    ),
+                    intervalMinutes = 60,
+                    createdAt = now,
+                ),
+            )
+            graph.store.upsert(
+                Monitor(
+                    id = "favicon-status",
+                    name = "Shop homepage",
+                    kind = MonitorKind.HTTP_STATUS,
+                    url = server.url("/"),
+                    intervalMinutes = 15,
+                    createdAt = now,
+                ),
+            )
+            // Warm the cache before the activity exists, so the badge is painted
+            // on the first frame instead of arriving a few frames later.
+            graph.favicons.clear()
+            graph.favicons.load(server.url("/widget-deluxe"))
+        }
+
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        composeRule.waitForIdle()
+        composeRule.captureScreenshot("36-favicon-badges")
     }
 
     /** The live element picker, rendering a real page in the embedded browser. */
