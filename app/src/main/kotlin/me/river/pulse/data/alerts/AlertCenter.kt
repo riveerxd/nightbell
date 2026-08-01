@@ -116,7 +116,191 @@ class AlertCenter(private val context: Context) {
         post(monitor.id.notificationId(), notification)
     }
 
+    /**
+     * The URGENT nag.
+     *
+     * One notification per monitor, re-posted in place: `setOnlyAlertOnce(false)`
+     * plus a stable id means every repeat rings and buzzes again without adding
+     * a second row to the shade. It is [NotificationCompat.CATEGORY_ALARM] and
+     * ongoing — you cannot swipe it away, you have to acknowledge it, which is
+     * the entire point of the mode.
+     */
+    fun notifyUrgent(monitor: Monitor, result: CheckResult, policy: AlertPolicy, repeatCount: Int) {
+        val channelId = urgentChannel(policy)
+        val body = result.message.ifBlank { result.failureKind.headline }
+        val notification = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(R.drawable.ic_stat_alert)
+            .setContentTitle("URGENT · ${monitor.displayName} is down")
+            .setContentText(body)
+            .setStyle(
+                NotificationCompat.BigTextStyle().bigText(
+                    buildString {
+                        append(result.failureKind.headline)
+                        if (result.failureKind.hint.isNotBlank()) {
+                            append("\n").append(result.failureKind.hint)
+                        }
+                        append("\n\nThis alert repeats every ")
+                        append(monitor.urgentRepeatMinutes.coerceAtLeast(1))
+                        append(" min until you acknowledge it.")
+                        if (repeatCount > 0) append("\nReminder #$repeatCount.")
+                        append("\n\n").append(monitor.url)
+                    },
+                ),
+            )
+            .setColor(DOWN_COLOR)
+            .setColorized(true)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setContentIntent(openMonitorIntent(monitor.id))
+            .setOngoing(true)
+            .setAutoCancel(false)
+            .setOnlyAlertOnce(false)
+            .setWhen(System.currentTimeMillis())
+            .setShowWhen(true)
+            .addAction(
+                R.drawable.ic_stat_ok,
+                "Acknowledge",
+                AlertActionReceiver.pendingIntent(
+                    context,
+                    AlertActionReceiver.ACTION_ACK_URGENT,
+                    monitor.id,
+                ),
+            )
+            .addAction(
+                R.drawable.ic_stat_refresh,
+                "Re-check now",
+                AlertActionReceiver.pendingIntent(context, AlertActionReceiver.ACTION_RECHECK, monitor.id),
+            )
+            .build()
+
+        post(monitor.id.urgentNotificationId(), notification)
+        // Channel vibration only fires on the first post of an id on some OEM
+        // builds, so drive the actuator directly for every repeat.
+        if (policy.vibrate) previewVibration(policy.vibrationStyle)
+    }
+
+    fun cancelUrgent(monitorId: String) = compat.cancel(monitorId.urgentNotificationId())
+
+    /** "Up, but slow." Deliberately quieter than a down alert. */
+    fun notifyDegraded(
+        monitor: Monitor,
+        result: CheckResult,
+        policy: AlertPolicy,
+        sloMs: Int,
+        silent: Boolean,
+        repeat: Boolean,
+    ) {
+        val channelId = channelFor(policy, Severity.DEGRADED, silent)
+        val notification = baseBuilder(channelId, monitor, silent)
+            .setSmallIcon(R.drawable.ic_stat_alert)
+            .setContentTitle(
+                if (repeat) {
+                    "${monitor.displayName} is still slow"
+                } else {
+                    "${monitor.displayName} is slow"
+                },
+            )
+            .setContentText("${result.latencyMs} ms — budget is $sloMs ms")
+            .setStyle(
+                NotificationCompat.BigTextStyle().bigText(
+                    buildString {
+                        append("The check succeeded but took ${result.latencyMs} ms, ")
+                        append("over the ${sloMs} ms latency budget.")
+                        append("\n\n").append(monitor.url)
+                    },
+                ),
+            )
+            .setColor(DEGRADED_COLOR)
+            .setColorized(true)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .addAction(
+                R.drawable.ic_stat_refresh,
+                "Re-check now",
+                AlertActionReceiver.pendingIntent(context, AlertActionReceiver.ACTION_RECHECK, monitor.id),
+            )
+            .addAction(
+                R.drawable.ic_stat_mute,
+                "Mute 1h",
+                AlertActionReceiver.pendingIntent(context, AlertActionReceiver.ACTION_MUTE_1H, monitor.id),
+            )
+            .build()
+        post(monitor.id.degradedNotificationId(), notification)
+    }
+
+    fun notifyDegradedRecovery(
+        monitor: Monitor,
+        result: CheckResult,
+        policy: AlertPolicy,
+        sloMs: Int,
+        silent: Boolean,
+    ) {
+        val channelId = channelFor(policy, Severity.RECOVERY, silent)
+        val notification = baseBuilder(channelId, monitor, silent)
+            .setSmallIcon(R.drawable.ic_stat_ok)
+            .setContentTitle("${monitor.displayName} is fast again")
+            .setContentText("${result.latencyMs} ms — back under the $sloMs ms budget")
+            .setColor(UP_COLOR)
+            .setColorized(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setAutoCancel(true)
+            .build()
+        post(monitor.id.degradedNotificationId(), notification)
+    }
+
+    fun cancelDegraded(monitorId: String) = compat.cancel(monitorId.degradedNotificationId())
+
     fun cancel(monitorId: String) = compat.cancel(monitorId.notificationId())
+
+    /** Down, degraded and urgent — everything a monitor can have on screen. */
+    fun cancelAll(monitorId: String) {
+        cancel(monitorId)
+        cancelDegraded(monitorId)
+        cancelUrgent(monitorId)
+    }
+
+    /**
+     * Ids of Pulse's own alert notifications that are currently on screen.
+     *
+     * The source of truth for "what is the user actually looking at". Reasoning
+     * from persisted monitor state alone cannot see a notification belonging to
+     * a monitor that has since been deleted, or one left behind by an older
+     * build — and an urgent notification is `ongoing`, so the user cannot clear
+     * it by hand either.
+     *
+     * Restricted to the three alert id spaces so the foreground-service
+     * notification, the policy preview and anything the system auto-groups are
+     * never touched.
+     */
+    fun activeAlertIds(): Set<Int> = runCatching {
+        manager.activeNotifications
+            .filter { it.tag == null && it.id in ALERT_ID_MIN..ALERT_ID_MAX }
+            .map { it.id }
+            .toSet()
+    }.getOrDefault(emptySet())
+
+    /** Cancels an alert notification by raw id — used by the reconciliation sweep. */
+    fun cancelById(id: Int) = compat.cancel(id)
+
+    /**
+     * Wipes every notification this app has posted.
+     *
+     * Only for the one-time upgrade repair. [activeAlertIds] is the surgical
+     * tool, but it depends on `getActiveNotifications()`, which some OEM builds
+     * are unhelpful about — and the whole point of the repair is to recover
+     * from a state we cannot enumerate. Anything genuinely current re-posts on
+     * the next check, and the foreground service re-posts its own immediately.
+     */
+    fun cancelEverything() = runCatching { compat.cancelAll() }.let { }
+
+    // The sweep needs to compare live ids against the ids a monitor may hold.
+    fun downIdOf(monitorId: String): Int = monitorId.notificationId()
+
+    fun degradedIdOf(monitorId: String): Int = monitorId.degradedNotificationId()
+
+    fun urgentIdOf(monitorId: String): Int = monitorId.urgentNotificationId()
 
     /**
      * Fires a sample alert so the user can feel/hear a policy before trusting it.
@@ -172,15 +356,95 @@ class AlertCenter(private val context: Context) {
 
     // ---- channels ----------------------------------------------------------
 
-    enum class Severity { DOWN, RECOVERY }
+    enum class Severity { DOWN, DEGRADED, RECOVERY }
 
     private fun ensureGroups() {
         manager.createNotificationChannelGroup(
             NotificationChannelGroup(GROUP_DOWN, "Down alerts"),
         )
         manager.createNotificationChannelGroup(
+            NotificationChannelGroup(GROUP_DEGRADED, "Latency alerts"),
+        )
+        manager.createNotificationChannelGroup(
             NotificationChannelGroup(GROUP_RECOVERY, "Recovery alerts"),
         )
+        manager.createNotificationChannelGroup(
+            NotificationChannelGroup(GROUP_URGENT, "Urgent"),
+        )
+    }
+
+    /**
+     * Urgent gets its own channel family so the user can leave it screaming
+     * while turning ordinary down alerts down — and so Do Not Disturb can be
+     * configured to let it through.
+     */
+    fun urgentChannel(policy: AlertPolicy): String {
+        val style = policy.vibrationStyle
+        val id = "pulse.urgent.${style.name.lowercase()}"
+        if (manager.getNotificationChannel(id) != null) return id
+        val channel = NotificationChannel(id, "Urgent · ${style.label}", NotificationManager.IMPORTANCE_HIGH).apply {
+            group = GROUP_URGENT
+            description = "Repeats until acknowledged when an URGENT monitor goes down."
+            enableVibration(true)
+            vibrationPattern = style.pattern
+            enableLights(true)
+            lightColor = DOWN_COLOR
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            setBypassDnd(true)
+            setShowBadge(true)
+            setSound(
+                Settings.System.DEFAULT_ALARM_ALERT_URI,
+                AudioAttributes.Builder()
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .build(),
+            )
+        }
+        manager.createNotificationChannel(channel)
+        return id
+    }
+
+    /**
+     * The strict-mode foreground-service channel: silent, un-dismissable, and
+     * as far out of the way as a mandatory notification can be.
+     */
+    fun ensureServiceChannel(): String {
+        if (manager.getNotificationChannel(SERVICE_CHANNEL) == null) {
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    SERVICE_CHANNEL,
+                    "Strict monitoring",
+                    NotificationManager.IMPORTANCE_LOW,
+                ).apply {
+                    description = "Shown while Pulse keeps a strict check cadence in the background."
+                    setShowBadge(false)
+                    enableVibration(false)
+                    setSound(null, null)
+                    lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                },
+            )
+        }
+        return SERVICE_CHANNEL
+    }
+
+    /** The persistent notification strict mode runs behind. */
+    fun serviceNotification(title: String, body: String, stopIntent: PendingIntent?): Notification {
+        val builder = NotificationCompat.Builder(context, ensureServiceChannel())
+            .setSmallIcon(R.drawable.ic_stat_refresh)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setContentIntent(openMonitorIntent(""))
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setOngoing(true)
+            .setSilent(true)
+            .setShowWhen(false)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+        if (stopIntent != null) {
+            builder.addAction(R.drawable.ic_stat_mute, "Stop strict mode", stopIntent)
+        }
+        return builder.build()
     }
 
     /** Materialises (once) the channel that matches this exact policy. */
@@ -188,8 +452,13 @@ class AlertCenter(private val context: Context) {
         val sound = if (silent) SoundChoice.SILENT else policy.sound
         val vibrateOn = policy.vibrate && !silent
         val style = policy.vibrationStyle
+        val prefix = when (severity) {
+            Severity.DOWN -> "pulse.down."
+            Severity.DEGRADED -> "pulse.degraded."
+            Severity.RECOVERY -> "pulse.recovery."
+        }
         val id = buildString {
-            append(if (severity == Severity.DOWN) "pulse.down." else "pulse.recovery.")
+            append(prefix)
             append(sound.name.lowercase())
             append('.')
             append(if (vibrateOn) style.name.lowercase() else "novib")
@@ -198,26 +467,41 @@ class AlertCenter(private val context: Context) {
 
         val importance = when {
             severity == Severity.RECOVERY -> NotificationManager.IMPORTANCE_DEFAULT
+            severity == Severity.DEGRADED -> NotificationManager.IMPORTANCE_DEFAULT
             sound == SoundChoice.SILENT && !vibrateOn -> NotificationManager.IMPORTANCE_DEFAULT
             else -> NotificationManager.IMPORTANCE_HIGH
         }
         val label = buildString {
-            append(if (severity == Severity.DOWN) "Down · " else "Recovery · ")
+            append(
+                when (severity) {
+                    Severity.DOWN -> "Down · "
+                    Severity.DEGRADED -> "Slow · "
+                    Severity.RECOVERY -> "Recovery · "
+                },
+            )
             append(sound.label)
             if (vibrateOn) append(" + ${style.label}")
         }
 
         val channel = NotificationChannel(id, label, importance).apply {
-            group = if (severity == Severity.DOWN) GROUP_DOWN else GROUP_RECOVERY
-            description = if (severity == Severity.DOWN) {
-                "Raised when a monitor starts failing (${sound.label.lowercase()})."
-            } else {
-                "Raised when a monitor recovers (${sound.label.lowercase()})."
+            group = when (severity) {
+                Severity.DOWN -> GROUP_DOWN
+                Severity.DEGRADED -> GROUP_DEGRADED
+                Severity.RECOVERY -> GROUP_RECOVERY
+            }
+            description = when (severity) {
+                Severity.DOWN -> "Raised when a monitor starts failing (${sound.label.lowercase()})."
+                Severity.DEGRADED -> "Raised when a monitor breaches its latency budget."
+                Severity.RECOVERY -> "Raised when a monitor recovers (${sound.label.lowercase()})."
             }
             enableVibration(vibrateOn)
             if (vibrateOn) vibrationPattern = style.pattern
             enableLights(severity == Severity.DOWN)
-            lightColor = if (severity == Severity.DOWN) DOWN_COLOR else UP_COLOR
+            lightColor = when (severity) {
+                Severity.DOWN -> DOWN_COLOR
+                Severity.DEGRADED -> DEGRADED_COLOR
+                Severity.RECOVERY -> UP_COLOR
+            }
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             setShowBadge(true)
             val uri = soundUri(sound)
@@ -266,7 +550,7 @@ class AlertCenter(private val context: Context) {
         val intent = Intent(context, MainActivity::class.java).apply {
             action = Intent.ACTION_VIEW
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            putExtra(MainActivity.EXTRA_MONITOR_ID, monitorId)
+            if (monitorId.isNotBlank()) putExtra(MainActivity.EXTRA_MONITOR_ID, monitorId)
         }
         return PendingIntent.getActivity(
             context,
@@ -302,12 +586,28 @@ class AlertCenter(private val context: Context) {
 
     companion object {
         private const val GROUP_DOWN = "pulse.group.down"
+        private const val GROUP_DEGRADED = "pulse.group.degraded"
         private const val GROUP_RECOVERY = "pulse.group.recovery"
+        private const val GROUP_URGENT = "pulse.group.urgent"
         private const val NOTIFICATION_GROUP = "pulse.alerts"
+        const val SERVICE_CHANNEL = "pulse.service.strict"
+        const val SERVICE_NOTIFICATION_ID = 4242
         const val PREVIEW_NOTIFICATION_ID = 424242
+
+        /** The three alert id spaces below, taken together. */
+        private const val ALERT_ID_MIN = 100_000
+        private const val ALERT_ID_MAX = 399_999
+
         private const val DOWN_COLOR = 0xFFFF5A7A.toInt()
+        private const val DEGRADED_COLOR = 0xFFFFB020.toInt()
         private const val UP_COLOR = 0xFF3DE8B0.toInt()
     }
 }
 
-private fun String.notificationId(): Int = 100_000 + (hashCode() and 0x7FFF)
+// Three disjoint id spaces so a monitor can hold a down, a slow and an urgent
+// notification at once without one silently replacing another.
+internal fun String.notificationId(): Int = 100_000 + (hashCode() and 0x7FFF)
+
+internal fun String.urgentNotificationId(): Int = 200_000 + (hashCode() and 0x7FFF)
+
+internal fun String.degradedNotificationId(): Int = 300_000 + (hashCode() and 0x7FFF)

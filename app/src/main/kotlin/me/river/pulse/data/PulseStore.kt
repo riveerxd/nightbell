@@ -88,11 +88,12 @@ class PulseStore(
     suspend fun currentSnapshot(): PulseSnapshot = awaitLoaded()
 
     suspend fun upsert(monitor: Monitor) = mutate { snap ->
-        val existing = snap.monitors.indexOfFirst { it.id == monitor.id }
+        val normalised = monitor.migrated
+        val existing = snap.monitors.indexOfFirst { it.id == normalised.id }
         val monitors = if (existing >= 0) {
-            snap.monitors.toMutableList().also { it[existing] = monitor }
+            snap.monitors.toMutableList().also { it[existing] = normalised }
         } else {
-            snap.monitors + monitor
+            snap.monitors + normalised
         }
         val runtimes = if (snap.runtimes.containsKey(monitor.id)) {
             snap.runtimes
@@ -146,6 +147,27 @@ class PulseStore(
         return runCatching { json.decodeFromString<PulseSnapshot>(raw) }
             .onFailure { Log.e(TAG, "Corrupt snapshot, resetting", it) }
             .getOrDefault(PulseSnapshot())
+            .let(::migrate)
+    }
+
+    /**
+     * Forward-migrates a decoded snapshot.
+     *
+     * Everything added since 1.0.0 has a default, so `ignoreUnknownKeys` plus
+     * defaults handles almost all of it for free. The one real migration is
+     * multi-element monitors: 1.0.0 wrote a single `element`, and this lifts it
+     * into `elements` so checkers and screens only ever read the list.
+     *
+     * Idempotent, and it never *drops* `element` — a store written here still
+     * decodes on 1.0.0, so a downgrade doesn't lose the user's monitors.
+     */
+    private fun migrate(snapshot: PulseSnapshot): PulseSnapshot {
+        val monitors = snapshot.monitors.map { it.migrated }
+        return if (monitors == snapshot.monitors) {
+            snapshot
+        } else {
+            snapshot.copy(schema = PulseSnapshot.SCHEMA_VERSION, monitors = monitors)
+        }
     }
 
     companion object {

@@ -36,6 +36,11 @@ class AlertActionReceiver : BroadcastReceiver() {
                         }
                     }
 
+                    // "I've seen it." Stops the urgent loop for this outage but
+                    // leaves the monitor down, its card red, and the ordinary
+                    // down notification exactly where it was.
+                    ACTION_ACK_URGENT -> graph.engine.acknowledgeUrgent(monitorId)
+
                     else -> Unit
                 }
             } catch (error: Throwable) {
@@ -50,6 +55,7 @@ class AlertActionReceiver : BroadcastReceiver() {
         private const val TAG = "AlertActionReceiver"
         const val ACTION_RECHECK = "me.river.pulse.action.RECHECK"
         const val ACTION_MUTE_1H = "me.river.pulse.action.MUTE_1H"
+        const val ACTION_ACK_URGENT = "me.river.pulse.action.ACK_URGENT"
         const val EXTRA_MONITOR_ID = "monitor_id"
         private const val MUTE_DURATION_MS = 60 * 60 * 1000L
 

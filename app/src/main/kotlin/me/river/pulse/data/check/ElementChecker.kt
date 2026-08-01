@@ -23,6 +23,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.booleanOrNull
@@ -54,9 +55,19 @@ class ElementChecker(
         val loadError: String = "",
     )
 
+    /** One page load, N lookups. */
+    data class PageResult(
+        val results: List<Located> = emptyList(),
+        val title: String = "",
+        val nodeCount: Int = 0,
+        val loadError: String = "",
+    ) {
+        val anyFound: Boolean get() = results.any { it.found }
+    }
+
     suspend fun check(monitor: Monitor): CheckResult {
-        val target = monitor.element
-        if (target == null || !target.isCaptured) {
+        val targets = monitor.targets
+        if (targets.isEmpty()) {
             return CheckResult(
                 ok = false,
                 latencyMs = 0,
@@ -67,10 +78,10 @@ class ElementChecker(
             )
         }
         val started = System.nanoTime()
-        val located = locate(monitor.url, target, monitor.timeoutSeconds)
+        val page = locateAll(monitor.url, targets, monitor.timeoutSeconds)
         val latency = ((System.nanoTime() - started) / 1_000_000L).coerceAtLeast(0L)
 
-        if (located == null) {
+        if (page == null) {
             return CheckResult(
                 ok = false,
                 latencyMs = latency,
@@ -80,106 +91,182 @@ class ElementChecker(
                 at = nowMs(),
             )
         }
-        if (located.loadError.isNotBlank()) {
+        if (page.loadError.isNotBlank()) {
             return CheckResult(
                 ok = false,
                 latencyMs = latency,
                 failureKind = FailureKind.RENDER,
                 message = "Page failed to load",
-                detail = located.loadError,
+                detail = page.loadError,
                 at = nowMs(),
             )
         }
 
-        val comparisonText = if (target.attribute.isNotBlank()) located.attrValue else located.text
-        val verdict = Assertions.checkElement(target, located.found && located.visible, comparisonText)
+        return evaluate(targets, page, latency)
+    }
+
+    /**
+     * Folds one page load's worth of lookups into a single [CheckResult].
+     * Pure apart from the clock, so the aggregation rules are testable.
+     */
+    internal fun evaluate(
+        targets: List<ElementTarget>,
+        page: PageResult,
+        latencyMs: Long,
+    ): CheckResult {
+        val texts = mutableListOf<String>()
+        val failures = mutableListOf<Pair<ElementTarget, Assertions.Verdict>>()
+        var firstStrategy = ""
+
+        targets.forEachIndexed { index, target ->
+            val located = page.results.getOrElse(index) { Located(found = false) }
+            val comparison = if (target.attribute.isNotBlank()) located.attrValue else located.text
+            texts += comparison
+            if (firstStrategy.isBlank()) firstStrategy = located.strategy
+            val verdict = Assertions.checkElement(target, located.found && located.visible, comparison)
+            if (!verdict.passed) failures += target to verdict
+        }
+
+        val ok = failures.isEmpty()
+        // One failing element fails the whole check — a page monitor is a
+        // conjunction, not a poll. The message names the first offender and
+        // counts the rest so the notification stays one line.
+        val headlineFailure = failures.firstOrNull()
+        val message = when {
+            ok && targets.size == 1 ->
+                "Element matched via ${firstStrategy.ifBlank { "selector" }} in ${latencyMs}ms"
+            ok -> "All ${targets.size} elements matched in ${latencyMs}ms"
+            failures.size == 1 -> headlineFailure!!.second.message
+            else -> "${headlineFailure!!.second.message} (+${failures.size - 1} more)"
+        }
+
         return CheckResult(
-            ok = verdict.passed,
-            latencyMs = latency,
+            ok = ok,
+            latencyMs = latencyMs,
             statusCode = 0,
-            failureKind = verdict.kind,
-            message = if (verdict.passed) {
-                "Element matched via ${located.strategy.ifBlank { "selector" }} in ${latency}ms"
-            } else {
-                verdict.message
-            },
+            failureKind = headlineFailure?.second?.kind ?: FailureKind.NONE,
+            message = message,
             detail = buildString {
-                append(verdict.detail.ifBlank { "Resolved through the \"${located.strategy}\" strategy." })
-                if (located.pageTitle.isNotBlank()) append("\nPage: ${located.pageTitle}")
-                if (located.nodeCount > 0) append("\nDOM nodes: ${located.nodeCount}")
-                if (located.found && !located.visible) append("\nNode exists but is not visible.")
-            },
-            bodyPreview = located.html,
-            elementText = comparisonText,
+                if (ok) {
+                    append("Resolved through the \"${firstStrategy.ifBlank { "selector" }}\" strategy.")
+                } else {
+                    failures.forEach { (target, verdict) ->
+                        append("• ${target.displayLabel}: ${verdict.message}\n")
+                    }
+                }
+                if (page.title.isNotBlank()) append("\nPage: ${page.title}")
+                if (page.nodeCount > 0) append("\nDOM nodes: ${page.nodeCount}")
+                page.results.forEachIndexed { index, located ->
+                    if (located.found && !located.visible) {
+                        val label = targets.getOrNull(index)?.displayLabel ?: "element ${index + 1}"
+                        append("\n$label exists but is not visible.")
+                    }
+                }
+            }.trim(),
+            bodyPreview = page.results.firstOrNull { it.html.isNotBlank() }?.html.orEmpty(),
+            elementText = texts.firstOrNull().orEmpty(),
+            elementTexts = texts,
             at = nowMs(),
         )
     }
 
-    /** Public so the setup flow can dry-run a capture before saving. */
-    @SuppressLint("SetJavaScriptEnabled")
-    suspend fun locate(url: String, target: ElementTarget, timeoutSeconds: Int): Located? =
-        withContext(Dispatchers.Main) {
-            var webView: WebView? = null
-            try {
-                withTimeoutOrNull(timeoutSeconds * 1000L + SETTLE_BUDGET_MS) {
-                    val errors = StringBuilder()
-                    val view = WebView(context).also { webView = it }
-                    configure(view)
+    /** Public so the setup flow can dry-run a single capture before saving. */
+    suspend fun locate(url: String, target: ElementTarget, timeoutSeconds: Int): Located? {
+        val page = locateAll(url, listOf(target), timeoutSeconds) ?: return null
+        val head = page.results.firstOrNull() ?: Located(found = false)
+        return head.copy(
+            pageTitle = page.title,
+            nodeCount = page.nodeCount,
+            loadError = page.loadError,
+        )
+    }
 
-                    val pageDone = PageLatch()
-                    view.webViewClient = object : WebViewClient() {
-                        override fun onPageFinished(view: WebView?, url: String?) {
+    /**
+     * Renders [url] once and resolves every target against that one DOM.
+     *
+     * Polls after `onPageFinished` because SPAs hydrate well after the load
+     * event; it stops early as soon as *all* targets resolve, and otherwise
+     * returns the best attempt so a partially-rendered page still produces an
+     * honest per-element verdict rather than a blanket timeout.
+     */
+    @SuppressLint("SetJavaScriptEnabled")
+    suspend fun locateAll(
+        url: String,
+        targets: List<ElementTarget>,
+        timeoutSeconds: Int,
+    ): PageResult? = withContext(Dispatchers.Main) {
+        if (targets.isEmpty()) return@withContext PageResult()
+        var webView: WebView? = null
+        try {
+            withTimeoutOrNull(timeoutSeconds * 1000L + SETTLE_BUDGET_MS) {
+                val errors = StringBuilder()
+                val view = WebView(context).also { webView = it }
+                configure(view)
+
+                val pageDone = PageLatch()
+                view.webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView?, url: String?) {
+                        pageDone.complete()
+                    }
+
+                    override fun onReceivedError(
+                        view: WebView?,
+                        request: WebResourceRequest?,
+                        error: WebResourceError?,
+                    ) {
+                        if (request?.isForMainFrame == true) {
+                            val description = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                error?.description?.toString() ?: "unknown"
+                            } else {
+                                "unknown"
+                            }
+                            errors.append("main frame: $description")
                             pageDone.complete()
                         }
+                    }
+                }
+                // Give the renderer a real viewport; an unmeasured WebView can
+                // skip layout for lazily-rendered content.
+                view.measure(VIEWPORT_WIDTH, VIEWPORT_HEIGHT)
+                view.layout(0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT)
+                view.loadUrl(url)
 
-                        override fun onReceivedError(
-                            view: WebView?,
-                            request: WebResourceRequest?,
-                            error: WebResourceError?,
-                        ) {
-                            if (request?.isForMainFrame == true) {
-                                val description = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                                    error?.description?.toString() ?: "unknown"
-                                } else {
-                                    "unknown"
-                                }
-                                errors.append("main frame: $description")
-                                pageDone.complete()
-                            }
+                pageDone.await()
+
+                val script = PickerScripts.locateMany(targets)
+                var attempt = 0
+                var best: PageResult? = null
+                while (attempt < MAX_ATTEMPTS) {
+                    delay(if (attempt == 0) FIRST_SETTLE_MS else RETRY_DELAY_MS)
+                    val parsed = parsePage(view.evalJs(script), targets.size)
+                    if (parsed != null) {
+                        val foundCount = parsed.results.count { it.found }
+                        val bestCount = best?.results?.count { it.found } ?: -1
+                        if (foundCount > bestCount) best = parsed
+                        if (foundCount == targets.size) {
+                            return@withTimeoutOrNull parsed.copy(loadError = errors.toString())
                         }
                     }
-                    // Give the renderer a real viewport; an unmeasured WebView can
-                    // skip layout for lazily-rendered content.
-                    view.measure(VIEWPORT_WIDTH, VIEWPORT_HEIGHT)
-                    view.layout(0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT)
-                    view.loadUrl(url)
-
-                    pageDone.await()
-
-                    // Poll: SPAs finish onPageFinished long before hydration lands.
-                    var attempt = 0
-                    var last: Located? = null
-                    while (attempt < MAX_ATTEMPTS) {
-                        delay(if (attempt == 0) FIRST_SETTLE_MS else RETRY_DELAY_MS)
-                        val raw = view.evalJs(PickerScripts.locate(target))
-                        last = parseLocated(raw)?.copy(loadError = errors.toString())
-                        if (last?.found == true) return@withTimeoutOrNull last
-                        attempt++
-                    }
-                    last ?: Located(found = false, loadError = errors.toString())
+                    attempt++
                 }
-            } catch (error: Throwable) {
-                Log.e(TAG, "Element check crashed", error)
-                Located(found = false, loadError = error.message ?: error::class.java.simpleName)
-            } finally {
-                webView?.let { view ->
-                    view.stopLoading()
-                    view.webViewClient = WebViewClient()
-                    view.loadUrl("about:blank")
-                    view.destroy()
-                }
+                (best ?: PageResult(results = List(targets.size) { Located(found = false) }))
+                    .copy(loadError = errors.toString())
+            }
+        } catch (error: Throwable) {
+            Log.e(TAG, "Element check crashed", error)
+            PageResult(
+                results = List(targets.size) { Located(found = false) },
+                loadError = error.message ?: error::class.java.simpleName,
+            )
+        } finally {
+            webView?.let { view ->
+                view.stopLoading()
+                view.webViewClient = WebViewClient()
+                view.loadUrl("about:blank")
+                view.destroy()
             }
         }
+    }
 
     private fun configure(view: WebView) {
         view.settings.apply {
@@ -200,11 +287,19 @@ class ElementChecker(
         view.setLayerType(android.view.View.LAYER_TYPE_NONE, null)
     }
 
-    private fun parseLocated(raw: String?): Located? {
+    /**
+     * `evaluateJavascript` hands back a *JSON-encoded* value, so a script that
+     * returns a JSON string arrives double-encoded. Unwrap one layer when it is
+     * there, and fall back to the raw text when it isn't.
+     */
+    private fun unwrap(raw: String?): JsonObject? {
         if (raw.isNullOrBlank() || raw == "null") return null
         val unwrapped = runCatching { json.parseToJsonElement(raw).jsonPrimitive.content }
             .getOrElse { raw }
-        val obj = runCatching { json.parseToJsonElement(unwrapped) as? JsonObject }.getOrNull() ?: return null
+        return runCatching { json.parseToJsonElement(unwrapped) as? JsonObject }.getOrNull()
+    }
+
+    private fun located(obj: JsonObject): Located {
         fun str(key: String) = obj[key]?.jsonPrimitive?.content.orEmpty()
         fun bool(key: String, default: Boolean) = obj[key]?.jsonPrimitive?.booleanOrNull ?: default
         return Located(
@@ -216,6 +311,24 @@ class ElementChecker(
             html = str("html"),
             pageTitle = str("title"),
             nodeCount = str("nodes").toIntOrNull() ?: 0,
+        )
+    }
+
+    private fun parsePage(raw: String?, expected: Int): PageResult? {
+        val obj = unwrap(raw) ?: return null
+        val array = obj["results"] as? JsonArray ?: return null
+        val results = array.mapNotNull { (it as? JsonObject)?.let(::located) }
+        // Pad defensively: a script that returned fewer entries than we asked
+        // for must not silently shift every later target's verdict.
+        val padded = if (results.size >= expected) {
+            results.take(expected)
+        } else {
+            results + List(expected - results.size) { Located(found = false) }
+        }
+        return PageResult(
+            results = padded,
+            title = obj["title"]?.jsonPrimitive?.content.orEmpty(),
+            nodeCount = obj["nodes"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
         )
     }
 

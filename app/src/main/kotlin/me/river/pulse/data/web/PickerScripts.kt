@@ -201,15 +201,14 @@ object PickerScripts {
     const val CLEAR_SELECTION: String =
         "(function(){ if(window.__pulseClear) window.__pulseClear(); return true; })();"
 
-    /** Re-resolves a stored [ElementTarget]; returns a JSON string. */
-    fun locate(target: ElementTarget): String = """
-        (function(){
-          $HELPERS
-          var ID = ${js(target.elementId)};
-          var SEL = ${js(target.cssSelector)};
-          var XP = ${js(target.xpath)};
-          var SNIP = ${js(target.textSnippet)};
-          var ATTR = ${js(target.attribute)};
+    /**
+     * The resolver shared by [locate] and [locateMany]: id → css → xpath → text
+     * fingerprint, degrading in that order so a cosmetic markup change doesn't
+     * false-alarm.
+     */
+    private val RESOLVER = """
+        function __pResolve(spec){
+          var ID = spec.id, SEL = spec.sel, XP = spec.xp, SNIP = spec.snip, ATTR = spec.attr;
           var el = null, how = '';
           try { if(ID){ el = document.getElementById(ID); if(el) how = 'id'; } } catch(e){}
           if(!el && SEL){ try { el = document.querySelector(SEL); if(el) how = 'css'; } catch(e){} }
@@ -235,24 +234,64 @@ object PickerScripts {
               }
             } catch(e){}
           }
-          if(!el){
-            return JSON.stringify({ found:false, how:'', text:'', title: document.title || '', nodes: document.querySelectorAll('*').length });
-          }
+          if(!el) return { found:false, how:'', text:'', visible:false, attrValue:'', html:'' };
           var visible = true;
           try {
             var rect = el.getBoundingClientRect();
             var cs = window.getComputedStyle(el);
             visible = !!(rect.width || rect.height) && cs.visibility !== 'hidden' && cs.display !== 'none';
           } catch(e){}
-          return JSON.stringify({
+          return {
             found: true,
             how: how,
             visible: visible,
             text: __pText(el).slice(0, 600),
             attrValue: ATTR ? (el.getAttribute(ATTR) || '') : '',
-            html: (el.outerHTML || '').slice(0, 300),
+            html: (el.outerHTML || '').slice(0, 300)
+          };
+        }
+    """.trimIndent()
+
+    private fun spec(target: ElementTarget): String =
+        "{id:${js(target.elementId)},sel:${js(target.cssSelector)}," +
+            "xp:${js(target.xpath)},snip:${js(target.textSnippet)},attr:${js(target.attribute)}}"
+
+    /** Re-resolves a stored [ElementTarget]; returns a JSON string. */
+    fun locate(target: ElementTarget): String = """
+        (function(){
+          $HELPERS
+          $RESOLVER
+          var r = __pResolve(${spec(target)});
+          r.title = document.title || '';
+          r.nodes = document.querySelectorAll('*').length;
+          return JSON.stringify(r);
+        })();
+    """.trimIndent()
+
+    /**
+     * Resolves every stored target against a single page load.
+     *
+     * One render, N lookups: the expensive part of an element check is booting
+     * a WebView and waiting for hydration, so watching six things on a page
+     * costs almost exactly what watching one costs.
+     *
+     * Returns `{ title, nodes, results: [ … ] }` with one entry per target, in
+     * the order they were passed.
+     */
+    fun locateMany(targets: List<ElementTarget>): String = """
+        (function(){
+          $HELPERS
+          $RESOLVER
+          var SPECS = [${targets.joinToString(",") { spec(it) }}];
+          var out = [];
+          for(var i = 0; i < SPECS.length; i++){
+            try { out.push(__pResolve(SPECS[i])); }
+            catch(e){ out.push({ found:false, how:'', text:'', visible:false, attrValue:'', html:'' }); }
+          }
+          return JSON.stringify({
             title: document.title || '',
-            nodes: document.querySelectorAll('*').length
+            nodes: document.querySelectorAll('*').length,
+            results: out
           });
         })();
     """.trimIndent()
