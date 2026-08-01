@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import me.river.pulse.data.Pulse
+import me.river.pulse.widget.PulseWidgetProvider
 import kotlinx.coroutines.launch
 
 /** Re-arms every monitor chain after a reboot or app update. */
@@ -20,6 +21,11 @@ class BootReceiver : BroadcastReceiver() {
             try {
                 val snapshot = graph.store.currentSnapshot()
                 graph.scheduler.syncAll(snapshot.monitors, snapshot.settings)
+                // Strict mode and any unacknowledged urgent outage have to
+                // survive a reboot; sync() decides whether that means starting
+                // the service or leaving it alone.
+                PulseMonitorService.sync(context)
+                PulseWidgetProvider.refresh(context)
             } finally {
                 pending?.finish()
             }

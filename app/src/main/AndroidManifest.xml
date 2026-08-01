@@ -8,6 +8,15 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!--
+        Strict monitoring runs a foreground service so checks keep their cadence
+        in Doze. SPECIAL_USE rather than DATA_SYNC: dataSync is capped at six
+        hours a day on API 34+, which would silently break the one guarantee
+        strict mode exists to make. The subtype below documents the use.
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
     <application
         android:name=".PulseApplication"
         android:allowBackup="true"
@@ -32,7 +41,32 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Widget rows deep-link straight to one monitor. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="pulse" android:host="monitor" />
+            </intent-filter>
         </activity>
+
+        <activity
+            android:name=".widget.WidgetConfigActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.Pulse">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".data.work.PulseMonitorService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps user-configured uptime checks on their exact schedule and repeats an unacknowledged URGENT outage alert until the user confirms it." />
+        </service>
 
         <receiver
             android:name=".data.alerts.AlertActionReceiver"
@@ -40,6 +74,7 @@
             <intent-filter>
                 <action android:name="me.river.pulse.action.RECHECK" />
                 <action android:name="me.river.pulse.action.MUTE_1H" />
+                <action android:name="me.river.pulse.action.ACK_URGENT" />
             </intent-filter>
         </receiver>
 
@@ -51,6 +86,19 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".widget.PulseWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="me.river.pulse.action.WIDGET_REFRESH" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_pulse_info" />
         </receiver>
     </application>
 </manifest>

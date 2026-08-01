@@ -1,0 +1,229 @@
+package me.river.pulse.data.work
+
+import android.app.PendingIntent
+import android.app.Service
+import android.content.Context
+import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.os.Build
+import android.os.IBinder
+import android.util.Log
+import me.river.pulse.data.Pulse
+import me.river.pulse.data.alerts.AlertCenter
+import me.river.pulse.domain.Summary
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+
+/**
+ * Strict monitoring: a foreground service that keeps its own cadence instead of
+ * asking WorkManager nicely.
+ *
+ * ### Why this exists
+ * WorkManager is the right default — it is battery-friendly and survives
+ * reboots — but Doze can defer a one-shot chain for a long time, and its
+ * periodic minimum is 15 minutes. A monitor set to "check every minute" simply
+ * does not check every minute in the background. A foreground service is the
+ * only supported way to get a real cadence, and the persistent notification is
+ * the price Android charges for it.
+ *
+ * ### What runs it
+ * The service is alive when *either* is true:
+ *  - [me.river.pulse.domain.GlobalSettings.strictForegroundMonitoring] is on
+ *    and at least one monitor is enabled, or
+ *  - some monitor has an unacknowledged URGENT outage.
+ *
+ * The second condition means the urgent nag keeps its interval even with strict
+ * mode off — which is the whole point of urgent — and the service shuts itself
+ * down the moment the outage is acknowledged or recovers.
+ *
+ * ### Tradeoffs
+ *  - Battery: a wake every [CheckEngine.MIN_TICK_MS]–[CheckEngine.MAX_IDLE_MS]
+ *    plus the checks themselves. It sleeps until the next monitor is actually
+ *    due rather than polling on a fixed tick, so an all-hourly fleet costs
+ *    roughly one wake a minute doing nothing.
+ *  - A permanent notification the user cannot dismiss (Android's rule, not ours).
+ *  - It does not replace WorkManager: [MonitorScheduler] stays armed as the
+ *    repair sweep, so a service killed by the OS still gets checks eventually.
+ */
+class PulseMonitorService : Service() {
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var loop: Job? = null
+    private var started = false
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val graph = Pulse.install(applicationContext)
+
+        if (intent?.action == ACTION_STOP) {
+            // Explicit "stop strict mode" from the notification: flip the
+            // setting too, otherwise the next sync would start us straight back.
+            scope.launch {
+                graph.store.updateSettings { it.copy(strictForegroundMonitoring = false) }
+                stopSelfSafely()
+            }
+            return START_NOT_STICKY
+        }
+
+        promote(graph.alerts, "Starting…", "Working out what needs checking.")
+        if (loop == null) {
+            loop = scope.launch { runLoop() }
+        }
+        return START_STICKY
+    }
+
+    private suspend fun runLoop() {
+        val graph = Pulse.install(applicationContext)
+        while (scope.isActive) {
+            val snapshot = runCatching { graph.store.currentSnapshot() }.getOrNull()
+            if (snapshot == null) {
+                delay(CheckEngine_MIN_TICK)
+                continue
+            }
+            val strict = snapshot.settings.strictForegroundMonitoring &&
+                snapshot.monitors.any { it.enabled }
+            val nagging = snapshot.monitors.any { monitor ->
+                monitor.urgent && snapshot.runtimes[monitor.id]?.urgentState?.nagging == true
+            }
+            if (!strict && !nagging) {
+                stopSelfSafely()
+                return
+            }
+
+            // Separate catches on purpose. These used to share one block, so a
+            // checker throwing anywhere in the pass — a WebView blowing up on
+            // one page, say — skipped the urgent tick *and* its reconciliation
+            // sweep for that tick, and the sweep is what removes notifications
+            // that should no longer be on screen.
+            if (strict) {
+                runCatching { graph.engine.runAllDue() }
+                    .onFailure { Log.e(TAG, "Check pass failed", it) }
+            }
+            runCatching { graph.engine.tickUrgent() }
+                .onFailure { Log.e(TAG, "Urgent tick failed", it) }
+
+            val fleet = runCatching {
+                graph.store.currentSnapshot().let { Summary.of(it.monitors, it.runtimes) }
+            }.getOrNull()
+            val offline = !graph.network.isOnline()
+            promote(
+                alerts = graph.alerts,
+                title = when {
+                    // Ahead of the fleet verdict: while offline that verdict is a
+                    // record of the past, and this notification is permanently on
+                    // screen claiming to describe the present.
+                    offline -> "Monitoring paused · offline"
+                    fleet == null -> "Strict monitoring"
+                    fleet.urgentPending > 0 -> "URGENT · ${fleet.urgentPending} unacknowledged"
+                    else -> "Strict monitoring · ${fleet.headline}"
+                },
+                body = buildString {
+                    if (offline) {
+                        append("No connection — checks resume automatically.")
+                    } else if (strict) {
+                        append("Checking on schedule instead of waiting for Android to batch work.")
+                    } else {
+                        append("Keeping the urgent alert alive until it's acknowledged.")
+                    }
+                    if (fleet != null && fleet.total > 0) {
+                        append("\n${fleet.total} monitor(s) · ${fleet.down} down · ${fleet.degraded} slow")
+                    }
+                },
+            )
+
+            val delayMs = runCatching { graph.engine.nextWakeDelayMs() }.getOrDefault(CheckEngine_MIN_TICK)
+            delay(delayMs)
+        }
+    }
+
+    private fun promote(alerts: AlertCenter, title: String, body: String) {
+        val notification = alerts.serviceNotification(title, body, stopPendingIntent())
+        if (!started) {
+            runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    startForeground(
+                        AlertCenter.SERVICE_NOTIFICATION_ID,
+                        notification,
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
+                    )
+                } else {
+                    startForeground(AlertCenter.SERVICE_NOTIFICATION_ID, notification)
+                }
+                started = true
+            }.onFailure { Log.e(TAG, "Could not enter the foreground", it) }
+        } else {
+            runCatching {
+                androidx.core.app.NotificationManagerCompat.from(this)
+                    .notify(AlertCenter.SERVICE_NOTIFICATION_ID, notification)
+            }
+        }
+    }
+
+    private fun stopSelfSafely() {
+        loop?.cancel()
+        loop = null
+        runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
+        stopSelf()
+    }
+
+    private fun stopPendingIntent(): PendingIntent = PendingIntent.getService(
+        this,
+        1,
+        Intent(this, PulseMonitorService::class.java).setAction(ACTION_STOP),
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
+
+    override fun onDestroy() {
+        scope.cancel()
+        super.onDestroy()
+    }
+
+    companion object {
+        private const val TAG = "PulseMonitorService"
+        private const val CheckEngine_MIN_TICK = 15_000L
+        const val ACTION_SYNC = "me.river.pulse.action.SERVICE_SYNC"
+        const val ACTION_STOP = "me.river.pulse.action.SERVICE_STOP"
+
+        /**
+         * Starts or stops the service to match the current store.
+         *
+         * Safe to call from anywhere and as often as you like — it is a
+         * reconciliation, not a command. Swallows the
+         * `ForegroundServiceStartNotAllowedException` Android 12+ throws when
+         * the app is in the background and has no exemption: strict mode then
+         * simply doesn't engage until the app is next opened, and the
+         * WorkManager sweep covers the gap.
+         */
+        fun sync(context: Context) {
+            val app = context.applicationContext
+            val graph = Pulse.install(app)
+            graph.appScope.launch {
+                val snapshot = runCatching { graph.store.currentSnapshot() }.getOrNull() ?: return@launch
+                val strict = snapshot.settings.strictForegroundMonitoring &&
+                    snapshot.monitors.any { it.enabled }
+                val nagging = snapshot.monitors.any { monitor ->
+                    monitor.urgent && snapshot.runtimes[monitor.id]?.urgentState?.nagging == true
+                }
+                val intent = Intent(app, PulseMonitorService::class.java).setAction(ACTION_SYNC)
+                if (strict || nagging) {
+                    runCatching {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            app.startForegroundService(intent)
+                        } else {
+                            app.startService(intent)
+                        }
+                    }.onFailure { Log.w(TAG, "Foreground start refused: ${it.message}") }
+                } else {
+                    runCatching { app.stopService(intent) }
+                }
+            }
+        }
+    }
+}
