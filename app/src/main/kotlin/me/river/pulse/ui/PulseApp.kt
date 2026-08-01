@@ -173,10 +173,9 @@ private fun PulseNavHost(navController: NavHostController, onToast: (String) -> 
 /**
  * Confirmation capsule. Slides down from the top and fades itself out.
  *
- * Sized to its text rather than to the screen, and parked just under the
- * wordmark: a transient "saved" message has no business covering the app's name
- * or its "N systems operational" verdict, which is the one line on the screen
- * someone opened Pulse to read.
+ * Sized to its text rather than to the screen, and parked over the wordmark
+ * row: a transient "saved" message has no business covering the fleet banner's
+ * verdict, which is the one line on the screen someone opened Pulse to read.
  */
 @Composable
 private fun GlassToast(
@@ -228,5 +227,11 @@ private fun GlassToast(
     }
 }
 
-/** Clears the wordmark and the status line beneath it. */
-private val TOAST_TOP_GAP = 66.dp
+/**
+ * Parks the capsule over the wordmark row and nothing else.
+ *
+ * The fleet verdict moved out of a subtitle and into the banner below, so the
+ * cheap row to cover is now the app's own name — and the banner, which is the
+ * line someone opened Pulse to read, stays clear.
+ */
+private val TOAST_TOP_GAP = 10.dp

@@ -86,7 +86,7 @@ class PulseE2ETest {
     @Test
     fun appLaunchesToAPolishedEmptyState() {
         launchApp()
-        composeRule.onNodeWithText("Pulse").assertIsDisplayed()
+        composeRule.onNodeWithText("PULSE").assertIsDisplayed()
         composeRule.onNodeWithText("Nothing on the radar").assertIsDisplayed()
         composeRule.onNodeWithText("No monitors yet").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Add a monitor").assertIsDisplayed()
@@ -115,7 +115,8 @@ class PulseE2ETest {
             composeRule.onAllNodesWithText("Operational").fetchSemanticsNodes().isNotEmpty()
         }
         composeRule.onAllNodesWithText("Operational").onFirst().assertIsDisplayed()
-        composeRule.onNodeWithText("All 1 systems operational").assertIsDisplayed()
+        // The fleet banner's verdict, straight from Summary.headline.
+        composeRule.onNodeWithText("All 1 operational").assertIsDisplayed()
         composeRule.captureScreenshot("02-dashboard-passing")
 
         val snapshot = runBlocking { Pulse.require().store.currentSnapshot() }
