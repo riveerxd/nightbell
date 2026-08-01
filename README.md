@@ -18,7 +18,7 @@ watch it, chart it, and shout when it breaks.
 | --- | --- |
 | **Status check** | Ping a URL, assert on the status code (exact / any 2xx / range / any). |
 | **Request & response** | Full control: GET·POST·PUT·PATCH·DELETE·HEAD, custom headers, request body and content type, plus a response-body assertion. |
-| **Page element** | Loads the real page in an embedded browser, and watches one DOM node you picked by tapping it. |
+| **Page element** | Loads the real page in an embedded browser and watches **any number** of DOM nodes you picked by tapping them — all resolved against one page load. |
 
 **Response-body assertions:** contains · does not contain · exactly equals ·
 matches regex · JSON field equals · JSON field exists. JSON paths support
@@ -28,11 +28,18 @@ nesting and array indices (`data.items[0].state`).
 text contains · text unchanged (snapshot). You can also compare an attribute
 (`href`, `value`, `data-state`, …) instead of the visible text.
 
+Each watched element carries its own expectation and an optional nickname. The
+list is a **conjunction** — one mismatch marks the monitor down, and the alert
+names the element that broke. Booting the WebView and waiting for hydration is
+what an element check actually costs, so watching six nodes costs almost exactly
+what watching one costs.
+
 ## Alerting
 
 Every monitor either inherits the global alert policy or overrides it:
 
 - **Down** and **recovery** notifications, independently toggleable.
+- **Degraded** (latency-SLO) notifications on their own track — see below.
 - **Sound**: silent · notification tone · alarm tone · ringtone.
 - **Haptics**: six named patterns — Tick, Double pulse, Long buzz, Heartbeat,
   S·O·S, Escalating. Tapping a style plays it immediately so you can feel it
@@ -41,13 +48,104 @@ Every monitor either inherits the global alert policy or overrides it:
   optional repeat-while-down nagging.
 - **Quiet hours** with midnight wrap-around, and an optional
   "still notify, but silently" bypass.
-- Inline notification actions: **Re-check now** and **Mute 1h**.
+- Inline notification actions: **Re-check now**, **Mute 1h**, and
+  **Acknowledge** on urgent alerts.
 
 Android freezes sound and vibration onto a notification channel at creation
 time, so a single channel could never honour per-monitor choices. Pulse
 materialises one channel per `(sound × vibration style × severity)` combination
 on demand and routes each alert to the matching one. Channels are grouped so the
 system settings screen stays readable.
+
+### URGENT mode
+
+A per-monitor switch for the things you cannot afford to sleep through.
+
+While an URGENT monitor is down, Pulse re-posts **one** notification on a
+dedicated, DND-bypassing alarm channel every *N* minutes (default 5) until you
+acknowledge it — from the notification action or from the monitor screen. It is
+`ongoing`, so it cannot be swiped away.
+
+Acknowledging stops the repeats **for that outage only**. The monitor stays red,
+the ordinary down notification stays where it was, and recovery re-arms the
+loop, so the *next* outage shouts again. Urgent overrides cooldown and the
+repeat toggle — that is the point — but still honours the master switch, the
+per-monitor alert switch, mute, the failure threshold and quiet hours. It means
+"don't let me miss it", not "ignore everything I configured".
+
+The whole state machine is `domain/UrgentAlerts.kt`: pure, and exhaustively
+tested.
+
+Because the urgent notification is `ongoing` — deliberately un-swipeable — its
+lifecycle is treated as a **reconciliation, not a transition**. A healthy check
+always issues a cancel rather than inferring one isn't needed, checks of one
+monitor are serialised behind a per-monitor lock, and every tick sweeps
+`getActiveNotifications()` against the ids monitors can currently justify. That
+last one is the only way to catch a notification belonging to a monitor that has
+since been deleted. See HANDOFF for the field bug that prompted all three.
+
+### Latency SLOs and DEGRADED
+
+`Health.DEGRADED` now means something. Give a monitor a **latency budget** (or
+inherit the global default, 2.5 s) and a successful response slower than it
+becomes DEGRADED — amber, not red, because the service answered.
+
+Degraded has its own alert track with its own cooldown, its own repeat setting
+and its own recovery notification, deliberately independent of the down track:
+"slow" and "broken" are different incidents, and a slow morning should not eat
+the cooldown an outage needs. An outage always supersedes slowness, so you never
+get two notifications for one event.
+
+### Strict foreground monitoring
+
+WorkManager is the right default — battery-friendly, survives reboots — but Doze
+can defer a one-shot chain for a long time and its periodic minimum is 15
+minutes. A monitor set to "check every minute" does not check every minute.
+
+Turning on **strict foreground monitoring** runs a foreground service that keeps
+your intervals exactly. It sleeps until the next monitor is actually due rather
+than polling on a fixed tick, and WorkManager stays armed underneath as a repair
+sweep, so a service the OS kills still gets checks eventually.
+
+The tradeoffs, stated plainly in the UI as well as here:
+
+| | Strict off (default) | Strict on |
+| --- | --- | --- |
+| Cadence | best-effort; Doze may delay | as configured, down to ~15 s |
+| Battery | negligible | real — a wake per due check |
+| Notification | none | permanent, un-dismissable (Android's rule) |
+| Survives reboot | yes | yes |
+| Survives OS kill | yes | restarted by `START_STICKY` + the sweep |
+
+An unacknowledged URGENT outage starts the same service on its own regardless of
+the setting, and stops it the moment you acknowledge or the monitor recovers.
+
+The service declares `foregroundServiceType="specialUse"` rather than
+`dataSync`, because `dataSync` is capped at six hours per day on API 34+ — which
+would silently break the one guarantee strict mode exists to make. Shipping this
+through Google Play would need that subtype justified in review; sideloading is
+unaffected.
+
+## Home-screen widget
+
+A worst-first list of monitors, configurable per instance:
+
+- **Theme**: black · white · blue — each a solid rounded surface, because a
+  widget has to stay legible on a white beach photo and a black AMOLED wallpaper
+  alike, and translucency cannot promise that.
+- **Density**: compact (dot · name · status) or detailed (adds host, latency and
+  the failure message).
+- Show/hide the app title and logo, show/hide the last-checked footer, and
+  optionally hide healthy monitors entirely.
+- Row cap, with any overflow disclosed as "+N more" rather than silently
+  truncated.
+
+Tapping the widget opens the dashboard; tapping a row deep-links to that
+monitor's detail screen. Placing several widgets gives each its own
+configuration, stored in a separate DataStore keyed by `appWidgetId` so a
+corrupt widget preference can never take the monitor list down with it — and so
+it survives an APK update. Widgets refresh after every completed check, plus the
+platform's 30-minute periodic tick.
 
 ## The element picker
 
@@ -63,12 +161,16 @@ system settings screen stays readable.
 ## Architecture
 
 ```
-domain/    Models, Assertions, AlertDecider, Validation   ← pure Kotlin, no Android
-data/      PulseStore (DataStore+JSON), HttpChecker (OkHttp),
-           ElementChecker (offscreen WebView), CheckEngine,
-           AlertCenter, WorkManager scheduling, Pulse (service locator)
-ui/        theme (colours, glass modifiers, motion), icons (hand-authored),
-           components, dashboard, setup (+ element picker), detail, settings
+domain/    Models, Assertions, AlertDecider, UrgentAlerts, Summary,
+           Validation                                     ← pure Kotlin, no Android
+data/      PulseStore (DataStore+JSON, forward migration), HttpChecker (OkHttp),
+           ElementChecker (offscreen WebView, N targets per load), CheckEngine,
+           AlertCenter, WorkManager scheduling, PulseMonitorService,
+           Pulse (service locator)
+ui/        theme (colours, glass modifiers, motion, backdrop blur),
+           icons (hand-authored), components, dashboard,
+           setup (+ element picker), detail, settings
+widget/    RemoteViews provider, per-instance config store, config activity
 ```
 
 The whole decision surface — status matching, body assertions, element
@@ -102,15 +204,56 @@ functions, which is why it can be exhaustively unit-tested without a device.
 - Icons are hand-authored `ImageVector`s on a 24-unit grid with 1.7px round
   strokes, so the whole app shares one optical weight and the APK carries only
   the glyphs it uses.
+- **Muted ≠ broken.** A snoozed monitor's rim goes amber and it gains a "Muted"
+  pill; red stays reserved for "this needs you now". A wall of red cards that
+  you have already triaged teaches you to ignore red.
+- **Pull-to-refresh is a two-stage gesture.** Re-checking every monitor fires
+  real requests at every endpoint at once, so it should not be reachable by an
+  accidental over-scroll. The pull is rubber-banded through
+  `maxPull · (1 − e^(−raw/maxPull))` and every visual — puck scale, ring sweep,
+  glyph rotation, label — is a pure function of that one distance, so the
+  indicator is welded to the finger. Past the threshold you must *hold* for two
+  seconds while a ring closes; releasing early springs back and cancels.
+- **Real backdrop blur on API 31+** (`ui/theme/Backdrop.kt`). The scrolling
+  subtree records itself into a `GraphicsLayer`; a floating sheet draws that
+  layer, translated and clipped to its own bounds, so it shows a genuinely
+  blurred copy of the pixels underneath. Two layers, not one — a layer's
+  `renderEffect` applies every time it is drawn, so a single blurred layer would
+  put the *screen* out of focus too. Sinks are invalidated by the source via
+  `DrawModifierNode.invalidateDraw()`, because a node that draws a layer
+  somebody else records reads no state and would otherwise freeze mid-scroll.
+  Below API 31, or with the setting off, it degrades to the opaque pane the app
+  shipped with. Toasts stay fully opaque either way.
 
 ## Build
 
 ```bash
 ./gradlew :app:assembleDebug        # app/build/outputs/apk/debug/app-debug.apk
-./gradlew :app:assembleRelease      # signed, see keystore/ below
-./gradlew :app:testDebugUnitTest    # 68 JVM tests
-./gradlew :app:connectedDebugAndroidTest   # 32 on-device tests
+./gradlew :app:assembleRelease      # minified + resource-shrunk, signed
+./gradlew :app:assembleReleaseTest  # minified but debug-signed, for smoke-testing R8
+./gradlew :app:testDebugUnitTest    # 118 JVM tests
+./gradlew :app:connectedDebugAndroidTest   # 57 on-device tests
 ```
+
+**Release is minified.** R8 plus resource shrinking takes the APK from 9.55 MB
+to **1.96 MB** (−79%). `proguard-rules.pro` documents every keep and why R8
+cannot see the reference itself: the WebView JS bridge (called from JavaScript
+by method name), kotlinx.serialization's generated serializers, WorkManager
+workers (instantiated by class name from a database that survives app updates),
+and the widget provider (referenced by an `AppWidgetProviderInfo` the *launcher*
+persists outside our APK).
+
+The `releaseTest` variant exists so the R8 configuration can be exercised on a
+device without replacing the installed release build. Everything reflective was
+verified against it: monitors round-tripped through a process kill, WorkManager
+jobs scheduled, the JS bridge returned a picked selector, the foreground service
+entered `specialUse`, and the notification actions resolved.
+
+**Baseline profile.** `app/src/main/baselineProfiles/baseline-prof.txt` is
+hand-authored and covers the cold-launch path plus the four flows in the brief.
+AGP merges it into `assets/dexopt/baseline.prof` and rewrites it through the R8
+mapping, so the source names in the file are correct even though the shipped
+classes are obfuscated. See HANDOFF for why it is not macrobenchmark-generated.
 
 Release signing reads `keystore/keystore.properties`; when it is absent the
 release build is simply unsigned. Regenerate with:
@@ -123,6 +266,8 @@ keytool -genkeypair -v -keystore keystore/pulse-release.jks -alias pulse \
 
 ## Testing
 
+**118 JVM + 57 on-device = 175 automated tests.**
+
 | Suite | Count | Covers |
 | --- | ---: | --- |
 | `AssertionsTest` | 20 | status modes, all six body assertions, JSON paths, element modes |
@@ -130,21 +275,55 @@ keytool -genkeypair -v -keystore keystore/pulse-release.jks -alias pulse \
 | `HttpCheckerTest` | 14 | real sockets: 200/503/418, body + JSON assertions, POST echo, timeout, DNS, refused, redirects |
 | `ValidationTest` | 16 | URL/header/assertion/cadence/element validation |
 | `PersistenceTest` | 4 | snapshot round-trip, forward compatibility, vibration table integrity |
+| `UrgentAlertsTest` | 13 | the urgent state machine: start, repeat gap, acknowledge, recovery re-arm, suppression |
+| `DegradedAlertTest` | 12 | latency threshold, independent cooldown/repeat/recovery, quiet hours, down-track regression guard |
+| `MultiElementTest` | 13 | target list, 1.0.0 migration, per-element validation, SLO/urgent validation |
+| `SummaryTest` | 10 | worst-first ranking shared by dashboard, widget and service |
 | `PulseE2ETest` | 8 | full UI journeys on-device |
 | `ElementMonitorTest` | 10 | real WebView DOM: locate, fallbacks, picker capture |
 | `AlertsInstrumentedTest` | 11 | real notifications, channels, escalation, mute, actions |
+| `UrgentModeInstrumentedTest` | 8 | urgent end-to-end through the real engine + notification action |
+| `WidgetInstrumentedTest` | 17 | RemoteViews **inflation**, ordering, every theme/density, config persistence and id remapping |
 | `ScreenshotTest` | 3 | drives every screen and writes PNGs |
+
+`WidgetInstrumentedTest` calls `RemoteViews.apply()` rather than asserting on
+the builder, because that runs the same inflation the launcher's process runs —
+an unsupported view, a method that isn't `@RemotableViewMethod`, or a missing
+resource fails there instead of showing "Problem loading widget" on a home
+screen.
 
 `TinyHttpServer` (in `src/testShared`) is a ~100-line dependency-free HTTP
 server shared by both suites, so the checker is always tested against real
 sockets rather than a mock.
 
+## Updating from 1.0.0
+
+`applicationId`, the signing key and the DataStore key (`snapshot_v1`) are
+unchanged, so 1.1.0 installs over 1.0.0 and keeps every monitor, its history and
+its settings. Every new field has a default and unknown keys are ignored, so the
+only real migration is multi-element monitors: `PulseStore.migrate` lifts 1.0.0's
+single `element` into the new `elements` list, and keeps `element` pointing at
+the head of that list so a downgrade still finds a target.
+
+Verified on a device, not just asserted: two monitors (one of them a
+single-element page monitor) were created in a real 1.0.0 build, 1.1.0 was
+installed over it without uninstalling, and both came back with their history
+intact and the element monitor re-resolving through the new code path.
+
 ## Known limitations
 
-- **Background cadence is best-effort.** WorkManager one-shots self-reschedule
-  per monitor and a 15-minute periodic sweep repairs dropped chains, but Doze
-  and App Standby can delay sub-15-minute intervals. Manual and foreground
-  checks are exact.
+- **Background cadence is best-effort *unless strict mode is on*.** WorkManager
+  one-shots self-reschedule per monitor and a 15-minute periodic sweep repairs
+  dropped chains, but Doze and App Standby can delay sub-15-minute intervals.
+  Manual and foreground checks are exact; strict mode makes the background ones
+  exact too, at the cost of a permanent notification and real battery.
+- **No Wear OS tile yet.** The shared roll-up it needs (`domain/Summary.kt`)
+  exists and is tested; the module itself is blocked on tooling — see HANDOFF.
+- **Widget rows are capped, not scrollable.** RemoteViews collections would buy
+  scrolling at the cost of a second process hop and a class of stale-data bugs;
+  a short worst-first list is what is actually glanceable. Overflow is disclosed.
+- **Real blur is API 31+.** Below that, and when the setting is off, floating
+  sheets are opaque. Nothing becomes see-through in either mode.
 - **Element checks need a renderable page.** Heavy SPAs are polled for up to
   ~5 s after `onPageFinished`; pages that hydrate slower than that, or that hard-
   block headless/offscreen WebViews, may report "element not found".

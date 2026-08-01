@@ -20,8 +20,24 @@ android {
         applicationId = "me.river.pulse"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        // 1.1.0 adds strict foreground monitoring, URGENT mode, latency SLOs,
+        // multi-element page monitors and the home-screen widget. applicationId
+        // and the DataStore key are unchanged, so 1.0.0 installs update in place
+        // and keep their monitors — see PulseStore.migrate.
+        // 1.1.2 fixes alert notifications that could outlive the outage they
+        // described — reproduced on a real device, see HANDOFF. Includes a
+        // one-time repair for stale notifications left by 1.1.0/1.1.1.
+        // 1.2.0 replaces the dashboard's uptime dial with the fleet banner: the
+        // top of the screen now takes the worst monitor's colour, and the card
+        // sparklines carry failures in the stroke instead of as dots.
+        // 1.4.0 shows the site favicon on page-element cards (cached in memory
+        // and on disk, with ICO unwrapping) instead of a generic cursor glyph.
+        // 1.3.0 stops checking entirely while the device has no connectivity —
+        // losing signal is not an outage, and reporting it as one was spamming
+        // real users. Both are UI/behaviour only; the store schema is untouched,
+        // so 1.1.x and 1.2.x installs update in place.
+        versionCode = 7
+        versionName = "1.4.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -45,12 +61,22 @@ android {
             isMinifyEnabled = false
         }
         release {
-            isMinifyEnabled = false
-            isShrinkResources = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             if (keystoreProps.isNotEmpty()) {
                 signingConfig = signingConfigs.getByName("release")
             }
+        }
+        // A minified build that is still debuggable and still signed with the
+        // debug key, so the R8 configuration can be smoke-tested on a device
+        // without swapping the installed release APK.
+        create("releaseTest") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".minified"
+            versionNameSuffix = "-minified"
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
         }
     }
 
@@ -109,6 +135,9 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.work.runtime.ktx)
+    // Installs app/src/main/baselineProfiles/*.txt on API 28–30, where the
+    // platform installer does not read them from the APK by itself.
+    implementation(libs.androidx.profileinstaller)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
