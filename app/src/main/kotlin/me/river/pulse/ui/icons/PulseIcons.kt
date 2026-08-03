@@ -202,4 +202,10 @@ object PulseIcons {
             "M8 18.6 L8 13.6 L16 13.6 L16 18.6",
     )
     val Drag = stroke("Drag", "M9 7 L9.1 7 M15 7 L15.1 7 M9 12 L9.1 12 M15 12 L15.1 12 M9 17 L9.1 17 M15 17 L15.1 17", width = 2.2f)
+
+    // Export and import share the tray so the pair reads as one operation in two
+    // directions; only the arrow differs.
+    private const val TRAY = "M4.4 15.4 L4.4 19.4 L19.6 19.4 L19.6 15.4"
+    val Export = stroke("Export", "$TRAY M12 3.6 L12 14.2 M7.8 9.8 L12 14.2 L16.2 9.8")
+    val Import = stroke("Import", "$TRAY M12 14.2 L12 3.6 M7.8 8 L12 3.6 L16.2 8")
 }

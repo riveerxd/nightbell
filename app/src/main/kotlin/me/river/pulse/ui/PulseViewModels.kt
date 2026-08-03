@@ -1,5 +1,6 @@
 package me.river.pulse.ui
 
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -8,7 +9,11 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import me.river.pulse.BuildConfig
 import me.river.pulse.data.Pulse
+import me.river.pulse.data.transfer.BackupCodec
+import me.river.pulse.data.transfer.BackupError
+import me.river.pulse.data.transfer.toImportableSnapshot
 import me.river.pulse.domain.AlertPolicy
 import me.river.pulse.domain.AssertionMode
 import me.river.pulse.domain.CheckResult
@@ -20,6 +25,7 @@ import me.river.pulse.domain.Monitor
 import me.river.pulse.domain.MonitorCard
 import me.river.pulse.domain.MonitorKind
 import me.river.pulse.domain.Validation
+import me.river.pulse.domain.isCancellation
 import java.util.UUID
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -492,6 +498,89 @@ class SettingsViewModel(private val graph: Pulse.Graph) : ViewModel() {
     var refetchingFavicons by mutableStateOf(false)
         private set
 
+    var transferring by mutableStateOf(false)
+        private set
+
+    /**
+     * Writes the whole store out through [sink].
+     *
+     * The caller supplies the sink rather than the URI because opening it needs a
+     * `ContentResolver`, which belongs to the screen; what belongs here is the
+     * snapshot, the coroutine and the reporting. See
+     * [me.river.pulse.data.transfer.PulseBackup] for why this exists at
+     * all.
+     */
+    fun exportBackup(sink: suspend (String) -> Unit) {
+        if (transferring) return
+        transferring = true
+        viewModelScope.launch {
+            try {
+                val snapshot = graph.store.currentSnapshot()
+                val document = BackupCodec.encode(
+                    snapshot = snapshot,
+                    applicationId = BuildConfig.APPLICATION_ID,
+                    versionName = BuildConfig.VERSION_NAME,
+                    versionCode = BuildConfig.VERSION_CODE,
+                    nowMs = System.currentTimeMillis(),
+                )
+                sink(document)
+                val count = snapshot.monitors.size
+                toast = "Exported $count monitor" + if (count == 1) "" else "s"
+            } catch (error: Throwable) {
+                if (isCancellation(error)) throw error
+                Log.w(TAG, "Export failed", error)
+                toast = "Couldn't write that file"
+            } finally {
+                transferring = false
+            }
+        }
+    }
+
+    /**
+     * Replaces the store with the backup read from [source].
+     *
+     * Replace rather than merge, and the screen confirms before calling this. A
+     * merge would have to invent an answer for two monitors with the same id and
+     * different settings, and the case this exists for — moving a fleet to the
+     * renamed app — is a fresh install where there is nothing to merge with.
+     *
+     * Everything is rescheduled afterwards, because the imported monitors have no
+     * work enqueued for them in *this* install and would otherwise sit there
+     * until something else triggered a sync.
+     */
+    fun importBackup(source: suspend () -> String) {
+        if (transferring) return
+        transferring = true
+        viewModelScope.launch {
+            try {
+                val raw = source()
+                val backup = BackupCodec.decode(raw).getOrElse { error ->
+                    toast = (error as? BackupCodec.BackupFailure)?.error?.message
+                        ?: BackupError.Unreadable.message
+                    return@launch
+                }
+                val imported = backup.toImportableSnapshot()
+                graph.store.replaceAll(imported)
+                graph.scheduler.syncAll(imported.monitors, imported.settings)
+                graph.scheduler.ensureSweep(imported.settings)
+                // Nothing here has ever been checked — health is UNKNOWN by
+                // construction — so a pass now is what makes the import look like
+                // it worked rather than like a screen of grey cards.
+                graph.engine.clearCheckerHealth("store replaced by import")
+                graph.notifyStateChanged()
+                if (graph.network.isOnline()) graph.engine.runAllDue(force = true)
+                val count = imported.monitors.size
+                toast = "Imported $count monitor" + if (count == 1) "" else "s"
+            } catch (error: Throwable) {
+                if (isCancellation(error)) throw error
+                Log.w(TAG, "Import failed", error)
+                toast = "Couldn't read that file"
+            } finally {
+                transferring = false
+            }
+        }
+    }
+
     /**
      * Throws away the cached site icons and fetches them again.
      *
@@ -564,6 +653,8 @@ class SettingsViewModel(private val graph: Pulse.Graph) : ViewModel() {
     }
 
     private companion object {
+        const val TAG = "SettingsViewModel"
+
         /** Slow on purpose: this is a settings screen, not a dashboard. */
         const val LIMIT_POLL_MS = 5_000L
     }

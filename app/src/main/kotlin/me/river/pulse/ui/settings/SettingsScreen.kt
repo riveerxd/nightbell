@@ -4,6 +4,8 @@ import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Intent
 import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import android.provider.Settings as AndroidSettings
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -70,6 +72,11 @@ import me.river.pulse.ui.theme.PulseColors
 import me.river.pulse.widget.PulseWidgetProvider
 import me.river.pulse.widget.WidgetConfigActivity
 import androidx.compose.ui.platform.testTag
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
@@ -88,6 +95,37 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
             manager.getAppWidgetIds(ComponentName(context, PulseWidgetProvider::class.java))
                 .toList()
         }.getOrDefault(emptyList())
+    }
+    // Storage Access Framework: no storage permission, and the user picks the
+    // destination — which can be a cloud provider, and needs to be, since the
+    // whole point is handing the file to a *different install* of the app.
+    var confirmImport by remember { mutableStateOf(false) }
+    val exportBackup = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri ->
+        if (uri != null) {
+            viewModel.exportBackup { document ->
+                withContext(Dispatchers.IO) {
+                    context.contentResolver.openOutputStream(uri)?.use { stream ->
+                        stream.write(document.toByteArray())
+                    } ?: error("no output stream for $uri")
+                }
+            }
+        }
+    }
+    val importBackup = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        confirmImport = false
+        if (uri != null) {
+            viewModel.importBackup {
+                withContext(Dispatchers.IO) {
+                    context.contentResolver.openInputStream(uri)
+                        ?.use { stream -> stream.readBytes().decodeToString() }
+                        ?: error("no input stream for $uri")
+                }
+            }
+        }
     }
     var notificationsAllowed by remember {
         mutableStateOf(Pulse.install(context).alerts.hasNotificationPermission())
@@ -488,8 +526,106 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
             }
         }
 
+        item(key = "backup") {
+            StaggeredEntrance(index = 8, key = "backup", log = entrance) {
+                GlassCard {
+                    SectionHeader("Backup and transfer", icon = PulseIcons.Export, accent = PulseColors.Violet)
+                    Text(
+                        text = "Writes every monitor, its history and your settings to a JSON " +
+                            "file, wherever you choose to put it. Nothing is uploaded — the file " +
+                            "goes where you send it and nowhere else.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = PulseColors.TextTertiary,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    PulseButton(
+                        text = "Export to a file",
+                        onClick = { exportBackup.launch(backupFileName()) },
+                        icon = PulseIcons.Export,
+                        tone = ButtonTone.Secondary,
+                        enabled = !viewModel.transferring,
+                        modifier = Modifier.fillMaxWidth().testTag("export-backup"),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    AnimatedVisibility(
+                        visible = !confirmImport,
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically(),
+                    ) {
+                        PulseButton(
+                            text = "Import from a file",
+                            onClick = { confirmImport = true },
+                            icon = PulseIcons.Import,
+                            tone = ButtonTone.Secondary,
+                            enabled = !viewModel.transferring,
+                            modifier = Modifier.fillMaxWidth().testTag("import-backup"),
+                        )
+                    }
+                    AnimatedVisibility(
+                        visible = confirmImport,
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically(),
+                    ) {
+                        Column {
+                            Text(
+                                text = "Import replaces everything",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = PulseColors.TextPrimary,
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                text = "The monitors and history on this device are dropped and " +
+                                    "the file's take their place. Export first if you want to " +
+                                    "keep them. This can't be undone.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = PulseColors.TextTertiary,
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                PulseButton(
+                                    text = "Cancel",
+                                    onClick = { confirmImport = false },
+                                    tone = ButtonTone.Secondary,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                PulseButton(
+                                    text = "Choose file",
+                                    // Anything, rather than application/json: mime
+                                    // detection for .json is inconsistent across
+                                    // storage providers and a filter that hides the
+                                    // user's own backup is worse than one that shows
+                                    // too much. The codec validates what comes back.
+                                    onClick = { importBackup.launch(arrayOf("*/*")) },
+                                    tone = ButtonTone.Danger,
+                                    icon = PulseIcons.Import,
+                                    modifier = Modifier.weight(1f).testTag("confirm-import"),
+                                )
+                            }
+                        }
+                    }
+                    GlassDivider(Modifier.padding(vertical = 12.dp))
+                    Text(
+                        text = "Moving to a new version of Pulse",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = PulseColors.TextSecondary,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "Pulse is changing its package name. Android identifies an app by " +
+                            "that name, so the renamed build is a different app to it: it " +
+                            "installs next to this one and starts empty, and no app can read " +
+                            "another's data. Export here, install the new build, import there — " +
+                            "that is the only route across, so do it before you uninstall this " +
+                            "one.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = PulseColors.TextTertiary,
+                    )
+                }
+            }
+        }
+
         item(key = "motion") {
-            StaggeredEntrance(index = 8, key = "motion", log = entrance) {
+            StaggeredEntrance(index = 9, key = "motion", log = entrance) {
                 GlassCard {
                     SectionHeader("Motion", icon = PulseIcons.Sparkle, accent = PulseColors.Mint)
                     Text(
@@ -535,7 +671,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         }
 
         item(key = "about") {
-            StaggeredEntrance(index = 9, key = "about", log = entrance) {
+            StaggeredEntrance(index = 10, key = "about", log = entrance) {
                 GlassCard {
                     SectionHeader("About", icon = PulseIcons.Info, accent = PulseColors.Sky)
                     AboutRow("Version", "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
@@ -701,6 +837,13 @@ private fun WidgetsCard(ids: List<Int>, onConfigure: (Int) -> Unit) {
         }
     }
 }
+
+/**
+ * `pulse-backup-2026-08-04-0031.json` — chronological, so a folder of them sorts
+ * itself, and unambiguous about which export is which.
+ */
+private fun backupFileName(nowMs: Long = System.currentTimeMillis()): String =
+    "pulse-backup-" + SimpleDateFormat("yyyy-MM-dd-HHmm", Locale.US).format(Date(nowMs)) + ".json"
 
 /** Amber-bordered panel for the "this costs you something" copy. */
 @Composable
