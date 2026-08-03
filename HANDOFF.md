@@ -1,23 +1,51 @@
 # Pulse — handoff
 
-## 1.7.0 — the bridge before the rename
+## 2.0.0 — the app id is `me.river.pulse`
 
-**This release exists to be installed before the renamed build arrives, and for
-no other reason.** Pulse is moving from
-`me.river.pulse` to `me.river.pulse`, and on Android that is not a
-rename.
+**2.0.0 does not update an earlier install. It installs beside it.**
 
-`applicationId` *is* the app. It names `/data/data/<id>/`, and it is what the
-installer matches to decide "update this" against "install a new thing". Change
-it and the device sees a different app: it installs **alongside** the old one,
-with an empty data directory, and the old one keeps running until it is
-uninstalled. The signing key does not change this — the key decides whether an
-update is *permitted*, never whether two APKs are the same app. Nor does any
-manifest or Gradle setting; there is no supported one.
+`applicationId` *is* the app as far as Android is concerned. It names
+`/data/data/<id>/`, and it is what the installer matches to decide "update this"
+against "install a new thing". A build carrying a different one is a different
+app: it lands alongside whatever is already there, with an empty data directory,
+and the older install keeps running until it is removed by hand. The signing key
+does not change this — a key decides whether an update is *permitted*, never
+whether two APKs are the same app. Neither does any manifest or Gradle setting;
+there is no supported one.
 
-One app also cannot read another's files. So the only path that carries a user's
-fleet across is one the user drives by hand, and this release is that path:
-**Settings → Backup and transfer**, export to a file, import in the new build.
+One app also cannot read another's files, so nothing automatic can carry a fleet
+across. The route is the one 1.7.0 added and the reason it was shipped first:
+**Settings → Backup and transfer**, export from the old install, import into this
+one. Anyone who removes the old install without exporting has lost their
+monitors, and no code here can get them back.
+
+Everything else in the tree moved with the id — `namespace`, all four Kotlin
+source roots, the broadcast action strings in the manifest, the R8 keep rules and
+the baseline profile's class descriptors. Notification channel ids, the DataStore
+name (`pulse_store`), its key (`snapshot_v1`) and the WorkManager unique names are
+hardcoded strings and were **not** derived from the package, so an import lands in
+a store that is byte-identical in shape to the one it was exported from.
+
+### Things worth knowing
+
+- **Placed home-screen widgets do not survive.** A launcher stores the provider as
+  a fully-qualified `ComponentName`, so the widget belongs to the old app and stays
+  with it. Widgets have to be dragged back onto the home screen after importing;
+  their saved per-widget config is in the backup and is re-applied.
+- **The archived APKs under `artifacts/` from before 2.0.0 carry the retired id
+  compiled in.** They are zip archives, not text, and no history rewrite reaches
+  inside them. Treat them as what they are: the binaries that were actually built
+  and installed at the time.
+
+## 1.7.0 — portable backups
+
+Everything the app holds, as one JSON file the user chooses the destination for.
+
+Shipped ahead of 2.0.0 on purpose, and the reason is in that section: 2.0.0
+changes the `applicationId`, so it cannot update an existing install, and this is
+the only way anything gets carried over. It is useful on its own afterwards —
+moving to a new phone, keeping a copy before a risky edit — but that is not why it
+went out when it did.
 
 ### The format
 

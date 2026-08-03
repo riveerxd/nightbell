@@ -56,16 +56,21 @@ android {
         // slider that goes all the way to fully transparent. Widget configs are
         // forward-compatible: every new field defaults, so widgets placed by 1.5.0
         // keep their exact look.
-        // 1.7.0 is the bridge for the applicationId change that follows it, and
-        // exists only to be installed *before* that change. Android identifies an
-        // app by its applicationId, so the renamed build is a different app: it
-        // installs alongside this one, gets its own data directory, and cannot
-        // read this one's. The only route across is a file the user carries, so
-        // Settings gains export and import. Ship this, give people time to run
-        // it, and only then rename. Nothing else about this release is load
-        // bearing.
-        versionCode = 10
-        versionName = "1.7.0"
+        // 1.7.0 adds export and import in Settings: the whole store as one JSON
+        // file the user picks the destination for. Shipped ahead of 2.0.0 on
+        // purpose — see below.
+        // 2.0.0 sets applicationId to me.river.pulse. This is the one release in
+        // the list that does NOT update an earlier install: Android identifies an
+        // app by its applicationId, so a build carrying a different one installs
+        // alongside the old app with an empty data directory, and no signing key
+        // or manifest setting changes that. The only route across is 1.7.0's
+        // export/import, driven by hand. Placed widgets do not survive either —
+        // a launcher stores the provider as a fully-qualified ComponentName.
+        // The store itself is untouched: the DataStore name, its key and
+        // SCHEMA_VERSION were never derived from the package, so an imported
+        // snapshot lands in exactly the shape it left.
+        versionCode = 11
+        versionName = "2.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

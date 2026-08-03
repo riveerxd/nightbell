@@ -231,12 +231,17 @@ your settings to a JSON file, through the Storage Access Framework — so Pulse
 needs no storage permission, the destination is yours to pick, and nothing is
 uploaded anywhere.
 
-This exists because Pulse is changing its package name. Android identifies an app
-by its `applicationId`, so the renamed build is a *different app* to the platform:
-it installs alongside this one, starts with an empty data directory, and cannot
-read this one's files. No signing key or manifest setting changes that. Export
-here, install the new build, import there — and do it before uninstalling the old
-one, because once it is gone so is the data.
+It also exists because **2.0.0 changed the app's `applicationId` to
+`me.river.pulse`, and that is not a rename.** Android identifies an app by that
+id, so 2.0.0 installs *beside* an earlier version rather than updating it: new
+data directory, no monitors, and no way for it to read the older install's files.
+No signing key or manifest setting changes that. Export from the old install,
+install 2.0.0, import — and export **before** uninstalling anything, because once
+the old app is gone so is its data.
+
+Placed home-screen widgets do not come across either: a launcher stores the
+provider as a fully-qualified class name, so they belong to the old app. Drag them
+back on after importing; their settings are in the backup.
 
 An import **replaces** what is on the device rather than merging, and says so
 before it does it. What it carries is monitors, settings, mute windows and
@@ -244,7 +249,7 @@ history. What it deliberately does not carry is any record of notifications
 already posted: health resets to unknown until this install has actually checked
 something, and the alert bookkeeping resets with it. Importing an in-progress
 alert state would suppress the first real outage on the new device — see the
-1.7.0 section of HANDOFF for why that is the same trap twice.
+1.7.0 and 2.0.0 sections of HANDOFF for why that is the same trap twice.
 
 ## The element picker
 
