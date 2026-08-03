@@ -12,6 +12,8 @@ import me.river.pulse.data.Pulse
 import me.river.pulse.domain.AlertPolicy
 import me.river.pulse.domain.AssertionMode
 import me.river.pulse.domain.CheckResult
+import me.river.pulse.domain.CheckerHealth
+import me.river.pulse.domain.CheckerLimit
 import me.river.pulse.domain.ElementTarget
 import me.river.pulse.domain.GlobalSettings
 import me.river.pulse.domain.Monitor
@@ -19,8 +21,12 @@ import me.river.pulse.domain.MonitorCard
 import me.river.pulse.domain.MonitorKind
 import me.river.pulse.domain.Validation
 import java.util.UUID
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -90,8 +96,10 @@ class DashboardViewModel(private val graph: Pulse.Graph) : ViewModel() {
             graph.store.setEnabled(monitorId, enabled)
             val snapshot = graph.store.currentSnapshot()
             snapshot.monitors.firstOrNull { it.id == monitorId }?.let {
-                graph.scheduler.scheduleNext(it, snapshot.settings)
+                graph.scheduler.schedule(it, snapshot.settings)
             }
+            // A paused monitor can no longer support a checker-crash claim.
+            if (!enabled) graph.engine.forgetMonitor(monitorId)
             toast = if (enabled) "Monitor resumed" else "Monitor paused"
         }
     }
@@ -104,6 +112,7 @@ class DashboardViewModel(private val graph: Pulse.Graph) : ViewModel() {
             // the monitor's urgent notification forever: it is `ongoing`, and
             // once the monitor is gone no per-monitor loop ever visits it again.
             graph.alerts.cancelAll(monitorId)
+            graph.engine.forgetMonitor(monitorId)
             toast = "Monitor deleted"
         }
     }
@@ -325,7 +334,7 @@ class SetupViewModel(
             ).migrated
             graph.store.upsert(clean)
             val snapshot = graph.store.currentSnapshot()
-            graph.scheduler.scheduleNext(clean, snapshot.settings)
+            graph.scheduler.schedule(clean, snapshot.settings)
             graph.scheduler.ensureSweep(snapshot.settings)
             if (clean.enabled) graph.engine.run(clean.id)
             saved = true
@@ -374,8 +383,9 @@ class DetailViewModel(
             graph.store.setEnabled(monitorId, enabled)
             val snapshot = graph.store.currentSnapshot()
             snapshot.monitors.firstOrNull { it.id == monitorId }?.let {
-                graph.scheduler.scheduleNext(it, snapshot.settings)
+                graph.scheduler.schedule(it, snapshot.settings)
             }
+            if (!enabled) graph.engine.forgetMonitor(monitorId)
         }
     }
 
@@ -409,6 +419,7 @@ class DetailViewModel(
             graph.store.delete(monitorId)
             graph.scheduler.cancel(monitorId)
             graph.alerts.cancelAll(monitorId)
+            graph.engine.forgetMonitor(monitorId)
             onDone()
         }
     }
@@ -426,6 +437,55 @@ class SettingsViewModel(private val graph: Pulse.Graph) : ViewModel() {
         .map { it.settings }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), GlobalSettings())
 
+    /**
+     * The checker's own health — see [me.river.pulse.domain.CheckerHealth].
+     *
+     * Combined with the persisted streak, not read from the engine alone: the
+     * checks that failed were very likely run by a WorkManager process that no
+     * longer exists, so the engine's in-memory state in *this* process would say
+     * "running normally" while every background check was in fact throwing.
+     */
+    val checkerHealth: StateFlow<CheckerHealth.State> = graph.engine.checkerHealth
+        .combine(graph.store.snapshot) { inMemory, snapshot ->
+            CheckerHealth.hydrate(snapshot.checkerStreak, inMemory, System.currentTimeMillis())
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CheckerHealth.State.Healthy)
+
+    /**
+     * Why background checks may be running late. Re-derived from the platform on
+     * every store change *and* on a slow tick, because battery saver and
+     * background restriction can be toggled while this screen is open and neither
+     * emits anything the app can subscribe to.
+     */
+    val checkerLimit: StateFlow<CheckerLimit> = graph.store.snapshot
+        .combine(ticker()) { snapshot, _ -> graph.limits.diagnose(snapshot) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CheckerLimit.NONE)
+
+    /**
+     * Whether Android is still deferring Pulse's work.
+     *
+     * A `StateFlow` off the same ticker, not a plain getter. As a getter it was read
+     * positionally during composition with nothing to invalidate it, so after the
+     * user granted the exemption and pressed Back the card went on offering the
+     * button — reading as though the grant had not taken.
+     */
+    val batteryOptimised: StateFlow<Boolean> = ticker()
+        .map { !graph.limits.isIgnoringBatteryOptimizations() }
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            !graph.limits.isIgnoringBatteryOptimizations(),
+        )
+
+    fun batterySettingsIntent() = graph.limits.batterySettingsIntent()
+
+    private fun ticker(): Flow<Unit> = flow {
+        while (true) {
+            emit(Unit)
+            delay(LIMIT_POLL_MS)
+        }
+    }
+
     var toast by mutableStateOf<String?>(null)
         private set
 
@@ -434,6 +494,9 @@ class SettingsViewModel(private val graph: Pulse.Graph) : ViewModel() {
             graph.store.updateSettings(transform)
             val snapshot = graph.store.currentSnapshot()
             graph.scheduler.syncAll(snapshot.monitors, snapshot.settings)
+            // The schedule was just rebuilt, so a claim about how checks were
+            // failing no longer describes how they run.
+            graph.engine.clearCheckerHealth("settings changed")
             // Strict mode is a setting, so flipping it has to start or stop the
             // service right away rather than at the next check.
             graph.notifyStateChanged()
@@ -462,6 +525,11 @@ class SettingsViewModel(private val graph: Pulse.Graph) : ViewModel() {
 
     fun consumeToast() {
         toast = null
+    }
+
+    private companion object {
+        /** Slow on purpose: this is a settings screen, not a dashboard. */
+        const val LIMIT_POLL_MS = 5_000L
     }
 }
 

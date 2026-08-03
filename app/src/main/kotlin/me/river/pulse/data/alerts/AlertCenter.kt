@@ -174,10 +174,16 @@ class AlertCenter(private val context: Context) {
             )
             .build()
 
-        post(monitor.id.urgentNotificationId(), notification)
+        val posted = post(monitor.id.urgentNotificationId(), notification)
         // Channel vibration only fires on the first post of an id on some OEM
-        // builds, so drive the actuator directly for every repeat.
-        if (policy.vibrate) previewVibration(policy.vibrationStyle)
+        // builds, so drive the actuator directly for every repeat — but only when
+        // the notification it belongs to actually arrived. A direct vibrate() call
+        // obeys neither the channel being switched off nor POST_NOTIFICATIONS being
+        // denied, so without these guards turning the urgent channel off left the
+        // buzz behind with nothing on screen to explain it.
+        if (posted && policy.vibrate && channelCanAlert(channelId)) {
+            previewVibration(policy.vibrationStyle)
+        }
     }
 
     fun cancelUrgent(monitorId: String) = compat.cancel(monitorId.urgentNotificationId())
@@ -251,6 +257,109 @@ class AlertCenter(private val context: Context) {
     }
 
     fun cancelDegraded(monitorId: String) = compat.cancel(monitorId.degradedNotificationId())
+
+    // ---- checker health ----------------------------------------------------
+
+    /**
+     * "Pulse's own checker is broken" — a different claim from "your site is
+     * down", and now a different notification.
+     *
+     * Up to 1.5.0 this was posted through [notifyDown] with the monitor's name
+     * and the words "Checker crashed", so a fault in Pulse (or, far more often,
+     * a perfectly ordinary coroutine cancellation) read as an outage on the
+     * user's website and escalated into the URGENT nag loop. See
+     * [me.river.pulse.domain.CheckerHealth].
+     *
+     * One deterministic id and one channel per haptic choice, so this can always
+     * be updated in place and always be cancelled. The id sits outside the
+     * [ALERT_ID_MIN]..[ALERT_ID_MAX] monitor-alert range on purpose: the
+     * reconciliation sweep must not treat it as an orphaned monitor alert.
+     */
+    fun notifyCheckerCrash(
+        state: me.river.pulse.domain.CheckerHealth.State,
+        monitorName: String,
+        policy: AlertPolicy,
+        silent: Boolean,
+        repeat: Boolean,
+    ) {
+        // The channel is chosen from the *policy*, never from whether this
+        // particular post makes a noise. Deriving it per-post made a repeat land
+        // on the quiet channel while the first raise landed on the vibrating one —
+        // two channels for one notification, so a user who muted the one they were
+        // shown would still be interrupted by the other. A repeat is silenced with
+        // `setSilent` instead, which is a property of the post rather than of the
+        // channel.
+        val channelId = healthChannel(policy.vibrate, policy.vibrationStyle)
+        val quiet = silent || repeat
+        val notification = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(R.drawable.ic_stat_alert)
+            .setContentTitle("Pulse can't complete its checks")
+            .setContentText("${state.consecutiveErrors} checks in a row failed inside Pulse itself")
+            .setStyle(
+                NotificationCompat.BigTextStyle().bigText(
+                    buildString {
+                        append("This is a fault in Pulse, not in the sites you are watching — ")
+                        append("their status is unchanged and no outage is implied.")
+                        append("\n\nLast error: ")
+                        append(state.lastSignature.ifBlank { "unknown" })
+                        if (state.lastDetail.isNotBlank()) {
+                            append("\n").append(state.lastDetail.take(200))
+                        }
+                        append("\nWhile checking: ").append(monitorName)
+                        append("\n\nThis clears itself as soon as one check completes.")
+                    },
+                ),
+            )
+            .setColor(DEGRADED_COLOR)
+            .setColorized(true)
+            .setPriority(
+                if (quiet) NotificationCompat.PRIORITY_LOW else NotificationCompat.PRIORITY_DEFAULT,
+            )
+            .setCategory(NotificationCompat.CATEGORY_ERROR)
+            .setContentIntent(openMonitorIntent(""))
+            .setSilent(quiet)
+            // Never ongoing. An un-dismissable notification about *our* bug would
+            // be adding insult to injury, and the state behind it is
+            // process-scoped anyway.
+            .setOngoing(false)
+            .setAutoCancel(true)
+            .setOnlyAlertOnce(true)
+            .setShowWhen(true)
+            .setWhen(System.currentTimeMillis())
+            .build()
+        val posted = post(CHECKER_HEALTH_NOTIFICATION_ID, notification)
+        // Only the first raise is felt, and only if the notification explaining it
+        // actually arrived. A repeat exists so the notice does not silently rot
+        // after being swiped away, not to nag about our own bug.
+        if (posted && policy.vibrate && !quiet && channelCanAlert(channelId)) {
+            previewVibration(policy.vibrationStyle)
+        }
+    }
+
+    fun cancelCheckerHealth() = compat.cancel(CHECKER_HEALTH_NOTIFICATION_ID)
+
+    /** Vibration is frozen into a channel at creation, so there is one of each. */
+    fun healthChannel(vibrate: Boolean, style: VibrationStyle): String {
+        val id = if (vibrate) "$HEALTH_CHANNEL.${style.name.lowercase()}" else "$HEALTH_CHANNEL.novib"
+        if (manager.getNotificationChannel(id) != null) return id
+        val channel = NotificationChannel(
+            id,
+            if (vibrate) "Checker health · ${style.label}" else "Checker health",
+            if (vibrate) NotificationManager.IMPORTANCE_DEFAULT else NotificationManager.IMPORTANCE_LOW,
+        ).apply {
+            group = GROUP_HEALTH
+            description = "Raised only when Pulse's own checking code repeatedly fails. " +
+                "Never raised for delayed background work, lost connectivity or battery saver."
+            enableVibration(vibrate)
+            if (vibrate) vibrationPattern = style.pattern
+            enableLights(false)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            setShowBadge(false)
+            setSound(null, null)
+        }
+        manager.createNotificationChannel(channel)
+        return id
+    }
 
     fun cancel(monitorId: String) = compat.cancel(monitorId.notificationId())
 
@@ -370,6 +479,9 @@ class AlertCenter(private val context: Context) {
         )
         manager.createNotificationChannelGroup(
             NotificationChannelGroup(GROUP_URGENT, "Urgent"),
+        )
+        manager.createNotificationChannelGroup(
+            NotificationChannelGroup(GROUP_HEALTH, "Checker health"),
         )
     }
 
@@ -560,10 +672,28 @@ class AlertCenter(private val context: Context) {
         )
     }
 
-    private fun post(id: Int, notification: Notification) {
-        if (!hasNotificationPermission()) return
-        runCatching { compat.notify(id, notification) }
+    /** @return whether the notification actually reached the shade. */
+    private fun post(id: Int, notification: Notification): Boolean {
+        if (!hasNotificationPermission()) return false
+        return runCatching { compat.notify(id, notification); true }.getOrDefault(false)
     }
+
+    /**
+     * Whether a channel is still allowed to interrupt.
+     *
+     * Needed because the actuator is driven directly for repeats (channel
+     * vibration only fires on the first post of an id on some OEM builds), and a
+     * direct `vibrate()` call answers to nothing — not the channel being turned
+     * off, not `POST_NOTIFICATIONS` being denied. Without this check, the standard
+     * user remedy for an unwanted buzz ("long-press → turn this channel off")
+     * silences the notification and leaves the buzz: a vibration for an event the
+     * user cannot see and has no remaining control over.
+     */
+    private fun channelCanAlert(channelId: String): Boolean = runCatching {
+        if (!compat.areNotificationsEnabled()) return@runCatching false
+        val channel = manager.getNotificationChannel(channelId) ?: return@runCatching true
+        channel.importance != NotificationManager.IMPORTANCE_NONE
+    }.getOrDefault(true)
 
     private fun resolveVibrator(): Vibrator? =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -589,9 +719,18 @@ class AlertCenter(private val context: Context) {
         private const val GROUP_DEGRADED = "pulse.group.degraded"
         private const val GROUP_RECOVERY = "pulse.group.recovery"
         private const val GROUP_URGENT = "pulse.group.urgent"
+        private const val GROUP_HEALTH = "pulse.group.health"
         private const val NOTIFICATION_GROUP = "pulse.alerts"
         const val SERVICE_CHANNEL = "pulse.service.strict"
+        const val HEALTH_CHANNEL = "pulse.health.checker"
         const val SERVICE_NOTIFICATION_ID = 4242
+
+        /**
+         * Deliberately next to the service id and far away from the monitor-alert
+         * ranges below, so [activeAlertIds] never sees it and the reconciliation
+         * sweep never cancels it out from under us.
+         */
+        const val CHECKER_HEALTH_NOTIFICATION_ID = 4243
         const val PREVIEW_NOTIFICATION_ID = 424242
 
         /** The three alert id spaces below, taken together. */

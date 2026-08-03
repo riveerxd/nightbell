@@ -7,8 +7,11 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import me.river.pulse.domain.CheckerHealth
+import me.river.pulse.domain.CheckerStreak
 import me.river.pulse.domain.GlobalSettings
 import me.river.pulse.domain.Health
+import me.river.pulse.domain.LegacyCrashRepair
 import me.river.pulse.domain.Monitor
 import me.river.pulse.domain.MonitorCard
 import me.river.pulse.domain.MonitorRuntime
@@ -40,6 +43,13 @@ data class PulseSnapshot(
      * the minimum size and the compensation would silently never engage.
      */
     val reference: List<ReferenceSample> = emptyList(),
+    /**
+     * The checker's own error streak, carried across processes.
+     *
+     * The *evidence* only — never the claim or its notification. See
+     * [CheckerStreak] for why this cannot live in memory alone.
+     */
+    val checkerStreak: CheckerStreak = CheckerStreak(),
 ) {
     companion object {
         const val SCHEMA_VERSION = 1
@@ -123,7 +133,16 @@ class PulseStore(
         snap.copy(
             monitors = snap.monitors.map { if (it.id == id) it.copy(enabled = enabled) else it },
             runtimes = snap.runtimes.mapValues { (mid, rt) ->
-                if (mid == id && !enabled) rt.copy(health = Health.PAUSED, alerting = false) else rt
+                when {
+                    mid != id -> rt
+                    !enabled -> rt.copy(health = Health.PAUSED, alerting = false)
+                    // Resuming clears the due-clock, so the monitor is checked at
+                    // once rather than waiting out an interval measured from before
+                    // it was paused — and so a monitor paused for a day is not
+                    // reported as "Android is delaying checks" the moment it
+                    // comes back.
+                    else -> rt.copy(lastCheckedAt = 0L)
+                }
             },
         )
     }
@@ -133,8 +152,24 @@ class PulseStore(
         snap.copy(runtimes = snap.runtimes + (id to transform(current)))
     }
 
+    /**
+     * One transform across every runtime, in a single atomic write.
+     *
+     * Exists for fleet-wide repairs — see
+     * `PulseApplication.repairNotificationsIfNeeded`, which has to reset alert
+     * bookkeeping for every monitor at once after wiping the notification shade.
+     * Doing that as N `updateRuntime` calls would be N DataStore writes with a
+     * check able to land between any two of them.
+     */
+    suspend fun updateAllRuntimes(transform: (MonitorRuntime) -> MonitorRuntime) = mutate { snap ->
+        snap.copy(runtimes = snap.runtimes.mapValues { (_, runtime) -> transform(runtime) })
+    }
+
     suspend fun updateReference(transform: (List<ReferenceSample>) -> List<ReferenceSample>) =
         mutate { snap -> snap.copy(reference = transform(snap.reference)) }
+
+    suspend fun updateCheckerStreak(transform: (CheckerStreak) -> CheckerStreak) =
+        mutate { snap -> snap.copy(checkerStreak = transform(snap.checkerStreak)) }
 
     suspend fun updateSettings(transform: (GlobalSettings) -> GlobalSettings) = mutate { snap ->
         snap.copy(settings = transform(snap.settings))
@@ -166,20 +201,44 @@ class PulseStore(
      * Forward-migrates a decoded snapshot.
      *
      * Everything added since 1.0.0 has a default, so `ignoreUnknownKeys` plus
-     * defaults handles almost all of it for free. The one real migration is
-     * multi-element monitors: 1.0.0 wrote a single `element`, and this lifts it
-     * into `elements` so checkers and screens only ever read the list.
+     * defaults handles almost all of it for free. Two real migrations:
      *
-     * Idempotent, and it never *drops* `element` — a store written here still
-     * decodes on 1.0.0, so a downgrade doesn't lose the user's monitors.
+     *  - **multi-element monitors** — 1.0.0 wrote a single `element`, and this
+     *    lifts it into `elements` so checkers and screens only ever read the
+     *    list. It never *drops* `element`, so a store written here still decodes
+     *    on 1.0.0 and a downgrade doesn't lose the user's monitors.
+     *  - **fake crash state** — see [scrubFakeCrashState].
+     *
+     * Idempotent.
      */
     private fun migrate(snapshot: PulseSnapshot): PulseSnapshot {
         val monitors = snapshot.monitors.map { it.migrated }
-        return if (monitors == snapshot.monitors) {
+        val runtimes = scrubFakeCrashState(snapshot.runtimes)
+        return if (monitors == snapshot.monitors && runtimes == snapshot.runtimes) {
             snapshot
         } else {
-            snapshot.copy(schema = PulseSnapshot.SCHEMA_VERSION, monitors = monitors)
+            snapshot.copy(
+                schema = PulseSnapshot.SCHEMA_VERSION,
+                monitors = monitors,
+                runtimes = runtimes,
+            )
         }
+    }
+
+    /**
+     * Erases the "Checker crashed" verdicts 1.5.0 and earlier persisted — see
+     * [LegacyCrashRepair] for what is on disk and why it all has to go.
+     *
+     * Applied on **read** so it is in force from the first moment the new build
+     * runs, with no write to schedule and no race against a worker that starts
+     * before a startup repair would have finished.
+     */
+    private fun scrubFakeCrashState(
+        runtimes: Map<String, MonitorRuntime>,
+    ): Map<String, MonitorRuntime> {
+        if (!LegacyCrashRepair.needsRepair(runtimes)) return runtimes
+        Log.i(TAG, "Scrubbing fabricated \"${CheckerHealth.LEGACY_CRASH_MESSAGE}\" state")
+        return LegacyCrashRepair.scrub(runtimes)
     }
 
     companion object {

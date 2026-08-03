@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Log
 import android.util.LruCache
+import me.river.pulse.domain.runCatchingCancellable
 import java.io.File
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
@@ -115,7 +116,10 @@ class FaviconStore(
         if (!isOnline()) return staleFallback(file, key)
 
         val bitmap = candidates(origin).firstNotNullOfOrNull { candidate ->
-            runCatching { fetch(candidate) }.getOrNull()
+            // Cancellation-aware: swallowing it here would move on to the next
+            // candidate on a dead coroutine and then cache a negative result for a
+            // fetch that never actually failed.
+            runCatchingCancellable { fetch(candidate) }.getOrNull()
         }
 
         if (bitmap == null) {
@@ -149,7 +153,7 @@ class FaviconStore(
      * an HTML error page, at `/favicon.ico`.
      */
     private fun candidates(origin: HttpUrl): List<HttpUrl> {
-        val declared = runCatching { declaredIcons(origin) }.getOrDefault(emptyList())
+        val declared = runCatchingCancellable { declaredIcons(origin) }.getOrDefault(emptyList())
         val wellKnown = listOfNotNull(
             origin.resolve("/favicon.ico"),
             origin.resolve("/apple-touch-icon.png"),

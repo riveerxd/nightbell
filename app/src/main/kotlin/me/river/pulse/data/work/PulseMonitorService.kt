@@ -11,6 +11,7 @@ import android.util.Log
 import me.river.pulse.data.Pulse
 import me.river.pulse.data.alerts.AlertCenter
 import me.river.pulse.domain.Summary
+import me.river.pulse.domain.runCatchingCancellable
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -82,7 +83,7 @@ class PulseMonitorService : Service() {
     private suspend fun runLoop() {
         val graph = Pulse.install(applicationContext)
         while (scope.isActive) {
-            val snapshot = runCatching { graph.store.currentSnapshot() }.getOrNull()
+            val snapshot = runCatchingCancellable { graph.store.currentSnapshot() }.getOrNull()
             if (snapshot == null) {
                 delay(CheckEngine_MIN_TICK)
                 continue
@@ -102,14 +103,19 @@ class PulseMonitorService : Service() {
             // one page, say — skipped the urgent tick *and* its reconciliation
             // sweep for that tick, and the sweep is what removes notifications
             // that should no longer be on screen.
+            //
+            // `runCatchingCancellable`, not `runCatching`: when this service is
+            // stopping, every one of these throws CancellationException, and
+            // swallowing that made the loop grind through a whole tick's worth of
+            // work on a dead scope.
             if (strict) {
-                runCatching { graph.engine.runAllDue() }
+                runCatchingCancellable { graph.engine.runAllDue() }
                     .onFailure { Log.e(TAG, "Check pass failed", it) }
             }
-            runCatching { graph.engine.tickUrgent() }
+            runCatchingCancellable { graph.engine.tickUrgent() }
                 .onFailure { Log.e(TAG, "Urgent tick failed", it) }
 
-            val fleet = runCatching {
+            val fleet = runCatchingCancellable {
                 graph.store.currentSnapshot().let { Summary.of(it.monitors, it.runtimes) }
             }.getOrNull()
             val offline = !graph.network.isOnline()
@@ -138,7 +144,8 @@ class PulseMonitorService : Service() {
                 },
             )
 
-            val delayMs = runCatching { graph.engine.nextWakeDelayMs() }.getOrDefault(CheckEngine_MIN_TICK)
+            val delayMs = runCatchingCancellable { graph.engine.nextWakeDelayMs() }
+                .getOrDefault(CheckEngine_MIN_TICK)
             delay(delayMs)
         }
     }
@@ -167,9 +174,16 @@ class PulseMonitorService : Service() {
     }
 
     private fun stopSelfSafely() {
+        // Cancelling the loop cancels whatever check it had in flight. That is
+        // correct and unavoidable — and up to 1.5.0 it was reported to the user
+        // as "Checker crashed". `CheckEngine` now records nothing for a cancelled
+        // check; this call additionally drops any crash claim, because a claim
+        // about how checks were failing does not survive the thing that was
+        // running them going away.
+        runCatchingCancellable { Pulse.install(applicationContext).engine.resetCheckerHealth("service stopping") }
         loop?.cancel()
         loop = null
-        runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
+        runCatchingCancellable { stopForeground(STOP_FOREGROUND_REMOVE) }
         stopSelf()
     }
 
@@ -205,7 +219,8 @@ class PulseMonitorService : Service() {
             val app = context.applicationContext
             val graph = Pulse.install(app)
             graph.appScope.launch {
-                val snapshot = runCatching { graph.store.currentSnapshot() }.getOrNull() ?: return@launch
+                val snapshot = runCatchingCancellable { graph.store.currentSnapshot() }
+                    .getOrNull() ?: return@launch
                 val strict = snapshot.settings.strictForegroundMonitoring &&
                     snapshot.monitors.any { it.enabled }
                 val nagging = snapshot.monitors.any { monitor ->

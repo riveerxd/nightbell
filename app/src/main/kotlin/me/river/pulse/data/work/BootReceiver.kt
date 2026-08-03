@@ -19,6 +19,9 @@ class BootReceiver : BroadcastReceiver() {
         val pending = runCatching { goAsync() }.getOrNull()
         graph.appScope.launch {
             try {
+                // A reboot or an app update rebuilds every schedule, so nothing a
+                // previous process concluded about failing checks still applies.
+                graph.engine.clearCheckerHealth(intent.action ?: "boot")
                 val snapshot = graph.store.currentSnapshot()
                 graph.scheduler.syncAll(snapshot.monitors, snapshot.settings)
                 // Strict mode and any unacknowledged urgent outage have to

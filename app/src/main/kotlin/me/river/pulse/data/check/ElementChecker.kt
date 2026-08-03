@@ -15,6 +15,7 @@ import me.river.pulse.domain.CheckResult
 import me.river.pulse.domain.ElementTarget
 import me.river.pulse.domain.FailureKind
 import me.river.pulse.domain.Monitor
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.coroutines.resume
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.Dispatchers
@@ -252,8 +253,15 @@ class ElementChecker(
                 (best ?: PageResult(results = List(targets.size) { Located(found = false) }))
                     .copy(loadError = errors.toString())
             }
+        } catch (cancellation: CancellationException) {
+            // The page is not broken; we were interrupted. Turning this into a
+            // `loadError` produced a "Page failed to load" verdict and a false
+            // outage alert — the same bug as "Checker crashed", wearing a
+            // different message. `withTimeoutOrNull` still swallows its *own*
+            // timeout above, which is a real verdict about a real slow page.
+            throw cancellation
         } catch (error: Throwable) {
-            Log.e(TAG, "Element check crashed", error)
+            Log.e(TAG, "Element check threw", error)
             PageResult(
                 results = List(targets.size) { Located(found = false) },
                 loadError = error.message ?: error::class.java.simpleName,

@@ -2,6 +2,7 @@ package me.river.pulse.data.check
 
 import android.util.Log
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -67,6 +68,11 @@ class LatencyReference(
                 val elapsed = (elapsedNanos() - started) / 1_000_000
                 if (response.code <= 0) null else elapsed.coerceAtLeast(1L)
             }
+        } catch (cancellation: CancellationException) {
+            // Not a failed probe — an interrupted one. Swallowing it would count
+            // against the backoff and would report the network as blocking an
+            // endpoint it never got to ask about.
+            throw cancellation
         } catch (error: Throwable) {
             Log.i(TAG, "Reference probe failed (${error::class.java.simpleName}); latency will be judged raw")
             null

@@ -43,6 +43,8 @@ class AlertActionReceiver : BroadcastReceiver() {
 
                     else -> Unit
                 }
+            } catch (cancellation: kotlin.coroutines.cancellation.CancellationException) {
+                throw cancellation
             } catch (error: Throwable) {
                 Log.e(TAG, "Alert action failed", error)
             } finally {

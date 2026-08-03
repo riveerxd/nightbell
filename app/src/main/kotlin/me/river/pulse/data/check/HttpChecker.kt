@@ -14,6 +14,7 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLException
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -93,6 +94,13 @@ class HttpChecker(
                     at = nowMs(),
                 )
             }
+        } catch (cancellation: CancellationException) {
+            // Not a failure of the monitored service, so it must not become one.
+            // Note it would otherwise fall through `classify` into
+            // `FailureKind.UNKNOWN` — CancellationException is an
+            // IllegalStateException, not an IOException — and be reported as
+            // "Check failed". See CheckerHealth.
+            throw cancellation
         } catch (error: Throwable) {
             val latency = elapsedMs(started)
             val kind = classify(error)

@@ -6,10 +6,12 @@ import me.river.pulse.data.check.CheckEngine
 import me.river.pulse.data.check.ElementChecker
 import me.river.pulse.data.check.HttpChecker
 import me.river.pulse.data.check.LatencyReference
+import me.river.pulse.data.health.SystemLimits
 import me.river.pulse.data.icons.FaviconStore
 import me.river.pulse.data.net.NetworkMonitor
 import me.river.pulse.data.work.MonitorScheduler
 import me.river.pulse.data.work.PulseMonitorService
+import me.river.pulse.domain.runCatchingCancellable
 import me.river.pulse.widget.PulseWidgetProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -36,6 +38,7 @@ object Pulse {
         val scheduler = MonitorScheduler(context)
         val network = NetworkMonitor(context)
         val favicons = FaviconStore(context, isOnline = network::isOnline)
+        val limits = SystemLimits(context, isOnline = network::isOnline)
 
         /**
          * Pushes current state to the two surfaces that live outside the
@@ -58,7 +61,7 @@ object Pulse {
             // first thing you do on the other side is look at the app.
             network.onReconnected = {
                 appScope.launch {
-                    runCatching { engine.runAllDue() }
+                    runCatchingCancellable { engine.runAllDue() }
                     notifyStateChanged()
                 }
             }

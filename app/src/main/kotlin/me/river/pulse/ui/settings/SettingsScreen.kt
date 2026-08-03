@@ -45,6 +45,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.river.pulse.BuildConfig
 import me.river.pulse.data.Pulse
+import me.river.pulse.domain.CheckerHealth
+import me.river.pulse.domain.CheckerLimit
 import me.river.pulse.ui.components.AlertPolicyEditor
 import me.river.pulse.ui.components.ButtonTone
 import me.river.pulse.ui.components.GlassCard
@@ -69,6 +71,9 @@ import androidx.compose.ui.platform.testTag
 fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
     val viewModel = rememberSettingsViewModel()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val checkerHealth by viewModel.checkerHealth.collectAsStateWithLifecycle()
+    val checkerLimit by viewModel.checkerLimit.collectAsStateWithLifecycle()
+    val batteryOptimised by viewModel.batteryOptimised.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var notificationsAllowed by remember {
         mutableStateOf(Pulse.install(context).alerts.hasNotificationPermission())
@@ -252,8 +257,22 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
             }
         }
 
+        item(key = "checker-health") {
+            StaggeredEntrance(index = 3, key = "checker-health", log = entrance) {
+                CheckerHealthCard(
+                    health = checkerHealth,
+                    limit = checkerLimit,
+                    batteryOptimised = batteryOptimised,
+                    strict = settings.strictForegroundMonitoring,
+                    onOpenBatterySettings = {
+                        runCatching { context.startActivity(viewModel.batterySettingsIntent()) }
+                    },
+                )
+            }
+        }
+
         item(key = "strict") {
-            StaggeredEntrance(index = 3, key = "strict", log = entrance) {
+            StaggeredEntrance(index = 4, key = "strict", log = entrance) {
                 GlassCard(accent = if (settings.strictForegroundMonitoring) PulseColors.Amber else Color.Transparent) {
                     SectionHeader("Strict cadence", icon = PulseIcons.Zap, accent = PulseColors.Amber)
                     Text(
@@ -306,7 +325,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         }
 
         item(key = "latency") {
-            StaggeredEntrance(index = 4, key = "latency", log = entrance) {
+            StaggeredEntrance(index = 5, key = "latency", log = entrance) {
                 GlassCard {
                     SectionHeader("Latency budget", icon = PulseIcons.Gauge, accent = PulseColors.Amber)
                     Text(
@@ -407,7 +426,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         }
 
         item(key = "motion") {
-            StaggeredEntrance(index = 5, key = "motion", log = entrance) {
+            StaggeredEntrance(index = 6, key = "motion", log = entrance) {
                 GlassCard {
                     SectionHeader("Motion", icon = PulseIcons.Sparkle, accent = PulseColors.Mint)
                     Text(
@@ -453,7 +472,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         }
 
         item(key = "about") {
-            StaggeredEntrance(index = 6, key = "about", log = entrance) {
+            StaggeredEntrance(index = 7, key = "about", log = entrance) {
                 GlassCard {
                     SectionHeader("About", icon = PulseIcons.Info, accent = PulseColors.Sky)
                     AboutRow("Version", "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
@@ -469,6 +488,112 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * Checker health, and the honest account of what Android will and will not do.
+ *
+ * The point of this card is that the app now has somewhere to *show* things it
+ * used to notify about. Before 1.6.0 there were two verdicts — fine, or down —
+ * so Doze deferring work, a stopped service and a cancelled coroutine all had to
+ * be reported as an outage, which is how a healthy fleet ended up buzzing
+ * "Checker crashed" six times at once. Delay and restriction are visible here and
+ * are never a notification; only a verified, repeated fault inside Pulse's own
+ * code is.
+ */
+@Composable
+private fun CheckerHealthCard(
+    health: CheckerHealth.State,
+    limit: CheckerLimit,
+    batteryOptimised: Boolean,
+    strict: Boolean,
+    onOpenBatterySettings: () -> Unit,
+) {
+    val crashed = health.kind == CheckerHealth.Kind.CRASHED
+    val accent = when {
+        crashed -> PulseColors.Rose
+        limit.isLimited -> PulseColors.Amber
+        else -> Color.Transparent
+    }
+    GlassCard(accent = accent) {
+        SectionHeader(
+            "Checker health",
+            icon = PulseIcons.Activity,
+            accent = if (accent == Color.Transparent) PulseColors.Mint else accent,
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconBadge(
+                when {
+                    crashed -> PulseIcons.Warning
+                    limit == CheckerLimit.OFFLINE -> PulseIcons.WifiOff
+                    limit.isLimited -> PulseIcons.Clock
+                    else -> PulseIcons.Check
+                },
+                if (accent == Color.Transparent) PulseColors.Mint else accent,
+                size = 40.dp,
+            )
+            Spacer(Modifier.width(13.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = if (crashed) "Pulse can't complete its checks" else limit.headline,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = PulseColors.TextPrimary,
+                )
+                Text(
+                    text = if (crashed) health.summary else limit.hint,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = PulseColors.TextTertiary,
+                )
+            }
+        }
+
+        if (crashed && health.lastSignature.isNotBlank()) {
+            Spacer(Modifier.height(10.dp))
+            WarningPanel(
+                "Last internal error: ${health.lastSignature}. This is a fault in " +
+                    "Pulse, not in the sites you are watching — their status is " +
+                    "unchanged. It clears as soon as one check completes.",
+            )
+        }
+
+        GlassDivider(Modifier.padding(vertical = 12.dp))
+
+        Text(
+            text = "What Android allows",
+            style = MaterialTheme.typography.labelMedium,
+            color = PulseColors.TextSecondary,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = "Background checks run through WorkManager, whose shortest " +
+                "possible repeat is 15 minutes — a platform floor, not a Pulse " +
+                "setting. A tighter interval than that is honoured at 15-minute " +
+                "granularity in the background, and exactly only while strict " +
+                "mode's foreground service is running. Doze can defer any of it " +
+                "further. None of that is an outage and Pulse will never notify " +
+                "you about it.",
+            style = MaterialTheme.typography.bodySmall,
+            color = PulseColors.TextTertiary,
+        )
+
+        if (batteryOptimised && !strict) {
+            Spacer(Modifier.height(12.dp))
+            PulseButton(
+                text = "Exempt Pulse from battery optimisation",
+                onClick = onOpenBatterySettings,
+                icon = PulseIcons.Power,
+                tone = ButtonTone.Secondary,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "Optional, and it helps — but it is not a guarantee. Only the " +
+                    "foreground service is.",
+                style = MaterialTheme.typography.bodySmall,
+                color = PulseColors.TextTertiary,
+            )
         }
     }
 }
