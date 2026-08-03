@@ -56,8 +56,16 @@ android {
         // slider that goes all the way to fully transparent. Widget configs are
         // forward-compatible: every new field defaults, so widgets placed by 1.5.0
         // keep their exact look.
-        versionCode = 9
-        versionName = "1.6.0"
+        // 1.7.0 is the bridge for the applicationId change that follows it, and
+        // exists only to be installed *before* that change. Android identifies an
+        // app by its applicationId, so the renamed build is a different app: it
+        // installs alongside this one, gets its own data directory, and cannot
+        // read this one's. The only route across is a file the user carries, so
+        // Settings gains export and import. Ship this, give people time to run
+        // it, and only then rename. Nothing else about this release is load
+        // bearing.
+        versionCode = 10
+        versionName = "1.7.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

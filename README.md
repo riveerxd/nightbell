@@ -224,6 +224,28 @@ known contrast, and letting a stray opacity value apply to them would quietly
 turn a legible preset illegible. Picking a pale custom background moves the text
 colour to something readable *unless* you have already chosen one yourself.
 
+## Moving between installs
+
+**Settings → Backup and transfer** writes every monitor, its sample history and
+your settings to a JSON file, through the Storage Access Framework — so Pulse
+needs no storage permission, the destination is yours to pick, and nothing is
+uploaded anywhere.
+
+This exists because Pulse is changing its package name. Android identifies an app
+by its `applicationId`, so the renamed build is a *different app* to the platform:
+it installs alongside this one, starts with an empty data directory, and cannot
+read this one's files. No signing key or manifest setting changes that. Export
+here, install the new build, import there — and do it before uninstalling the old
+one, because once it is gone so is the data.
+
+An import **replaces** what is on the device rather than merging, and says so
+before it does it. What it carries is monitors, settings, mute windows and
+history. What it deliberately does not carry is any record of notifications
+already posted: health resets to unknown until this install has actually checked
+something, and the alert bookkeeping resets with it. Importing an in-progress
+alert state would suppress the first real outage on the new device — see the
+1.7.0 section of HANDOFF for why that is the same trap twice.
+
 ## The element picker
 
 1. Enter a URL and tap **Open live preview**.
@@ -343,7 +365,7 @@ keytool -genkeypair -v -keystore keystore/pulse-release.jks -alias pulse \
 
 ## Testing
 
-**227 JVM + 67 on-device = 294 automated tests.**
+**242 JVM + 67 on-device = 309 automated tests.**
 
 | Suite | Count | Covers |
 | --- | ---: | --- |
@@ -360,6 +382,7 @@ keytool -genkeypair -v -keystore keystore/pulse-release.jks -alias pulse \
 | `LegacyCrashRepairTest` | 10 | scrubbing 1.5.0's fabricated crash state without touching a genuine outage |
 | `DueCheckTest` | 7 | the due-ness rule, including a wall clock that jumps backwards |
 | `WidgetPaletteTest` | 12 | preset and custom widget colours, opacity clamping, fully-transparent surfaces |
+| `BackupTest` | 15 | the transfer format, its refusals, and what an import must not carry over |
 | `NetworkBaselineTest` | 19 | the latency-reference maths and its four trust states |
 | `MultiElementTest` | 13 | target list, 1.0.0 migration, per-element validation, SLO/urgent validation |
 | `SummaryTest` | 10 | worst-first ranking shared by dashboard, widget and service |

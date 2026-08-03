@@ -1,5 +1,82 @@
 # Pulse — handoff
 
+## 1.7.0 — the bridge before the rename
+
+**This release exists to be installed before the renamed build arrives, and for
+no other reason.** Pulse is moving from
+`me.river.pulse` to `me.river.pulse`, and on Android that is not a
+rename.
+
+`applicationId` *is* the app. It names `/data/data/<id>/`, and it is what the
+installer matches to decide "update this" against "install a new thing". Change
+it and the device sees a different app: it installs **alongside** the old one,
+with an empty data directory, and the old one keeps running until it is
+uninstalled. The signing key does not change this — the key decides whether an
+update is *permitted*, never whether two APKs are the same app. Nor does any
+manifest or Gradle setting; there is no supported one.
+
+One app also cannot read another's files. So the only path that carries a user's
+fleet across is one the user drives by hand, and this release is that path:
+**Settings → Backup and transfer**, export to a file, import in the new build.
+
+### The format
+
+`data/transfer/PulseBackup.kt`. The envelope is thin on purpose — it is the
+store's own `PulseSnapshot` plus provenance (`app`, `versionName`, `versionCode`,
+`exportedAt`, `monitorCount`) and a `format` integer. Reusing the snapshot rather
+than defining a schema means the export cannot drift away from what the app
+actually stores, and `ignoreUnknownKeys` plus a default on everything added since
+1.0.0 means a file written here imports into a later build for free.
+
+`format` is refused when it is *higher* than this build knows, rather than
+best-efforted. A version field whose only behaviour is to be ignored is not a
+version field.
+
+### What an import deliberately does not carry
+
+Monitors, settings, mute windows and the sample history come across verbatim.
+Everything that is bookkeeping about *notifications already posted* does not,
+because none of it is true on the new install — the shade is empty and nothing
+has been announced or acknowledged there.
+
+This is the same pair of traps `LegacyCrashRepair` exists to undo, arriving by a
+different door:
+
+- the down track is transition-driven, so an imported `alerting = true` means the
+  first genuine outage on the new install is **never announced**;
+- `urgentAcknowledged` silences the urgent track until a *successful* check,
+  which never arrives while a site is actually down.
+
+Health resets to `UNKNOWN` (or `PAUSED` for a disabled monitor) rather than to
+whatever the old device last saw, and `lastCheckedAt` goes with it so every
+monitor reads as due immediately and the import is followed by a real pass. The
+last-check verdict fields are cleared to match — with health `UNKNOWN` they would
+be a message with nothing behind it. Element baselines are cleared so the first
+check here establishes what the element says rather than comparing against
+another install.
+
+Two things are dropped outright: `checkerStreak`, which is evidence about a
+checker process that no longer exists, and the latency `reference` window, which
+measures one device's connection. Neither says anything about the user's
+monitors, which is all a backup is for.
+
+### Things worth knowing
+
+- **Import replaces, it does not merge.** A merge has to invent an answer for two
+  monitors with the same id and different settings, and the case this exists for
+  is a fresh install with nothing to merge against. The screen confirms first.
+- **The file picker filters on `*/*`, not `application/json`.** Mime detection for
+  `.json` is inconsistent across storage providers, and a filter that hides the
+  user's own backup is worse than one that shows too much. `BackupCodec.decode`
+  is what actually validates.
+- **The import reschedules everything and then runs a pass.** Imported monitors
+  have no work enqueued in this install; without `syncAll` + `ensureSweep` they
+  would sit there until something else triggered a sync, and without the pass the
+  user would be looking at a screen of grey UNKNOWN cards wondering if it worked.
+- **`BackupTest` is 15 JVM tests and deserves to stay that thorough.** This path
+  runs exactly once per user and there is no second chance if it silently drops
+  something.
+
 ## 1.6.0 — a cancelled check is not a crashed one (field bug)
 
 **Reported from real use, with screenshots.** Six monitors, six simultaneous
