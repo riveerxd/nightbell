@@ -11,6 +11,10 @@ import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -68,6 +72,17 @@ class FaviconStore(
      */
     private val locks = ConcurrentHashMap<String, Mutex>()
 
+    private val generations = MutableStateFlow(0)
+
+    /**
+     * Bumped whenever cached icons are deliberately thrown away.
+     *
+     * A composable that has already resolved an icon holds it for the life of its
+     * composition, so a purge is invisible without something to re-ask on — see
+     * [me.river.pulse.ui.components.rememberFavicon].
+     */
+    val generation: StateFlow<Int> = generations.asStateFlow()
+
     private val client: OkHttpClient = (baseClient ?: OkHttpClient())
         .newBuilder()
         .connectTimeout(6, TimeUnit.SECONDS)
@@ -94,6 +109,66 @@ class FaviconStore(
             memory.get(key)?.let { return@withLock it }
             withContext(Dispatchers.IO) { resolve(origin, key) }
         }
+    }
+
+    /**
+     * Ignores every cache layer and fetches the icons for [pageUrls] again.
+     *
+     * The TTLs above are long on purpose: a site's mark almost never changes, and
+     * revalidating one per scroll would be rude to somebody else's server. That
+     * trade is wrong exactly once — the day a site *does* change its icon, when
+     * the app will happily show the old one for a month. This is the way out, and
+     * the only path here that goes to the network for an icon it already has.
+     *
+     * A cached file is *expired* rather than deleted, so a fetch that fails
+     * leaves the previous icon showing instead of blanking the badge.
+     */
+    suspend fun refetch(pageUrls: List<String>): Refetch {
+        // Everything on one site shares an icon, so two monitors on the same host
+        // are one fetch, not two.
+        val origins = pageUrls.mapNotNull { originOf(it) }.distinctBy { keyFor(it) }
+        var changed = 0
+        for (origin in origins) {
+            val key = keyFor(origin)
+            val file = File(dir, "$key.png")
+            val fresh = locks.getOrPut(key) { Mutex() }.withLock {
+                memory.remove(key)
+                misses.remove(key)
+                withContext(Dispatchers.IO) {
+                    val before = fingerprint(file)
+                    expire(file)
+                    // The negative cache lasts three days. A human asking for this
+                    // outranks a conclusion we drew before they did.
+                    runCatching { missMarker(key).delete() }
+                    resolve(origin, key)
+                    fingerprint(file) != before
+                }
+            }
+            if (fresh) changed++
+        }
+        generations.update { it + 1 }
+        return Refetch(sites = origins.size, changed = changed)
+    }
+
+    /** What a [refetch] did, so the caller has something honest to report. */
+    data class Refetch(val sites: Int, val changed: Int)
+
+    /** Marks a cached icon stale without giving up its value as a fallback. */
+    private fun expire(file: File) {
+        if (!file.isFile) return
+        if (runCatching { file.setLastModified(0) }.getOrDefault(false)) return
+        // Some filesystems refuse the timestamp. Dropping the file is then the
+        // only way to force a refetch, and the stale fallback is what we lose.
+        runCatching { file.delete() }
+    }
+
+    /** "Is this still the same icon?" — a digest of the cached bytes, or null if none. */
+    private fun fingerprint(file: File): String? {
+        if (!file.isFile) return null
+        return runCatching {
+            MessageDigest.getInstance("SHA-256").digest(file.readBytes())
+                .joinToString("") { "%02x".format(it) }
+        }.getOrNull()
     }
 
     private fun resolve(origin: HttpUrl, key: String): Bitmap? {
@@ -325,6 +400,7 @@ class FaviconStore(
         memory.evictAll()
         misses.clear()
         runCatching { dir.deleteRecursively() }
+        generations.update { it + 1 }
     }
 
     private companion object {

@@ -489,6 +489,42 @@ class SettingsViewModel(private val graph: Pulse.Graph) : ViewModel() {
     var toast by mutableStateOf<String?>(null)
         private set
 
+    var refetchingFavicons by mutableStateOf(false)
+        private set
+
+    /**
+     * Throws away the cached site icons and fetches them again.
+     *
+     * Icons are cached for a month, which is right for something that almost
+     * never changes and wrong on the day it does. Only page-element monitors
+     * display one, so only those sites are visited — asking an API endpoint for a
+     * favicon is a request nobody benefits from.
+     */
+    fun refetchFavicons() {
+        if (refetchingFavicons) return
+        if (!graph.network.isOnline()) {
+            toast = OFFLINE_TOAST
+            return
+        }
+        refetchingFavicons = true
+        viewModelScope.launch {
+            try {
+                val urls = graph.store.currentSnapshot().monitors
+                    .filter { it.kind == MonitorKind.WEBSITE_ELEMENT && it.url.isNotBlank() }
+                    .map { it.url }
+                val result = graph.favicons.refetch(urls)
+                val sites = "${result.sites} site" + if (result.sites == 1) "" else "s"
+                toast = when {
+                    result.sites == 0 -> "No website monitors to fetch icons for"
+                    result.changed == 0 -> "Checked $sites — icons unchanged"
+                    else -> "${result.changed} of $sites updated"
+                }
+            } finally {
+                refetchingFavicons = false
+            }
+        }
+    }
+
     fun update(transform: (GlobalSettings) -> GlobalSettings) {
         viewModelScope.launch {
             graph.store.updateSettings(transform)

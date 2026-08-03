@@ -9,6 +9,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.river.pulse.data.Pulse
 
 /**
@@ -24,12 +25,19 @@ import me.river.pulse.data.Pulse
 @Composable
 fun rememberFavicon(pageUrl: String, enabled: Boolean = true): ImageBitmap? {
     val context = LocalContext.current
+    val store = Pulse.from(context).favicons
+    // Re-asks after a purge. Without this the store can refetch a changed icon
+    // and the badge on screen would still be showing the one it resolved once,
+    // for as long as the screen stays composed.
+    val generation by store.generation.collectAsStateWithLifecycle()
+    // Keyed on the URL only, so the previous icon stays put while a refetch runs
+    // rather than blinking back to the fallback glyph.
     var image by remember(pageUrl) { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(pageUrl, enabled) {
+    LaunchedEffect(pageUrl, enabled, generation) {
         if (!enabled || pageUrl.isBlank()) return@LaunchedEffect
         // A cache hit resolves before the next frame; a miss resolves whenever
         // the network does, and the badge simply keeps its fallback glyph.
-        image = Pulse.from(context).favicons.load(pageUrl)?.asImageBitmap()
+        image = store.load(pageUrl)?.asImageBitmap()
     }
     return image
 }

@@ -456,8 +456,40 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
             }
         }
 
+        item(key = "favicons") {
+            StaggeredEntrance(index = 7, key = "favicons", log = entrance) {
+                GlassCard {
+                    SectionHeader("Site icons", icon = PulseIcons.Globe, accent = PulseColors.Sky)
+                    Text(
+                        text = "Website-element monitors are badged with the site's own favicon, " +
+                            "cached for a month so the dashboard isn't hitting somebody else's " +
+                            "server every time you scroll. If a site has changed its mark, this " +
+                            "fetches them all again now.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = PulseColors.TextTertiary,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    PulseButton(
+                        text = if (viewModel.refetchingFavicons) "Refetching…" else "Refetch site icons",
+                        onClick = viewModel::refetchFavicons,
+                        icon = PulseIcons.Refresh,
+                        tone = ButtonTone.Secondary,
+                        loading = viewModel.refetchingFavicons,
+                        modifier = Modifier.fillMaxWidth().testTag("refetch-favicons"),
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "An icon that can't be fetched keeps the one it had — you won't " +
+                            "end up with blank badges because a site was briefly down.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = PulseColors.TextTertiary,
+                    )
+                }
+            }
+        }
+
         item(key = "motion") {
-            StaggeredEntrance(index = 7, key = "motion", log = entrance) {
+            StaggeredEntrance(index = 8, key = "motion", log = entrance) {
                 GlassCard {
                     SectionHeader("Motion", icon = PulseIcons.Sparkle, accent = PulseColors.Mint)
                     Text(
@@ -503,7 +535,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         }
 
         item(key = "about") {
-            StaggeredEntrance(index = 8, key = "about", log = entrance) {
+            StaggeredEntrance(index = 9, key = "about", log = entrance) {
                 GlassCard {
                     SectionHeader("About", icon = PulseIcons.Info, accent = PulseColors.Sky)
                     AboutRow("Version", "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
