@@ -96,11 +96,56 @@ and its own recovery notification, deliberately independent of the down track:
 the cooldown an outage needs. An outage always supersedes slowness, so you never
 get two notifications for one event.
 
+### How background checks actually run
+
+Three layers, and the app is explicit about what each one can promise:
+
+| Layer | Cadence it can honour | Notes |
+| --- | --- | --- |
+| Per-monitor `PeriodicWorkRequest` | the monitor's interval, **floored at 15 min** | Android's floor, not a Pulse setting |
+| 15-minute repair sweep | anything overdue, at 15-min granularity | also re-arms missing periodic work |
+| Strict foreground service | exactly as configured, down to ~15 s | costs a permanent notification and battery |
+
+**Sub-15-minute intervals cannot be honoured in the background.**
+`PeriodicWorkRequest.MIN_PERIODIC_INTERVAL_MILLIS` is 15 minutes and WorkManager
+clamps anything shorter, silently. Pulse clamps it *visibly* instead: the
+scheduler coerces to the floor, the sweep still picks the monitor up as overdue
+on every wake, and the Settings → **Checker health** card says so in as many
+words. Strict mode is the only way to get the interval you asked for, and that is
+the honest answer rather than a promise the platform will not keep.
+
+Nothing re-arms itself from inside its own execution, and every reconciliation
+uses a policy that **cannot cancel work in flight**
+(`ExistingPeriodicWorkPolicy.UPDATE` for cadence, `ExistingWorkPolicy.KEEP` for
+"check now"). That is not a style preference — see the 1.6.0 section of HANDOFF
+for what the previous `REPLACE`-everywhere design did to real users.
+
+### Checker health, separately from monitor health
+
+A check can fail to produce an answer for three very different reasons, and Pulse
+now keeps them apart:
+
+| | What it means | What the user gets |
+| --- | --- | --- |
+| **Monitor failure** | the site is down, the selector is gone, the status is wrong | notification + vibration, per policy |
+| **System-limited** | Doze, battery saver, no connectivity, background restricted | shown in Settings; **never** a notification |
+| **Checker fault** | an exception escaped Pulse's own checker code | its own quiet channel, only once verified |
+
+The middle row is the one that was missing, and its absence is why cancelled
+checks used to arrive as outages. A checker fault needs **three consecutive
+internal errors with no completed check in between** before it says anything, is
+held in memory only (so a restart cannot inherit a stale claim), and clears the
+instant any check produces a verdict — passing *or* failing.
+
+**Coroutine cancellation is not any of the three.** WorkManager replacing work, a
+foreground service stopping and a screen going away all cancel checks constantly;
+none of them is evidence about anything, and Pulse records and says nothing.
+
 ### Strict foreground monitoring
 
 WorkManager is the right default — battery-friendly, survives reboots — but Doze
-can defer a one-shot chain for a long time and its periodic minimum is 15
-minutes. A monitor set to "check every minute" does not check every minute.
+can defer work for a long time and its periodic minimum is 15 minutes. A monitor
+set to "check every minute" does not check every minute.
 
 Turning on **strict foreground monitoring** runs a foreground service that keeps
 your intervals exactly. It sleeps until the next monitor is actually due rather
@@ -146,6 +191,38 @@ configuration, stored in a separate DataStore keyed by `appWidgetId` so a
 corrupt widget preference can never take the monitor list down with it — and so
 it survives an APK update. Widgets refresh after every completed check, plus the
 platform's 30-minute periodic tick.
+
+### Finding a placed widget's settings
+
+Three routes, because the platform only reliably gives you one and it did not
+exist below Android 12:
+
+1. **The cog in the widget itself.** Works on every launcher and every API level;
+   can be switched off per widget if you prefer the cleaner look.
+2. **Long-press the widget** → its settings entry. This is
+   `widgetFeatures="reconfigurable"`, added in API 31 and ignored below it.
+3. **Settings → Home-screen widgets**, which lists every placed widget.
+
+Reported as a real problem: once the widget was on the home screen its
+configuration was unreachable.
+
+### Colours and transparency
+
+Three presets (black, white, blue) plus **Custom**: a background colour, a text
+colour, and a background-opacity slider that goes all the way to zero — at which
+point the widget is text on your wallpaper and nothing else.
+
+The surface is a tintable `ImageView` behind the content, not a background
+drawable on it, because `RemoteViews` cannot recolour a `View` background on
+API 26–30. `setColorFilter` plus `setImageAlpha` give an arbitrary colour at an
+arbitrary opacity while keeping the rounded corners a flat `setBackgroundColor`
+would throw away. The hairline edge is its own layer and fades out with the
+surface, so a fully transparent widget has no ring floating around it.
+
+Presets deliberately ignore the opacity slider: they are defined surfaces with
+known contrast, and letting a stray opacity value apply to them would quietly
+turn a legible preset illegible. Picking a pale custom background moves the text
+colour to something readable *unless* you have already chosen one yourself.
 
 ## The element picker
 
@@ -266,7 +343,7 @@ keytool -genkeypair -v -keystore keystore/pulse-release.jks -alias pulse \
 
 ## Testing
 
-**118 JVM + 57 on-device = 175 automated tests.**
+**227 JVM + 67 on-device = 294 automated tests.**
 
 | Suite | Count | Covers |
 | --- | ---: | --- |
@@ -277,13 +354,21 @@ keytool -genkeypair -v -keystore keystore/pulse-release.jks -alias pulse \
 | `PersistenceTest` | 4 | snapshot round-trip, forward compatibility, vibration table integrity |
 | `UrgentAlertsTest` | 13 | the urgent state machine: start, repeat gap, acknowledge, recovery re-arm, suppression |
 | `DegradedAlertTest` | 12 | latency threshold, independent cooldown/repeat/recovery, quiet hours, down-track regression guard |
+| `CheckerHealthTest` | 25 | the checker-health machine: cancellation raises nothing, the three-error bar, streak windows, clearing, expiry |
+| `CancellationIsNotAFailureTest` | 8 | real sockets: a cancelled check throws instead of returning a verdict, and real IO failures are still classified |
+| `CheckerLimitsTest` | 12 | why checks are late, and the precedence between offline / metered / restricted / saver / Doze |
+| `LegacyCrashRepairTest` | 10 | scrubbing 1.5.0's fabricated crash state without touching a genuine outage |
+| `DueCheckTest` | 7 | the due-ness rule, including a wall clock that jumps backwards |
+| `WidgetPaletteTest` | 12 | preset and custom widget colours, opacity clamping, fully-transparent surfaces |
+| `NetworkBaselineTest` | 19 | the latency-reference maths and its four trust states |
 | `MultiElementTest` | 13 | target list, 1.0.0 migration, per-element validation, SLO/urgent validation |
 | `SummaryTest` | 10 | worst-first ranking shared by dashboard, widget and service |
 | `PulseE2ETest` | 8 | full UI journeys on-device |
 | `ElementMonitorTest` | 10 | real WebView DOM: locate, fallbacks, picker capture |
 | `AlertsInstrumentedTest` | 11 | real notifications, channels, escalation, mute, actions |
 | `UrgentModeInstrumentedTest` | 8 | urgent end-to-end through the real engine + notification action |
-| `WidgetInstrumentedTest` | 17 | RemoteViews **inflation**, ordering, every theme/density, config persistence and id remapping |
+| `CheckerCancellationInstrumentedTest` | 5 | the reported bug through the real graph: a cancelled check, and a cancelled six-monitor pass, must announce nothing |
+| `WidgetInstrumentedTest` | 22 | RemoteViews **inflation**, ordering, every theme/density, custom colours at three opacities, the settings cog, config persistence and id remapping |
 | `ScreenshotTest` | 3 | drives every screen and writes PNGs |
 
 `WidgetInstrumentedTest` calls `RemoteViews.apply()` rather than asserting on
@@ -312,11 +397,16 @@ intact and the element monitor re-resolving through the new code path.
 
 ## Known limitations
 
-- **Background cadence is best-effort *unless strict mode is on*.** WorkManager
-  one-shots self-reschedule per monitor and a 15-minute periodic sweep repairs
-  dropped chains, but Doze and App Standby can delay sub-15-minute intervals.
-  Manual and foreground checks are exact; strict mode makes the background ones
-  exact too, at the cost of a permanent notification and real battery.
+- **Sub-15-minute background intervals are impossible, not merely unreliable.**
+  `PeriodicWorkRequest`'s minimum period is 15 minutes and there is no supported
+  way around it. Pulse clamps to the floor, lets the 15-minute repair sweep pick
+  up anything overdue, and says so in Settings → Checker health. Manual and
+  foreground-service checks are exact; strict mode makes the background ones exact
+  too, at the cost of a permanent notification and real battery.
+- **Doze and App Standby can delay even a 15-minute interval.** Exempting Pulse
+  from battery optimisation (offered in Settings → Checker health) helps and is
+  not a guarantee. Only the foreground service is. Delay is reported in the UI and
+  is never notified about — it is not an outage.
 - **No Wear OS tile yet.** The shared roll-up it needs (`domain/Summary.kt`)
   exists and is tested; the module itself is blocked on tooling — see HANDOFF.
 - **Widget rows are capped, not scrollable.** RemoteViews collections would buy

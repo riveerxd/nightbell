@@ -39,8 +39,25 @@ android {
         // losing signal is not an outage, and reporting it as one was spamming
         // real users. Both are UI/behaviour only; the store schema is untouched,
         // so 1.1.x and 1.2.x installs update in place.
-        versionCode = 8
-        versionName = "1.5.0"
+        // 1.6.0 stops reporting cancelled checks as crashed ones. A coroutine
+        // cancellation — WorkManager replacing unique work, a foreground service
+        // stopping, a screen going away — was caught by `catch (Throwable)`,
+        // turned into a failed check called "Checker crashed", and escalated
+        // through the down track into the URGENT nag loop. Reproduced from a real
+        // device: six simultaneous ongoing DND-bypassing "URGENT · … is down"
+        // notifications for six monitors that had all just passed. Background
+        // scheduling is rebuilt on periodic work with UPDATE so nothing cancels a
+        // check in flight in the first place, and checker faults now have their
+        // own track and channel. Store schema untouched; the fabricated runtime
+        // state 1.5.0 persisted is scrubbed on read — see PulseStore.migrate.
+        // 1.6.0 also makes a placed widget's settings reachable again — a cog in
+        // the widget, `widgetFeatures="reconfigurable"`, and a list in Settings —
+        // and adds custom background/text colours with a background-opacity
+        // slider that goes all the way to fully transparent. Widget configs are
+        // forward-compatible: every new field defaults, so widgets placed by 1.5.0
+        // keep their exact look.
+        versionCode = 9
+        versionName = "1.6.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

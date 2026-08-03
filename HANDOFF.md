@@ -1,5 +1,319 @@
 # Pulse — handoff
 
+## 1.6.0 — a cancelled check is not a crashed one (field bug)
+
+**Reported from real use, with screenshots.** Six monitors, six simultaneous
+notifications reading **`URGENT · <name> is down` / `Checker crashed`**,
+`ongoing`, `CATEGORY_ALARM`, DND-bypassing, vibrating every 60 s. All six
+timestamped 19:38 — the same minute the foreground-service notification directly
+above them read **"Strict monitoring · All 6 operational"**, and the same minute
+each monitor's own history recorded a *successful* check. Nothing had crashed and
+nothing was down.
+
+### Root cause
+
+`CheckEngine.runLocked` wrapped the check in `catch (Throwable)` and turned
+whatever it caught into a failed `CheckResult`:
+
+```kotlin
+val result = try {
+    dryRun(monitor)
+} catch (error: Throwable) {           // <- also catches CancellationException
+    CheckResult(ok = false, failureKind = UNKNOWN, message = "Checker crashed", …)
+}
+```
+
+`kotlin.coroutines.cancellation.CancellationException` is an
+`IllegalStateException`, not an `IOException`, so it sailed past every
+classification in `HttpChecker.classify` and landed here. That fabricated result
+then went down the **ordinary down-alert track**: `AlertDecider.decide` with the
+default `failureThreshold = 1` returned `Kind.DOWN`, `AlertCenter.notifyDown`
+posted on a HIGH-importance channel, and because the monitors had `urgent = true`
+the URGENT loop started too.
+
+Three things made it much worse than a single wrong notification:
+
+1. **The persist came after the notification.** `alerts.notifyDown(...)` is
+   synchronous; the `store.updateRuntime(...)` that would have recorded
+   `lastAlertAt` and `alerting` was the *next suspending call on the same
+   cancelled coroutine*, so it threw immediately. Nothing was persisted — so the
+   cooldown never engaged, `wasAlerting` stayed `false`, and the next cancellation
+   fired a fresh full-volume `Kind.DOWN` all over again. That is the "it keeps
+   vibrating".
+2. **The urgent notification became an orphan.** `notifyUrgent` posts an
+   `ongoing`, DND-bypassing notification, but the state that would let anything
+   cancel it was never written. Only `reconcileNotifications` could clear it, and
+   only from the service loop.
+3. **It self-inflicted the cancellations.** See below.
+
+### Where the cancellations came from — and why six at once
+
+`MonitorScheduler` used `ExistingWorkPolicy.REPLACE` everywhere, and **REPLACE
+cancels the work it replaces**:
+
+- `MonitorWorker` re-armed itself at the end of `doWork()` — `enqueueUniqueWork`
+  with `REPLACE`, under **its own unique name**, while still running. Every
+  scheduled check cancelled itself on the way out.
+- `MonitorScheduler.syncAll()` did the same `REPLACE` across *every* monitor, and
+  it was called from `PulseApplication.onCreate`, `BootReceiver`, every settings
+  write, and — crucially — from the 15-minute `SweepWorker`, *after* that sweep
+  had already run `runAllDue()`.
+
+The reported screenshot is that last path exactly. `SweepWorker` and the
+per-monitor chains were both on 15-minute cadences and had drifted into alignment
+(they are all armed together by any `syncAll`). The sweep ran its own sequential
+pass — visible in the history as three successes one second apart at 19:22:22/23/24
+— and then `syncAll` REPLACEd all six unique work names, cancelling every
+`MonitorWorker` running in parallel with it. Six cancellations, one instant, six
+"Checker crashed" alerts, while the sweep's own checks had all passed.
+
+A second, quieter bug fed the same fire: `MonitorWorker` called
+`engine.run(monitorId)` **unconditionally**, with no due-check. That is why one
+monitor on a 15-minute interval recorded three samples within three seconds — and
+every redundant run was another chance to be cancelled and mis-reported.
+
+### The fix, in four parts
+
+**1 · Cancellation is never a verdict.** `CheckEngine` catches
+`CancellationException` *before* the `Throwable` clause, records nothing and
+rethrows. Same rethrow added to `HttpChecker`, `ElementChecker` (where it was
+producing false `"Page failed to load"` outages), `LatencyReference`,
+`MonitorWorker`, `SweepWorker` and `AlertActionReceiver`. `domain/Cancellation.kt`
+adds `runCatchingCancellable`, and every `runCatching` around a suspending call in
+the check path now uses it.
+
+**2 · A checker fault is not a monitor failure.** A genuinely escaped exception no
+longer touches the monitor's health at all — `run()` returns `null` and feeds
+`domain/CheckerHealth`, a pure state machine with its own notification channel and
+one deterministic id (`4243`, deliberately outside the `100_000..399_999` alert
+range so the reconciliation sweep leaves it alone). It needs three consecutive
+internal errors inside a 45-minute window before it says anything, never becomes
+`ongoing`, vibrates only on the first raise, and clears on any completed check, on
+`forgetMonitor` (delete/disable), on `resetCheckerHealth` (process start, boot,
+settings write, service stop) or on evidence ageing out after 90 minutes. It is
+held **in memory only** — so "clear stale crash state after app restart" is a
+property of the type rather than a code path that could be forgotten.
+
+**3 · Nothing cancels a check in flight any more.** Cadence is now a per-monitor
+`PeriodicWorkRequest` with `ExistingPeriodicWorkPolicy.UPDATE`, which applies to
+the next period and does not touch a running worker. `requestImmediate` moved to
+its own unique name (`pulse.monitor.now.<id>`) with `KEEP`, so "check now" can
+neither cancel the periodic worker nor cancel itself. No worker re-arms itself.
+`MonitorWorker` now respects `CheckEngine.isDue` unless explicitly forced, which
+kills the duplicate-check bursts. `syncAll` also cancels the legacy
+`pulse.monitor.<id>` chain once, so upgrades do not leave an orphan.
+
+**4 · The third state now exists.** `CheckerLimit` / `CheckerLimits` +
+`data/health/SystemLimits` diagnose *why* checks are late — offline, metered,
+battery saver, background-restricted, Doze, or the user's own switch — and surface
+it in Settings → **Checker health**, with a route to the battery-optimisation
+exemption. None of it is ever a notification. Battery saver is deliberately not
+blamed while strict mode is running (a foreground service is not deferrable work),
+and the "Android is delaying checks" verdict has a 50-minute floor on its
+tolerance so a 1-minute interval is not flagged merely for hitting the documented
+15-minute platform floor.
+
+### The data on disk had to be repaired too
+
+The bug wrote state, not just notifications: per monitor a `DOWN` health, a raised
+`alerting` flag, a failure streak, `urgentActive`, and a persisted `Sample`
+recording a failure that never happened. Shipping the engine fix alone would leave
+all six cards red, would let `reconcileNotifications` keep the down notifications
+alive (it treats `health == DOWN` as legitimate), and would have `lastResultFor`
+re-hydrate the string verbatim into every urgent re-nag.
+
+`domain/LegacyCrashRepair` scrubs it, and `PulseStore.migrate` applies it **on
+read** — in force from the first moment the new build runs, with no write to
+schedule and no race against a worker that starts before a startup repair would
+have finished. Rules:
+
+- a runtime whose *current* `lastMessage` is the sentinel is reset to
+  `Health.UNKNOWN` (not `UP` — nothing is actually known) with the streak, the
+  alerting flag and `urgentActive` cleared;
+- a runtime that has since had a real check keeps its current state; only the fake
+  samples go;
+- `PAUSED` stays `PAUSED`; mute windows, latency history and everything unrelated
+  survive;
+- fabricated samples are dropped, because uptime and p95 computed from failures
+  that did not occur are worse than a shorter history. A sample must be *both* a
+  failure *and* carry the exact sentinel note, which no genuine verdict does.
+
+`REPAIR_VERSION` is bumped to 5 so the one-time `cancelEverything()` clears the
+standing notifications, and `PulseApplication.onCreate` additionally cancels the
+checker-health id synchronously before any worker in the process can run.
+
+### Store compatibility
+
+`applicationId`, the DataStore name (`pulse_store`), the key (`snapshot_v1`) and
+`SCHEMA_VERSION` are all unchanged. No field was removed or renamed; nothing new
+is persisted. 1.5.0 installs update in place and keep their monitors, settings,
+notification preferences and widget configuration.
+
+### Things worth knowing
+
+- `catch (Throwable)` around anything suspending is the shape of this bug. There
+  is now `runCatchingCancellable` and `isCancellation` in `domain/Cancellation.kt`;
+  prefer them, and treat a bare `runCatching` around a `suspend` call as a defect.
+- `CheckerHealth.REPEAT_GAP_MS` must stay **shorter** than `EVIDENCE_TTL_MS` or
+  `Action.REPEAT` is unreachable — the claim would always expire before its own
+  repeat came due. There is a test asserting exactly that.
+- `STREAK_WINDOW_MS` must span more than one WorkManager period (it is 45 min, three
+  periods) or Doze breaks the streak of a genuinely broken checker every time the
+  platform batches it. And a streak restarting deliberately does **not** withdraw a
+  raised claim — otherwise a Doze-delayed fault would re-raise, and re-vibrate,
+  every few errors.
+- Notification ids `4242` (service) and `4243` (checker health) sit outside
+  `ALERT_ID_MIN..ALERT_ID_MAX` on purpose. Anything added inside that range becomes
+  fair game for `reconcileNotifications`.
+- `MonitorWorker` rethrowing `CancellationException` is correct for
+  `CoroutineWorker`: WorkManager records the run as cancelled rather than retrying
+  work nobody is waiting for.
+- **The two WorkManager guarantees the fix rests on were verified against the
+  2.10.5 bytecode, not against the docs.**
+  - `ExistingWorkPolicy.KEEP` (used by `requestImmediate`) skips enqueueing *only*
+    when an existing spec for that unique name is `ENQUEUED` or `RUNNING`
+    (`EnqueueRunnable.enqueueWorkWithPrerequisites`). Terminal work falls through to
+    `CancelWorkRunnable.forNameInline` and the new request is enqueued — so KEEP
+    coalesces a duplicate "check now" without ever permanently blocking one.
+  - `ExistingPeriodicWorkPolicy.UPDATE` reads
+    `Processor.isEnqueued(workSpecId)` first; when the worker **is** executing it
+    neither calls `Scheduler.cancel` nor reschedules, and returns
+    `APPLIED_FOR_NEXT_RUN` (`WorkerUpdater.updateWorkImpl`). A running check is
+    genuinely untouched.
+- **`UPDATE` throws `UnsupportedOperationException` if the existing spec under that
+  unique name is one-time work.** This is why the periodic name is
+  `pulse.monitor.periodic.<id>` and *not* the 1.5.0 name `pulse.monitor.<id>`,
+  which held one-shots. Do not "tidy" the names back together — upgrading installs
+  would throw on first sync. `pulse.sweep` was already periodic, so it is safe.
+- **`UPDATE` preserves `lastEnqueueTime`, so a *shortened* interval only takes
+  effect at the next period boundary.** Changing a monitor from 4 h to 15 min can
+  leave up to 4 h before the new cadence engages. Covered rather than ignored:
+  `SetupViewModel.save()` runs the monitor immediately, and the 15-minute sweep
+  picks it up as overdue in the meantime — which is exactly the repair role the
+  sweep exists for. Worth knowing before chasing it as a bug.
+
+### What an adversarial review of this change turned up
+
+The whole change was put through five independent dimension reviews (cancellation,
+WorkManager semantics, notification lifecycle, migration, regression), each finding
+then handed to a verifier told to refute it. 18 findings raised, 6 refuted, 12
+confirmed — all 12 fixed, plus the refuted ones whose mechanism was sound anyway.
+The ones worth remembering:
+
+- **`cancelEverything()` does not re-post what is genuinely current.** The down and
+  degraded tracks are transition-driven: with `alerting = true` persisted and
+  `repeatEnabled = false` (the shipped default), `AlertDecider.decide` returns
+  `NO_TRANSITION` for the whole outage. Wiping the shade without clearing the
+  bookkeeping left a live outage with no notification and none coming.
+  `repairNotificationsIfNeeded` now resets `alerting`/`lastAlertAt` fleet-wide via
+  `PulseStore.updateAllRuntimes`.
+- **`urgentAcknowledged` is the field that silences urgent *permanently*.**
+  `UrgentAlerts.evaluate` returns `NONE` for an acknowledged monitor and only clears
+  the acknowledgement on a **successful** check — which never arrives while a site is
+  down. Tapping "I've got it" on an ongoing fake nag was the expected user response,
+  so affected devices very likely have it set. `LegacyCrashRepair` clears it.
+- **Notify-then-persist is a cancellation hazard, not just a style.** Every alert
+  side effect in `runLocked` is non-suspend, so cancellation can only be observed at
+  the persist that follows — after the shade has already changed. A recovered monitor
+  could stay recorded `DOWN` with `urgentActive = true`, and `tickUrgent` would
+  re-shout about it. The commits in `runLocked`, `acknowledgeUrgent`, `tickUrgent`
+  and `mute` are now `withContext(NonCancellable)`.
+- **`ExistingPeriodicWorkPolicy.UPDATE` cannot resurrect terminal work.**
+  `WorkerUpdater.updateWorkImpl` returns `NOT_APPLIED` when `state.isFinished`, and a
+  single throwable escaping `doWork` is enough for WorkerWrapper to mark a periodic
+  spec FAILED. That monitor would then never be checked again and every later
+  `syncAll` would be a silent no-op. `MonitorScheduler.clearIfDead` cancels a spec
+  whose every `WorkInfo` is finished before re-enqueueing — and only then, so it can
+  never touch work in flight. `Pulse.install` also moved inside both workers' `try`.
+- **A gate is only as good as where it is evaluated.** `MonitorWorker` checked
+  `isDue` and then blocked on the per-monitor mutex behind the sweep's check of the
+  same monitor, so it ran anyway. `run()` now re-checks inside the lock, and takes a
+  `force` flag so explicit user actions still always check.
+- **`lastCheckedAt` is wall-clock.** With no unconditional background check path
+  left, a clock moving *backwards* made `isDue` false for every monitor until the
+  clock caught up. `DueCheck.isDue` treats a future stamp as due now.
+- **A direct `vibrate()` obeys nothing.** `previewVibration` was called after
+  `post()` regardless of whether the notification arrived, so turning the channel off
+  — the remedy the notification itself invites — silenced the notice and left the
+  buzz. `post()` now reports whether it posted, and `channelCanAlert` checks the
+  channel's importance first. Applied to the urgent track too, where it was
+  pre-existing.
+- **Aggregating two monitors' numbers together produces nonsense.**
+  `CheckerLimits` compared the *oldest* check age against the *tightest* interval, so
+  a healthy 15-minute-plus-2-hour fleet read as "Android is delaying checks" for most
+  of every two hours. Lateness is per monitor now (`MonitorCadence`).
+
+### Device verification still outstanding
+
+The JVM suite covers the state machines, the repair and `HttpChecker` cancellation
+against real sockets. `CheckerCancellationInstrumentedTest` covers the rest but
+needs a device or emulator — see the verification checklist at the end of this
+section in the release notes below.
+
+
+## 1.6.0 — a placed widget's settings were unreachable, and it could only be one of three colours
+
+**Reported from real use:** "I can't find the settings of the widget after I placed
+it on the homescreen."
+
+Correct, and not a discoverability problem: there was no route. The config activity
+is declared with `android:configure`, which Android launches **once**, when the
+widget is dropped. Getting back to it needs
+`android:widgetFeatures="reconfigurable"`, which did not exist here — and which was
+only added in API 31 anyway, so on API 26–30 there is no platform route at all.
+
+Three routes now, deliberately redundant:
+
+1. **A cog in the widget's header.** The only one that works everywhere. The header
+   row is kept even when the title is switched off, or hiding the title would hide
+   the settings with it. It is per-widget optional (`showSettingsButton`).
+2. **`widgetFeatures="reconfigurable"`** for the long-press menu on API 31+.
+3. **Settings → Home-screen widgets**, enumerated with
+   `AppWidgetManager.getAppWidgetIds`.
+
+The config screen now knows which of the two it is: `WidgetConfigStore.exists`
+distinguishes a freshly dropped widget (*Add widget*, and Cancel means "don't place
+it") from a revisit (*Save*).
+
+### Arbitrary colours on API 26
+
+`RemoteViews` cannot recolour a `View`'s background below API 31, which is why the
+widget had exactly three looks — one compiled-in `<shape>` each. The surface is now
+two tintable `ImageView`s *behind* the content:
+
+- `widget_surface`, a white rounded rect, tinted with `setColorFilter` and faded
+  with `setImageAlpha`;
+- `widget_surface_border`, stroke only, on the same treatment.
+
+Both methods are `@RemotableViewMethod`, so this works from API 26 up, and the
+rounded corners survive — which a flat `setBackgroundColor` would not.
+`WidgetInstrumentedTest` inflates custom colours at 0%, 35% and 100% opacity through
+`RemoteViews.apply()`, which is the same inflation the launcher's process runs, so a
+non-remotable method fails the test rather than showing "Problem loading widget" on
+someone's home screen.
+
+Details that matter:
+
+- `setColorFilter` wants **opaque** RGB and `setImageAlpha` carries the
+  transparency. Passing a translucent colour to `setColorFilter` tints by the
+  *filter's* alpha and looks nothing like the swatch — hence `opaque()`/`alphaOf()`.
+- `customBackgroundRgb` stores RGB only. Alpha is `backgroundOpacity`'s job, so
+  dragging opacity to zero and back cannot lose the colour.
+- The border alpha is `backgroundOpacity × 0.20`, so a fully transparent widget has
+  no ring floating around it.
+- Presets ignore `backgroundOpacity` on purpose: they are surfaces with known
+  contrast, and letting a stray value apply would quietly make a legible preset
+  illegible.
+- The Compose preview reads `WidgetConfig.palette`, the same property the real
+  widget reads. It used to hard-code its own copy of the three themes, which is
+  survivable until the palettes gain arithmetic — then the preview disagrees with
+  the widget about exactly the setting being previewed. The preview also draws a
+  checkerboard behind the surface so "fully transparent" previews as see-through.
+- `WidgetTheme` gained `CUSTOM` and `WidgetConfig` gained five fields, all with
+  defaults. Enum values serialise by name and unknown keys are ignored, so widgets
+  placed by 1.5.0 keep their exact look and gain the cog. `widget_bg_black/white/blue`
+  are gone; nothing references them.
+
 ## 1.5.0 — discount the phone's own connection before calling anything slow
 
 **Reported from real use:** DEGRADED alerts for services that were fine. The
