@@ -2,79 +2,122 @@
 <!--
     Pulse home-screen widget.
 
-    Deliberately a solid rounded surface rather than a transparent one: a widget
-    has to stay legible on a white beach photo and a black AMOLED wallpaper
-    alike, and translucency cannot promise that.
+    The surface is two tintable ImageViews behind the content rather than a
+    background drawable on the content itself. That is what makes an arbitrary
+    background colour and opacity possible on API 26+: RemoteViews cannot
+    recolour a View's background there, so the widget was previously stuck with
+    whichever of three fixed shapes was compiled in. `setColorFilter` and
+    `setImageAlpha` on an ImageView *are* remotable, so colour and transparency
+    become a runtime decision — corners intact, which a flat
+    `setBackgroundColor` would have thrown away.
 -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/widget_root"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_frame"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="@drawable/widget_bg_black"
-    android:padding="14dp">
+    android:layout_height="match_parent">
+
+    <ImageView
+        android:id="@+id/widget_surface"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitXY"
+        android:src="@drawable/widget_surface"
+        android:contentDescription="@null" />
+
+    <ImageView
+        android:id="@+id/widget_surface_border"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitXY"
+        android:src="@drawable/widget_surface_border"
+        android:contentDescription="@null" />
 
     <LinearLayout
-        android:id="@+id/widget_header"
+        android:id="@+id/widget_root"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:paddingBottom="10dp">
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:padding="14dp">
 
-        <ImageView
-            android:id="@+id/widget_logo"
-            android:layout_width="18dp"
-            android:layout_height="18dp"
-            android:layout_marginEnd="8dp"
-            android:src="@drawable/ic_widget_mark"
-            android:contentDescription="@string/app_name" />
+        <LinearLayout
+            android:id="@+id/widget_header"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingBottom="10dp">
+
+            <ImageView
+                android:id="@+id/widget_logo"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:layout_marginEnd="8dp"
+                android:src="@drawable/ic_widget_mark"
+                android:contentDescription="@string/app_name" />
+
+            <TextView
+                android:id="@+id/widget_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/app_name"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:textColor="#FFFFFFFF" />
+
+            <TextView
+                android:id="@+id/widget_headline"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="10dp"
+                android:gravity="end"
+                android:maxLines="1"
+                android:ellipsize="end"
+                android:textSize="12sp"
+                android:textColor="#FFD6D6D6" />
+
+            <!--
+                The way back into this widget's settings.
+
+                Android only offers "reconfigure" behind a long-press, and only on
+                API 31+; below that a placed widget's configuration was
+                unreachable. Its own tap target, so it works on every launcher and
+                every version.
+            -->
+            <ImageView
+                android:id="@+id/widget_settings"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_marginStart="4dp"
+                android:padding="6dp"
+                android:src="@drawable/ic_widget_cog"
+                android:contentDescription="@string/widget_settings" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/widget_rows"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
 
         <TextView
-            android:id="@+id/widget_title"
-            android:layout_width="wrap_content"
+            android:id="@+id/widget_empty"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/app_name"
-            android:textSize="15sp"
-            android:textStyle="bold"
-            android:textColor="#FFFFFFFF" />
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"
+            android:textSize="12sp"
+            android:visibility="gone"
+            android:textColor="#FF8A8A8A" />
 
         <TextView
-            android:id="@+id/widget_headline"
-            android:layout_width="0dp"
+            android:id="@+id/widget_footer"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="10dp"
-            android:gravity="end"
+            android:paddingTop="8dp"
             android:maxLines="1"
             android:ellipsize="end"
-            android:textSize="12sp"
-            android:textColor="#FFD6D6D6" />
+            android:textSize="10sp"
+            android:textColor="#FF8A8A8A" />
     </LinearLayout>
-
-    <LinearLayout
-        android:id="@+id/widget_rows"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical" />
-
-    <TextView
-        android:id="@+id/widget_empty"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingTop="6dp"
-        android:paddingBottom="6dp"
-        android:textSize="12sp"
-        android:visibility="gone"
-        android:textColor="#FF8A8A8A" />
-
-    <TextView
-        android:id="@+id/widget_footer"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingTop="8dp"
-        android:maxLines="1"
-        android:ellipsize="end"
-        android:textSize="10sp"
-        android:textColor="#FF8A8A8A" />
-</LinearLayout>
+</FrameLayout>

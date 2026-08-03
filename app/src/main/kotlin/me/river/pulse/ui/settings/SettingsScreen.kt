@@ -1,5 +1,7 @@
 package me.river.pulse.ui.settings
 
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings as AndroidSettings
@@ -65,6 +67,8 @@ import me.river.pulse.ui.icons.PulseIcons
 import me.river.pulse.ui.rememberSettingsViewModel
 import me.river.pulse.ui.theme.Backdrop
 import me.river.pulse.ui.theme.PulseColors
+import me.river.pulse.widget.PulseWidgetProvider
+import me.river.pulse.widget.WidgetConfigActivity
 import androidx.compose.ui.platform.testTag
 
 @Composable
@@ -75,6 +79,16 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
     val checkerLimit by viewModel.checkerLimit.collectAsStateWithLifecycle()
     val batteryOptimised by viewModel.batteryOptimised.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    // Read once per composition of this screen rather than observed: widgets are
+    // placed and removed on the home screen, so this is only ever right at the
+    // moment the user opens Settings — which is when they need it.
+    val placedWidgetIds = remember {
+        runCatching {
+            val manager = AppWidgetManager.getInstance(context)
+            manager.getAppWidgetIds(ComponentName(context, PulseWidgetProvider::class.java))
+                .toList()
+        }.getOrDefault(emptyList())
+    }
     var notificationsAllowed by remember {
         mutableStateOf(Pulse.install(context).alerts.hasNotificationPermission())
     }
@@ -425,8 +439,25 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
             }
         }
 
+        item(key = "widgets") {
+            StaggeredEntrance(index = 6, key = "widgets", log = entrance) {
+                WidgetsCard(
+                    ids = placedWidgetIds,
+                    onConfigure = { id ->
+                        runCatching {
+                            context.startActivity(
+                                Intent(context, WidgetConfigActivity::class.java)
+                                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                            )
+                        }
+                    },
+                )
+            }
+        }
+
         item(key = "motion") {
-            StaggeredEntrance(index = 6, key = "motion", log = entrance) {
+            StaggeredEntrance(index = 7, key = "motion", log = entrance) {
                 GlassCard {
                     SectionHeader("Motion", icon = PulseIcons.Sparkle, accent = PulseColors.Mint)
                     Text(
@@ -472,7 +503,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         }
 
         item(key = "about") {
-            StaggeredEntrance(index = 7, key = "about", log = entrance) {
+            StaggeredEntrance(index = 8, key = "about", log = entrance) {
                 GlassCard {
                     SectionHeader("About", icon = PulseIcons.Info, accent = PulseColors.Sky)
                     AboutRow("Version", "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
@@ -593,6 +624,47 @@ private fun CheckerHealthCard(
                     "foreground service is.",
                 style = MaterialTheme.typography.bodySmall,
                 color = PulseColors.TextTertiary,
+            )
+        }
+    }
+}
+
+/**
+ * A route into a placed widget's settings from inside the app.
+ *
+ * The third of three, and the one that always works. Android only offers
+ * "reconfigure" behind a long-press and only on API 31+; the widget's own cog can
+ * be switched off; this cannot be missed. Reported as a real problem: once the
+ * widget was on the home screen, its configuration was unreachable.
+ */
+@Composable
+private fun WidgetsCard(ids: List<Int>, onConfigure: (Int) -> Unit) {
+    GlassCard {
+        SectionHeader("Home-screen widgets", icon = PulseIcons.Layers, accent = PulseColors.Sky)
+        if (ids.isEmpty()) {
+            Text(
+                text = "None placed yet. Long-press your home screen, choose Widgets, " +
+                    "and look for Pulse.",
+                style = MaterialTheme.typography.bodySmall,
+                color = PulseColors.TextTertiary,
+            )
+            return@GlassCard
+        }
+        Text(
+            text = "Colours, transparency, density and which monitors appear are set per " +
+                "widget. You can also tap the cog on the widget itself.",
+            style = MaterialTheme.typography.bodySmall,
+            color = PulseColors.TextTertiary,
+        )
+        Spacer(Modifier.height(10.dp))
+        ids.forEachIndexed { index, id ->
+            if (index > 0) Spacer(Modifier.height(8.dp))
+            PulseButton(
+                text = if (ids.size == 1) "Configure widget" else "Configure widget ${index + 1}",
+                onClick = { onConfigure(id) },
+                icon = PulseIcons.Sliders,
+                tone = ButtonTone.Secondary,
+                modifier = Modifier.fillMaxWidth().testTag("configure-widget-$id"),
             )
         }
     }

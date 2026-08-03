@@ -11,12 +11,19 @@ import kotlinx.coroutines.flow.first
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
-/** Widget palettes. Deliberately the same three surfaces the app itself uses. */
+/**
+ * Widget palettes: the three surfaces the app itself uses, plus [CUSTOM].
+ *
+ * [CUSTOM] is a fourth *preset slot* rather than a flag, so the choice is a
+ * single value the whole config can be reasoned about from — and so switching
+ * back to a preset keeps the custom colours around to switch forward to again.
+ */
 @Serializable
 enum class WidgetTheme {
     BLACK,
     WHITE,
     BLUE,
+    CUSTOM,
     ;
 
     val label: String
@@ -24,7 +31,46 @@ enum class WidgetTheme {
             BLACK -> "Black"
             WHITE -> "White"
             BLUE -> "Blue"
+            CUSTOM -> "Custom"
         }
+}
+
+/**
+ * Every colour the widget draws, already resolved to plain ARGB ints.
+ *
+ * [RemoteViews][android.widget.RemoteViews] cannot compute anything, so all the
+ * arithmetic — preset lookup, opacity, the derived secondary/tertiary text
+ * shades — happens here, once, and is unit-testable without Android.
+ */
+data class WidgetPalette(
+    /** The rounded surface, alpha included. Fully transparent is legal. */
+    val background: Int,
+    /** Hairline edge. Fades out with the background so a glass widget has no ring. */
+    val border: Int,
+    val primary: Int,
+    val secondary: Int,
+    val tertiary: Int,
+)
+
+/** Replaces a colour's alpha channel. Input may be RGB or ARGB; alpha is 0f..1f. */
+internal fun Int.withAlpha(alpha: Float): Int {
+    val a = (alpha.coerceIn(0f, 1f) * 255f).toInt().coerceIn(0, 255)
+    return (a shl 24) or (this and 0x00FFFFFF)
+}
+
+/**
+ * Relative luminance, 0f (black) to 1f (white).
+ *
+ * Used to pick a readable default text colour for a custom background: someone
+ * who sets a pale background and never touches the text colour must not end up
+ * with white-on-white. Rec. 709 coefficients, close enough for this and far
+ * cheaper than a full contrast calculation.
+ */
+internal fun Int.luminance(): Float {
+    val r = (this shr 16 and 0xFF) / 255f
+    val g = (this shr 8 and 0xFF) / 255f
+    val b = (this and 0xFF) / 255f
+    return 0.2126f * r + 0.7152f * g + 0.0722f * b
 }
 
 @Serializable
@@ -55,7 +101,104 @@ data class WidgetConfig(
     /** Hide healthy monitors so the widget only speaks up when it matters. */
     val onlyProblems: Boolean = false,
     val maxRows: Int = 5,
-)
+
+    // ---- custom colours (theme == CUSTOM) -----------------------------------
+    /**
+     * Background hue, **RGB only**. Alpha is [backgroundOpacity]'s job, so the two
+     * controls stay independent: dragging opacity to zero and back must not lose
+     * the colour, and picking a colour must not silently reset transparency.
+     */
+    val customBackgroundRgb: Int = 0x0B0B0B,
+    val customTextRgb: Int = 0xFFFFFF,
+    /** 0f is genuinely fully transparent — the widget becomes text on wallpaper. */
+    val backgroundOpacity: Float = 0.94f,
+
+    /**
+     * The in-widget gear.
+     *
+     * On by default, because the launcher's own "reconfigure" affordance is
+     * hidden behind a long-press on API 31+ and simply does not exist below it —
+     * a widget's settings were effectively unreachable once placed. Anyone who
+     * wants the cleaner look can switch it off and still long-press.
+     */
+    val showSettingsButton: Boolean = true,
+) {
+    /**
+     * Every colour resolved, presets and custom alike.
+     *
+     * Presets ignore [backgroundOpacity] on purpose: they are defined surfaces
+     * with a known contrast, and letting opacity apply to them would quietly turn
+     * a legible preset into an illegible one. Transparency is a custom-theme
+     * decision, made deliberately.
+     */
+    val palette: WidgetPalette
+        get() = when (theme) {
+            WidgetTheme.BLACK -> WidgetPalette(
+                background = 0xF00B0B0B.toInt(),
+                border = 0x26FFFFFF,
+                primary = 0xFFFFFFFF.toInt(),
+                secondary = 0xFFD6D6D6.toInt(),
+                tertiary = 0xFF8A8A8A.toInt(),
+            )
+
+            WidgetTheme.WHITE -> WidgetPalette(
+                background = 0xF5F6F6F8.toInt(),
+                border = 0x22000000,
+                primary = 0xFF0A0A0A.toInt(),
+                secondary = 0xFF3A3A3A.toInt(),
+                tertiary = 0xFF6B6B6B.toInt(),
+            )
+
+            WidgetTheme.BLUE -> WidgetPalette(
+                background = 0xF00C1A3A.toInt(),
+                border = 0x402F6BFF,
+                primary = 0xFFFFFFFF.toInt(),
+                secondary = 0xFFBBD0FF.toInt(),
+                tertiary = 0xFF7E9BD6.toInt(),
+            )
+
+            WidgetTheme.CUSTOM -> {
+                val text = customTextRgb and 0x00FFFFFF
+                WidgetPalette(
+                    background = customBackgroundRgb.withAlpha(backgroundOpacity),
+                    // The edge follows the surface. A fully transparent widget with
+                    // a visible ring around it looks like a rendering bug.
+                    border = text.withAlpha(backgroundOpacity * BORDER_ALPHA),
+                    primary = text.withAlpha(1f),
+                    secondary = text.withAlpha(SECONDARY_ALPHA),
+                    tertiary = text.withAlpha(TERTIARY_ALPHA),
+                )
+            }
+        }
+
+    companion object {
+        private const val BORDER_ALPHA = 0.20f
+        private const val SECONDARY_ALPHA = 0.80f
+        private const val TERTIARY_ALPHA = 0.55f
+
+        /** Background swatches offered in the picker. Kept short and opinionated. */
+        val BACKGROUND_SWATCHES = listOf(
+            0x000000, 0x0B0B0B, 0x1C1C1E, 0x3A3A3C,
+            0xF6F6F8, 0xFFFFFF, 0x0C1A3A, 0x102A43,
+            0x1B3A2A, 0x3A1B1B, 0x2E1B3A, 0x3A2E1B,
+        )
+
+        /** Text swatches. Includes the brand accents so a widget can be themed. */
+        val TEXT_SWATCHES = listOf(
+            0xFFFFFF, 0xD6D6D6, 0x8A8A8A, 0x0A0A0A,
+            0x2FD98A, 0xFFB020, 0xFF4D57, 0x2F6BFF,
+            0x6AA8FF, 0xFF7A59, 0xBBD0FF, 0x7E9BD6,
+        )
+
+        /**
+         * The text colour a background suggests, for the moment a user picks a
+         * pale surface without touching the text: white-on-white is not a look
+         * anybody chose.
+         */
+        fun suggestedTextRgb(backgroundRgb: Int): Int =
+            if (backgroundRgb.luminance() > 0.55f) 0x0A0A0A else 0xFFFFFF
+    }
+}
 
 private val Context.widgetDataStore: DataStore<Preferences> by
     preferencesDataStore(name = "pulse_widgets")
@@ -76,6 +219,18 @@ object WidgetConfigStore {
         val raw = runCatching { context.widgetDataStore.data.first()[key(appWidgetId)] }.getOrNull()
         return decode(raw)
     }
+
+    /**
+     * Whether this widget has ever been configured.
+     *
+     * Distinguishes "the launcher just dropped a new widget" from "the user came
+     * back to change one", which is the difference between an *Add widget* button
+     * and a *Save* button — and between Cancel meaning "don't place it" and Cancel
+     * meaning "leave it as it was".
+     */
+    suspend fun exists(context: Context, appWidgetId: Int): Boolean = runCatching {
+        context.widgetDataStore.data.first()[key(appWidgetId)] != null
+    }.getOrDefault(false)
 
     /** Blocking read for [android.appwidget.AppWidgetProvider] callbacks. */
     fun loadBlocking(context: Context, appWidgetId: Int): WidgetConfig =

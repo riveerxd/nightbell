@@ -8,6 +8,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,6 +29,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -39,6 +42,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
@@ -92,9 +98,11 @@ class WidgetConfigActivity : ComponentActivity() {
         setContent {
             var config by remember { mutableStateOf(WidgetConfig()) }
             var loaded by remember { mutableStateOf(false) }
+            var reconfiguring by remember { mutableStateOf(false) }
             val snapshot by Pulse.store.snapshot.collectAsState()
 
             LaunchedEffect(Unit) {
+                reconfiguring = WidgetConfigStore.exists(applicationContext, appWidgetId)
                 config = WidgetConfigStore.load(applicationContext, appWidgetId)
                 loaded = true
             }
@@ -109,6 +117,7 @@ class WidgetConfigActivity : ComponentActivity() {
                         ConfigBody(
                             config = config,
                             fleet = Summary.of(snapshot.monitors, snapshot.runtimes),
+                            reconfiguring = reconfiguring,
                             onChange = { config = it },
                             onCancel = { finish() },
                             onSave = { commit(config) },
@@ -135,6 +144,7 @@ class WidgetConfigActivity : ComponentActivity() {
 private fun ConfigBody(
     config: WidgetConfig,
     fleet: Summary.Fleet,
+    reconfiguring: Boolean,
     onChange: (WidgetConfig) -> Unit,
     onCancel: () -> Unit,
     onSave: () -> Unit,
@@ -160,7 +170,11 @@ private fun ConfigBody(
                     color = PulseColors.TextPrimary,
                 )
                 Text(
-                    text = "Monitors are always listed worst first.",
+                    text = if (reconfiguring) {
+                        "Changes apply as soon as you save."
+                    } else {
+                        "Monitors are always listed worst first."
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = PulseColors.TextSecondary,
                 )
@@ -206,6 +220,99 @@ private fun ConfigBody(
                 }
             }
 
+            item(key = "colours") {
+                GlassCard {
+                    SectionHeader("Colours", icon = PulseIcons.Sparkle, accent = PulseColors.Mint)
+                    if (config.theme == WidgetTheme.CUSTOM) {
+                        Text(
+                            text = "Background",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = PulseColors.TextTertiary,
+                            modifier = Modifier.padding(bottom = 8.dp),
+                        )
+                        SwatchGrid(
+                            swatches = WidgetConfig.BACKGROUND_SWATCHES,
+                            selected = config.customBackgroundRgb,
+                            onSelect = { rgb ->
+                                // Move the text colour with the background *only* while
+                                // it is still whatever the previous background suggested.
+                                // Someone who has deliberately picked a colour keeps it;
+                                // someone who has not is spared white-on-white.
+                                val untouched = config.customTextRgb ==
+                                    WidgetConfig.suggestedTextRgb(config.customBackgroundRgb)
+                                onChange(
+                                    config.copy(
+                                        customBackgroundRgb = rgb,
+                                        customTextRgb = if (untouched) {
+                                            WidgetConfig.suggestedTextRgb(rgb)
+                                        } else {
+                                            config.customTextRgb
+                                        },
+                                    ),
+                                )
+                            },
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            text = "Text",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = PulseColors.TextTertiary,
+                            modifier = Modifier.padding(bottom = 8.dp),
+                        )
+                        SwatchGrid(
+                            swatches = WidgetConfig.TEXT_SWATCHES,
+                            selected = config.customTextRgb,
+                            onSelect = { onChange(config.copy(customTextRgb = it)) },
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Background opacity",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = PulseColors.TextTertiary,
+                            )
+                            Spacer(Modifier.weight(1f))
+                            Text(
+                                text = "${(config.backgroundOpacity * 100).toInt()}%",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = PulseColors.TextSecondary,
+                            )
+                        }
+                        Slider(
+                            value = config.backgroundOpacity,
+                            onValueChange = { onChange(config.copy(backgroundOpacity = it)) },
+                            valueRange = 0f..1f,
+                            colors = SliderDefaults.colors(
+                                thumbColor = PulseColors.Mint,
+                                activeTrackColor = PulseColors.Mint,
+                                inactiveTrackColor = PulseColors.GlassFill,
+                            ),
+                            modifier = Modifier.testTag("widget-opacity"),
+                        )
+                        Text(
+                            text = when {
+                                config.backgroundOpacity <= 0.01f ->
+                                    "Fully transparent — just text on your wallpaper. " +
+                                        "Legibility is then entirely up to the wallpaper."
+                                config.backgroundOpacity < 0.5f ->
+                                    "Mostly see-through. Check it against your actual wallpaper."
+                                else -> "Solid enough to stay readable over anything."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = PulseColors.TextTertiary,
+                        )
+                    } else {
+                        Text(
+                            text = "The ${config.theme.label.lowercase()} preset is a fixed " +
+                                "surface with known contrast. Choose Custom above to set your " +
+                                "own background, text colour and transparency.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = PulseColors.TextTertiary,
+                        )
+                    }
+                }
+            }
+
             item(key = "content") {
                 GlassCard {
                     SectionHeader("Content", icon = PulseIcons.Layers, accent = PulseColors.Violet)
@@ -215,6 +322,18 @@ private fun ConfigBody(
                         checked = config.showTitle,
                         onCheckedChange = { onChange(config.copy(showTitle = it)) },
                         icon = PulseIcons.Sparkle,
+                        accent = PulseColors.Violet,
+                    )
+                    ToggleRow(
+                        title = "Settings button",
+                        subtitle = if (config.showSettingsButton) {
+                            "A cog in the corner reopens this screen"
+                        } else {
+                            "Hidden — long-press the widget instead (Android 12+)"
+                        },
+                        checked = config.showSettingsButton,
+                        onCheckedChange = { onChange(config.copy(showSettingsButton = it)) },
+                        icon = PulseIcons.Sliders,
                         accent = PulseColors.Violet,
                     )
                     ToggleRow(
@@ -270,11 +389,46 @@ private fun ConfigBody(
         ) {
             PulseButton("Cancel", onCancel, tone = ButtonTone.Secondary, icon = PulseIcons.Close)
             PulseButton(
-                text = "Add widget",
+                text = if (reconfiguring) "Save" else "Add widget",
                 onClick = onSave,
                 icon = PulseIcons.Check,
                 modifier = Modifier.weight(1f),
             )
+        }
+    }
+}
+
+/**
+ * A row-wrapping grid of colour swatches.
+ *
+ * Deliberately a fixed palette rather than a hue/saturation picker: a widget has
+ * to stay legible over a photograph, and a free picker mostly produces colours
+ * nobody can read grey text on. Twelve considered options cover the intent
+ * ("dark", "light", "match my accent") without that trap.
+ */
+@Composable
+private fun SwatchGrid(swatches: List<Int>, selected: Int, onSelect: (Int) -> Unit) {
+    val perRow = 6
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        swatches.chunked(perRow).forEach { rowColours ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                rowColours.forEach { rgb ->
+                    val isSelected = (rgb and 0x00FFFFFF) == (selected and 0x00FFFFFF)
+                    Box(
+                        Modifier
+                            .size(34.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color(rgb or 0xFF000000.toInt()))
+                            .border(
+                                width = if (isSelected) 2.dp else 1.dp,
+                                color = if (isSelected) PulseColors.Mint else Color.White.copy(alpha = 0.18f),
+                                shape = RoundedCornerShape(10.dp),
+                            )
+                            .clickable { onSelect(rgb) }
+                            .testTag("swatch-$rgb"),
+                    )
+                }
+            }
         }
     }
 }
@@ -286,27 +440,56 @@ private fun ConfigBody(
  */
 @Composable
 private fun WidgetPreview(config: WidgetConfig, fleet: Summary.Fleet) {
-    val background = when (config.theme) {
-        WidgetTheme.BLACK -> Color(0xFF0B0B0B)
-        WidgetTheme.WHITE -> Color(0xFFF6F6F8)
-        WidgetTheme.BLUE -> Color(0xFF0C1A3A)
-    }
-    val primary = if (config.theme == WidgetTheme.WHITE) Color(0xFF0A0A0A) else Color.White
-    val tertiary = when (config.theme) {
-        WidgetTheme.WHITE -> Color(0xFF6B6B6B)
-        WidgetTheme.BLUE -> Color(0xFF7E9BD6)
-        WidgetTheme.BLACK -> Color(0xFF8A8A8A)
-    }
+    // One source of truth with the real widget. The preview used to hard-code its
+    // own copy of the three themes, which is fine until the palettes gain
+    // arithmetic — then the preview and the widget quietly disagree about exactly
+    // the setting the user is trying to see.
+    val palette = config.palette
+    val background = Color(palette.background)
+    val primary = Color(palette.primary)
+    val tertiary = Color(palette.tertiary)
     val rows = fleet.ranked
         .filter { !config.onlyProblems || it.health != Health.UP }
         .take(config.maxRows)
 
+    // A checkerboard behind the surface, so "fully transparent" previews as
+    // see-through rather than as whatever colour this screen happens to be.
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .drawBehind {
+                val cell = 10.dp.toPx()
+                var y = 0f
+                var row = 0
+                while (y < size.height) {
+                    var x = 0f
+                    var col = 0
+                    while (x < size.width) {
+                        if ((row + col) % 2 == 0) {
+                            drawRect(
+                                color = Color.White.copy(alpha = 0.05f),
+                                topLeft = Offset(x, y),
+                                size = Size(
+                                    minOf(cell, size.width - x),
+                                    minOf(cell, size.height - y),
+                                ),
+                            )
+                        }
+                        x += cell
+                        col++
+                    }
+                    y += cell
+                    row++
+                }
+            },
+    ) {
     Column(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
             .background(background)
-            .border(1.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(20.dp))
+            .border(1.dp, Color(palette.border), RoundedCornerShape(20.dp))
             .padding(14.dp),
     ) {
         if (config.showTitle) {
@@ -383,5 +566,6 @@ private fun WidgetPreview(config: WidgetConfig, fleet: Summary.Fleet) {
                 color = tertiary,
             )
         }
+    }
     }
 }

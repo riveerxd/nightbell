@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    `widgetFeatures="reconfigurable"` is what puts a settings entry on the
+    long-press menu of an already-placed widget. It was added in API 31 and is
+    ignored below that — which is exactly why the widget also carries its own cog
+    in the header: on API 26–30 there is no platform route back into a placed
+    widget's configuration at all, and the widget's settings were unreachable.
+-->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="180dp"
     android:minHeight="110dp"
@@ -12,6 +19,7 @@
     android:widgetCategory="home_screen"
     android:updatePeriodMillis="1800000"
     android:configure="me.river.pulse.widget.WidgetConfigActivity"
+    android:widgetFeatures="reconfigurable"
     android:previewLayout="@layout/widget_pulse"
     android:initialLayout="@layout/widget_pulse"
     android:description="@string/widget_description" />

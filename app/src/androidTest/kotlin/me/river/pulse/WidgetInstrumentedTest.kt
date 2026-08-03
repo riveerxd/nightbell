@@ -72,8 +72,8 @@ class WidgetInstrumentedTest {
     )
 
     /** Inflates the RemoteViews the way the launcher would. */
-    private fun inflate(config: WidgetConfig): View {
-        val views = PulseWidgetProvider.build(appContext, config, fleet)
+    private fun inflate(config: WidgetConfig, appWidgetId: Int = 7): View {
+        val views = PulseWidgetProvider.build(appContext, config, fleet, appWidgetId)
         val parent = FrameLayout(appContext)
         return views.apply(appContext, parent)
     }
@@ -157,11 +157,81 @@ class WidgetInstrumentedTest {
     }
 
     @Test
-    fun hidingTheTitleRemovesTheHeader() {
+    fun hidingTheTitleRemovesTheTitle() {
         val withTitle = texts(inflate(WidgetConfig(showTitle = true)))
         val without = texts(inflate(WidgetConfig(showTitle = false)))
         assertTrue(withTitle.any { it == "Pulse" })
         assertFalse(without.any { it == "Pulse" })
+    }
+
+    // ---- reaching the settings again ---------------------------------------
+
+    @Test
+    fun theSettingsCogSurvivesHidingTheTitle() {
+        // The header row has to stay for the cog even with the title off, or the
+        // only route back into a placed widget's configuration disappears with it —
+        // which is exactly the bug reported: "I can't find the settings of the
+        // widget after I placed it".
+        val root = inflate(WidgetConfig(showTitle = false, showSettingsButton = true))
+        val cog = root.findViewById<View>(me.river.pulse.R.id.widget_settings)
+        assertNotNull(cog)
+        assertEquals(View.VISIBLE, cog.visibility)
+        assertTrue("the cog must be tappable", cog.hasOnClickListeners())
+    }
+
+    @Test
+    fun theSettingsCogCanBeTurnedOff() {
+        val root = inflate(WidgetConfig(showSettingsButton = false))
+        val cog = root.findViewById<View>(me.river.pulse.R.id.widget_settings)
+        assertEquals(View.GONE, cog.visibility)
+    }
+
+    @Test
+    fun aWidgetWithNoIdShowsNoCog() {
+        // The preview the widget picker renders has no real appWidgetId, so a cog
+        // there would open a configuration screen for nothing.
+        val root = inflate(
+            WidgetConfig(showSettingsButton = true),
+            appWidgetId = android.appwidget.AppWidgetManager.INVALID_APPWIDGET_ID,
+        )
+        val cog = root.findViewById<View>(me.river.pulse.R.id.widget_settings)
+        assertEquals(View.GONE, cog.visibility)
+    }
+
+    // ---- custom colours ----------------------------------------------------
+
+    @Test
+    fun customColoursAndOpacityInflate() {
+        // The point of the test: `setColorFilter` and `setImageAlpha` must really be
+        // @RemotableViewMethod. If either is not, apply() throws here rather than
+        // showing "Problem loading widget" on somebody's home screen.
+        listOf(0f, 0.35f, 1f).forEach { opacity ->
+            val root = inflate(
+                WidgetConfig(
+                    theme = WidgetTheme.CUSTOM,
+                    customBackgroundRgb = 0x102A43,
+                    customTextRgb = 0x2FD98A,
+                    backgroundOpacity = opacity,
+                    maxRows = 4,
+                ),
+            )
+            assertNotNull("opacity $opacity failed to inflate", root)
+            assertTrue("opacity $opacity rendered nothing", texts(root).isNotEmpty())
+        }
+    }
+
+    @Test
+    fun aFullyTransparentWidgetStillRendersItsText() {
+        val rendered = texts(
+            inflate(
+                WidgetConfig(
+                    theme = WidgetTheme.CUSTOM,
+                    backgroundOpacity = 0f,
+                    maxRows = 4,
+                ),
+            ),
+        )
+        assertTrue("text must survive a transparent surface: $rendered", rendered.any { it.contains("Charlie") })
     }
 
     @Test

@@ -88,16 +88,49 @@ class PulseWidgetProvider : AppWidgetProvider() {
             val snapshot = graph.store.snapshot.value
             val fleet = Summary.of(snapshot.monitors, snapshot.runtimes)
             runCatching {
-                manager.updateAppWidget(appWidgetId, build(app, config, fleet))
+                manager.updateAppWidget(appWidgetId, build(app, config, fleet, appWidgetId))
             }.onFailure { Log.e(TAG, "Could not update widget $appWidgetId", it) }
         }
 
-        internal fun build(context: Context, config: WidgetConfig, fleet: Summary.Fleet): RemoteViews {
+        @JvmOverloads
+        internal fun build(
+            context: Context,
+            config: WidgetConfig,
+            fleet: Summary.Fleet,
+            appWidgetId: Int = AppWidgetManager.INVALID_APPWIDGET_ID,
+        ): RemoteViews {
             val views = RemoteViews(context.packageName, R.layout.widget_pulse)
-            val palette = palette(config.theme)
+            val palette = config.palette
 
-            views.setInt(R.id.widget_root, "setBackgroundResource", palette.background)
-            views.setViewVisibility(R.id.widget_header, if (config.showTitle) VISIBLE else GONE)
+            // Colour and opacity are applied to a tintable ImageView rather than set
+            // as a background resource, which is the only way to get an arbitrary
+            // surface on API 26+. `setColorFilter` wants opaque RGB and
+            // `setImageAlpha` carries the transparency, so the two are split apart
+            // here — passing a translucent colour to setColorFilter would tint by
+            // the *filter's* alpha and look nothing like the swatch.
+            views.setInt(R.id.widget_surface, "setColorFilter", opaque(palette.background))
+            views.setInt(R.id.widget_surface, "setImageAlpha", alphaOf(palette.background))
+            views.setInt(R.id.widget_surface_border, "setColorFilter", opaque(palette.border))
+            views.setInt(R.id.widget_surface_border, "setImageAlpha", alphaOf(palette.border))
+
+            // The header row stays when the title is off, so the settings cog does
+            // not disappear with it — a hidden title must not also hide the only
+            // route back into the widget's own configuration.
+            val showCog = config.showSettingsButton && appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID
+            views.setViewVisibility(
+                R.id.widget_header,
+                if (config.showTitle || showCog) VISIBLE else GONE,
+            )
+            views.setViewVisibility(R.id.widget_logo, if (config.showTitle) VISIBLE else GONE)
+            views.setViewVisibility(R.id.widget_title, if (config.showTitle) VISIBLE else GONE)
+            views.setViewVisibility(R.id.widget_headline, if (config.showTitle) VISIBLE else GONE)
+            views.setViewVisibility(R.id.widget_settings, if (showCog) VISIBLE else GONE)
+            views.setInt(R.id.widget_settings, "setColorFilter", opaque(palette.tertiary))
+            views.setInt(R.id.widget_settings, "setImageAlpha", alphaOf(palette.tertiary))
+            if (showCog) {
+                views.setOnClickPendingIntent(R.id.widget_settings, openConfig(context, appWidgetId))
+            }
+
             views.setTextColor(R.id.widget_title, palette.primary)
             views.setTextColor(R.id.widget_headline, palette.secondary)
             views.setTextColor(R.id.widget_footer, palette.tertiary)
@@ -140,7 +173,7 @@ class PulseWidgetProvider : AppWidgetProvider() {
         private fun row(
             context: Context,
             config: WidgetConfig,
-            palette: Palette,
+            palette: WidgetPalette,
             entry: Summary.Entry,
         ): RemoteViews {
             val row = RemoteViews(context.packageName, R.layout.widget_row)
@@ -205,33 +238,26 @@ class PulseWidgetProvider : AppWidgetProvider() {
             )
         }
 
-        internal data class Palette(
-            val background: Int,
-            val primary: Int,
-            val secondary: Int,
-            val tertiary: Int,
-        )
+        /** Alpha channel as 0..255, for `setImageAlpha`. */
+        internal fun alphaOf(argb: Int): Int = (argb ushr 24) and 0xFF
 
-        internal fun palette(theme: WidgetTheme): Palette = when (theme) {
-            WidgetTheme.BLACK -> Palette(
-                background = R.drawable.widget_bg_black,
-                primary = 0xFFFFFFFF.toInt(),
-                secondary = 0xFFD6D6D6.toInt(),
-                tertiary = 0xFF8A8A8A.toInt(),
-            )
+        /** The same colour at full alpha, for `setColorFilter`. */
+        internal fun opaque(argb: Int): Int = argb or 0xFF000000.toInt()
 
-            WidgetTheme.WHITE -> Palette(
-                background = R.drawable.widget_bg_white,
-                primary = 0xFF0A0A0A.toInt(),
-                secondary = 0xFF3A3A3A.toInt(),
-                tertiary = 0xFF6B6B6B.toInt(),
-            )
-
-            WidgetTheme.BLUE -> Palette(
-                background = R.drawable.widget_bg_blue,
-                primary = 0xFFFFFFFF.toInt(),
-                secondary = 0xFFBBD0FF.toInt(),
-                tertiary = 0xFF7E9BD6.toInt(),
+        /** Opens this widget's own configuration. See `widget_pulse_info.xml`. */
+        private fun openConfig(context: Context, appWidgetId: Int): PendingIntent {
+            val intent = Intent(context, WidgetConfigActivity::class.java)
+                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+                // PendingIntent equality ignores extras, so without a distinct data
+                // URI every placed widget's cog would share one intent and configure
+                // whichever widget was rendered last.
+                .setData(android.net.Uri.parse("pulse://widget/$appWidgetId"))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            return PendingIntent.getActivity(
+                context,
+                appWidgetId,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
         }
 

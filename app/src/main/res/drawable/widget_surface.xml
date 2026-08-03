@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The widget's surface, drawn white so it can be tinted to any colour at
+    runtime.
+
+    A tintable ImageView rather than the View background it replaced: RemoteViews
+    cannot recolour a background drawable on API 26–30, so the three fixed
+    `widget_bg_*` shapes were the only surfaces the widget could ever have. An
+    ImageView takes `setColorFilter` and `setImageAlpha`, which together give an
+    arbitrary colour at an arbitrary opacity — including fully transparent — while
+    keeping the rounded corners a flat `setBackgroundColor` would throw away.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#FFFFFFFF" />
+    <corners android:radius="22dp" />
+</shape>
