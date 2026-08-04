@@ -21,6 +21,14 @@
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
     <!--
+        Lets the app ask for a Doze exemption with a system dialog in place,
+        rather than sending the user off to hunt through battery settings. Without
+        the exemption Android can refuse the foreground service that owns the
+        URGENT page and its repeat loop.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!--
         Without this, `NotificationChannel.setBypassDnd(true)` is silently
         dropped and Do Not Disturb mutes the page completely. Declaring it is
         only half the job: the user still has to grant policy access.

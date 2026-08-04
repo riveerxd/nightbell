@@ -169,6 +169,7 @@ class PulseMonitorService : Service() {
                 }
                 if (runtime != null && policy != null) {
                     val since = runtime.urgentSinceAt.takeIf { it > 0L } ?: System.currentTimeMillis()
+                    val respectRinger = snapshot2.settings.urgentRespectsRingerMode
                     promoteWith(
                         graph.alerts.urgentPage(
                             monitor = monitor,
@@ -177,11 +178,21 @@ class PulseMonitorService : Service() {
                             downForMs = System.currentTimeMillis() - since,
                             pageCount = runtime.urgentPageCount.coerceAtLeast(1),
                             otherPending = others,
+                            respectRinger = respectRinger,
+                            // The loop below is making the noise; the channel must
+                            // not chime over it.
+                            silent = true,
                         ),
                     )
                     // Looping, because a channel's sound fires once per post and a
                     // five-minute gap between chimes is a reminder, not a pager.
-                    alarm.start(policy.vibrationStyle, vibrate = true)
+                    // `start` re-reads the ringer every tick, so flipping the phone
+                    // to vibrate quietens a page already in progress.
+                    alarm.start(
+                        style = policy.vibrationStyle,
+                        vibrate = true,
+                        respectRinger = respectRinger,
+                    )
                     paging_ = true
                     // The per-monitor fallback copy, if an earlier pass posted one
                     // before this service could start, would now be a duplicate.

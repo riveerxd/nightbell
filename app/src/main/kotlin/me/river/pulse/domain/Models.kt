@@ -613,6 +613,33 @@ data class GlobalSettings(
      * latency is judged raw exactly as it was before this existed.
      */
     val latencyReferenceUrl: String = "https://www.gstatic.com/generate_204",
+    /**
+     * Let the phone's ringer switch decide whether an URGENT page makes noise.
+     *
+     * The page loops on the **alarm** stream, which is deliberately exempt from
+     * the ringer — an alarm you set for 6am is meant to go off whether or not you
+     * silenced your ringer at midnight. Correct for alarms, wrong for this: a
+     * phone set to vibrate got a full-volume siren.
+     *
+     * On (the default) the page follows the ringer: sound and haptics on Normal,
+     * haptics only on Vibrate and on Silent. Off restores the alarm-stream
+     * behaviour, which is louder and answers to nothing.
+     *
+     * Silent still vibrates on purpose. A page that produces no sound *and* no
+     * buzz is indistinguishable from a pager that is simply broken, and the whole
+     * feature exists so an outage cannot be missed. See
+     * [me.river.pulse.data.alerts.UrgentAlarm].
+     */
+    val urgentRespectsRingerMode: Boolean = true,
+    /**
+     * The user has been through (or dismissed) the pager-setup screen.
+     *
+     * Gates that screen exactly once. It stays reachable from Settings
+     * afterwards — a monitoring app that will not show you your monitors until
+     * you have flipped four system toggles is worse than one with a degraded
+     * pager. See [me.river.pulse.domain.PagerReadiness.shouldGate].
+     */
+    val hasSeenPagerSetup: Boolean = false,
 )
 
 /**

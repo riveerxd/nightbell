@@ -212,6 +212,12 @@ class AlertCenter(private val context: Context) {
         downForMs: Long,
         pageCount: Int,
         otherPending: Int = 0,
+        respectRinger: Boolean = true,
+        /**
+         * True when [UrgentAlarm] is looping the audio for this page, so the
+         * channel must not also fire its own one-shot on top of it.
+         */
+        silent: Boolean = false,
     ): Notification {
         val headline = result.message.ifBlank { result.failureKind.headline }
         val content = UrgentPageContent(
@@ -226,9 +232,10 @@ class AlertCenter(private val context: Context) {
         return UrgentPageStyles.build(
             context = context,
             style = UrgentPageStyle.CALL_CUSTOM,
-            channelId = urgentChannel(policy),
+            channelId = urgentChannel(policy, respectRinger),
             content = content,
             actions = urgentActions(monitor),
+            silent = silent,
         )
     }
 
@@ -287,9 +294,20 @@ class AlertCenter(private val context: Context) {
         policy: AlertPolicy,
         downForMs: Long,
         pageCount: Int,
+        respectRinger: Boolean = true,
     ): Boolean = post(
         monitor.id.urgentNotificationId(),
-        urgentPage(monitor, result, policy, downForMs, pageCount),
+        // Not silent: with no service there is no looping player, so the
+        // channel's one-shot is the only sound this page will make.
+        urgentPage(
+            monitor = monitor,
+            result = result,
+            policy = policy,
+            downForMs = downForMs,
+            pageCount = pageCount,
+            respectRinger = respectRinger,
+            silent = false,
+        ),
     )
 
     /** Renders a duration the way the page says it. */
@@ -335,8 +353,8 @@ class AlertCenter(private val context: Context) {
     fun dndAccessIntent(): Intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
 
     /** Whether the urgent channel is still allowed to interrupt. */
-    fun urgentChannelEnabled(policy: AlertPolicy): Boolean = runCatching {
-        val channel = manager.getNotificationChannel(urgentChannel(policy))
+    fun urgentChannelEnabled(policy: AlertPolicy, respectRinger: Boolean = true): Boolean = runCatching {
+        val channel = manager.getNotificationChannel(urgentChannel(policy, respectRinger))
             ?: return@runCatching true
         channel.importance != NotificationManager.IMPORTANCE_NONE
     }.getOrDefault(true)
@@ -643,16 +661,22 @@ class AlertCenter(private val context: Context) {
      * while turning ordinary down alerts down — and so Do Not Disturb can be
      * configured to let it through.
      */
-    fun urgentChannel(policy: AlertPolicy): String {
+    fun urgentChannel(policy: AlertPolicy, respectRinger: Boolean = true): String {
         val style = policy.vibrationStyle
         // v2, and the version suffix is load-bearing. Android freezes a channel's
         // importance, sound and DND bypass at creation and ignores every later
         // change, so the 1.1.0-era `pulse.urgent.*` channels on an existing
         // install could never be given `setBypassDnd`. A new id is the only way
         // the fix reaches a device that already ran an older build.
-        val id = "$URGENT_CHANNEL_V2.${style.name.lowercase()}"
+        // The ringer choice is part of the id because a channel's sound and its
+        // audio attributes are frozen at creation. Without this, a user who turned
+        // ringer-respect on kept the alarm-usage channel and still got one
+        // full-volume chime per post on a phone set to vibrate.
+        val streamTag = if (respectRinger) "ring" else "alarm"
+        val id = "$URGENT_CHANNEL_V2.${style.name.lowercase()}.$streamTag"
         if (manager.getNotificationChannel(id) != null) return id
         runCatching { manager.deleteNotificationChannel("pulse.urgent.${style.name.lowercase()}") }
+        runCatching { manager.deleteNotificationChannel("$URGENT_CHANNEL_V2.${style.name.lowercase()}") }
         val channel = NotificationChannel(id, "Urgent · ${style.label}", NotificationManager.IMPORTANCE_HIGH).apply {
             group = GROUP_URGENT
             description = "Repeats until acknowledged when an URGENT monitor goes down."
@@ -667,7 +691,13 @@ class AlertCenter(private val context: Context) {
                 Settings.System.DEFAULT_ALARM_ALERT_URI,
                 AudioAttributes.Builder()
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .setUsage(
+                        if (respectRinger) {
+                            AudioAttributes.USAGE_NOTIFICATION_RINGTONE
+                        } else {
+                            AudioAttributes.USAGE_ALARM
+                        },
+                    )
                     .build(),
             )
         }

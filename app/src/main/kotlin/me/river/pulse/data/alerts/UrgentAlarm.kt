@@ -24,9 +24,16 @@ import me.river.pulse.domain.VibrationStyle
  * is reserved for system apps, so an app that wants to keep making noise has to
  * own the player.
  *
- * Plays on [AudioAttributes.USAGE_ALARM] so it uses the alarm stream: the one
- * stream a user who silences their ringer still expects to hear from, and the one
- * Do Not Disturb's "alarms" allowance covers.
+ * ### Which stream
+ * By default the page follows the **ringer**: sound and haptics on Normal,
+ * haptics only on Vibrate and Silent, with the sound on the ringtone usage so
+ * ring volume applies. The alarm stream — which is exempt from the ringer, so a
+ * phone set to vibrate got a full-volume siren — is used only when the user turns
+ * [me.river.pulse.domain.GlobalSettings.urgentRespectsRingerMode] off and asks
+ * for a pager that answers to nothing.
+ *
+ * Haptics always use the alarm vibration usage, because vibrating is precisely
+ * what a phone set to vibrate is asking for.
  *
  * Single instance, owned by [me.river.pulse.data.work.PulseMonitorService], which
  * is alive for exactly as long as a page is unacknowledged. [stop] is idempotent
@@ -37,20 +44,79 @@ class UrgentAlarm(private val context: Context) {
     private var player: MediaPlayer? = null
     private var vibrating = false
 
+    /** Which usage [player] was built for, so a ringer flip can rebuild it. */
+    private var usage: Int? = null
+
     val isPlaying: Boolean get() = player != null
+
+    /**
+     * What the ringer switch says this page is allowed to do.
+     *
+     * The page loops on the alarm stream, which the platform exempts from the
+     * ringer entirely — right for an alarm clock, wrong here: a phone set to
+     * vibrate got a full-volume siren out of it. When [respectRinger] is on the
+     * output is chosen from [AudioManager.getRingerMode] instead, and the sound
+     * moves to the ringtone usage so the *ring* volume applies to it.
+     *
+     * Silent still vibrates. A page with no sound and no buzz cannot be told
+     * apart from a broken pager.
+     */
+    private data class Output(val sound: Boolean, val vibrate: Boolean, val usage: Int)
+
+    private fun outputFor(respectRinger: Boolean, vibratePreferred: Boolean): Output {
+        if (!respectRinger) {
+            return Output(sound = true, vibrate = vibratePreferred, usage = AudioAttributes.USAGE_ALARM)
+        }
+        val mode = runCatching {
+            context.getSystemService(AudioManager::class.java)?.ringerMode
+        }.getOrNull() ?: AudioManager.RINGER_MODE_NORMAL
+        return when (mode) {
+            AudioManager.RINGER_MODE_SILENT ->
+                Output(sound = false, vibrate = true, usage = AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+            AudioManager.RINGER_MODE_VIBRATE ->
+                Output(sound = false, vibrate = true, usage = AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+            else ->
+                Output(sound = true, vibrate = vibratePreferred, usage = AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+        }
+    }
 
     /**
      * Starts looping, or does nothing if already looping.
      *
      * Deliberately not restarted on a repeat: the noise is continuous until
      * acknowledged, so re-starting it would only introduce a gap.
+     *
+     * Re-evaluates the ringer on every call, though, so flipping the phone to
+     * vibrate during an outage quietens the page it is already making — and
+     * flipping it back makes it loud again — without waiting for the next repeat.
      */
-    fun start(style: VibrationStyle, vibrate: Boolean) {
-        if (player == null) startSound()
-        if (vibrate && !vibrating) startVibration(style)
+    fun start(style: VibrationStyle, vibrate: Boolean, respectRinger: Boolean = true) {
+        val output = outputFor(respectRinger, vibrate)
+        if (output.sound) {
+            if (player == null || usage != output.usage) {
+                stopSound()
+                startSound(output.usage)
+            }
+        } else {
+            stopSound()
+        }
+        if (output.vibrate) {
+            if (!vibrating) startVibration(style)
+        } else if (vibrating) {
+            runCatching { resolveVibrator()?.cancel() }
+            vibrating = false
+        }
     }
 
     fun stop() {
+        stopSound()
+        if (vibrating) {
+            runCatching { resolveVibrator()?.cancel() }
+            vibrating = false
+        }
+    }
+
+    private fun stopSound() {
         player?.let { active ->
             runCatching {
                 if (active.isPlaying) active.stop()
@@ -58,20 +124,17 @@ class UrgentAlarm(private val context: Context) {
             }.onFailure { Log.w(TAG, "Alarm would not stop cleanly", it) }
         }
         player = null
-        if (vibrating) {
-            runCatching { resolveVibrator()?.cancel() }
-            vibrating = false
-        }
+        usage = null
     }
 
-    private fun startSound() {
+    private fun startSound(soundUsage: Int) {
         val uri = Settings.System.DEFAULT_ALARM_ALERT_URI ?: return
         runCatching {
             MediaPlayer().apply {
                 setAudioAttributes(
                     AudioAttributes.Builder()
                         .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setUsage(soundUsage)
                         .build(),
                 )
                 setDataSource(context, uri)
@@ -82,10 +145,12 @@ class UrgentAlarm(private val context: Context) {
                 prepare()
                 start()
                 player = this
+                usage = soundUsage
             }
         }.onFailure {
             Log.e(TAG, "Could not start the urgent alarm", it)
             player = null
+            usage = null
         }
     }
 
@@ -106,8 +171,9 @@ class UrgentAlarm(private val context: Context) {
         } else {
             VibrationEffect.createWaveform(pattern, repeatFrom)
         }
-        // Alarm usage, so the haptics survive a silenced ringer for the same
-        // reason the sound does.
+        // Alarm usage for the haptics regardless of the sound's usage: this is
+        // the one output that must survive a phone set to vibrate, which is
+        // exactly the case the ringer check quietens the sound for.
         val attributes = VibrationAttributes.Builder()
             .setUsage(VibrationAttributes.USAGE_ALARM)
             .build()
@@ -147,10 +213,20 @@ class UrgentAlarm(private val context: Context) {
      * Surfaced so the app can tell the user their pager is muted instead of
      * silently failing to wake them.
      */
-    fun alarmStreamAudible(): Boolean = runCatching {
+    fun alarmStreamAudible(respectRinger: Boolean = true): Boolean = runCatching {
         val audio = context.getSystemService(AudioManager::class.java) ?: return@runCatching true
-        audio.getStreamVolume(AudioManager.STREAM_ALARM) > 0
+        val stream = if (respectRinger) AudioManager.STREAM_RING else AudioManager.STREAM_ALARM
+        audio.getStreamVolume(stream) > 0
     }.getOrDefault(true)
+
+    /** Human-readable account of what the ringer is currently allowing. */
+    fun ringerSummary(): String = runCatching {
+        when (context.getSystemService(AudioManager::class.java)?.ringerMode) {
+            AudioManager.RINGER_MODE_SILENT -> "Silent — pages vibrate only"
+            AudioManager.RINGER_MODE_VIBRATE -> "Vibrate — pages vibrate only"
+            else -> "Normal — pages ring and vibrate"
+        }
+    }.getOrDefault("Normal — pages ring and vibrate")
 
     private companion object {
         const val TAG = "UrgentAlarm"

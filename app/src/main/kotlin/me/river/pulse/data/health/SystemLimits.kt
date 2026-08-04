@@ -72,10 +72,14 @@ class SystemLimits(
     /**
      * Whether Android has been told to stop deferring Pulse's work.
      *
-     * Queried, never requested: asking for the exemption needs
-     * `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, which is a policy-sensitive
-     * permission Pulse does not need — [batterySettingsIntent] opens the list and
-     * lets the user decide, which is also the honest way round.
+     * Queried here; [batteryExemptionRequestIntent] asks.
+     *
+     * This used to say the exemption was queried and never requested, because
+     * `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` is policy-sensitive and the app did
+     * not need it. That changed when URGENT became a real pager: without the
+     * exemption Android can refuse the foreground service that owns the page and
+     * its repeat loop, so the exemption is now load-bearing rather than a nicety,
+     * and making the user hunt for it in a settings list was costing pages.
      */
     fun isIgnoringBatteryOptimizations(): Boolean = runCatching {
         context.getSystemService(PowerManager::class.java)
@@ -111,6 +115,19 @@ class SystemLimits(
      */
     fun batterySettingsIntent(): Intent =
         Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+    /**
+     * Asks for the Doze exemption with a system dialog, in place.
+     *
+     * The one grant of the four that can be requested without sending the user
+     * to a settings screen, so the pager setup uses it. Falls back to
+     * [batterySettingsIntent] if a build refuses to answer it.
+     */
+    fun batteryExemptionRequestIntent(): Intent =
+        @Suppress("BatteryLife")
+        Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+            .setData(android.net.Uri.fromParts("package", context.packageName, null))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
     fun appDetailsIntent(): Intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)

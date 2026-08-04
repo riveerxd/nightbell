@@ -167,18 +167,24 @@ object UrgentPageStyles {
         channelId: String,
         content: UrgentPageContent,
         actions: UrgentPageActions,
+        /**
+         * Suppresses this post's own sound and vibration. Used when
+         * [UrgentAlarm] is looping the audio, so the channel does not chime over
+         * the top of it.
+         */
+        silent: Boolean = false,
     ): Notification = when (style) {
-        UrgentPageStyle.CALL_INCOMING -> callIncoming(context, channelId, content, actions)
-        UrgentPageStyle.CALL_ONGOING -> callOngoing(context, channelId, content, actions)
-        UrgentPageStyle.RED_BANNER -> redBanner(context, channelId, content, actions)
-        UrgentPageStyle.LOUD_STANDARD -> loudStandard(context, channelId, content, actions)
-        UrgentPageStyle.CUSTOM_DECORATED -> customDecorated(context, channelId, content, actions)
-        UrgentPageStyle.CALL_AVATAR -> callAvatar(context, channelId, content, actions)
-        UrgentPageStyle.RED_FULL_BLEED -> redFullBleed(context, channelId, content, actions)
-        UrgentPageStyle.CALL_CUSTOM -> callCustom(context, channelId, content, actions)
-        UrgentPageStyle.CALL_DARK_RED -> callDarkRed(context, channelId, content, actions)
-        UrgentPageStyle.RED_CARD -> redCard(context, channelId, content, actions)
-        UrgentPageStyle.CALL_RELABELLED -> callRelabelled(context, channelId, content, actions)
+        UrgentPageStyle.CALL_INCOMING -> callIncoming(context, channelId, content, actions, silent)
+        UrgentPageStyle.CALL_ONGOING -> callOngoing(context, channelId, content, actions, silent)
+        UrgentPageStyle.RED_BANNER -> redBanner(context, channelId, content, actions, silent)
+        UrgentPageStyle.LOUD_STANDARD -> loudStandard(context, channelId, content, actions, silent)
+        UrgentPageStyle.CUSTOM_DECORATED -> customDecorated(context, channelId, content, actions, silent)
+        UrgentPageStyle.CALL_AVATAR -> callAvatar(context, channelId, content, actions, silent)
+        UrgentPageStyle.RED_FULL_BLEED -> redFullBleed(context, channelId, content, actions, silent)
+        UrgentPageStyle.CALL_CUSTOM -> callCustom(context, channelId, content, actions, silent)
+        UrgentPageStyle.CALL_DARK_RED -> callDarkRed(context, channelId, content, actions, silent)
+        UrgentPageStyle.RED_CARD -> redCard(context, channelId, content, actions, silent)
+        UrgentPageStyle.CALL_RELABELLED -> callRelabelled(context, channelId, content, actions, silent)
     }
 
     // ---- 11 · CALL_RELABELLED -----------------------------------------------
@@ -197,8 +203,9 @@ object UrgentPageStyles {
         channelId: String,
         content: UrgentPageContent,
         actions: UrgentPageActions,
+        silent: Boolean,
     ): Notification {
-        val notification = callDarkRed(context, channelId, content, actions)
+        val notification = callDarkRed(context, channelId, content, actions, silent)
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return notification
         val existing = notification.actions ?: return notification
         val ack = context.getString(R.string.urgent_action_acknowledge_short)
@@ -224,8 +231,9 @@ object UrgentPageStyles {
         channelId: String,
         content: UrgentPageContent,
         actions: UrgentPageActions,
+        silent: Boolean,
     ): Notification {
-        val builder = base(context, channelId, content, actions)
+        val builder = base(context, channelId, content, actions, silent)
             .setColor(DEEP_DOWN_COLOR)
             .setColorized(true)
             .setContentTitle("${content.monitorName} is down")
@@ -259,6 +267,7 @@ object UrgentPageStyles {
         channelId: String,
         content: UrgentPageContent,
         actions: UrgentPageActions,
+        silent: Boolean,
     ): Notification {
         val views = RemoteViews(context.packageName, R.layout.notification_urgent_call).apply {
             setTextViewText(R.id.urgent_name, "${content.monitorName} is down")
@@ -314,7 +323,7 @@ object UrgentPageStyles {
                 }
             }
         }
-        return base(context, channelId, content, actions)
+        return base(context, channelId, content, actions, silent)
             .setContentTitle("${content.monitorName} is down")
             .setContentText(content.headline)
             .setCustomContentView(views)
@@ -334,13 +343,14 @@ object UrgentPageStyles {
         channelId: String,
         content: UrgentPageContent,
         actions: UrgentPageActions,
+        silent: Boolean,
     ): Notification {
         val person = Person.Builder()
             .setName(content.monitorName)
             .setImportant(true)
             .setIcon(IconCompat.createWithBitmap(avatarBitmap()))
             .build()
-        val builder = base(context, channelId, content, actions)
+        val builder = base(context, channelId, content, actions, silent)
             .setColor(DEEP_DOWN_COLOR)
             .setContentTitle(content.monitorName)
             .setContentText("${content.headline} · down for ${content.downFor}")
@@ -367,13 +377,14 @@ object UrgentPageStyles {
         channelId: String,
         content: UrgentPageContent,
         actions: UrgentPageActions,
+        silent: Boolean,
     ): Notification {
         val person = Person.Builder()
             .setName(content.monitorName)
             .setImportant(true)
             .setIcon(IconCompat.createWithBitmap(avatarBitmap()))
             .build()
-        val builder = base(context, channelId, content, actions)
+        val builder = base(context, channelId, content, actions, silent)
             .setContentTitle(content.monitorName)
             .setContentText("${content.headline} · down for ${content.downFor}")
             // Only honoured when this is posted as a foreground-service
@@ -436,9 +447,10 @@ object UrgentPageStyles {
         channelId: String,
         content: UrgentPageContent,
         actions: UrgentPageActions,
+        silent: Boolean,
     ): Notification {
         val views = urgentViews(context, content)
-        return base(context, channelId, content, actions)
+        return base(context, channelId, content, actions, silent)
             .setContentTitle("${content.monitorName} is down")
             .setContentText(content.headline)
             .setCustomContentView(views)
@@ -455,9 +467,10 @@ object UrgentPageStyles {
         channelId: String,
         content: UrgentPageContent,
         actions: UrgentPageActions,
+        silent: Boolean,
     ): Notification {
         val person = monitorAsPerson(context, content)
-        val builder = base(context, channelId, content, actions)
+        val builder = base(context, channelId, content, actions, silent)
             .setContentTitle(content.monitorName)
             .setContentText(content.headline)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -486,9 +499,10 @@ object UrgentPageStyles {
         channelId: String,
         content: UrgentPageContent,
         actions: UrgentPageActions,
+        silent: Boolean,
     ): Notification {
         val person = monitorAsPerson(context, content)
-        val builder = base(context, channelId, content, actions)
+        val builder = base(context, channelId, content, actions, silent)
             .setContentTitle(content.monitorName)
             .setContentText("Down for ${content.downFor} · ${content.headline}")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -510,7 +524,8 @@ object UrgentPageStyles {
         channelId: String,
         content: UrgentPageContent,
         actions: UrgentPageActions,
-    ): Notification = base(context, channelId, content, actions)
+        silent: Boolean,
+    ): Notification = base(context, channelId, content, actions, silent)
         .setContentTitle("${content.monitorName} is DOWN")
         .setContentText("${content.headline} · down for ${content.downFor}")
         .setStyle(NotificationCompat.BigTextStyle().bigText(bigText(content)))
@@ -527,7 +542,8 @@ object UrgentPageStyles {
         channelId: String,
         content: UrgentPageContent,
         actions: UrgentPageActions,
-    ): Notification = base(context, channelId, content, actions)
+        silent: Boolean,
+    ): Notification = base(context, channelId, content, actions, silent)
         .setContentTitle("🔴 ${content.monitorName} is down")
         .setContentText("${content.headline} · ${content.failedChecks} failed checks")
         .setStyle(NotificationCompat.BigTextStyle().bigText(bigText(content)))
@@ -543,9 +559,10 @@ object UrgentPageStyles {
         channelId: String,
         content: UrgentPageContent,
         actions: UrgentPageActions,
+        silent: Boolean,
     ): Notification {
         val heads = urgentViews(context, content)
-        return base(context, channelId, content, actions)
+        return base(context, channelId, content, actions, silent)
             .setContentTitle("${content.monitorName} is down")
             .setContentText(content.headline)
             .setStyle(NotificationCompat.DecoratedCustomViewStyle())
@@ -571,7 +588,12 @@ object UrgentPageStyles {
         channelId: String,
         content: UrgentPageContent,
         actions: UrgentPageActions,
+        silent: Boolean,
     ): NotificationCompat.Builder = NotificationCompat.Builder(context, channelId)
+        // Silenced when UrgentAlarm is looping the audio for this page: without
+        // it the channel fires its own one-shot over the top of the loop, and on
+        // a phone set to vibrate that one-shot was the whole bug.
+        .setSilent(silent)
         .setSmallIcon(R.drawable.ic_stat_alert)
         .setColor(DOWN_COLOR)
         .setCategory(NotificationCompat.CATEGORY_CALL)

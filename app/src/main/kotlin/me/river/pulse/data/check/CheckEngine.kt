@@ -345,7 +345,8 @@ class CheckEngine(
             nowMs = result.at,
             repeatMinutes = monitor.urgentRepeatMinutes,
         )
-        val urgentMutation = applyUrgent(monitor, urgentOutcome, result, policy, after)
+        val urgentMutation =
+            applyUrgent(monitor, urgentOutcome, result, policy, after, settings.urgentRespectsRingerMode)
 
         // NonCancellable, and this is load-bearing.
         //
@@ -470,6 +471,7 @@ class CheckEngine(
         result: CheckResult?,
         policy: AlertPolicy,
         runtime: MonitorRuntime,
+        respectRinger: Boolean,
     ): (MonitorRuntime) -> MonitorRuntime {
         when (outcome.action) {
             UrgentAlerts.Action.START, UrgentAlerts.Action.REPEAT -> {
@@ -493,6 +495,7 @@ class CheckEngine(
                         policy = policy,
                         downForMs = at - since,
                         pageCount = runtime.urgentPageCount + 1,
+                        respectRinger = respectRinger,
                     )
                 }
                 return { it.withUrgentPaged(at) }
@@ -733,7 +736,14 @@ class CheckEngine(
                 fired++
                 continue
             }
-            val mutation = applyUrgent(monitor, outcome, lastResultFor(runtime), policy, runtime)
+            val mutation = applyUrgent(
+                monitor,
+                outcome,
+                lastResultFor(runtime),
+                policy,
+                runtime,
+                snapshot.settings.urgentRespectsRingerMode,
+            )
             // `applyUrgent` has already posted and vibrated. Losing this write
             // would drop the repeat cooldown it just earned, so the next tick — or
             // the next process to start the service — would nag again immediately

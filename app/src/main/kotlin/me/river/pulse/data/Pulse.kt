@@ -2,6 +2,7 @@ package me.river.pulse.data
 
 import android.content.Context
 import me.river.pulse.data.alerts.AlertCenter
+import me.river.pulse.data.alerts.UrgentAlarm
 import me.river.pulse.data.check.CheckEngine
 import me.river.pulse.data.check.ElementChecker
 import me.river.pulse.data.check.HttpChecker
@@ -31,6 +32,13 @@ object Pulse {
         val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val store = PulseStore(context, appScope)
         val alerts = AlertCenter(context)
+
+        /**
+         * Shared so the pager-setup screen can report what the ringer currently
+         * allows without constructing its own player. Only
+         * [me.river.pulse.data.work.PulseMonitorService] ever calls `start`.
+         */
+        val alarm = UrgentAlarm(context)
         val http = HttpChecker()
         val element = ElementChecker(context)
         val reference = LatencyReference()

@@ -58,13 +58,21 @@ class MainActivity : ComponentActivity() {
         return data.lastPathSegment?.takeIf { it.isNotBlank() }
     }
 
+    /**
+     * Asks for notifications on launch — unless the pager-setup screen is about
+     * to, in which case this fired the system dialog straight over the top of it
+     * before the user had read a word.
+     */
     private fun requestNotificationPermissionIfNeeded() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
         val granted = ContextCompat.checkSelfPermission(
             this,
             Manifest.permission.POST_NOTIFICATIONS,
         ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-        if (!granted) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        if (granted) return
+        val setupWillAsk = !Pulse.install(this).store.snapshot.value.settings.hasSeenPagerSetup
+        if (setupWillAsk) return
+        notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 
     companion object {

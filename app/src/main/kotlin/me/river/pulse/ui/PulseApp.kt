@@ -52,9 +52,26 @@ import me.river.pulse.ui.setup.SetupScreen
 import me.river.pulse.ui.theme.PulseColors
 import me.river.pulse.ui.theme.PulseTheme
 import me.river.pulse.ui.theme.softShadow
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import me.river.pulse.domain.PagerReadiness
+import me.river.pulse.ui.permissions.PagerSetupScreen
 import kotlinx.coroutines.delay
 
+/** One reading of what the platform currently allows. */
+private fun pagerReadinessNow(graph: Pulse.Graph): PagerReadiness.State {
+    val settings = graph.store.snapshot.value.settings
+    return PagerReadiness.State(
+        notifications = graph.alerts.hasNotificationPermission(),
+        batteryExempt = graph.limits.isIgnoringBatteryOptimizations(),
+        fullScreen = graph.alerts.canUseFullScreenIntent(),
+        dndBypass = graph.alerts.urgentBypassesDnd(),
+        audible = graph.alarm.alarmStreamAudible(settings.urgentRespectsRingerMode),
+    )
+}
+
 object Routes {
+    const val PAGER_SETUP = "pager-setup"
     const val DASHBOARD = "dashboard"
     const val SETTINGS = "settings"
     const val SETUP_NEW = "setup"
@@ -72,6 +89,20 @@ fun PulseApp(initialMonitorId: String? = null) {
     val navController = rememberNavController()
     var toastMessage by remember { mutableStateOf<String?>(null) }
 
+    // Decided once, from the first snapshot that has loaded: making this reactive
+    // would yank the user back to the gate the moment a grant was revoked, and
+    // re-deciding it after `hasSeenPagerSetup` flips would fight the navigation
+    // that flipped it.
+    val startDestination = remember {
+        val settings = graph.store.snapshot.value.settings
+        val state = pagerReadinessNow(graph)
+        if (PagerReadiness.shouldGate(state, dismissed = settings.hasSeenPagerSetup)) {
+            Routes.PAGER_SETUP
+        } else {
+            Routes.DASHBOARD
+        }
+    }
+
     LaunchedEffect(initialMonitorId) {
         if (!initialMonitorId.isNullOrBlank()) {
             navController.navigate(Routes.detail(initialMonitorId))
@@ -85,6 +116,7 @@ fun PulseApp(initialMonitorId: String? = null) {
         ) {
             PulseNavHost(
                 navController = navController,
+                startDestination = startDestination,
                 onToast = { toastMessage = it },
             )
             GlassToast(
@@ -97,10 +129,14 @@ fun PulseApp(initialMonitorId: String? = null) {
 }
 
 @Composable
-private fun PulseNavHost(navController: NavHostController, onToast: (String) -> Unit) {
+private fun PulseNavHost(
+    navController: NavHostController,
+    startDestination: String,
+    onToast: (String) -> Unit,
+) {
     NavHost(
         navController = navController,
-        startDestination = Routes.DASHBOARD,
+        startDestination = startDestination,
         modifier = Modifier.fillMaxSize(),
         enterTransition = {
             slideInHorizontally(tween(320)) { it / 5 } + fadeIn(tween(240)) + scaleIn(tween(320), 0.96f)
@@ -115,6 +151,23 @@ private fun PulseNavHost(navController: NavHostController, onToast: (String) -> 
             slideOutHorizontally(tween(280)) { it / 5 } + fadeOut(tween(200)) + scaleOut(tween(280), 0.96f)
         },
     ) {
+        composable(Routes.PAGER_SETUP) {
+            val scope = rememberCoroutineScope()
+            val graph = Pulse.require()
+            PagerSetupScreen(
+                onDone = {
+                    // Recorded before navigating, so a process death between the
+                    // two cannot make the gate reappear over and over.
+                    scope.launch {
+                        graph.store.updateSettings { it.copy(hasSeenPagerSetup = true) }
+                    }
+                    navController.navigate(Routes.DASHBOARD) {
+                        popUpTo(Routes.PAGER_SETUP) { inclusive = true }
+                    }
+                },
+            )
+        }
+
         composable(Routes.DASHBOARD) {
             DashboardScreen(
                 onAddMonitor = { navController.navigate(Routes.SETUP_NEW) },

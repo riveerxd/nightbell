@@ -86,8 +86,27 @@ android {
         // instead of leaving an un-dismissable one; and `sync()` no longer stops a
         // service that has not yet promoted itself, which was killing the process
         // with ForegroundServiceDidNotStartInTimeException.
-        versionCode = 12
-        versionName = "2.1.0"
+        // 2.2.0 does two things 2.1.0 left undone. URGENT pages now follow the
+        // ringer switch: sound and haptics on Normal, haptics only on Vibrate and
+        // Silent. 2.1.0 looped on the alarm stream, which the platform exempts
+        // from the ringer on purpose — correct for an alarm clock, wrong here, so
+        // a phone set to vibrate got a full-volume siren. The channel had to be
+        // versioned by stream for the same reason as before: its audio attributes
+        // are frozen at creation, so the ringer-respecting variant is a separate
+        // id. Off in Settings restores the alarm-stream behaviour for anyone who
+        // wants a pager that answers to nothing.
+        //
+        // And there is now a setup screen in front of the dashboard on a fresh
+        // install, because four separate grants across three settings sections is
+        // not something anyone should have to be told where to find. Two of them
+        // (notifications, Doze exemption) are asked for with a system dialog in
+        // place; the other two are "special app access" toggles that Android
+        // exposes no API for, so the screen deep-links straight to each one and
+        // re-checks on resume so it advances by itself. It gates once and is
+        // skippable — a monitoring app that will not show you your monitors until
+        // you have flipped four toggles is worse than one with a degraded pager.
+        versionCode = 13
+        versionName = "2.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

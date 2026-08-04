@@ -29,7 +29,28 @@ object PulseTestSupport {
      */
     fun resetApp(settings: GlobalSettings = GlobalSettings(motionIntensity = 0f)) {
         val graph = Pulse.install(appContext)
-        runBlocking { graph.store.replaceAll(PulseSnapshot(settings = settings)) }
+        runBlocking {
+            graph.store.replaceAll(
+                PulseSnapshot(
+                    // Past the pager-setup gate unless a test says otherwise.
+                    // That screen stands in front of the dashboard while any grant
+                    // is missing, and on an emulator several always are, so every
+                    // UI suite would otherwise be asserting against it instead of
+                    // the app. `PagerSetupInstrumentedTest` opts back in.
+                    settings = settings.copy(hasSeenPagerSetup = true),
+                ),
+            )
+        }
+    }
+
+    /** Resets *into* the pager-setup gate, for the tests that are about it. */
+    fun resetAppAtPagerSetup(settings: GlobalSettings = GlobalSettings(motionIntensity = 0f)) {
+        val graph = Pulse.install(appContext)
+        runBlocking {
+            graph.store.replaceAll(
+                PulseSnapshot(settings = settings.copy(hasSeenPagerSetup = false)),
+            )
+        }
     }
 
     /**
