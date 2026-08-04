@@ -605,18 +605,15 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                     }
                     GlassDivider(Modifier.padding(vertical = 12.dp))
                     Text(
-                        text = "Moving to a new version of Pulse",
+                        text = "Moving to another phone",
                         style = MaterialTheme.typography.labelMedium,
                         color = PulseColors.TextSecondary,
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        text = "Pulse is changing its package name. Android identifies an app by " +
-                            "that name, so the renamed build is a different app to it: it " +
-                            "installs next to this one and starts empty, and no app can read " +
-                            "another's data. Export here, install the new build, import there — " +
-                            "that is the only route across, so do it before you uninstall this " +
-                            "one.",
+                        text = "Export on the old phone, import on the new one. Android keeps " +
+                            "each app's data to itself, so a file you carry across is the only " +
+                            "route — and it has to be written before the old install goes away.",
                         style = MaterialTheme.typography.bodySmall,
                         color = PulseColors.TextTertiary,
                     )

@@ -10,13 +10,16 @@ import kotlinx.serialization.json.Json
  * The whole store as one portable JSON document, so a user can carry their
  * monitors between two installs of Pulse.
  *
- * This exists because Pulse is changing its `applicationId`, and on Android that
- * is not a rename. The identifier *is* the app: it names `/data/data/<id>/` and
- * it is what the installer matches to decide "update" against "new app". The
- * renamed build therefore installs **alongside** the old one, with its own empty
- * data directory, and no key, manifest or Gradle setting changes that. One app
- * cannot read another's files either, so the only path that carries a fleet
- * across is one the user drives by hand: export here, import there.
+ * This was written for 2.0.0's `applicationId` change, which on Android is not a
+ * rename. The identifier *is* the app: it names `/data/data/<id>/` and it is what
+ * the installer matches to decide "update" against "new app". 2.0.0 therefore
+ * installed **alongside** the older build, with its own empty data directory, and
+ * no key, manifest or Gradle setting changes that. One app cannot read another's
+ * files either, so the only path that carried a fleet across was one the user
+ * drove by hand: export from the old install, import into the new one.
+ *
+ * That migration is done, and this stays as an ordinary feature — moving to a new
+ * phone, or keeping a copy before a risky edit.
  *
  * The format is the store's own [PulseSnapshot] inside a thin envelope rather
  * than a bespoke schema. That is deliberate — `PulseSnapshot` already decodes
