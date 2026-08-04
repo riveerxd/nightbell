@@ -200,6 +200,9 @@ class ScreenshotTest {
                     runtimes = runtimes,
                     settings = GlobalSettings(
                         motionIntensity = 0f,
+                        // Past the pager-setup gate, or every capture below is a
+                        // photograph of the permissions screen.
+                        hasSeenPagerSetup = true,
                         defaultAlert = AlertPolicy(
                             sound = SoundChoice.ALARM,
                             vibrationStyle = VibrationStyle.HEARTBEAT,
