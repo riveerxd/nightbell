@@ -23,6 +23,8 @@ import me.river.pulse.domain.ElementTarget
 import me.river.pulse.domain.GlobalSettings
 import me.river.pulse.domain.Monitor
 import me.river.pulse.domain.MonitorCard
+import me.river.pulse.domain.MonitorQuery
+import me.river.pulse.domain.MonitorTemplates
 import me.river.pulse.domain.MonitorKind
 import me.river.pulse.domain.Validation
 import me.river.pulse.domain.isCancellation
@@ -65,6 +67,184 @@ class DashboardViewModel(private val graph: Pulse.Graph) : ViewModel() {
     val offline: StateFlow<Boolean> = graph.network.online
         .map { !it }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), !graph.network.isOnline())
+
+    // ---- narrowing ---------------------------------------------------------
+    //
+    // Held here rather than in the composable so it survives a rotation and a
+    // trip into a monitor's detail screen; coming back to a dashboard that has
+    // silently forgotten the filter you set is its own small betrayal.
+
+    var spec by mutableStateOf(MonitorQuery.Spec())
+        private set
+
+    init {
+        // Restores only the sort. Search text and filters start clear on purpose: a
+        // dashboard that opens with monitors hidden reads as a dashboard that has
+        // lost them.
+        viewModelScope.launch {
+            val stored = graph.store.currentSnapshot().settings.dashboardSort
+            if (spec.sort == MonitorQuery.Sort.WORST_FIRST) {
+                spec = spec.copy(sort = stored)
+            }
+        }
+    }
+
+    /** True while anything is hidden — drives the "clear" affordance. */
+    val narrowed: Boolean get() = !spec.hidesNothing
+
+    /**
+     * Ids in the order a drag currently has them, or null when nothing is dragging.
+     *
+     * The store is written once, on drop. Committing on every crossed boundary
+     * would put a DataStore write behind each few pixels of finger travel, and a
+     * reorder that fights the disk is a reorder that stutters.
+     */
+    var reorderPreview by mutableStateOf<List<String>?>(null)
+        private set
+
+    /** The list as shown: filtered, searched, sorted, and mid-drag if dragging. */
+    val visible: List<MonitorCard>
+        get() {
+            val base = MonitorQuery.apply(cards.value, spec)
+            val preview = reorderPreview ?: return base
+            val byId = base.associateBy { it.monitor.id }
+            // Fall back to the sorted list if the preview has gone stale — a monitor
+            // can be deleted from a notification action while a drag is in progress.
+            val ordered = preview.mapNotNull(byId::get)
+            return if (ordered.size == base.size) ordered else base
+        }
+
+    fun beginReorder() {
+        reorderPreview = visible.map { it.monitor.id }
+    }
+
+    fun moveInReorder(fromId: String, toId: String) {
+        val current = reorderPreview ?: return
+        val from = current.indexOf(fromId)
+        val to = current.indexOf(toId)
+        if (from < 0 || to < 0) return
+        reorderPreview = MonitorQuery.reordered(current, from, to)
+    }
+
+    /** Nudge one monitor by a single place — the accessible path into the same edit. */
+    fun nudge(monitorId: String, by: Int) {
+        val ids = visible.map { it.monitor.id }
+        val from = ids.indexOf(monitorId)
+        if (from < 0) return
+        val to = (from + by).coerceIn(0, ids.lastIndex)
+        if (from == to) return
+        val next = MonitorQuery.reordered(ids, from, to)
+        reorderPreview = null
+        viewModelScope.launch { graph.store.reorder(next) }
+    }
+
+    fun commitReorder() {
+        val order = reorderPreview ?: return
+        reorderPreview = null
+        viewModelScope.launch { graph.store.reorder(order) }
+    }
+
+    fun cancelReorder() {
+        reorderPreview = null
+    }
+
+    fun setQuery(value: String) {
+        spec = spec.copy(query = value)
+    }
+
+    fun setFilter(filter: MonitorQuery.Filter) {
+        spec = spec.copy(filter = filter)
+    }
+
+    fun setSort(sort: MonitorQuery.Sort) {
+        spec = spec.copy(sort = sort)
+        viewModelScope.launch { graph.store.updateSettings { it.copy(dashboardSort = sort) } }
+    }
+
+    /**
+     * Clears the search and the filter, and leaves the sort alone.
+     *
+     * "Clear" means "stop hiding things". Resetting a hand-made order as a side
+     * effect of clearing a search would be a destructive act behind a harmless
+     * label.
+     */
+    fun clearNarrowing() {
+        spec = MonitorQuery.Spec(sort = spec.sort)
+    }
+
+    // ---- selection ---------------------------------------------------------
+    //
+    // Entered by long-pressing a card. Bulk actions exist because pausing eight
+    // monitors for a deploy window was eight trips into eight detail screens.
+
+    var selection by mutableStateOf<Set<String>>(emptySet())
+        private set
+
+    val selecting: Boolean get() = selection.isNotEmpty()
+
+    fun toggleSelected(monitorId: String) {
+        selection = if (monitorId in selection) selection - monitorId else selection + monitorId
+    }
+
+    fun selectAllVisible() {
+        selection = visible.map { it.monitor.id }.toSet()
+    }
+
+    fun clearSelection() {
+        selection = emptySet()
+    }
+
+    /**
+     * Pause or resume everything selected.
+     *
+     * Re-schedules per monitor rather than once at the end, because the scheduler
+     * is keyed per monitor and a single sync would not know which ones changed.
+     */
+    fun setEnabledForSelection(enabled: Boolean) {
+        val ids = selection.toList()
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            ids.forEach { id ->
+                graph.store.setEnabled(id, enabled)
+                if (!enabled) graph.engine.forgetMonitor(id)
+            }
+            val snapshot = graph.store.currentSnapshot()
+            snapshot.monitors.filter { it.id in ids }.forEach {
+                graph.scheduler.schedule(it, snapshot.settings)
+            }
+            graph.notifyStateChanged()
+            toast = "${ids.size} ${plural(ids.size)} ${if (enabled) "resumed" else "paused"}"
+            clearSelection()
+        }
+    }
+
+    fun muteSelection(hours: Int) {
+        val ids = selection.toList()
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            ids.forEach { graph.engine.mute(it, hours * 60 * 60 * 1000L) }
+            toast = "${ids.size} ${plural(ids.size)} muted for ${hours}h"
+            clearSelection()
+        }
+    }
+
+    fun deleteSelection() {
+        val ids = selection.toList()
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            ids.forEach { id ->
+                graph.scheduler.cancel(id)
+                graph.alerts.cancelAll(id)
+                graph.engine.forgetMonitor(id)
+                graph.store.delete(id)
+            }
+            graph.notifyStateChanged()
+            toast = "${ids.size} ${plural(ids.size)} deleted"
+            clearSelection()
+        }
+    }
+
+    private fun plural(count: Int) = if (count == 1) "monitor" else "monitors"
 
     fun checkAll() {
         if (refreshing) return
@@ -154,6 +334,7 @@ class DashboardViewModel(private val graph: Pulse.Graph) : ViewModel() {
 class SetupViewModel(
     private val graph: Pulse.Graph,
     private val editingId: String?,
+    private val templateId: String? = null,
 ) : ViewModel() {
 
     var draft by mutableStateOf(
@@ -195,6 +376,19 @@ class SetupViewModel(
     var realBlurEnabled by mutableStateOf(true)
         private set
 
+    /**
+     * The draft as it stood once the screen had finished opening.
+     *
+     * Captured *after* the store has loaded, so an edit is compared against what
+     * is actually persisted and a new monitor against the defaults it was seeded
+     * with — comparing against the pre-seed blank would call every new monitor
+     * dirty before the user had touched anything.
+     */
+    private var baseline by mutableStateOf<Monitor?>(null)
+
+    /** There is unsaved work worth asking about before throwing it away. */
+    val isDirty: Boolean get() = baseline?.let { it != draft } == true
+
     val report: Validation.Report get() = Validation.report(draft)
 
     /** Always the list, never the legacy single field. */
@@ -213,7 +407,16 @@ class SetupViewModel(
                     latencySloMs = 0,
                     accent = snapshot.monitors.size,
                 )
+                // A template answers step 0 — "what kind of thing is this" — so the
+                // wizard opens on step 1 with the URL field waiting. Skipping
+                // straight past a question the user has already answered is the
+                // entire value of picking a template.
+                MonitorTemplates.byId(templateId.orEmpty())?.let { template ->
+                    draft = template.apply(draft)
+                    step = 1
+                }
             }
+            baseline = draft
             loading = false
         }
     }
@@ -668,9 +871,14 @@ fun rememberDashboardViewModel(): DashboardViewModel = viewModel(
 )
 
 @androidx.compose.runtime.Composable
-fun rememberSetupViewModel(monitorId: String?): SetupViewModel = viewModel(
-    key = "setup-${monitorId ?: "new"}",
-    factory = viewModelFactory { initializer { SetupViewModel(Pulse.require(), monitorId) } },
+fun rememberSetupViewModel(monitorId: String?, templateId: String? = null): SetupViewModel = viewModel(
+    // The template is part of the key: two different templates are two different
+    // drafts, and reusing one view model between them would show the first
+    // template's fields under the second one's name.
+    key = "setup-${monitorId ?: "new"}-${templateId ?: "blank"}",
+    factory = viewModelFactory {
+        initializer { SetupViewModel(Pulse.require(), monitorId, templateId) }
+    },
 )
 
 @androidx.compose.runtime.Composable

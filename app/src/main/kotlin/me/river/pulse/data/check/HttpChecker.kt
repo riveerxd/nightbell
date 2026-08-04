@@ -12,6 +12,7 @@ import java.io.InterruptedIOException
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
+import java.security.cert.X509Certificate
 import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLException
 import kotlin.coroutines.cancellation.CancellationException
@@ -91,6 +92,8 @@ class HttpChecker(
                         verdict.detail
                     },
                     bodyPreview = body.take(MAX_PREVIEW),
+                    certExpiresAt = leafCertExpiry(response),
+                    certIssuer = leafCertIssuer(response),
                     at = nowMs(),
                 )
             }
@@ -154,6 +157,28 @@ class HttpChecker(
         return out.toString("UTF-8")
     }
 
+    /**
+     * `notAfter` of the certificate this connection actually presented.
+     *
+     * Reads the *leaf*, `peerCertificates.first()`, not the chain: an
+     * intermediate valid for another five years says nothing about the cert that
+     * is going to stop working. Returns 0 rather than throwing for plain HTTP,
+     * for a cached response with no handshake attached, and for anything that
+     * isn't an X.509 certificate, because a certificate the checker cannot read
+     * must degrade to "no opinion" and never to "expiring".
+     */
+    private fun leafCertExpiry(response: okhttp3.Response): Long = runCatching {
+        val leaf = response.handshake?.peerCertificates?.firstOrNull() as? X509Certificate
+        leaf?.notAfter?.time ?: 0L
+    }.getOrDefault(0L)
+
+    /** Issuer common name, for the detail screen. Falls back to the whole DN. */
+    private fun leafCertIssuer(response: okhttp3.Response): String = runCatching {
+        val leaf = response.handshake?.peerCertificates?.firstOrNull() as? X509Certificate
+        val dn = leaf?.issuerX500Principal?.name.orEmpty()
+        CN_IN_DN.find(dn)?.groupValues?.get(1)?.trim().orEmpty().ifBlank { dn }
+    }.getOrDefault("")
+
     private fun elapsedMs(startedNano: Long): Long =
         ((System.nanoTime() - startedNano) / 1_000_000L).coerceAtLeast(0L)
 
@@ -177,6 +202,8 @@ class HttpChecker(
     }
 
     companion object {
+        /** `CN=…` inside an X.500 DN, stopping at the first unescaped comma. */
+        private val CN_IN_DN = Regex("""CN=((?:\\.|[^,])*)""")
         private const val MAX_BODY_BYTES = 512 * 1024
         private const val MAX_PREVIEW = 4_000
         const val USER_AGENT = "PulseMonitor/1.0 (Android)"

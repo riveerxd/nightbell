@@ -430,6 +430,20 @@ data class MonitorRuntime(
     val degradedAlerting: Boolean = false,
     val lastDegradedAlertAt: Long = 0L,
 
+    // ---- certificate track --------------------------------------------------
+    /** `notAfter` of the leaf certificate last seen, 0 if none. */
+    val certExpiresAt: Long = 0L,
+    val certIssuer: String = "",
+    /**
+     * [CertificateWatch.Level.rank] most recently announced.
+     *
+     * Persisted rather than derived: the point of the track is to speak once per
+     * escalation, and a counter held in memory would re-announce the same expiry
+     * on every process start for a fortnight.
+     */
+    val certAlertedLevel: Int = 0,
+    val lastCertAlertAt: Long = 0L,
+
     // ---- urgent track -------------------------------------------------------
     /** An urgent outage is in progress and has *not* been acknowledged. */
     val urgentActive: Boolean = false,
@@ -477,8 +491,40 @@ data class MonitorRuntime(
         urgentSinceAt = if (urgentSinceAt == 0L) atMs else urgentSinceAt,
     )
 
+    /**
+     * Share of every retained check that passed.
+     *
+     * Deliberately *not* what the UI labels "uptime". The buffer holds
+     * [GlobalSettings.historyDepth] checks, so the span it covers is a function
+     * of the monitor's interval — the same number means the last fifteen hours at
+     * a fifteen-minute cadence and the last twenty-five days at ten-hourly. Use
+     * [uptimeWithin] for anything a user reads as an uptime figure.
+     */
     val uptimePercent: Float
         get() = if (samples.isEmpty()) 0f else samples.count { it.ok } * 100f / samples.size
+
+    /**
+     * Uptime over a real span of wall time.
+     *
+     * Returns null when no check falls inside the window at all, which is a
+     * genuinely different answer from 0% and has to stay distinguishable: a
+     * monitor nobody has checked today is not a monitor that was down all day.
+     */
+    fun uptimeWithin(nowMs: Long, windowMs: Long): UptimeWindow? {
+        val inWindow = samples.filter { nowMs - it.at in 0..windowMs }
+        if (inWindow.isEmpty()) return null
+        val oldest = inWindow.minOf { it.at }
+        return UptimeWindow(
+            percent = inWindow.count { it.ok } * 100f / inWindow.size,
+            checks = inWindow.size,
+            spanMs = nowMs - oldest,
+            // The window is only covered in full if the history reaches past its
+            // far edge, or happens to start exactly on it. An install two hours
+            // old cannot report twenty-four-hour uptime, and saying so is the
+            // whole point of carrying this flag around.
+            complete = samples.any { nowMs - it.at > windowMs } || nowMs - oldest >= windowMs,
+        )
+    }
 
     val averageLatencyMs: Long
         get() = samples.filter { it.ok }.map { it.latencyMs }.average().let {
@@ -492,6 +538,27 @@ data class MonitorRuntime(
             val idx = ((ok.size - 1) * 0.95).toInt()
             return ok[idx]
         }
+}
+
+/**
+ * An uptime figure that knows what it is a figure *of*.
+ *
+ * The percentage on its own is not reportable — the same 93% means something
+ * different over four hours than over four weeks — so the span and the check
+ * count travel with it and the UI is expected to show them.
+ */
+data class UptimeWindow(
+    val percent: Float,
+    val checks: Int,
+    /** Wall time from the oldest check in the window until now. */
+    val spanMs: Long,
+    /** The history reaches all the way back across the requested window. */
+    val complete: Boolean,
+)
+
+/** Windows the UI reports uptime over. */
+object UptimeWindows {
+    const val DAY_MS = 24L * 60 * 60 * 1000
 }
 
 /** A monitor plus everything we know about how it has been behaving. */
@@ -560,8 +627,48 @@ data class CheckResult(
     val elementText: String = "",
     /** One entry per watched element, in [Monitor.targets] order. */
     val elementTexts: List<String> = emptyList(),
+    /**
+     * `notAfter` of the leaf certificate the handshake presented, or 0 for a
+     * plain-HTTP monitor and for any check that never got as far as a handshake.
+     *
+     * Free with the connection the checker is already making, which is the whole
+     * argument for reading it: the expiry that takes a site down at 03:00 was
+     * visible in every successful check for the previous ninety days.
+     */
+    val certExpiresAt: Long = 0L,
+    /** Who signed it, for the detail screen. Common name only, not the full DN. */
+    val certIssuer: String = "",
     val at: Long = 0L,
 )
+
+/**
+ * Which colour scheme to paint in.
+ *
+ * Pulse shipped dark-only, which was a defensible design decision right up until
+ * it became an unstated one — the theme function took a `darkTheme` flag and
+ * ignored it. Following the system is the default because a monitoring app is
+ * something you open at 3am and also at noon outdoors, and the OS already knows
+ * which of those it is.
+ */
+@Serializable
+enum class ThemeChoice {
+    @SerialName("system")
+    SYSTEM,
+
+    @SerialName("dark")
+    DARK,
+
+    @SerialName("light")
+    LIGHT,
+    ;
+
+    val label: String
+        get() = when (this) {
+            SYSTEM -> "System"
+            DARK -> "Dark"
+            LIGHT -> "Light"
+        }
+}
 
 @Serializable
 data class GlobalSettings(
@@ -573,7 +680,6 @@ data class GlobalSettings(
     val defaultTimeoutSeconds: Int = 15,
     val historyDepth: Int = 60,
     val motionIntensity: Float = 1f,
-    val hasSeenOnboarding: Boolean = false,
     /**
      * Run a foreground service so checks keep their cadence in Doze.
      * Costs a persistent notification and real battery — see the README.
@@ -640,6 +746,35 @@ data class GlobalSettings(
      * pager. See [me.river.pulse.domain.PagerReadiness.shouldGate].
      */
     val hasSeenPagerSetup: Boolean = false,
+
+    /**
+     * Watch TLS certificate expiry alongside the checks.
+     *
+     * On by default and cheap: the date comes back with a handshake the checker is
+     * already paying for, so the only cost is the notification, and the failure it
+     * catches is one nobody wants to meet at three in the morning. See
+     * [me.river.pulse.domain.CertificateWatch].
+     */
+    /** Dark, light, or whatever the system is doing. */
+    val theme: ThemeChoice = ThemeChoice.SYSTEM,
+
+    /**
+     * The dashboard's sort order.
+     *
+     * Persisted, unlike the search text and the state filter, and the asymmetry is
+     * deliberate. A filter that survived a restart would hide monitors on launch,
+     * which is indistinguishable from having lost them. A sort is an *arrangement* —
+     * and once a user has dragged their monitors into an order by hand, forgetting
+     * it on the next launch throws away work they did deliberately and leaves no
+     * trace that it ever existed.
+     */
+    val dashboardSort: MonitorQuery.Sort = MonitorQuery.Sort.WORST_FIRST,
+
+    val certAlertsEnabled: Boolean = true,
+    /** Days before expiry at which the advisory starts. 0 turns the track off. */
+    val certWarnDays: Int = 14,
+    /** Days before expiry at which it stops being merely advisory. */
+    val certCriticalDays: Int = 2,
 )
 
 /**

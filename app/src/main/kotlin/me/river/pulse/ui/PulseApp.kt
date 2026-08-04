@@ -1,5 +1,6 @@
 package me.river.pulse.ui
 
+import android.app.Activity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -27,6 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,20 +39,26 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.zIndex
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import me.river.pulse.data.Pulse
 import me.river.pulse.ui.components.AuroraBackground
 import me.river.pulse.ui.dashboard.DashboardScreen
 import me.river.pulse.ui.detail.DetailScreen
 import me.river.pulse.ui.settings.SettingsScreen
 import me.river.pulse.ui.setup.SetupScreen
+import me.river.pulse.ui.theme.LocalNowMs
 import me.river.pulse.ui.theme.PulseColors
 import me.river.pulse.ui.theme.PulseTheme
+import me.river.pulse.ui.theme.rememberNowMs
+import me.river.pulse.ui.theme.rememberSystemAnimationsEnabled
 import me.river.pulse.ui.theme.softShadow
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
@@ -74,9 +82,19 @@ object Routes {
     const val PAGER_SETUP = "pager-setup"
     const val DASHBOARD = "dashboard"
     const val SETTINGS = "settings"
-    const val SETUP_NEW = "setup"
+    /**
+     * New monitor, optionally seeded from a template.
+     *
+     * The template travels as a query parameter rather than a path segment so the
+     * plain "setup" route keeps working untouched — a deep link or a saved back
+     * stack entry from an earlier build still resolves.
+     */
+    const val SETUP_NEW = "setup?template={template}"
     const val SETUP_EDIT = "setup/{monitorId}"
     const val DETAIL = "detail/{monitorId}"
+
+    fun setupNew(templateId: String? = null) =
+        if (templateId == null) "setup?template=" else "setup?template=$templateId"
 
     fun setupEdit(id: String) = "setup/$id"
     fun detail(id: String) = "detail/$id"
@@ -109,21 +127,35 @@ fun PulseApp(initialMonitorId: String? = null) {
         }
     }
 
-    PulseTheme(motionIntensity = settings.settings.motionIntensity) {
-        AuroraBackground(
-            modifier = Modifier.fillMaxSize(),
-            intensity = (0.35f + settings.settings.motionIntensity * 0.65f).coerceIn(0.35f, 1.2f),
-        ) {
-            PulseNavHost(
-                navController = navController,
-                startDestination = startDestination,
-                onToast = { toastMessage = it },
-            )
-            GlassToast(
-                message = toastMessage,
-                onDismissed = { toastMessage = null },
-                modifier = Modifier.align(Alignment.TopCenter),
-            )
+    val nowMs by rememberNowMs()
+
+    // The system toggle is a veto, not another input to average in: "Remove
+    // animations" is off-means-off, and the in-app slider only gets to choose how
+    // much motion there is when the platform has not already said none.
+    val systemAnimations = rememberSystemAnimationsEnabled()
+    val motionIntensity = if (systemAnimations) settings.settings.motionIntensity else 0f
+
+    PulseTheme(motionIntensity = motionIntensity, theme = settings.settings.theme) {
+        // The bars are transparent and the content runs under them, so their icons
+        // have to be told which way to contrast. Without this the clock and the
+        // back gesture hint stay white and vanish against the light scheme.
+        SyncSystemBarIcons(light = !PulseColors.isDark)
+        CompositionLocalProvider(LocalNowMs provides nowMs) {
+            AuroraBackground(
+                modifier = Modifier.fillMaxSize(),
+                intensity = (0.35f + motionIntensity * 0.65f).coerceIn(0.35f, 1.2f),
+            ) {
+                PulseNavHost(
+                    navController = navController,
+                    startDestination = startDestination,
+                    onToast = { toastMessage = it },
+                )
+                GlassToast(
+                    message = toastMessage,
+                    onDismissed = { toastMessage = null },
+                    modifier = Modifier.align(Alignment.TopCenter),
+                )
+            }
         }
     }
 }
@@ -170,7 +202,8 @@ private fun PulseNavHost(
 
         composable(Routes.DASHBOARD) {
             DashboardScreen(
-                onAddMonitor = { navController.navigate(Routes.SETUP_NEW) },
+                onAddMonitor = { navController.navigate(Routes.setupNew()) },
+                onPickTemplate = { navController.navigate(Routes.setupNew(it)) },
                 onOpenMonitor = { navController.navigate(Routes.detail(it)) },
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                 onToast = onToast,
@@ -179,11 +212,15 @@ private fun PulseNavHost(
 
         composable(
             Routes.SETUP_NEW,
+            arguments = listOf(
+                navArgument("template") { defaultValue = ""; nullable = false },
+            ),
             enterTransition = { slideInVertically(tween(340)) { it / 3 } + fadeIn(tween(240)) },
             popExitTransition = { slideOutVertically(tween(280)) { it / 3 } + fadeOut(tween(200)) },
-        ) {
+        ) { entry ->
             SetupScreen(
                 monitorId = null,
+                templateId = entry.arguments?.getString("template").orEmpty().ifBlank { null },
                 onClose = { navController.popBackStack() },
                 onSaved = {
                     onToast("Monitor created")
@@ -219,6 +256,26 @@ private fun PulseNavHost(
                 onBack = { navController.popBackStack() },
                 onToast = onToast,
             )
+        }
+    }
+}
+
+/**
+ * Points the status- and navigation-bar icons at the active scheme.
+ *
+ * Edge-to-edge means the bars are transparent and app content passes beneath
+ * them, so nothing but this decides whether the clock is legible. A no-op when
+ * the composable is previewed outside an Activity.
+ */
+@Composable
+private fun SyncSystemBarIcons(light: Boolean) {
+    val view = LocalView.current
+    if (view.isInEditMode) return
+    val window = (view.context as? Activity)?.window ?: return
+    LaunchedEffect(light, window) {
+        WindowCompat.getInsetsController(window, view).apply {
+            isAppearanceLightStatusBars = light
+            isAppearanceLightNavigationBars = light
         }
     }
 }
@@ -260,7 +317,7 @@ private fun GlassToast(
                 .softShadow(corner = 100.dp, radius = 26.dp, strength = 2.4f)
                 .clip(shape)
                 .background(PulseColors.ToastFill)
-                .border(1.dp, Color.White.copy(alpha = 0.14f), shape)
+                .border(1.dp, PulseColors.sheen(0.14f), shape)
                 .padding(start = 15.dp, end = 20.dp, top = 11.dp, bottom = 11.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

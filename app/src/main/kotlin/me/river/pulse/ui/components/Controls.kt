@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -231,8 +232,8 @@ fun PulseButton(
         )
 
         ButtonTone.Secondary -> Modifier
-            .background(Color.White.copy(alpha = 0.08f * alpha))
-            .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)), shape)
+            .background(PulseColors.sheen(0.08f * alpha))
+            .border(BorderStroke(1.dp, PulseColors.sheen(0.16f)), shape)
 
         ButtonTone.Ghost -> Modifier
 
@@ -293,6 +294,18 @@ fun SpinnerDot(color: Color, size: androidx.compose.ui.unit.Dp = 15.dp) {
     )
 }
 
+/**
+ * Material's floor for anything a finger has to hit.
+ *
+ * Enforced on the *touch* area rather than the drawn one: several of these
+ * buttons are deliberately small — a 34 dp cog next to a wordmark is the right
+ * visual weight — and growing the paint to satisfy the guideline would trade one
+ * real problem for another. The pattern throughout is a [MinTouchTarget] box
+ * that takes the gesture, with the visual centred inside at whatever size the
+ * design calls for.
+ */
+val MinTouchTarget = 48.dp
+
 @Composable
 fun GlassIconButton(
     icon: ImageVector,
@@ -302,6 +315,10 @@ fun GlassIconButton(
     accent: Color = PulseColors.TextSecondary,
     size: androidx.compose.ui.unit.Dp = 42.dp,
     enabled: Boolean = true,
+    /** Marks the control as holding non-default state, e.g. an active filter. */
+    badged: Boolean = false,
+    /** Pressed-in look, for a toggle that reveals a panel. */
+    active: Boolean = false,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
@@ -310,16 +327,10 @@ fun GlassIconButton(
         animationSpec = spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMedium),
         label = "iconScale",
     )
+    val shape = RoundedCornerShape(size / 2.6f)
     Box(
         modifier = modifier
-            .graphicsLayer { scaleX = scale; scaleY = scale }
-            .size(size)
-            .clip(RoundedCornerShape(size / 2.6f))
-            .background(Color.White.copy(alpha = if (enabled) 0.07f else 0.03f))
-            .border(
-                BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)),
-                RoundedCornerShape(size / 2.6f),
-            )
+            .size(maxOf(size, MinTouchTarget))
             .clickable(
                 enabled = enabled,
                 interactionSource = interaction,
@@ -329,12 +340,51 @@ fun GlassIconButton(
             .semantics { this.contentDescription = contentDescription },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = if (enabled) accent else accent.copy(alpha = 0.4f),
-            modifier = Modifier.size(size * 0.45f),
-        )
+        Box(
+            modifier = Modifier
+                .graphicsLayer { scaleX = scale; scaleY = scale }
+                .size(size)
+                .clip(shape)
+                .background(
+                    if (active) {
+                        accent.copy(alpha = 0.20f)
+                    } else {
+                        PulseColors.sheen(if (enabled) 0.07f else 0.03f)
+                    },
+                )
+                .border(
+                    BorderStroke(
+                        1.dp,
+                        if (active) accent.copy(alpha = 0.55f) else PulseColors.sheen(0.10f),
+                    ),
+                    shape,
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (enabled) accent else accent.copy(alpha = 0.4f),
+                modifier = Modifier.size(size * 0.45f),
+            )
+        }
+        if (badged) {
+            // Drawn on the outer, unclipped box.
+            //
+            // Inside the visual box it was invisible: that box clips to the button's
+            // rounded shape, so a dot offset past the corner is simply cut away. A
+            // filter that hides monitors has to be visible from the collapsed state,
+            // or a short list looks like lost data.
+            Box(
+                Modifier
+                    .align(Alignment.Center)
+                    .offset(x = size / 2 - 2.dp, y = -(size / 2) + 2.dp)
+                    .size(9.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(PulseColors.Amber)
+                    .border(2.dp, PulseColors.Void, RoundedCornerShape(50)),
+            )
+        }
     }
 }
 
@@ -358,8 +408,8 @@ fun <T> SegmentedSelector(
         modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(Color.White.copy(alpha = 0.055f))
-            .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.09f)), shape)
+            .background(PulseColors.sheen(0.055f))
+            .border(BorderStroke(1.dp, PulseColors.sheen(0.09f)), shape)
             .padding(4.dp),
     ) {
         val itemWidth = maxWidth / options.size
@@ -368,8 +418,12 @@ fun <T> SegmentedSelector(
             animationSpec = spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow),
             label = "segmentOffset",
         )
+        // The pill keeps its 34 dp height; the tappable segments around it are
+        // MinTouchTarget tall, so the control grew a little breathing room rather
+        // than the sliding indicator growing fat.
         Box(
             Modifier
+                .align(Alignment.CenterStart)
                 .offset(x = offsetX)
                 .width(itemWidth)
                 .height(34.dp)
@@ -387,7 +441,7 @@ fun <T> SegmentedSelector(
                 Box(
                     modifier = Modifier
                         .width(itemWidth)
-                        .height(34.dp)
+                        .height(MinTouchTarget)
                         .clip(shape)
                         .clickable(
                             indication = ripple(color = accent),
@@ -410,6 +464,15 @@ fun <T> SegmentedSelector(
     }
 }
 
+/**
+ * The one chip geometry.
+ *
+ * Fixed so a set of chips reads as a family regardless of label length, and so the
+ * filter row and the sort row cannot drift apart.
+ */
+private val CHIP_HEIGHT = 38.dp
+private val CHIP_MIN_WIDTH = 78.dp
+
 /** Wrapping chip picker for larger option sets. */
 @Composable
 fun <T> ChipSelector(
@@ -424,7 +487,9 @@ fun <T> ChipSelector(
     FlowRow(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        // No extra vertical gap: each chip already carries the padding that lifts it
+        // to the touch floor, and adding more on top opens a visible gutter.
+        verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {
         options.forEach { option ->
             val isSelected = option == selected
@@ -437,6 +502,18 @@ fun <T> ChipSelector(
             Row(
                 modifier = Modifier
                     .graphicsLayer { scaleX = scale; scaleY = scale }
+                    // The touch floor is reached with padding *outside* the capsule,
+                    // not by growing it.
+                    //
+                    // Stretching the visual to 48 dp while leaving 13 dp of side
+                    // padding made a chip's shape depend on how long its label was:
+                    // "All" came out 46×48 — a circle — next to a properly capsule
+                    // "Problems". A chip set has to read as one family, so the height
+                    // is fixed and a minimum width keeps even a three-letter label
+                    // wider than it is tall.
+                    .padding(vertical = (MinTouchTarget - CHIP_HEIGHT) / 2)
+                    .height(CHIP_HEIGHT)
+                    .defaultMinSize(minWidth = CHIP_MIN_WIDTH)
                     .clip(chipShape)
                     .background(
                         if (isSelected) {
@@ -445,14 +522,14 @@ fun <T> ChipSelector(
                             )
                         } else {
                             Brush.linearGradient(
-                                listOf(Color.White.copy(alpha = 0.06f), Color.White.copy(alpha = 0.04f)),
+                                listOf(PulseColors.sheen(0.06f), PulseColors.sheen(0.04f)),
                             )
                         },
                     )
                     .border(
                         BorderStroke(
                             1.dp,
-                            if (isSelected) accent.copy(alpha = 0.55f) else Color.White.copy(alpha = 0.10f),
+                            if (isSelected) accent.copy(alpha = 0.55f) else PulseColors.sheen(0.10f),
                         ),
                         chipShape,
                     )
@@ -460,7 +537,7 @@ fun <T> ChipSelector(
                         indication = ripple(color = accent),
                         interactionSource = remember { MutableInteractionSource() },
                     ) { onSelect(option) }
-                    .padding(horizontal = 13.dp, vertical = 9.dp)
+                    .padding(horizontal = 16.dp)
                     .semantics { stateDescription = if (isSelected) "Selected" else "Not selected" },
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -532,8 +609,8 @@ fun ToggleRow(
                 checkedTrackColor = accent,
                 checkedBorderColor = accent,
                 uncheckedThumbColor = PulseColors.TextTertiary,
-                uncheckedTrackColor = Color.White.copy(alpha = 0.06f),
-                uncheckedBorderColor = Color.White.copy(alpha = 0.16f),
+                uncheckedTrackColor = PulseColors.sheen(0.06f),
+                uncheckedBorderColor = PulseColors.sheen(0.16f),
             ),
         )
     }
@@ -591,13 +668,12 @@ private fun StepperButton(glyph: String, description: String, onClick: () -> Uni
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) 0.85f else 1f, label = "stepScale")
+    val shape = RoundedCornerShape(12.dp)
+    // − and + sat 34 dp wide a few dp apart, which is the worst possible geometry
+    // for a control people tap repeatedly to nudge a number.
     Box(
         modifier = Modifier
-            .graphicsLayer { scaleX = scale; scaleY = scale }
-            .size(34.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color.White.copy(alpha = 0.07f))
-            .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)), RoundedCornerShape(12.dp))
+            .size(MinTouchTarget)
             .clickable(
                 interactionSource = interaction,
                 indication = ripple(bounded = false, color = PulseColors.Aqua),
@@ -606,6 +682,16 @@ private fun StepperButton(glyph: String, description: String, onClick: () -> Uni
             .semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
     ) {
-        Text(glyph, style = MaterialTheme.typography.titleLarge, color = PulseColors.TextSecondary)
+        Box(
+            modifier = Modifier
+                .graphicsLayer { scaleX = scale; scaleY = scale }
+                .size(34.dp)
+                .clip(shape)
+                .background(PulseColors.sheen(0.07f))
+                .border(BorderStroke(1.dp, PulseColors.sheen(0.10f)), shape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(glyph, style = MaterialTheme.typography.titleLarge, color = PulseColors.TextSecondary)
+        }
     }
 }

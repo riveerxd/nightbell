@@ -43,6 +43,19 @@ class HttpCheckerTest {
     }
 
     @Test
+    fun `a plain HTTP response carries no certificate, over a real socket`() {
+        // The guard that matters most in the certificate track: no handshake means
+        // no opinion. If this ever returned something non-zero, every http:// monitor
+        // would start reporting an expiry date derived from nothing.
+        TinyHttpServer { TinyHttpServer.Response(body = "ok") }.use { server ->
+            val result = runBlocking { checker.check(monitor(server.url("/plain"))) }
+            assertTrue(result.message, result.ok)
+            assertEquals(0L, result.certExpiresAt)
+            assertEquals("", result.certIssuer)
+        }
+    }
+
+    @Test
     fun `unexpected status is reported as a status failure`() {
         TinyHttpServer { TinyHttpServer.Response(code = 503, reason = "Service Unavailable", body = "nope") }
             .use { server ->

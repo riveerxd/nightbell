@@ -235,6 +235,17 @@ object AlertDecider {
             consecutiveSuccesses = successes,
             lastElementText = result.elementText.ifBlank { previous.lastElementText },
             lastElementTexts = result.elementTexts.ifEmpty { previous.lastElementTexts },
+            // Kept when the newest check has nothing to say about the certificate.
+            // A connection that never completed a handshake — a timeout, a refused
+            // socket — is not evidence that the cert has gone away, and clearing
+            // the date on every failed check would lose the expiry warning at
+            // exactly the moment the site starts misbehaving.
+            certExpiresAt = if (result.certExpiresAt > 0L) {
+                result.certExpiresAt
+            } else {
+                previous.certExpiresAt
+            },
+            certIssuer = result.certIssuer.ifBlank { previous.certIssuer },
             samples = history,
         )
     }

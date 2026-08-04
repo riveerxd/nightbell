@@ -257,7 +257,7 @@ private fun PickerContent(
                 Modifier
                     .fillMaxWidth()
                     .height(2.dp)
-                    .background(Color.White.copy(alpha = 0.05f)),
+                    .background(PulseColors.sheen(0.05f)),
             ) {
                 Box(
                     Modifier
@@ -268,12 +268,16 @@ private fun PickerContent(
             }
 
             // --- web view ------------------------------------------------------
+            // Resolved out here: an AndroidView factory runs outside composition,
+            // and a WebView painted the dark scheme's ink on a light page flashes
+            // black on every load.
+            val webBackground = PulseColors.Ink.toArgb()
             Box(Modifier.weight(1f)) {
                 AndroidView(
                     modifier = Modifier.fillMaxSize(),
                     factory = { ctx ->
                         WebView(ctx).apply {
-                            setBackgroundColor(PulseColors.Ink.toArgb())
+                            setBackgroundColor(webBackground)
                             settings.apply {
                                 javaScriptEnabled = true
                                 domStorageEnabled = true
@@ -422,7 +426,7 @@ private fun PickerBottomBar(
                     .clip(RoundedCornerShape(12.dp))
                     .background(
                         if (pickMode) PulseColors.Aqua.copy(alpha = 0.22f)
-                        else Color.White.copy(alpha = 0.06f),
+                        else PulseColors.sheen(0.06f),
                     ),
                 contentAlignment = Alignment.Center,
             ) {
@@ -459,8 +463,8 @@ private fun PickerBottomBar(
                     checkedTrackColor = PulseColors.Aqua,
                     checkedBorderColor = PulseColors.Aqua,
                     uncheckedThumbColor = PulseColors.TextTertiary,
-                    uncheckedTrackColor = Color.White.copy(alpha = 0.06f),
-                    uncheckedBorderColor = Color.White.copy(alpha = 0.16f),
+                    uncheckedTrackColor = PulseColors.sheen(0.06f),
+                    uncheckedBorderColor = PulseColors.sheen(0.16f),
                 ),
             )
         }
@@ -472,7 +476,7 @@ private fun PickerBottomBar(
                     Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
-                        .background(Color.White.copy(alpha = 0.05f))
+                        .background(PulseColors.sheen(0.05f))
                         .border(1.dp, PulseColors.Aqua.copy(alpha = 0.28f), RoundedCornerShape(16.dp))
                         .padding(13.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),

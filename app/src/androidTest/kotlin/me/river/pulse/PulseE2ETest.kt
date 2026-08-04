@@ -87,10 +87,37 @@ class PulseE2ETest {
     fun appLaunchesToAPolishedEmptyState() {
         launchApp()
         composeRule.onNodeWithText("PULSE").assertIsDisplayed()
-        composeRule.onNodeWithText("Nothing on the radar").assertIsDisplayed()
+        // The empty state is no longer a single "Create a monitor" button over a
+        // "Nothing on the radar" headline. It offers templates that pre-fill the
+        // wizard, so what has to be on screen is the invitation plus a way past it.
+        composeRule.onNodeWithText("Watch something").assertIsDisplayed()
+        composeRule.onNodeWithText("A website").assertIsDisplayed()
+        composeRule.onNodeWithText("A health endpoint").assertIsDisplayed()
+        composeRule.onNodeWithText("Start from scratch").assertIsDisplayed()
         composeRule.onNodeWithText("No monitors yet").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Add a monitor").assertIsDisplayed()
         composeRule.captureScreenshot("01-empty-state")
+    }
+
+    /**
+     * A template has to land on the URL field with its decisions already made.
+     *
+     * The whole value of picking one is skipping step 0, so this asserts on the
+     * step counter as well as the pre-filled expectation — a template that opened
+     * the wizard at the beginning would look like it had done nothing.
+     */
+    @Test
+    fun aTemplateSeedsTheWizardAndSkipsTheKindStep() {
+        launchApp()
+        composeRule.onNodeWithText("A health endpoint").performClick()
+        composeRule.waitForIdle()
+        // Step 2 of 4: "Target".
+        composeRule.onNodeWithText("2/4").assertIsDisplayed()
+        composeRule.onNodeWithText("Target").assertIsDisplayed()
+        composeRule.captureScreenshot("38-template-seeded-setup")
+
+        // Nothing is saved by picking a template.
+        assertEquals(0, runBlocking { Pulse.require().store.currentSnapshot().monitors.size })
     }
 
     // ---- 2. create a passing 200 monitor ------------------------------------

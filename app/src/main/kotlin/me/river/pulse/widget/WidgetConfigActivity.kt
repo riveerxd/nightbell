@@ -107,7 +107,10 @@ class WidgetConfigActivity : ComponentActivity() {
                 loaded = true
             }
 
-            PulseTheme(motionIntensity = snapshot.settings.motionIntensity) {
+            PulseTheme(
+                motionIntensity = snapshot.settings.motionIntensity,
+                theme = snapshot.settings.theme,
+            ) {
                 Box(
                     Modifier
                         .fillMaxSize()
@@ -421,7 +424,7 @@ private fun SwatchGrid(swatches: List<Int>, selected: Int, onSelect: (Int) -> Un
                             .background(Color(rgb or 0xFF000000.toInt()))
                             .border(
                                 width = if (isSelected) 2.dp else 1.dp,
-                                color = if (isSelected) PulseColors.Mint else Color.White.copy(alpha = 0.18f),
+                                color = if (isSelected) PulseColors.Mint else PulseColors.sheen(0.18f),
                                 shape = RoundedCornerShape(10.dp),
                             )
                             .clickable { onSelect(rgb) }
@@ -454,6 +457,7 @@ private fun WidgetPreview(config: WidgetConfig, fleet: Summary.Fleet) {
 
     // A checkerboard behind the surface, so "fully transparent" previews as
     // see-through rather than as whatever colour this screen happens to be.
+    val checker = PulseColors.sheen(0.05f)
     Box(
         Modifier
             .fillMaxWidth()
@@ -468,7 +472,7 @@ private fun WidgetPreview(config: WidgetConfig, fleet: Summary.Fleet) {
                     while (x < size.width) {
                         if ((row + col) % 2 == 0) {
                             drawRect(
-                                color = Color.White.copy(alpha = 0.05f),
+                                color = checker,
                                 topLeft = Offset(x, y),
                                 size = Size(
                                     minOf(cell, size.width - x),

@@ -389,8 +389,8 @@ private fun TimeStepper(
     Column(
         modifier
             .clip(RoundedCornerShape(16.dp))
-            .background(Color.White.copy(alpha = 0.05f))
-            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(16.dp))
+            .background(PulseColors.sheen(0.05f))
+            .border(1.dp, PulseColors.sheen(0.08f), RoundedCornerShape(16.dp))
             .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
         Text(
@@ -427,7 +427,7 @@ private fun SmallStep(
         Modifier
             .size(30.dp)
             .clip(RoundedCornerShape(10.dp))
-            .background(Color.White.copy(alpha = 0.06f))
+            .background(PulseColors.sheen(0.06f))
             .clickable(onClick = onClick)
             .semantics { contentDescription = description },
         verticalAlignment = Alignment.CenterVertically,

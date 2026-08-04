@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -34,7 +35,21 @@ import androidx.compose.ui.unit.dp
  * Tinting this with an accent turns every card into a neon sign, so accent
  * colour belongs on the edge (see [glass]) instead.
  */
+@Composable
 fun Modifier.softShadow(
+    corner: Dp,
+    color: Color = Color.Black,
+    radius: Dp = 12.dp,
+    strength: Float = 1f,
+): Modifier {
+    // Same geometry in both schemes, less of it on light: a cast shadow is nearly
+    // free over black and very loud over off-white.
+    val scaled = strength * PulseColors.shadowScale
+    return softShadowRaw(corner, color, radius, scaled)
+}
+
+/** The drawing itself, scheme-free so it can be used from non-composable code. */
+fun Modifier.softShadowRaw(
     corner: Dp,
     color: Color = Color.Black,
     radius: Dp = 12.dp,
@@ -83,18 +98,23 @@ fun Modifier.softShadow(
  * halo — the status still reads instantly across a dark list, and the screen
  * doesn't turn into a wall of bloom.
  */
+@Composable
 fun Modifier.glass(
     shape: Shape = RoundedCornerShape(PulseRadii.card),
     corner: Dp = PulseRadii.card,
     fill: Color = PulseColors.GlassFill,
     fillEnd: Color = PulseColors.Ink,
     strokeTop: Color = PulseColors.GlassStroke,
-    strokeBottom: Color = Color.White.copy(alpha = 0.05f),
+    strokeBottom: Color = PulseColors.sheen(0.05f),
     elevation: Dp = 12.dp,
     accent: Color = Color.Transparent,
     specular: Boolean = true,
 ): Modifier {
     val tinted = accent != Color.Transparent
+    // Read here, not inside drawWithCache: a draw scope has no composition to ask
+    // which scheme is in force.
+    val specularNear = PulseColors.sheen(0.028f)
+    val specularFar = PulseColors.sheen(0.008f)
     return this
         .softShadow(corner = corner, radius = elevation)
         .clip(shape)
@@ -104,8 +124,8 @@ fun Modifier.glass(
                 Modifier.drawWithCache {
                     val sweep = Brush.linearGradient(
                         colorStops = arrayOf(
-                            0.0f to Color.White.copy(alpha = 0.028f),
-                            0.28f to Color.White.copy(alpha = 0.008f),
+                            0.0f to specularNear,
+                            0.28f to specularFar,
                             0.55f to Color.Transparent,
                             1.0f to Color.Transparent,
                         ),
@@ -133,6 +153,7 @@ fun Modifier.glass(
 }
 
 /** A brighter variant for interactive surfaces (fields, chips, buttons). */
+@Composable
 fun Modifier.glassInteractive(
     shape: Shape = RoundedCornerShape(PulseRadii.field),
     corner: Dp = PulseRadii.field,
@@ -148,7 +169,7 @@ fun Modifier.glassInteractive(
     val strokeBottom = when {
         error -> PulseColors.Rose.copy(alpha = 0.35f)
         focused -> accent.copy(alpha = 0.30f)
-        else -> Color.White.copy(alpha = 0.06f)
+        else -> PulseColors.sheen(0.06f)
     }
     return glass(
         shape = shape,

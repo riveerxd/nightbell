@@ -67,6 +67,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -148,6 +149,7 @@ fun StatusOrb(
         label = "ping",
     )
     val alive = checking || health == Health.DOWN
+    val gloss = PulseColors.sheen(0.40f)
 
     Canvas(
         modifier
@@ -180,7 +182,7 @@ fun StatusOrb(
         }
         drawCircle(color = color, radius = core, center = center)
         drawCircle(
-            color = Color.White.copy(alpha = 0.40f),
+            color = gloss,
             radius = core * 0.4f,
             center = center.copy(x = center.x - core * 0.25f, y = center.y - core * 0.25f),
         )
@@ -273,8 +275,10 @@ fun Sparkline(
     }
 
     val maxLatency = max(1L, samples.maxOf { it.latencyMs })
+    val fail = PulseColors.Rose
+    val headCore = PulseColors.TextPrimary
 
-    Canvas(modifier.semantics { contentDescription = "Response time trend" }) {
+    Canvas(modifier.clearAndSetSemantics { contentDescription = chartSummary("Response time trend", samples) }) {
         val w = size.width
         val h = size.height
         val gap = SAMPLE_GAP.toPx()
@@ -323,7 +327,7 @@ fun Sparkline(
         // at cell centres, which are inset by half a cell at each end.
         val healthStops = samples.mapIndexed { index, sample ->
             (sampleCenterX(index, samples.size, w, gap) / w) to
-                if (sample.ok) accent else PulseColors.Rose
+                if (sample.ok) accent else fail
         }
         drawPath(
             path = line,
@@ -338,9 +342,9 @@ fun Sparkline(
         // Leading dot — "now", tinted by whether now is healthy.
         val lastIndex = min(visibleCount, samples.size) - 1
         val head = pointAt(lastIndex)
-        val headTone = if (samples[lastIndex].ok) accent else PulseColors.Rose
+        val headTone = if (samples[lastIndex].ok) accent else fail
         drawCircle(headTone.copy(alpha = 0.3f), radius = 6.dp.toPx(), center = head)
-        drawCircle(Color.White, radius = 2.6.dp.toPx(), center = head)
+        drawCircle(headCore, radius = 2.6.dp.toPx(), center = head)
     }
 }
 
@@ -361,7 +365,8 @@ fun LatencyBars(
         return
     }
     val maxLatency = max(1L, samples.maxOf { it.latencyMs })
-    Canvas(modifier.semantics { contentDescription = "Response time history" }) {
+    val fail = PulseColors.Rose
+    Canvas(modifier.clearAndSetSemantics { contentDescription = chartSummary("Response time history", samples) }) {
         val count = samples.size
         val gap = 3.dp.toPx()
         val barWidth = ((size.width - gap * (count - 1)) / count).coerceAtLeast(1.5f)
@@ -369,7 +374,7 @@ fun LatencyBars(
             val ratio = (sample.latencyMs.toFloat() / maxLatency).coerceIn(0.04f, 1f) * grow.value
             val barHeight = size.height * ratio
             val x = index * (barWidth + gap)
-            val color = if (sample.ok) accent else PulseColors.Rose
+            val color = if (sample.ok) accent else fail
             drawRoundRect(
                 brush = Brush.verticalGradient(
                     listOf(color.copy(alpha = 0.95f), color.copy(alpha = 0.28f)),
@@ -389,6 +394,8 @@ fun UptimeRing(
     modifier: Modifier = Modifier,
     accent: Color = PulseColors.Mint,
     label: String = "uptime",
+    /** No reading available — show a dash rather than a confident 0%. */
+    unknown: Boolean = false,
 ) {
     val motion = LocalPulseMotion.current
     val animated by animateFloatAsState(
@@ -400,13 +407,20 @@ fun UptimeRing(
         },
         label = "uptime",
     )
-    Box(modifier, contentAlignment = Alignment.Center) {
+    // One node, one sentence. Left as two Texts inside a Canvas, TalkBack read
+    // "ninety-three percent" and then spelled U-P-T-I-M-E as a separate item.
+    val spoken = if (unknown) label else "${animated.roundToInt()} percent, $label"
+    val track = PulseColors.sheen(0.07f)
+    Box(
+        modifier.clearAndSetSemantics { contentDescription = spoken },
+        contentAlignment = Alignment.Center,
+    ) {
         Canvas(Modifier.fillMaxSize()) {
             val stroke = 9.dp.toPx()
             val inset = stroke / 2f + 2.dp.toPx()
             val arcSize = Size(size.width - inset * 2, size.height - inset * 2)
             drawArc(
-                color = Color.White.copy(alpha = 0.07f),
+                color = track,
                 startAngle = 135f,
                 sweepAngle = 270f,
                 useCenter = false,
@@ -414,6 +428,7 @@ fun UptimeRing(
                 size = arcSize,
                 style = Stroke(width = stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round),
             )
+            if (unknown) return@Canvas
             drawArc(
                 // Stays in one hue: a green dial that fades through brand blue
                 // reads as a gradient, not as "93% up".
@@ -430,9 +445,9 @@ fun UptimeRing(
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = "${animated.roundToInt()}%",
+                text = if (unknown) "—" else "${animated.roundToInt()}%",
                 style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold),
-                color = PulseColors.TextPrimary,
+                color = if (unknown) PulseColors.TextTertiary else PulseColors.TextPrimary,
             )
             Text(
                 text = label.uppercase(),
@@ -453,10 +468,12 @@ fun HistoryStrip(
     modifier: Modifier = Modifier,
     accent: Color = PulseColors.Mint,
 ) {
-    Canvas(modifier.semantics { contentDescription = "Recent check outcomes" }) {
+    val empty = PulseColors.sheen(0.05f)
+    val fail = PulseColors.Rose
+    Canvas(modifier.clearAndSetSemantics { contentDescription = outcomeSummary(samples) }) {
         if (samples.isEmpty()) {
             drawRoundRect(
-                color = Color.White.copy(alpha = 0.05f),
+                color = empty,
                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height / 2f),
             )
             return@Canvas
@@ -469,7 +486,7 @@ fun HistoryStrip(
             // gradient stop to the same x.
             val centerX = sampleCenterX(index, count, size.width, gap)
             drawRoundRect(
-                color = if (sample.ok) accent.copy(alpha = 0.85f) else PulseColors.Rose,
+                color = if (sample.ok) accent.copy(alpha = 0.85f) else fail,
                 topLeft = Offset(centerX - tickWidth / 2f, 0f),
                 size = Size(tickWidth, size.height),
                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(tickWidth / 2f),
@@ -503,6 +520,7 @@ fun EmptyState(
         durationMillis = 14_000,
         label = "spin",
     )
+    val rings = List(3) { i -> PulseColors.sheen(0.09f - i * 0.02f) }
     Column(
         modifier = modifier.fillMaxWidth().padding(horizontal = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -526,7 +544,7 @@ fun EmptyState(
                 )
                 listOf(0.42f, 0.62f, 0.82f).forEachIndexed { i, factor ->
                     drawCircle(
-                        color = Color.White.copy(alpha = 0.09f - i * 0.02f),
+                        color = rings[i],
                         radius = size.minDimension / 2f * factor,
                         center = center,
                         style = Stroke(
@@ -754,7 +772,7 @@ private fun RefreshIndicator(
                 .background(PulseColors.ToastFill)
                 .border(
                     1.dp,
-                    Color.White.copy(alpha = 0.10f + holdProgress * 0.20f),
+                    PulseColors.sheen(0.10f + holdProgress * 0.20f),
                     CircleShape,
                 ),
             contentAlignment = Alignment.Center,
@@ -834,7 +852,50 @@ fun formatLatency(ms: Long): String = when {
     else -> String.format("%.2f s", ms / 1000.0)
 }
 
-/** "just now", "4m ago", "3h ago", "2d ago". */
+/**
+ * What a latency chart actually says, in words.
+ *
+ * Every chart in the app used to carry a fixed string — "Response time trend" —
+ * which tells a screen reader that a chart exists and nothing whatsoever about
+ * the data in it. The shape of these graphs is the whole content, so the numbers
+ * have to be spoken: latest, worst, and how many checks are behind them.
+ */
+internal fun chartSummary(kind: String, samples: List<Sample>): String {
+    if (samples.isEmpty()) return "$kind, no checks yet"
+    val ok = samples.filter { it.ok }
+    val failed = samples.size - ok.size
+    return buildString {
+        append("$kind, ${samples.size} checks")
+        samples.lastOrNull()?.let { append(", latest ${formatLatency(it.latencyMs)}") }
+        if (ok.isNotEmpty()) append(", slowest ${formatLatency(ok.maxOf { it.latencyMs })}")
+        if (failed > 0) append(", $failed failed")
+    }
+}
+
+/** The pass/fail strip, spoken as the count it encodes. */
+internal fun outcomeSummary(samples: List<Sample>): String {
+    if (samples.isEmpty()) return "No checks recorded yet"
+    val passed = samples.count { it.ok }
+    return "Recent checks, $passed of ${samples.size} passed"
+}
+
+/** "40m", "6h", "3d" — a duration, for saying what a figure covers. */
+fun formatSpan(ms: Long): String = when {
+    ms < 60_000 -> "under a minute"
+    ms < 3_600_000 -> "${ms / 60_000}m"
+    ms < 86_400_000 -> "${ms / 3_600_000}h"
+    else -> "${ms / 86_400_000}d"
+}
+
+/**
+ * "just now", "4m ago", "3h ago", "2d ago".
+ *
+ * From a composable, always pass [me.river.pulse.ui.theme.LocalNowMs] rather
+ * than letting [nowMs] default: the default is read once per composition and
+ * then frozen, which is how the dashboard used to sit on "just now" for a full
+ * fifteen-minute interval. The default is for the widget and the notifications,
+ * which are rebuilt from scratch on every update and have no clock to read.
+ */
 fun formatRelative(epochMs: Long, nowMs: Long = System.currentTimeMillis()): String {
     if (epochMs <= 0) return "never"
     val delta = abs(nowMs - epochMs)
@@ -857,8 +918,8 @@ fun MetricTile(
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(18.dp))
-            .background(Color.White.copy(alpha = 0.05f))
-            .border(1.dp, Color.White.copy(alpha = 0.07f), RoundedCornerShape(18.dp))
+            .background(PulseColors.sheen(0.05f))
+            .border(1.dp, PulseColors.sheen(0.07f), RoundedCornerShape(18.dp))
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -902,7 +963,7 @@ fun ProgressPips(total: Int, current: Int, modifier: Modifier = Modifier, accent
                     .clip(RoundedCornerShape(3.dp))
                     .background(
                         if (active) accent.copy(alpha = if (index == current) 1f else 0.5f)
-                        else Color.White.copy(alpha = 0.12f),
+                        else PulseColors.sheen(0.12f),
                     ),
             )
         }

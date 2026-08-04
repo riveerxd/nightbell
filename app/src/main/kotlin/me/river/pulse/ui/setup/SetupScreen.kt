@@ -1,6 +1,7 @@
 package me.river.pulse.ui.setup
 
 import androidx.compose.animation.AnimatedContent
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -16,6 +17,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -91,6 +93,7 @@ import me.river.pulse.ui.theme.BackdropScope
 import me.river.pulse.ui.theme.PulseColors
 import me.river.pulse.ui.theme.PulseRadii
 import me.river.pulse.ui.theme.accentFor
+import me.river.pulse.ui.theme.readableContentPadding
 import me.river.pulse.ui.theme.sheetSurface
 import me.river.pulse.ui.theme.softShadow
 import androidx.compose.ui.platform.testTag
@@ -102,8 +105,9 @@ fun SetupScreen(
     monitorId: String?,
     onClose: () -> Unit,
     onSaved: () -> Unit,
+    templateId: String? = null,
 ) {
-    val viewModel = rememberSetupViewModel(monitorId)
+    val viewModel = rememberSetupViewModel(monitorId, templateId)
     val draft = viewModel.draft
     val report = viewModel.report
     val (accent, accentEnd) = accentFor(draft.accent)
@@ -120,6 +124,30 @@ fun SetupScreen(
     // something real for it to frost. Its measured height becomes the scroll
     // area's bottom padding, so nothing ever hides behind it.
     var footerHeight by remember { mutableStateOf(0.dp) }
+    var confirmDiscard by remember { mutableStateOf(false) }
+
+    /**
+     * Leaving the wizard, from whichever direction the request arrived.
+     *
+     * The footer's Cancel and the system Back gesture have to agree: a draft that
+     * cost a page load to capture must not evaporate because the user swiped
+     * instead of tapping.
+     */
+    val requestLeave = {
+        if (viewModel.isDirty) confirmDiscard = true else onClose()
+    }
+
+    // Step 0 is the only step where Back means "leave". Everywhere else the
+    // gesture walks the wizard backwards, exactly as the footer's Back does.
+    // Disabled while the picker is up — that has its own handler, and it needs to
+    // consume Back for in-page navigation first.
+    BackHandler(enabled = !viewModel.pickerOpen) {
+        when {
+            confirmDiscard -> confirmDiscard = false
+            viewModel.step > 0 -> viewModel.back()
+            else -> requestLeave()
+        }
+    }
 
     Box(Modifier.fillMaxSize()) {
         BackdropHost(
@@ -131,7 +159,7 @@ fun SetupScreen(
                         step = viewModel.step,
                         editing = viewModel.isEditing,
                         accent = accent,
-                        onClose = onClose,
+                        onClose = requestLeave,
                     )
 
                     AnimatedContent(
@@ -154,7 +182,9 @@ fun SetupScreen(
                                 .fillMaxSize()
                                 .testTag("setup-scroll")
                                 .verticalScroll(rememberScrollState())
-                                .padding(horizontal = 18.dp),
+                                // Clamped and centred on a tablet: a form field a
+                                // thousand pixels wide is harder to read, not easier.
+                                .padding(readableContentPadding()),
                             verticalArrangement = Arrangement.spacedBy(16.dp),
                         ) {
                             when (step) {
@@ -189,7 +219,7 @@ fun SetupScreen(
                     accentEnd = accentEnd,
                     bottomInset = bottomInset,
                     backdrop = backdrop,
-                    onBack = { if (viewModel.step == 0) onClose() else viewModel.back() },
+                    onBack = { if (viewModel.step == 0) requestLeave() else viewModel.back() },
                     onNext = viewModel::next,
                     onSave = viewModel::save,
                     modifier = Modifier
@@ -218,6 +248,13 @@ fun SetupScreen(
             },
         )
 
+        DiscardDraftPrompt(
+            visible = confirmDiscard,
+            editing = viewModel.isEditing,
+            onKeepEditing = { confirmDiscard = false },
+            onDiscard = onClose,
+        )
+
         if (viewModel.loading) {
             Box(
                 Modifier
@@ -226,6 +263,73 @@ fun SetupScreen(
             )
         }
         Spacer(Modifier.height(topInset))
+    }
+}
+
+/**
+ * The last thing between a captured draft and losing it.
+ *
+ * Only ever raised when there is genuinely something to lose — an untouched
+ * wizard closes without argument, because a confirmation you always get is a
+ * confirmation you stop reading.
+ */
+@Composable
+private fun DiscardDraftPrompt(
+    visible: Boolean,
+    editing: Boolean,
+    onKeepEditing: () -> Unit,
+    onDiscard: () -> Unit,
+) {
+    AnimatedVisibility(visible = visible, enter = fadeIn(), exit = fadeOut()) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(PulseColors.Void.copy(alpha = 0.72f))
+                // Swallows taps so the form underneath cannot be edited while the
+                // prompt is up, and doubles as tap-outside-to-cancel.
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() },
+                    onClick = onKeepEditing,
+                )
+                .padding(horizontal = 26.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            GlassCard(accent = PulseColors.Amber, contentPadding = 20.dp) {
+                Text(
+                    text = if (editing) "Discard your changes?" else "Discard this monitor?",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = PulseColors.TextPrimary,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = if (editing) {
+                        "The monitor keeps its current settings. Anything you changed here goes."
+                    } else {
+                        "Nothing has been saved yet, so everything you filled in — including " +
+                            "any elements you captured — goes with it."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = PulseColors.TextTertiary,
+                )
+                Spacer(Modifier.height(16.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    PulseButton(
+                        text = "Keep editing",
+                        onClick = onKeepEditing,
+                        tone = ButtonTone.Secondary,
+                        modifier = Modifier.weight(1f),
+                    )
+                    PulseButton(
+                        text = "Discard",
+                        onClick = onDiscard,
+                        tone = ButtonTone.Danger,
+                        icon = PulseIcons.Trash,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -369,13 +473,13 @@ private fun StepKind(draft: Monitor, onSelect: (MonitorKind) -> Unit) {
                         )
                     } else {
                         Brush.linearGradient(
-                            listOf(Color.White.copy(alpha = 0.06f), Color.White.copy(alpha = 0.03f)),
+                            listOf(PulseColors.sheen(0.06f), PulseColors.sheen(0.03f)),
                         )
                     },
                 )
                 .border(
                     1.dp,
-                    if (selected) accent.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.09f),
+                    if (selected) accent.copy(alpha = 0.6f) else PulseColors.sheen(0.09f),
                     RoundedCornerShape(PulseRadii.card),
                 )
                 .clickable { onSelect(kind) }
@@ -595,8 +699,8 @@ private fun CapturedElementRow(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(15.dp))
-            .background(Color.White.copy(alpha = 0.05f))
-            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(15.dp))
+            .background(PulseColors.sheen(0.05f))
+            .border(1.dp, PulseColors.sheen(0.08f), RoundedCornerShape(15.dp))
             .padding(12.dp)
             .semantics { contentDescription = "Element ${index + 1}: ${element.displayLabel}" },
     ) {

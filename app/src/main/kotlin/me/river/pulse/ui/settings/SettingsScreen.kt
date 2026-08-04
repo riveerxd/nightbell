@@ -51,6 +51,7 @@ import me.river.pulse.BuildConfig
 import me.river.pulse.data.Pulse
 import me.river.pulse.domain.CheckerHealth
 import me.river.pulse.domain.CheckerLimit
+import me.river.pulse.domain.ThemeChoice
 import me.river.pulse.ui.components.AlertPolicyEditor
 import me.river.pulse.ui.components.ButtonTone
 import me.river.pulse.ui.components.GlassCard
@@ -61,6 +62,7 @@ import me.river.pulse.ui.components.GlassField
 import me.river.pulse.ui.components.GlassDivider
 import androidx.compose.ui.text.input.KeyboardType
 import me.river.pulse.ui.components.SectionHeader
+import me.river.pulse.ui.components.SegmentedSelector
 import me.river.pulse.ui.components.StaggeredEntrance
 import me.river.pulse.ui.components.rememberEntranceLog
 import me.river.pulse.ui.components.StepperRow
@@ -69,6 +71,7 @@ import me.river.pulse.ui.icons.PulseIcons
 import me.river.pulse.ui.rememberSettingsViewModel
 import me.river.pulse.ui.theme.Backdrop
 import me.river.pulse.ui.theme.PulseColors
+import me.river.pulse.ui.theme.readableContentPadding
 import me.river.pulse.widget.PulseWidgetProvider
 import me.river.pulse.widget.WidgetConfigActivity
 import androidx.compose.ui.platform.testTag
@@ -145,9 +148,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
 
     LazyColumn(
         Modifier.fillMaxSize().testTag("settings-list"),
-        contentPadding = PaddingValues(
-            start = 18.dp,
-            end = 18.dp,
+        contentPadding = readableContentPadding(
             top = topInset + 12.dp,
             bottom = bottomInset + 40.dp,
         ),
@@ -494,8 +495,69 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
             }
         }
 
+        item(key = "certificates") {
+            StaggeredEntrance(index = 7, key = "certificates", log = entrance) {
+                GlassCard {
+                    SectionHeader(
+                        "TLS certificates",
+                        icon = PulseIcons.Shield,
+                        accent = PulseColors.Mint,
+                    )
+                    Text(
+                        text = "Every HTTPS check already completes a handshake, and the " +
+                            "handshake carries the certificate's expiry date. Reading it costs " +
+                            "nothing and catches the one outage you can see coming.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = PulseColors.TextTertiary,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    ToggleRow(
+                        title = "Warn before certificates expire",
+                        subtitle = if (settings.certAlertsEnabled) {
+                            "Advisory only — never wakes you, never bypasses quiet hours"
+                        } else {
+                            "A cert can lapse without warning"
+                        },
+                        checked = settings.certAlertsEnabled,
+                        onCheckedChange = { v -> viewModel.update { it.copy(certAlertsEnabled = v) } },
+                        icon = PulseIcons.Shield,
+                        accent = PulseColors.Mint,
+                    )
+                    if (settings.certAlertsEnabled) {
+                        Spacer(Modifier.height(6.dp))
+                        StepperRow(
+                            title = "Start warning",
+                            value = settings.certWarnDays,
+                            onValueChange = { v -> viewModel.update { it.copy(certWarnDays = v) } },
+                            range = 1..90,
+                            suffix = "d",
+                            icon = PulseIcons.Clock,
+                            accent = PulseColors.Amber,
+                        )
+                        StepperRow(
+                            title = "Urgent below",
+                            value = settings.certCriticalDays,
+                            onValueChange = { v -> viewModel.update { it.copy(certCriticalDays = v) } },
+                            range = 0..30,
+                            suffix = "d",
+                            icon = PulseIcons.Zap,
+                            accent = PulseColors.Rose,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = "Said once when it crosses each threshold, then at most once " +
+                                "a day. A renewal clears the notice on the next check. " +
+                                "Plain-HTTP monitors have no certificate and are skipped.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = PulseColors.TextTertiary,
+                        )
+                    }
+                }
+            }
+        }
+
         item(key = "favicons") {
-            StaggeredEntrance(index = 7, key = "favicons", log = entrance) {
+            StaggeredEntrance(index = 8, key = "favicons", log = entrance) {
                 GlassCard {
                     SectionHeader("Site icons", icon = PulseIcons.Globe, accent = PulseColors.Sky)
                     Text(
@@ -527,7 +589,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         }
 
         item(key = "backup") {
-            StaggeredEntrance(index = 8, key = "backup", log = entrance) {
+            StaggeredEntrance(index = 9, key = "backup", log = entrance) {
                 GlassCard {
                     SectionHeader("Backup and transfer", icon = PulseIcons.Export, accent = PulseColors.Violet)
                     Text(
@@ -621,8 +683,38 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
             }
         }
 
+        item(key = "help") {
+            StaggeredEntrance(index = 10, key = "help", log = entrance) {
+                HelpCard()
+            }
+        }
+
+        item(key = "appearance") {
+            StaggeredEntrance(index = 11, key = "appearance", log = entrance) {
+                GlassCard {
+                    SectionHeader("Appearance", icon = PulseIcons.Eye, accent = PulseColors.Aqua)
+                    Text(
+                        text = "Pulse is built dark-first — the glass reads on depth, and depth " +
+                            "is easiest to draw on black. The light scheme is a designed " +
+                            "counterpart rather than an inversion: same layout, re-picked " +
+                            "colours, and the status hues darkened until they stay legible.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = PulseColors.TextTertiary,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    SegmentedSelector(
+                        options = ThemeChoice.entries.toList(),
+                        selected = settings.theme,
+                        onSelect = { choice -> viewModel.update { it.copy(theme = choice) } },
+                        label = { it.label },
+                        modifier = Modifier.testTag("theme-selector"),
+                    )
+                }
+            }
+        }
+
         item(key = "motion") {
-            StaggeredEntrance(index = 9, key = "motion", log = entrance) {
+            StaggeredEntrance(index = 12, key = "motion", log = entrance) {
                 GlassCard {
                     SectionHeader("Motion", icon = PulseIcons.Sparkle, accent = PulseColors.Mint)
                     Text(
@@ -668,7 +760,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         }
 
         item(key = "about") {
-            StaggeredEntrance(index = 10, key = "about", log = entrance) {
+            StaggeredEntrance(index = 13, key = "about", log = entrance) {
                 GlassCard {
                     SectionHeader("About", icon = PulseIcons.Info, accent = PulseColors.Sky)
                     AboutRow("Version", "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")

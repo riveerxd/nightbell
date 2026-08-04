@@ -12,6 +12,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -72,6 +73,7 @@ fun GlassCard(
     elevation: Dp = 12.dp,
     contentPadding: Dp = 18.dp,
     onClick: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
@@ -92,9 +94,10 @@ fun GlassCard(
             .glass(shape = shape, corner = corner, elevation = elevation, accent = accent)
             .then(
                 if (onClick != null) {
-                    Modifier.clickable(
+                    Modifier.combinedClickable(
                         interactionSource = interaction,
                         indication = ripple(color = if (accent == Color.Transparent) PulseColors.Aqua else accent),
+                        onLongClick = onLongClick,
                         onClick = onClick,
                     )
                 } else {
@@ -163,7 +166,7 @@ fun GlassDivider(modifier: Modifier = Modifier, alpha: Float = 0.10f) {
                 Brush.horizontalGradient(
                     listOf(
                         Color.Transparent,
-                        Color.White.copy(alpha = alpha),
+                        PulseColors.sheen(alpha),
                         Color.Transparent,
                     ),
                 ),
@@ -257,7 +260,14 @@ fun ShimmerBlock(
     Box(
         modifier
             .clip(shape)
-            .background(Color.White.copy(alpha = 0.06f))
+            .background(PulseColors.sheen(0.06f))
+            .let { base -> base.shimmerSweep(PulseColors.sheen(0.14f), progress) }
+    )
+}
+
+/** The travelling highlight, with its colour resolved outside the draw scope. */
+private fun Modifier.shimmerSweep(tint: Color, progress: Float): Modifier =
+    this
             .drawWithContent {
                 drawContent()
                 val width = size.width
@@ -265,7 +275,7 @@ fun ShimmerBlock(
                     brush = Brush.linearGradient(
                         colors = listOf(
                             Color.Transparent,
-                            Color.White.copy(alpha = 0.14f),
+                            tint,
                             Color.Transparent,
                         ),
                         start = Offset(progress * width - width * 0.4f, 0f),
@@ -273,9 +283,7 @@ fun ShimmerBlock(
                     ),
                 )
             }
-            .clearAndSetSemantics { },
-    )
-}
+            .clearAndSetSemantics { }
 
 /** Small uppercase tag used for kinds, methods and codes. */
 @Composable
@@ -283,9 +291,15 @@ fun MicroTag(
     text: String,
     modifier: Modifier = Modifier,
     color: Color = PulseColors.TextSecondary,
-    background: Color = Color.White.copy(alpha = 0.07f),
+    background: Color = PulseColors.sheen(0.07f),
     icon: ImageVector? = null,
 ) {
+    // Metadata only, deliberately not interactive.
+    //
+    // It is 22 dp tall and 11.5 sp — the right weight for a latency reading beside a
+    // status pill, and completely wrong for a control. Using it as a button is how
+    // "My order" and "Clear" ended up as things you could barely see, let alone hit.
+    // Anything tappable uses PulseButton or ChipSelector.
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(PulseRadii.chip))

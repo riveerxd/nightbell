@@ -16,3 +16,4 @@ keystore/keystore.properties
 # Debug APKs are 14 MB each and rebuildable; releases and their R8 mapping
 # are kept because a release stack trace is unreadable without the mapping.
 artifacts/*-debug.apk
+.impeccable/

@@ -44,10 +44,27 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
+    <!--
+        Auto Backup is off, deliberately.
+
+        `allowBackup="true"` with `fullBackupContent="true"` and no exclusion rules
+        was uploading `datastore/pulse_store.preferences_pb` to the user's Google
+        Drive — and that document holds every monitor's request headers, which is
+        exactly where an `Authorization: Bearer …` lives. An app whose pitch is
+        "no server, no account, no third party" cannot ship its users' API tokens
+        to a third party as a side effect of a default.
+
+        Device-to-device transfer is off with it, and that is the right trade
+        rather than a casualty: the store also carries in-progress alert
+        bookkeeping, and restoring that onto a fresh install is the one thing the
+        JSON import path deliberately refuses to do, because inheriting a stale
+        "already alerting" flag suppresses the next real outage. Settings →
+        Backup and transfer stays the only way across, and it scrubs that state on
+        purpose.
+    -->
     <application
         android:name=".PulseApplication"
-        android:allowBackup="true"
-        android:fullBackupContent="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"

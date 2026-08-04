@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import kotlinx.coroutines.launch
 import me.river.pulse.data.Pulse
+import me.river.pulse.domain.ThemeChoice
 import me.river.pulse.ui.theme.PulseTheme
 import me.river.pulse.ui.urgent.UrgentAlertScreen
 import me.river.pulse.ui.urgent.UrgentAlertUi
@@ -53,7 +54,11 @@ class UrgentAlertActivity : ComponentActivity() {
         )
 
         setContent {
-            PulseTheme(motionIntensity = 1f) {
+            // Pinned to dark on purpose, ignoring the user's theme choice. This
+            // is a full-bleed red emergency surface that appears over a lock
+            // screen at 3am; it has one appearance so it is recognised instantly,
+            // and a light variant of it would be a different thing entirely.
+            PulseTheme(motionIntensity = 1f, theme = ThemeChoice.DARK) {
                 UrgentAlertScreen(
                     variant = UrgentAlertVariant.BRIEF,
                     ui = ui,

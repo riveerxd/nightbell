@@ -38,11 +38,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.river.pulse.domain.CertificateWatch
 import me.river.pulse.domain.Health
 import me.river.pulse.domain.Monitor
 import me.river.pulse.domain.MonitorKind
 import me.river.pulse.domain.MonitorRuntime
 import me.river.pulse.domain.Sample
+import me.river.pulse.domain.UptimeWindows
 import me.river.pulse.ui.components.ButtonTone
 import me.river.pulse.ui.components.EmptyState
 import me.river.pulse.ui.components.GlassCard
@@ -60,17 +62,23 @@ import me.river.pulse.ui.components.StatusOrb
 import me.river.pulse.ui.components.UptimeRing
 import me.river.pulse.ui.components.formatLatency
 import me.river.pulse.ui.components.formatRelative
+import me.river.pulse.ui.components.formatSpan
 import me.river.pulse.ui.dashboard.kindIcon
 import me.river.pulse.ui.icons.PulseIcons
 import me.river.pulse.ui.rememberDetailViewModel
+import me.river.pulse.ui.theme.LocalNowMs
 import me.river.pulse.ui.theme.PulseColors
 import me.river.pulse.ui.theme.accentFor
+import me.river.pulse.ui.theme.readableContentPadding
 import me.river.pulse.ui.theme.healthColor
 import me.river.pulse.ui.theme.healthRim
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import androidx.compose.ui.platform.testTag
+
+/** How many checks the history shows before it asks whether you want the rest. */
+private const val EVENT_PREVIEW = 24
 
 @Composable
 fun DetailScreen(
@@ -82,6 +90,7 @@ fun DetailScreen(
     val viewModel = rememberDetailViewModel(monitorId)
     val card by viewModel.card.collectAsStateWithLifecycle()
     var confirmDelete by remember { mutableStateOf(false) }
+    var showAllChecks by remember { mutableStateOf(false) }
     val entrance = rememberEntranceLog()
 
     val toast = viewModel.toast
@@ -113,12 +122,11 @@ fun DetailScreen(
     val runtime = current.runtime
     val (accent, accentEnd) = accentFor(monitor.accent)
     val health = if (!monitor.enabled) Health.PAUSED else runtime.health
+    val now = LocalNowMs.current
 
     LazyColumn(
         Modifier.fillMaxSize().testTag("detail-list"),
-        contentPadding = PaddingValues(
-            start = 18.dp,
-            end = 18.dp,
+        contentPadding = readableContentPadding(
             top = topInset + 12.dp,
             bottom = bottomInset + 36.dp,
         ),
@@ -172,7 +180,7 @@ fun DetailScreen(
 
         item(key = "hero") {
             StaggeredEntrance(index = 0, key = "hero-${monitor.id}", log = entrance) {
-                HeroCard(monitor, runtime, health, current.checking, accent, accentEnd)
+                HeroCard(monitor, runtime, health, current.checking, accent, accentEnd, now)
             }
         }
 
@@ -181,7 +189,7 @@ fun DetailScreen(
                 ActionsRow(
                     enabled = monitor.enabled,
                     busy = viewModel.busy || current.checking,
-                    muted = runtime.mutedUntil > System.currentTimeMillis(),
+                    muted = runtime.mutedUntil > now,
                     accent = accent,
                     onCheck = viewModel::checkNow,
                     onToggle = { viewModel.setEnabled(!monitor.enabled) },
@@ -227,8 +235,16 @@ fun DetailScreen(
             }
         }
 
+        if (runtime.certExpiresAt > 0L) {
+            item(key = "cert") {
+                StaggeredEntrance(index = 3, key = "cert-${monitor.id}", log = entrance) {
+                    CertificateCard(runtime, now)
+                }
+            }
+        }
+
         item(key = "config") {
-            StaggeredEntrance(index = 3, key = "config-${monitor.id}", log = entrance) {
+            StaggeredEntrance(index = 4, key = "config-${monitor.id}", log = entrance) {
                 ConfigCard(monitor, accent)
             }
         }
@@ -248,7 +264,11 @@ fun DetailScreen(
                 }
             }
         } else {
-            val recent = runtime.samples.asReversed().take(24)
+            val all = runtime.samples.asReversed()
+            // The list is capped at a readable length, but the rest is *stored* —
+            // it was simply unreachable, which is a strange thing to do to the
+            // history someone came to this screen to read.
+            val recent = if (showAllChecks) all else all.take(EVENT_PREVIEW)
             item(key = "events") {
                 GlassCard(contentPadding = 6.dp) {
                     recent.forEachIndexed { index, sample ->
@@ -257,6 +277,21 @@ fun DetailScreen(
                             GlassDivider(Modifier.padding(horizontal = 12.dp), alpha = 0.06f)
                         }
                     }
+                }
+            }
+            if (all.size > EVENT_PREVIEW) {
+                item(key = "events-more") {
+                    PulseButton(
+                        text = if (showAllChecks) {
+                            "Show fewer"
+                        } else {
+                            "Show all ${all.size} checks"
+                        },
+                        onClick = { showAllChecks = !showAllChecks },
+                        icon = if (showAllChecks) PulseIcons.ChevronUp else PulseIcons.History,
+                        tone = ButtonTone.Secondary,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             }
         }
@@ -323,13 +358,26 @@ private fun HeroCard(
     checking: Boolean,
     accent: Color,
     accentEnd: Color,
+    nowMs: Long,
 ) {
     GlassCard(accent = healthRim(health), contentPadding = 20.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            // The ring used to show passing-checks-over-retained-checks under the
+            // word UPTIME, which is a different quantity wearing the name of the
+            // one people read it as. It now reports a real day, and when there is
+            // not yet a day of history it says how far back it can actually see
+            // instead of quietly reporting a shorter window as if it were one.
+            val window = runtime.uptimeWithin(nowMs, UptimeWindows.DAY_MS)
             UptimeRing(
-                percent = runtime.uptimePercent,
+                percent = window?.percent ?: 0f,
                 modifier = Modifier.size(124.dp),
                 accent = healthColor(health),
+                label = when {
+                    window == null -> "no checks yet"
+                    window.complete -> "24h uptime"
+                    else -> "past ${formatSpan(window.spanMs)}"
+                },
+                unknown = window == null,
             )
             Spacer(Modifier.width(18.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -365,7 +413,7 @@ private fun HeroCard(
                     }
                 }
                 Text(
-                    text = "Checked ${formatRelative(runtime.lastCheckedAt)}",
+                    text = "Checked ${formatRelative(runtime.lastCheckedAt, LocalNowMs.current)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = PulseColors.TextTertiary,
                 )
@@ -471,6 +519,67 @@ private fun UrgentBanner(repeatMinutes: Int, onAcknowledge: () -> Unit) {
     }
 }
 
+/**
+ * The certificate the last handshake presented.
+ *
+ * Its own card rather than a row in Configuration, because it is the only thing
+ * on this screen that is an *observation with a deadline*: everything in
+ * Configuration is a setting the user typed, and everything in the hero is what
+ * happened on the last check. A date the site will stop working on is neither.
+ *
+ * Only rendered when a certificate was actually seen, so a plain-HTTP monitor
+ * gets no empty card claiming nothing.
+ */
+@Composable
+private fun CertificateCard(runtime: MonitorRuntime, nowMs: Long) {
+    // Thresholds here are the reporting defaults rather than the user's, because
+    // this card describes the certificate rather than the alerting decision — the
+    // date and the days remaining are true regardless of when someone chose to be
+    // told about them.
+    val days = CertificateWatch.daysLeft(runtime.certExpiresAt, nowMs)
+    val expired = nowMs >= runtime.certExpiresAt
+    val tone = when {
+        expired -> PulseColors.Rose
+        days <= 14 -> PulseColors.Amber
+        else -> PulseColors.Mint
+    }
+    GlassCard(accent = if (tone == PulseColors.Mint) Color.Transparent else tone) {
+        SectionHeader("TLS certificate", icon = PulseIcons.Shield, accent = tone)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = when {
+                        expired -> "Expired ${formatSpan(nowMs - runtime.certExpiresAt)} ago"
+                        days <= 0L -> "Expires today"
+                        days == 1L -> "Expires tomorrow"
+                        else -> "$days days left"
+                    },
+                    style = MaterialTheme.typography.titleLarge,
+                    color = tone,
+                )
+                Text(
+                    text = certDateFormat.format(Date(runtime.certExpiresAt)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = PulseColors.TextTertiary,
+                )
+            }
+            if (runtime.certIssuer.isNotBlank()) {
+                MicroTag(runtime.certIssuer, color = PulseColors.TextSecondary)
+            }
+        }
+        if (expired) {
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = "Every client that verifies certificates is refusing this " +
+                    "connection. A check that still passes is checking something " +
+                    "that stopped being trustworthy.",
+                style = MaterialTheme.typography.bodySmall,
+                color = PulseColors.TextSecondary,
+            )
+        }
+    }
+}
+
 @Composable
 private fun ConfigCard(monitor: Monitor, accent: Color) {
     GlassCard {
@@ -546,6 +655,7 @@ private fun ConfigRow(label: String, value: String) {
     }
 }
 
+private val certDateFormat = SimpleDateFormat("d MMM yyyy", Locale.getDefault())
 private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 private val dateFormat = SimpleDateFormat("d MMM", Locale.getDefault())
 

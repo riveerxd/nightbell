@@ -122,8 +122,8 @@ android {
         // `notifyStateChanged` — so acknowledge, mute and recovery are all felt at
         // once. Regression test asserts under two seconds and was confirmed to
         // fail against the old code.
-        versionCode = 15
-        versionName = "2.2.2"
+        versionCode = 16
+        versionName = "2.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

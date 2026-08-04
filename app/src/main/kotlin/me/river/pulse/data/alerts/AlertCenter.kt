@@ -23,7 +23,11 @@ import androidx.core.content.ContextCompat
 import me.river.pulse.MainActivity
 import me.river.pulse.UrgentAlertActivity
 import me.river.pulse.R
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import me.river.pulse.domain.AlertPolicy
+import me.river.pulse.domain.CertificateWatch
 import me.river.pulse.domain.CheckResult
 import me.river.pulse.domain.Monitor
 import me.river.pulse.domain.SoundChoice
@@ -429,6 +433,70 @@ class AlertCenter(private val context: Context) {
 
     fun cancelDegraded(monitorId: String) = compat.cancel(monitorId.degradedNotificationId())
 
+    // ---- certificate expiry -------------------------------------------------
+
+    /**
+     * The certificate advisory.
+     *
+     * Always silent-by-nature rather than silent-by-flag: it takes the monitor's
+     * chosen sound like any other alert, but it lands on a DEFAULT-importance
+     * channel and carries CATEGORY_REMINDER, because it is a deadline and not an
+     * event. No re-check action either — re-running the check cannot renew a
+     * certificate, and offering it would imply otherwise.
+     */
+    fun notifyCertExpiry(
+        monitor: Monitor,
+        level: CertificateWatch.Level,
+        daysLeft: Long,
+        expiresAt: Long,
+        issuer: String,
+        policy: AlertPolicy,
+        silent: Boolean,
+    ) {
+        val host = monitor.prettyHost.substringBefore('/')
+        val channelId = channelFor(policy, Severity.CERT, silent)
+        val notification = baseBuilder(channelId, monitor, silent)
+            .setSmallIcon(R.drawable.ic_stat_alert)
+            .setContentTitle(CertificateWatch.headline(level, daysLeft, host))
+            .setContentText(
+                if (level == CertificateWatch.Level.EXPIRED) {
+                    "Clients are refusing this connection now"
+                } else {
+                    "Expires ${certDateFormat.format(Date(expiresAt))}"
+                },
+            )
+            .setStyle(
+                NotificationCompat.BigTextStyle().bigText(
+                    buildString {
+                        if (level == CertificateWatch.Level.EXPIRED) {
+                            append("The TLS certificate for $host expired on ")
+                            append(certDateFormat.format(Date(expiresAt)))
+                            append(". Every client that checks it is refusing the connection.")
+                        } else {
+                            append("The TLS certificate for $host is valid until ")
+                            append(certDateFormat.format(Date(expiresAt)))
+                            append(". Renew it before then or the site stops answering.")
+                        }
+                        if (issuer.isNotBlank()) append("\n\nIssued by $issuer")
+                        append("\n\n").append(monitor.url)
+                    },
+                ),
+            )
+            .setColor(
+                if (level == CertificateWatch.Level.EXPIRED) DOWN_COLOR else DEGRADED_COLOR,
+            )
+            .setColorized(true)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setAutoCancel(true)
+            .build()
+        post(monitor.id.certNotificationId(), notification)
+    }
+
+    fun cancelCert(monitorId: String) = compat.cancel(monitorId.certNotificationId())
+
+    fun certIdOf(monitorId: String): Int = monitorId.certNotificationId()
+
     // ---- checker health ----------------------------------------------------
 
     /**
@@ -636,7 +704,7 @@ class AlertCenter(private val context: Context) {
 
     // ---- channels ----------------------------------------------------------
 
-    enum class Severity { DOWN, DEGRADED, RECOVERY }
+    enum class Severity { DOWN, DEGRADED, RECOVERY, CERT }
 
     private fun ensureGroups() {
         manager.createNotificationChannelGroup(
@@ -647,6 +715,9 @@ class AlertCenter(private val context: Context) {
         )
         manager.createNotificationChannelGroup(
             NotificationChannelGroup(GROUP_RECOVERY, "Recovery alerts"),
+        )
+        manager.createNotificationChannelGroup(
+            NotificationChannelGroup(GROUP_CERT, "Certificate alerts"),
         )
         manager.createNotificationChannelGroup(
             NotificationChannelGroup(GROUP_URGENT, "Urgent"),
@@ -757,6 +828,7 @@ class AlertCenter(private val context: Context) {
             Severity.DOWN -> "pulse.down."
             Severity.DEGRADED -> "pulse.degraded."
             Severity.RECOVERY -> "pulse.recovery."
+            Severity.CERT -> "pulse.cert."
         }
         val id = buildString {
             append(prefix)
@@ -769,6 +841,10 @@ class AlertCenter(private val context: Context) {
         val importance = when {
             severity == Severity.RECOVERY -> NotificationManager.IMPORTANCE_DEFAULT
             severity == Severity.DEGRADED -> NotificationManager.IMPORTANCE_DEFAULT
+            // A certificate with nine days left has nothing to say at 3am. DEFAULT
+            // means it lands in the shade and waits, which is the correct urgency
+            // for a deadline rather than an outage.
+            severity == Severity.CERT -> NotificationManager.IMPORTANCE_DEFAULT
             sound == SoundChoice.SILENT && !vibrateOn -> NotificationManager.IMPORTANCE_DEFAULT
             else -> NotificationManager.IMPORTANCE_HIGH
         }
@@ -778,6 +854,7 @@ class AlertCenter(private val context: Context) {
                     Severity.DOWN -> "Down · "
                     Severity.DEGRADED -> "Slow · "
                     Severity.RECOVERY -> "Recovery · "
+                    Severity.CERT -> "Certificate · "
                 },
             )
             append(sound.label)
@@ -789,18 +866,20 @@ class AlertCenter(private val context: Context) {
                 Severity.DOWN -> GROUP_DOWN
                 Severity.DEGRADED -> GROUP_DEGRADED
                 Severity.RECOVERY -> GROUP_RECOVERY
+                Severity.CERT -> GROUP_CERT
             }
             description = when (severity) {
                 Severity.DOWN -> "Raised when a monitor starts failing (${sound.label.lowercase()})."
                 Severity.DEGRADED -> "Raised when a monitor breaches its latency budget."
                 Severity.RECOVERY -> "Raised when a monitor recovers (${sound.label.lowercase()})."
+                Severity.CERT -> "Raised when a TLS certificate is approaching its expiry date."
             }
             enableVibration(vibrateOn)
             if (vibrateOn) vibrationPattern = style.pattern
             enableLights(severity == Severity.DOWN)
             lightColor = when (severity) {
                 Severity.DOWN -> DOWN_COLOR
-                Severity.DEGRADED -> DEGRADED_COLOR
+                Severity.DEGRADED, Severity.CERT -> DEGRADED_COLOR
                 Severity.RECOVERY -> UP_COLOR
             }
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
@@ -907,6 +986,9 @@ class AlertCenter(private val context: Context) {
         private const val GROUP_DOWN = "pulse.group.down"
         private const val GROUP_DEGRADED = "pulse.group.degraded"
         private const val GROUP_RECOVERY = "pulse.group.recovery"
+        private const val GROUP_CERT = "pulse.group.cert"
+        /** Date only: an expiry to the second is precision nobody can act on. */
+        private val certDateFormat = SimpleDateFormat("d MMM yyyy", Locale.getDefault())
         private const val GROUP_URGENT = "pulse.group.urgent"
         private const val GROUP_HEALTH = "pulse.group.health"
         private const val NOTIFICATION_GROUP = "pulse.alerts"
@@ -946,3 +1028,5 @@ internal fun String.notificationId(): Int = 100_000 + (hashCode() and 0x7FFF)
 internal fun String.urgentNotificationId(): Int = 200_000 + (hashCode() and 0x7FFF)
 
 internal fun String.degradedNotificationId(): Int = 300_000 + (hashCode() and 0x7FFF)
+
+internal fun String.certNotificationId(): Int = 400_000 + (hashCode() and 0x7FFF)

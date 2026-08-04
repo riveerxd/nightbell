@@ -4,9 +4,11 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
@@ -16,56 +18,190 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.river.pulse.domain.Health
+import me.river.pulse.domain.ThemeChoice
 
-/** Core palette. Pulse is dark-first by design — the glass only reads on depth. */
-object PulseColors {
-    val Void = Color(0xFF000000)
-    val Ink = Color(0xFF090909)
-    val Slate = Color(0xFF141414)
+/**
+ * One palette, resolved per scheme.
+ *
+ * Pulse was dark-only, and not by a flag — [PulseTheme] took a `darkTheme`
+ * parameter and suppressed it. The reason was real: the glass system is built on
+ * depth, and depth here is drawn as *white at a low alpha over black*, which has
+ * no meaning on a light surface. A light mode is therefore not an inversion, it is
+ * a second set of answers to the same questions, which is why every one of those
+ * hand-tuned white overlays now goes through [sheen] instead of naming a colour.
+ *
+ * Health colours are the interesting part. They cannot simply carry over: mint
+ * `#2FD98A` on white has a contrast ratio of about 1.9, so "operational" would be
+ * legible in one scheme and invisible in the other. The light scheme keeps each
+ * status's *hue* and darkens it until it passes, so a red still reads as red and
+ * still reads at all.
+ */
+@Immutable
+class PulseColorScheme(
+    /** True when this scheme paints light-on-dark. */
+    val isDark: Boolean,
+
+    val Void: Color,
+    val Ink: Color,
+    val Slate: Color,
 
     // Brand. One blue family — chrome, charts and per-monitor identity.
-    val Aqua = Color(0xFF2F6BFF)
-    val Violet = Color(0xFF2F6BFF)
-    val Indigo = Color(0xFF1647C7)
+    val Aqua: Color,
+    val Violet: Color,
+    val Indigo: Color,
 
     // Status. These carry *meaning*, so they must never be folded into the brand
     // blue: a monitor that is down has to read as red from across the room, and
     // "degraded" has to be distinguishable from both.
-    val Mint = Color(0xFF2FD98A) // UP / passing
-    val Amber = Color(0xFFFFB020) // DEGRADED / warnings / non-2xx codes
-    val Rose = Color(0xFFFF4D57) // DOWN / errors / destructive actions
-    val Sky = Color(0xFF6AA8FF) // UNKNOWN — never checked yet
-    val Coral = Color(0xFFFF7A59)
+    val Mint: Color,
+    val Amber: Color,
+    val Rose: Color,
+    val Sky: Color,
+    val Coral: Color,
 
-    val TextPrimary = Color(0xFFFFFFFF)
-    val TextSecondary = Color(0xFFD6D6D6)
-    val TextTertiary = Color(0xFF8A8A8A)
+    val TextPrimary: Color,
+    val TextSecondary: Color,
+    val TextTertiary: Color,
 
-    // Opaque on purpose: the toast capsule floats over cards and charts, and a
-    // translucent fill lets whatever it covers show through as noise.
-    val ToastFill = Color(0xFF171717)
+    val ToastFill: Color,
+    val SheetScrim: Color,
 
-    // Painted over a real backdrop blur. Translucent enough to see the blur
-    // move underneath, opaque enough that body text on top never fights it.
-    val SheetScrim = Color(0xD40C0C0C)
+    val GlassFill: Color,
+    val GlassFillStrong: Color,
+    val GlassStroke: Color,
+    val GlassStrokeSoft: Color,
 
-    val GlassFill = Color(0xF20A0A0A)
-    val GlassFillStrong = Color(0xFF111111)
-    val GlassStroke = Color(0x40FFFFFF)
-    val GlassStrokeSoft = Color(0x22FFFFFF)
+    /**
+     * Multiplier applied to [sheen] alphas.
+     *
+     * Black over a light surface reads considerably stronger than white over a
+     * black one at the same alpha, so the light scheme needs *less* of it to land
+     * at the same perceived weight, not more. Tuned by eye against the dark
+     * original rather than derived, because the goal is matching how heavy an edge
+     * looks, and no formula gets that right.
+     */
+    val sheenScale: Float,
+
+    /**
+     * Multiplier applied to [Modifier.softShadow] strength.
+     *
+     * A cast shadow is nearly free on black and very loud on off-white. Same
+     * geometry, less of it.
+     */
+    val shadowScale: Float,
+) {
+    /**
+     * The "raised surface" overlay: a hairline, a control fill, a specular sweep.
+     *
+     * Every one of these was `Color.White.copy(alpha = …)` inline, which is the
+     * single thing that made a light scheme impossible — 45 separate hard-coded
+     * assumptions that the surface underneath was black.
+     */
+    fun sheen(alpha: Float): Color =
+        if (isDark) {
+            Color.White.copy(alpha = alpha)
+        } else {
+            Color.Black.copy(alpha = (alpha * sheenScale).coerceIn(0f, 1f))
+        }
+
+    /**
+     * Per-monitor accent pairs. Deliberately monochrome — monitor identity is
+     * carried by name and icon, and colour is reserved for health, so a red card
+     * always means one thing.
+     */
+    val accentPairs: List<Pair<Color, Color>> get() = listOf(Aqua to Indigo)
 }
 
-/**
- * Per-monitor accent pairs. The palette is deliberately monochrome here —
- * monitor identity is carried by name and icon, and colour is reserved for
- * health, so a red card always means one thing.
- */
-val AccentPairs: List<Pair<Color, Color>> = listOf(
-    PulseColors.Aqua to PulseColors.Indigo,
+val PulseDarkColors = PulseColorScheme(
+    isDark = true,
+    Void = Color(0xFF000000),
+    Ink = Color(0xFF090909),
+    Slate = Color(0xFF141414),
+    Aqua = Color(0xFF2F6BFF),
+    Violet = Color(0xFF2F6BFF),
+    Indigo = Color(0xFF1647C7),
+    Mint = Color(0xFF2FD98A),
+    Amber = Color(0xFFFFB020),
+    Rose = Color(0xFFFF4D57),
+    Sky = Color(0xFF6AA8FF),
+    Coral = Color(0xFFFF7A59),
+    TextPrimary = Color(0xFFFFFFFF),
+    TextSecondary = Color(0xFFD6D6D6),
+    TextTertiary = Color(0xFF8A8A8A),
+    // Opaque on purpose: the toast capsule floats over cards and charts, and a
+    // translucent fill lets whatever it covers show through as noise.
+    ToastFill = Color(0xFF171717),
+    // Painted over a real backdrop blur. Translucent enough to see the blur move
+    // underneath, opaque enough that body text on top never fights it.
+    SheetScrim = Color(0xD40C0C0C),
+    GlassFill = Color(0xF20A0A0A),
+    GlassFillStrong = Color(0xFF111111),
+    GlassStroke = Color(0x40FFFFFF),
+    GlassStrokeSoft = Color(0x22FFFFFF),
+    sheenScale = 1f,
+    shadowScale = 1f,
 )
 
-fun accentFor(index: Int): Pair<Color, Color> = AccentPairs[((index % AccentPairs.size) + AccentPairs.size) % AccentPairs.size]
+/**
+ * The light scheme.
+ *
+ * Depth inverts rather than translating: on black, a card is *lighter* than its
+ * background and lifts itself with a white top edge; on off-white, the card is the
+ * white one and the background is the tinted one, with the edge doing the lifting
+ * in the opposite direction. That is why [Void] is not white here — a white card
+ * on a white page has nothing to be raised out of.
+ */
+val PulseLightColors = PulseColorScheme(
+    isDark = false,
+    Void = Color(0xFFF3F4F7),
+    Ink = Color(0xFFFFFFFF),
+    Slate = Color(0xFFE8EAEF),
+    // Darkened until they pass on white while staying recognisably the same blue.
+    Aqua = Color(0xFF1B4FD9),
+    Violet = Color(0xFF1B4FD9),
+    Indigo = Color(0xFF12379B),
+    // Hue preserved, luminance dropped to clear 4.5:1 against Void and Ink.
+    Mint = Color(0xFF07834B),
+    Amber = Color(0xFF8A5200),
+    Rose = Color(0xFFC4111F),
+    Sky = Color(0xFF1D4FD8),
+    Coral = Color(0xFFB63A18),
+    TextPrimary = Color(0xFF0B0D12),
+    TextSecondary = Color(0xFF3C424E),
+    // 5.3:1 on Void — the old #8A8A8A would have been 2.5:1 and unreadable.
+    TextTertiary = Color(0xFF5E6573),
+    ToastFill = Color(0xFFFFFFFF),
+    SheetScrim = Color(0xD9F7F8FA),
+    GlassFill = Color(0xF7FFFFFF),
+    GlassFillStrong = Color(0xFFFFFFFF),
+    GlassStroke = Color(0x1F000000),
+    GlassStrokeSoft = Color(0x12000000),
+    sheenScale = 0.85f,
+    shadowScale = 0.5f,
+)
 
+val LocalPulseColors = staticCompositionLocalOf { PulseDarkColors }
+
+/**
+ * The active palette.
+ *
+ * A composable property so every existing `PulseColors.Rose` call site keeps
+ * reading, and now reads the scheme in force rather than a compile-time constant.
+ */
+val PulseColors: PulseColorScheme
+    @Composable
+    @ReadOnlyComposable
+    get() = LocalPulseColors.current
+
+@Composable
+@ReadOnlyComposable
+fun accentFor(index: Int): Pair<Color, Color> {
+    val pairs = PulseColors.accentPairs
+    return pairs[((index % pairs.size) + pairs.size) % pairs.size]
+}
+
+@Composable
+@ReadOnlyComposable
 fun healthColor(health: Health): Color = when (health) {
     Health.UP -> PulseColors.Mint
     Health.DOWN -> PulseColors.Rose
@@ -81,6 +217,8 @@ fun healthColor(health: Health): Color = when (health) {
  * the list is outlined, the one that is actually broken stops standing out —
  * healthy monitors already say so with their pill and orb.
  */
+@Composable
+@ReadOnlyComposable
 fun healthRim(health: Health): Color = when (health) {
     Health.DOWN -> PulseColors.Rose
     Health.DEGRADED -> PulseColors.Amber
@@ -99,26 +237,52 @@ data class PulseMotion(
 
 val LocalPulseMotion = staticCompositionLocalOf { PulseMotion() }
 
-private val PulseDarkScheme = darkColorScheme(
-    primary = PulseColors.Aqua,
-    onPrimary = PulseColors.Void,
-    primaryContainer = PulseColors.Indigo,
-    onPrimaryContainer = PulseColors.TextPrimary,
-    secondary = PulseColors.Violet,
-    onSecondary = PulseColors.Void,
-    tertiary = PulseColors.Mint,
-    onTertiary = PulseColors.Void,
-    background = PulseColors.Void,
-    onBackground = PulseColors.TextPrimary,
-    surface = PulseColors.Ink,
-    onSurface = PulseColors.TextPrimary,
-    surfaceVariant = PulseColors.Slate,
-    onSurfaceVariant = PulseColors.TextSecondary,
-    outline = PulseColors.GlassStroke,
-    outlineVariant = PulseColors.GlassStrokeSoft,
-    error = PulseColors.Rose,
-    onError = PulseColors.Void,
-)
+private fun materialScheme(colors: PulseColorScheme) = if (colors.isDark) {
+    darkColorScheme(
+        primary = colors.Aqua,
+        onPrimary = colors.Void,
+        primaryContainer = colors.Indigo,
+        onPrimaryContainer = colors.TextPrimary,
+        secondary = colors.Violet,
+        onSecondary = colors.Void,
+        tertiary = colors.Mint,
+        onTertiary = colors.Void,
+        background = colors.Void,
+        onBackground = colors.TextPrimary,
+        surface = colors.Ink,
+        onSurface = colors.TextPrimary,
+        surfaceVariant = colors.Slate,
+        onSurfaceVariant = colors.TextSecondary,
+        outline = colors.GlassStroke,
+        outlineVariant = colors.GlassStrokeSoft,
+        error = colors.Rose,
+        onError = colors.Void,
+    )
+} else {
+    lightColorScheme(
+        primary = colors.Aqua,
+        // White text on the brand blue, not near-black: `Void` is the page
+        // background in both schemes, and on light that happens to be the right
+        // colour for content sitting on a saturated fill.
+        onPrimary = Color.White,
+        primaryContainer = colors.Indigo,
+        onPrimaryContainer = Color.White,
+        secondary = colors.Violet,
+        onSecondary = Color.White,
+        tertiary = colors.Mint,
+        onTertiary = Color.White,
+        background = colors.Void,
+        onBackground = colors.TextPrimary,
+        surface = colors.Ink,
+        onSurface = colors.TextPrimary,
+        surfaceVariant = colors.Slate,
+        onSurfaceVariant = colors.TextSecondary,
+        outline = colors.GlassStroke,
+        outlineVariant = colors.GlassStrokeSoft,
+        error = colors.Rose,
+        onError = Color.White,
+    )
+}
 
 private val Sans = FontFamily.SansSerif
 
@@ -185,12 +349,21 @@ object PulseRadii {
 @Composable
 fun PulseTheme(
     motionIntensity: Float = 1f,
-    @Suppress("UNUSED_PARAMETER") darkTheme: Boolean = isSystemInDarkTheme(),
+    theme: ThemeChoice = ThemeChoice.SYSTEM,
     content: @Composable () -> Unit,
 ) {
-    CompositionLocalProvider(LocalPulseMotion provides PulseMotion(motionIntensity)) {
+    val dark = when (theme) {
+        ThemeChoice.SYSTEM -> isSystemInDarkTheme()
+        ThemeChoice.DARK -> true
+        ThemeChoice.LIGHT -> false
+    }
+    val colors = if (dark) PulseDarkColors else PulseLightColors
+    CompositionLocalProvider(
+        LocalPulseMotion provides PulseMotion(motionIntensity),
+        LocalPulseColors provides colors,
+    ) {
         MaterialTheme(
-            colorScheme = PulseDarkScheme,
+            colorScheme = materialScheme(colors),
             typography = PulseTypography,
             content = content,
         )

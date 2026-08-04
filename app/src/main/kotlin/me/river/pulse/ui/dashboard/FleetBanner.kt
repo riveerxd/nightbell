@@ -38,6 +38,8 @@ import me.river.pulse.ui.components.ButtonTone
 import me.river.pulse.ui.components.PulseButton
 import me.river.pulse.ui.components.formatLatency
 import me.river.pulse.ui.icons.PulseIcons
+import me.river.pulse.domain.UptimeWindows
+import me.river.pulse.ui.components.formatSpan
 import me.river.pulse.ui.theme.PulseColors
 import me.river.pulse.ui.theme.healthColor
 import kotlin.math.roundToInt
@@ -58,6 +60,12 @@ data class FleetStats(
     val paused: Int,
     val checked: Int,
     val uptime: Float,
+    /** At least one check landed inside the reporting window. */
+    val uptimeKnown: Boolean,
+    /** Every monitor's history reaches back across the whole window. */
+    val uptimeComplete: Boolean,
+    /** The shortest reach across the fleet — what the figure can honestly claim. */
+    val uptimeSpanMs: Long,
     val avgLatencyMs: Long,
     /** Worst-first, one entry per monitor — the tick row's source. */
     val healths: List<Health>,
@@ -67,41 +75,76 @@ data class FleetStats(
 ) {
     val allGood: Boolean get() = down == 0 && degraded == 0
 
-    /**
-     * Colour means health here exactly as it does on a card — with one
-     * exception. Offline is deliberately *not* red: nothing is known to be
-     * broken, we have simply stopped looking, and claiming an outage we did not
-     * observe is the same lie the notifications were telling.
-     */
-    val tone: Color
-        get() = when {
-            offline -> PulseColors.Sky
-            down > 0 -> PulseColors.Rose
-            degraded > 0 -> PulseColors.Amber
-            total == 0 -> PulseColors.Sky
-            else -> PulseColors.Mint
-        }
-
-    val uptimeText: String get() = if (total == 0) "—" else "${uptime.roundToInt()}%"
+    val uptimeText: String get() = if (total == 0 || !uptimeKnown) "—" else "${uptime.roundToInt()}%"
     val avgText: String get() = if (checked == 0) "—" else formatLatency(avgLatencyMs)
+
+    /**
+     * What the percentage is a percentage of.
+     *
+     * Printed next to the number rather than left implied. "93% UPTIME" over a
+     * span that silently varies with every monitor's interval is a figure nobody
+     * can act on, and the fix is one word, not a smaller number.
+     */
+    val uptimeScope: String
+        get() = when {
+            !uptimeKnown -> "NO CHECKS YET"
+            uptimeComplete -> "24H UPTIME"
+            else -> "UPTIME, PAST ${formatSpan(uptimeSpanMs).uppercase()}"
+        }
 }
 
-fun fleetStatsOf(cards: List<MonitorCard>, offline: Boolean = false): FleetStats {
-    val samples = cards.flatMap { it.runtime.samples }
-    val ok = samples.filter { it.ok }
+fun fleetStatsOf(
+    cards: List<MonitorCard>,
+    nowMs: Long,
+    offline: Boolean = false,
+): FleetStats {
     val fleet = Summary.of(cards.map { it.monitor }, cards.associate { it.monitor.id to it.runtime })
+    // Uptime is pooled across the fleet over one real day, so it means the same
+    // thing whether a monitor runs every minute or every ten hours. Latency stays
+    // on the same window for the same reason: two numbers side by side that cover
+    // different spans invite exactly the wrong comparison.
+    val windows = cards.mapNotNull { it.runtime.uptimeWithin(nowMs, UptimeWindows.DAY_MS) }
+    val inDay = cards.flatMap { card ->
+        card.runtime.samples.filter { nowMs - it.at in 0..UptimeWindows.DAY_MS }
+    }
+    val ok = inDay.filter { it.ok }
     return FleetStats(
         total = cards.size,
         down = fleet.down,
         degraded = fleet.degraded,
         paused = fleet.paused,
         checked = cards.count { it.runtime.lastCheckedAt > 0 },
-        uptime = if (samples.isEmpty()) 100f else ok.size * 100f / samples.size,
+        uptime = if (inDay.isEmpty()) 0f else ok.size * 100f / inDay.size,
+        uptimeKnown = inDay.isNotEmpty(),
+        // Only the fleet's shortest reach can be claimed: one monitor with a
+        // full day of history does not let the roll-up speak for a monitor added
+        // ten minutes ago.
+        uptimeComplete = windows.isNotEmpty() && windows.all { it.complete },
+        uptimeSpanMs = windows.minOfOrNull { it.spanMs } ?: 0L,
         avgLatencyMs = if (ok.isEmpty()) 0L else ok.sumOf { it.latencyMs } / ok.size,
         healths = fleet.ranked.map { it.health },
         headline = fleet.headline,
         offline = offline,
     )
+}
+
+/**
+ * Colour means health here exactly as it does on a card — with one exception.
+ * Offline is deliberately *not* red: nothing is known to be broken, we have
+ * simply stopped looking, and claiming an outage we did not observe is the same
+ * lie the notifications were telling.
+ *
+ * A composable read rather than a property on [FleetStats], because the palette
+ * now depends on the active scheme and a plain getter cannot see one.
+ */
+@Composable
+@androidx.compose.runtime.ReadOnlyComposable
+fun FleetStats.tone(): Color = when {
+    offline -> PulseColors.Sky
+    down > 0 -> PulseColors.Rose
+    degraded > 0 -> PulseColors.Amber
+    total == 0 -> PulseColors.Sky
+    else -> PulseColors.Mint
 }
 
 @Composable
@@ -111,7 +154,7 @@ fun FleetBanner(
     onCheckAll: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val tone = stats.tone
+    val tone = stats.tone()
     val shape = RoundedCornerShape(26.dp)
 
     Column(
@@ -188,12 +231,12 @@ fun FleetBanner(
         // and the banner's job is the verdict above, not a metrics dashboard.
         Row(verticalAlignment = Alignment.CenterVertically) {
             Mono(
-                text = "${stats.uptimeText} UPTIME",
+                text = "${stats.uptimeText} ${stats.uptimeScope}",
                 color = PulseColors.TextSecondary,
                 size = 10,
                 weight = FontWeight.Bold,
                 tracking = 1.2,
-                spoken = "${stats.uptimeText} uptime",
+                spoken = "${stats.uptimeText} ${stats.uptimeScope.lowercase()}",
             )
             MonoDot()
             Mono(
@@ -302,7 +345,7 @@ fun FleetTicks(
                     .weight(1f)
                     .fillMaxSize()
                     .clip(RoundedCornerShape(corner))
-                    .background(Color.White.copy(alpha = 0.06f)),
+                    .background(PulseColors.sheen(0.06f)),
             )
         }
         healths.forEach { health ->

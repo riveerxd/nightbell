@@ -123,6 +123,22 @@ class PulseStore(
         snap.copy(monitors = monitors, runtimes = runtimes)
     }
 
+    /**
+     * Rewrite the monitor order to match [orderedIds].
+     *
+     * Ids the caller did not mention keep their relative order and land at the end,
+     * so a drag that raced a monitor being created or deleted elsewhere cannot lose
+     * one. Unknown ids are ignored for the same reason.
+     */
+    suspend fun reorder(orderedIds: List<String>) = mutate { snap ->
+        val byId = snap.monitors.associateBy { it.id }
+        val ranked = orderedIds.mapNotNull(byId::get)
+        val rest = snap.monitors.filter { it.id !in orderedIds.toSet() }
+        val monitors = ranked + rest
+        if (monitors.map { it.id } == snap.monitors.map { it.id }) snap
+        else snap.copy(monitors = monitors)
+    }
+
     suspend fun delete(id: String) = mutate { snap ->
         snap.copy(
             monitors = snap.monitors.filterNot { it.id == id },

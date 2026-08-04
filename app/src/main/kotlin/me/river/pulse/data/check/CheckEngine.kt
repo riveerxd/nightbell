@@ -5,6 +5,7 @@ import me.river.pulse.data.PulseStore
 import me.river.pulse.data.alerts.AlertCenter
 import me.river.pulse.domain.AlertDecider
 import me.river.pulse.domain.AlertPolicy
+import me.river.pulse.domain.CertificateWatch
 import me.river.pulse.domain.CheckResult
 import me.river.pulse.domain.CheckerHealth
 import me.river.pulse.domain.CheckerStreak
@@ -337,6 +338,67 @@ class CheckEngine(
             alerts.cancelDegraded(monitor.id)
         }
 
+        // ---- certificate track -----------------------------------------------
+        //
+        // Reads `after`, not `result`: a check that failed to complete a handshake
+        // carries no expiry date, and the fold above deliberately keeps the last
+        // one we saw. Judging from the raw result would silently drop the warning
+        // for any monitor that happened to time out.
+        val certLevel = if (settings.certAlertsEnabled) {
+            CertificateWatch.level(
+                expiresAt = after.certExpiresAt,
+                nowMs = result.at,
+                warnDays = settings.certWarnDays,
+                criticalDays = settings.certCriticalDays,
+            )
+        } else {
+            CertificateWatch.Level.UNKNOWN
+        }
+        val certQuiet = policy.quietHoursEnabled &&
+            AlertDecider.inQuietHours(minute, policy.quietStartMinute, policy.quietEndMinute)
+        // Nothing about a renewal deadline justifies overriding quiet hours, mute
+        // or the master switch, so this track has no bypass at all — not even the
+        // silent-but-still-posted one the down track gets.
+        val certShouldAlert = !muted &&
+            settings.masterAlertsEnabled &&
+            policy.enabled &&
+            !certQuiet &&
+            CertificateWatch.shouldAlert(
+                level = certLevel,
+                alertedLevel = before.certAlertedLevel,
+                lastAlertAt = before.lastCertAlertAt,
+                nowMs = result.at,
+            )
+        if (certShouldAlert) {
+            alerts.notifyCertExpiry(
+                monitor = monitor,
+                level = certLevel,
+                daysLeft = CertificateWatch.daysLeft(after.certExpiresAt, result.at),
+                expiresAt = after.certExpiresAt,
+                issuer = after.certIssuer,
+                policy = policy,
+                silent = false,
+            )
+        }
+        // A renewed certificate has to take its notice down with it. Cancelling on
+        // the level rather than on a transition means a notice left behind by a
+        // process death gets cleared by the next healthy check too.
+        val certResolved = certLevel == CertificateWatch.Level.OK ||
+            certLevel == CertificateWatch.Level.UNKNOWN
+        if (certResolved && before.certAlertedLevel > CertificateWatch.Level.OK.rank) {
+            alerts.cancelCert(monitor.id)
+        }
+        val certMutation: (MonitorRuntime) -> MonitorRuntime = { runtime ->
+            runtime.copy(
+                certAlertedLevel = if (certShouldAlert || certResolved) {
+                    CertificateWatch.alertedLevelAfter(certLevel)
+                } else {
+                    runtime.certAlertedLevel
+                },
+                lastCertAlertAt = if (certShouldAlert) result.at else runtime.lastCertAlertAt,
+            )
+        }
+
         // ---- urgent track ----------------------------------------------------
         val urgentOutcome = UrgentAlerts.evaluate(
             previous = before.urgentState,
@@ -381,6 +443,7 @@ class CheckEngine(
                     )
                     .withUrgentState(urgentOutcome.state)
                     .let(urgentMutation)
+                    .let(certMutation)
             }
         }
         onStateChanged?.invoke()
@@ -791,6 +854,13 @@ class CheckEngine(
             }
             if (runtime.degradedAlerting) {
                 legitimate += alerts.degradedIdOf(monitor.id)
+            }
+            // The certificate notice outlives the check that posted it by days, so
+            // the sweep has to know it is justified. Without this the next tick
+            // would cancel a warning nobody has read yet — the same class of bug
+            // the sweep was added to fix, in the opposite direction.
+            if (runtime.certAlertedLevel > CertificateWatch.Level.OK.rank) {
+                legitimate += alerts.certIdOf(monitor.id)
             }
             // `consecutiveSuccesses <= 1` keeps a just-posted recovery notice.
             if (runtime.alerting || runtime.health == Health.DOWN || runtime.consecutiveSuccesses <= 1) {

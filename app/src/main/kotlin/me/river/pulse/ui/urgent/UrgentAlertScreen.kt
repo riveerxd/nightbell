@@ -285,13 +285,14 @@ private fun CallStyle(
             Spacer(Modifier.weight(0.9f))
 
             // Avatar with the same expanding halo a call screen uses.
+            val haloTone = PulseColors.Rose
             Box(contentAlignment = Alignment.Center) {
                 Canvas(Modifier.size(210.dp)) {
                     val base = size.minDimension / 2f * 0.46f
                     listOf(0f, 0.33f, 0.66f).forEach { offset ->
                         val p = (phase + offset) % 1f
                         drawCircle(
-                            color = PulseColors.Rose.copy(alpha = 0.30f * (1f - p)),
+                            color = haloTone.copy(alpha = 0.30f * (1f - p)),
                             radius = base + (size.minDimension / 2f - base) * p,
                             style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx()),
                         )
@@ -576,20 +577,21 @@ private fun Beacon(
             Spacer(Modifier.weight(0.8f))
             // The halo is laid out rather than drawn behind the whole screen, so
             // it can never end up underneath the text on a short display.
+            val beacon = PulseColors.Rose
             Canvas(Modifier.size(230.dp)) {
                 val centre = androidx.compose.ui.geometry.Offset(size.width / 2f, size.height / 2f)
                 val max = size.minDimension / 2f
                 listOf(0f, 0.5f).forEach { offset ->
                     val p = (phase + offset) % 1f
                     drawCircle(
-                        color = PulseColors.Rose.copy(alpha = 0.22f * (1f - p)),
+                        color = beacon.copy(alpha = 0.22f * (1f - p)),
                         radius = max * (0.34f + 0.66f * p),
                         center = centre,
                     )
                 }
                 drawCircle(
                     brush = Brush.radialGradient(
-                        colors = listOf(PulseColors.Rose, Color(0xFF7A1420)),
+                        colors = listOf(beacon, Color(0xFF7A1420)),
                         center = centre,
                         radius = max * 0.34f,
                     ),

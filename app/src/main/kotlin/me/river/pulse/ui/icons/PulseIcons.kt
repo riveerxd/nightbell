@@ -54,6 +54,14 @@ object PulseIcons {
     val ChevronRight = stroke("ChevronRight", "M9.5 5.5 L16 12 L9.5 18.5", width = 1.9f)
     val ChevronLeft = stroke("ChevronLeft", "M14.5 5.5 L8 12 L14.5 18.5", width = 1.9f)
     val ChevronDown = stroke("ChevronDown", "M5.5 9 L12 15.5 L18.5 9", width = 1.9f)
+    val ChevronUp = stroke("ChevronUp", "M5.5 15.5 L12 9 L18.5 15.5", width = 1.9f)
+
+    /** Drag grip: two rows of three, the platform-conventional reorder affordance. */
+    val Grip = stroke(
+        "Grip",
+        "M8 9 L8 9 M12 9 L12 9 M16 9 L16 9 M8 15 L8 15 M12 15 L12 15 M16 15 L16 15",
+        width = 2.6f,
+    )
     val ArrowLeft = stroke("ArrowLeft", "M20 12 L4 12 M10 6 L4 12 L10 18", width = 1.9f)
     val ArrowRight = stroke("ArrowRight", "M4 12 L20 12 M14 6 L20 12 L14 18", width = 1.9f)
 
@@ -134,6 +142,18 @@ object PulseIcons {
         "M12 3.2 L20 6.2 L20 11.8 C20 16.8 16.4 20 12 21.2 C7.6 20 4 16.8 4 11.8 L4 6.2 Z",
     )
     val Search = stroke("Search", circle(11f, 11f, 6.9f) + " M16.1 16.1 L21 21")
+
+    /** Generic sort glyph: descending rule lengths. Used where the key is a name. */
+    val SortLines = stroke(
+        "SortLines",
+        "M4 6.6 L16 6.6 M4 12 L13 12 M4 17.4 L10 17.4 M19 6.6 L19 17.4 M16.6 15 L19 17.4 L21.4 15",
+    )
+
+    /** Filter funnel — the entry point to the dashboard's show/order panel. */
+    val Funnel = stroke(
+        "Funnel",
+        "M3.6 5.2 L20.4 5.2 L13.8 13 L13.8 19.6 L10.2 17.6 L10.2 13 Z",
+    )
     val Copy = stroke("Copy", "M9 8.8 L19.2 8.8 L19.2 19.4 L9 19.4 Z M5.6 15.2 L5.6 4.6 L15.8 4.6")
     val Info = stroke("Info", circle(12f, 12f, 8.6f) + " M12 11 L12 16.4 M12 7.4 L12 8.1")
     val Warning = stroke(

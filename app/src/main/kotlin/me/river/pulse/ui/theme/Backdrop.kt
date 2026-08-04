@@ -122,6 +122,7 @@ class BackdropScope internal constructor(internal val state: BackdropState?) {
      * @param scrim tint painted over the blur; this is what carries the text
      *   contrast and prevents the see-through-panel problem.
      */
+    @Composable
     fun Modifier.backdropBlur(
         shape: Shape,
         scrim: Color = PulseColors.GlassFill,
@@ -292,6 +293,7 @@ private class BackdropSinkNode(
  * hairline edge, generously scrimmed so a form inside it stays legible against
  * whatever scrolls underneath.
  */
+@Composable
 fun Modifier.sheetSurface(
     scope: BackdropScope,
     corner: Dp = PulseRadii.sheet,

@@ -1,6 +1,9 @@
 package me.river.pulse.ui.dashboard
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
@@ -12,13 +15,17 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -31,9 +38,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -41,7 +50,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -54,14 +65,22 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.river.pulse.domain.CertificateWatch
 import me.river.pulse.domain.Health
 import me.river.pulse.domain.MonitorCard
 import me.river.pulse.domain.MonitorKind
+import me.river.pulse.domain.MonitorQuery
+import me.river.pulse.domain.MonitorTemplates
 import me.river.pulse.ui.components.AnimatedCounter
 import me.river.pulse.ui.components.ButtonTone
 import me.river.pulse.ui.components.EmptyState
@@ -69,9 +88,12 @@ import me.river.pulse.ui.components.GlassCard
 import me.river.pulse.ui.components.GlassIconButton
 import me.river.pulse.ui.components.HistoryStrip
 import me.river.pulse.ui.components.IconBadge
+import me.river.pulse.ui.components.ChipSelector
+import me.river.pulse.ui.components.GlassField
 import me.river.pulse.ui.components.MicroTag
 import me.river.pulse.ui.components.PullToRefreshLayout
 import me.river.pulse.ui.components.PulseButton
+import me.river.pulse.ui.components.SectionHeader
 import me.river.pulse.ui.components.SAMPLE_WINDOW
 import me.river.pulse.ui.components.Sparkline
 import me.river.pulse.ui.components.StaggeredEntrance
@@ -83,6 +105,7 @@ import me.river.pulse.ui.components.formatLatency
 import me.river.pulse.ui.components.formatRelative
 import me.river.pulse.ui.icons.PulseIcons
 import me.river.pulse.ui.rememberDashboardViewModel
+import me.river.pulse.ui.theme.LocalNowMs
 import me.river.pulse.ui.theme.PulseColors
 import me.river.pulse.ui.theme.accentFor
 import me.river.pulse.ui.theme.healthColor
@@ -91,6 +114,24 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import me.river.pulse.ui.theme.rememberLoopingFloat
 import androidx.compose.ui.platform.testTag
+
+/**
+ * Narrowest a monitor card may be before the grid drops a column.
+ *
+ * A card carries a name, a host, five or six tags, a sparkline and a row of
+ * actions. Below roughly this width the tag row starts wrapping and the card stops
+ * being glanceable, which is the only thing it is for.
+ */
+private val MIN_CARD_WIDTH = 340.dp
+
+/**
+ * Monitors needed before the search and filter/sort buttons appear in the header.
+ *
+ * Two: with one monitor there is nothing to search for, nothing to filter out and
+ * nothing to put in an order. Above that the buttons are always there, because they
+ * cost two icons rather than a permanent panel.
+ */
+private const val TOOLS_THRESHOLD = 2
 
 fun kindIcon(kind: MonitorKind) = when (kind) {
     MonitorKind.HTTP_STATUS -> PulseIcons.Server
@@ -104,13 +145,16 @@ fun DashboardScreen(
     onOpenMonitor: (String) -> Unit,
     onOpenSettings: () -> Unit,
     onToast: (String) -> Unit,
+    onPickTemplate: (String) -> Unit = { onAddMonitor() },
 ) {
     val viewModel = rememberDashboardViewModel()
     val cards by viewModel.cards.collectAsStateWithLifecycle()
     val offline by viewModel.offline.collectAsStateWithLifecycle()
-    val listState = rememberLazyListState()
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val gridState = rememberLazyGridState()
     val scope = rememberCoroutineScope()
     val entrance = rememberEntranceLog()
+    val nowMs = LocalNowMs.current
 
     val toast = viewModel.toast
     if (toast != null) {
@@ -123,93 +167,273 @@ fun DashboardScreen(
     val topInset = WindowInsets.systemBars.asPaddingValues().calculateTopPadding()
     val bottomInset = WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
 
+    val visible = viewModel.visible
+    val selecting = viewModel.selecting
+    // Dragging and bulk selection are mutually exclusive modes; the handle is hidden
+    // while selecting so the two can never be in play at once.
+    val canReorder = MonitorQuery.canReorder(viewModel.spec) && !selecting
+    val reorder = rememberGridReorderState(gridState, scope)
+    val reorderableKeys = remember(visible) { visible.map { it.monitor.id }.toSet() }
+
+    // Edge scrolling has to be a loop rather than a per-event nudge: a finger held
+    // still at the bottom of the screen produces no drag events, and that is exactly
+    // the moment the list needs to keep moving.
+    androidx.compose.runtime.LaunchedEffect(reorder.autoScroll) {
+        while (reorder.autoScroll != 0) {
+            reorder.scrollStep()
+            kotlinx.coroutines.delay(16)
+        }
+    }
+
+    var panel by remember { mutableStateOf(DashboardPanel.NONE) }
+    // Tools appear at two monitors: below that there is nothing to search, nothing
+    // to filter and nothing to arrange.
+    val showTools = cards.size >= TOOLS_THRESHOLD
+    if (!showTools && panel != DashboardPanel.NONE) panel = DashboardPanel.NONE
+
+    // One handler, explicit priority. Two competing BackHandlers would leave which
+    // one wins up to composition order.
+    BackHandler(enabled = selecting || panel != DashboardPanel.NONE) {
+        when {
+            selecting -> viewModel.clearSelection()
+            else -> panel = DashboardPanel.NONE
+        }
+    }
+
     Box(Modifier.fillMaxSize()) {
         PullToRefreshLayout(
             refreshing = viewModel.refreshing,
             onRefresh = { viewModel.checkAll() },
             modifier = Modifier.fillMaxSize(),
         ) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize().testTag("dashboard-list"),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                    start = 18.dp,
-                    end = 18.dp,
-                    top = topInset + 14.dp,
-                    bottom = bottomInset + 128.dp,
-                ),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                item(key = "header") {
-                    DashboardHeader(onOpenSettings = onOpenSettings)
-                }
-
-                item(key = "overview") {
-                    StaggeredEntrance(index = 0, key = "overview", log = entrance) {
-                        FleetBanner(
-                            stats = fleetStatsOf(cards, offline = offline),
-                            refreshing = viewModel.refreshing,
-                            onCheckAll = { viewModel.checkAll() },
-                        )
-                    }
-                }
-
-                if (cards.isEmpty()) {
-                    item(key = "empty") {
-                        Spacer(Modifier.height(40.dp))
-                        EmptyState(
-                            title = "Nothing on the radar",
-                            message = "Add your first monitor and Pulse will keep an eye on it " +
-                                "— status codes, response bodies, or a single element on a page.",
-                            action = {
-                                PulseButton(
-                                    text = "Create a monitor",
-                                    onClick = onAddMonitor,
-                                    icon = PulseIcons.Plus,
-                                )
+            // Adaptive rather than fixed: a phone gets one column, a tablet or a
+            // landscape phone gets as many 340 dp columns as fit. The cards were
+            // being stretched to the full width of a 10-inch screen, which turned a
+            // scannable list into six very wide rows.
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                val columns = ((maxWidth - 36.dp) / MIN_CARD_WIDTH).toInt().coerceIn(1, 3)
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(columns),
+                    state = gridState,
+                    modifier = Modifier.fillMaxSize().testTag("dashboard-list"),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                        start = 18.dp,
+                        end = 18.dp,
+                        top = topInset + 14.dp,
+                        bottom = bottomInset + if (selecting) 168.dp else 128.dp,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    item(key = "header", span = { GridItemSpan(maxLineSpan) }) {
+                        DashboardHeader(
+                            showTools = showTools,
+                            panel = panel,
+                            narrowing = viewModel.narrowed,
+                            onTogglePanel = { requested ->
+                                panel = if (panel == requested) DashboardPanel.NONE else requested
                             },
+                            onOpenSettings = onOpenSettings,
                         )
                     }
-                } else {
-                    items(cards, key = { it.monitor.id }) { card ->
-                        val index = cards.indexOfFirst { it.monitor.id == card.monitor.id }
-                        StaggeredEntrance(index = index + 1, key = card.monitor.id, log = entrance) {
-                            MonitorRowCard(
-                                card = card,
-                                onOpen = { onOpenMonitor(card.monitor.id) },
-                                onCheck = { viewModel.check(card.monitor.id) },
-                                onToggle = { viewModel.setEnabled(card.monitor.id, it) },
-                                onAcknowledge = { viewModel.acknowledgeUrgent(card.monitor.id) },
+
+                    item(key = "overview", span = { GridItemSpan(maxLineSpan) }) {
+                        StaggeredEntrance(index = 0, key = "overview", log = entrance) {
+                            FleetBanner(
+                                stats = fleetStatsOf(cards, nowMs = nowMs, offline = offline),
+                                refreshing = viewModel.refreshing,
+                                onCheckAll = { viewModel.checkAll() },
                             )
                         }
                     }
 
-                    item(key = "footer") {
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            text = "Pull down and hold to re-check everything",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = PulseColors.TextTertiary,
-                            modifier = Modifier.fillMaxWidth(),
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        )
+                    if (panel != DashboardPanel.NONE) {
+                        item(key = "panel", span = { GridItemSpan(maxLineSpan) }) {
+                            when (panel) {
+                                DashboardPanel.SEARCH -> SearchPanel(
+                                    query = viewModel.spec.query,
+                                    shownCount = visible.size,
+                                    totalCount = cards.size,
+                                    onQuery = viewModel::setQuery,
+                                    onClose = { panel = DashboardPanel.NONE },
+                                )
+
+                                DashboardPanel.TUNE -> TunePanel(
+                                    spec = viewModel.spec,
+                                    shownCount = visible.size,
+                                    totalCount = cards.size,
+                                    onFilter = viewModel::setFilter,
+                                    onSort = viewModel::setSort,
+                                    onClear = viewModel::clearNarrowing,
+                                    onClose = { panel = DashboardPanel.NONE },
+                                )
+
+                                DashboardPanel.NONE -> Unit
+                            }
+                        }
+                    } else if (viewModel.narrowed) {
+                        item(key = "narrowing", span = { GridItemSpan(maxLineSpan) }) {
+                            NarrowingStrip(
+                                spec = viewModel.spec,
+                                shownCount = visible.size,
+                                totalCount = cards.size,
+                                onClear = viewModel::clearNarrowing,
+                            )
+                        }
+                    }
+
+                    if (cards.isEmpty()) {
+                        item(key = "first-run", span = { GridItemSpan(maxLineSpan) }) {
+                            Spacer(Modifier.height(24.dp))
+                            FirstRunStarter(
+                                onPickTemplate = onPickTemplate,
+                                onBlank = onAddMonitor,
+                            )
+                        }
+                    } else if (visible.isEmpty()) {
+                        item(key = "empty", span = { GridItemSpan(maxLineSpan) }) {
+                            Spacer(Modifier.height(40.dp))
+                            EmptyState(
+                                title = "Nothing here",
+                                message = MonitorQuery.emptyMessage(viewModel.spec, cards.size),
+                                icon = PulseIcons.Search,
+                                action = {
+                                    PulseButton(
+                                        text = "Clear filters",
+                                        onClick = viewModel::clearNarrowing,
+                                        icon = PulseIcons.Close,
+                                        tone = ButtonTone.Secondary,
+                                    )
+                                },
+                            )
+                        }
+                    } else {
+                        // itemsIndexed rather than a lookup inside the row: recovering
+                        // the index with indexOfFirst ran a scan per row per
+                        // recomposition for a number the list already knew.
+                        itemsIndexed(visible, key = { _, card -> card.monitor.id }) { index, card ->
+                            StaggeredEntrance(index = index + 1, key = card.monitor.id, log = entrance) {
+                                MonitorRowCard(
+                                    card = card,
+                                    certLevel = if (settings.certAlertsEnabled) {
+                                        CertificateWatch.level(
+                                            expiresAt = card.runtime.certExpiresAt,
+                                            nowMs = nowMs,
+                                            warnDays = settings.certWarnDays,
+                                            criticalDays = settings.certCriticalDays,
+                                        )
+                                    } else {
+                                        CertificateWatch.Level.UNKNOWN
+                                    },
+                                    selecting = selecting,
+                                    selected = card.monitor.id in viewModel.selection,
+                                    dragging = reorder.draggingKey == card.monitor.id,
+                                    dragDelta = reorder.delta,
+                                    reorderHandle = if (canReorder) {
+                                        {
+                                            ReorderHandle(
+                                                monitorName = card.monitor.displayName,
+                                                onDragStart = {
+                                                    viewModel.beginReorder()
+                                                    reorder.start(card.monitor.id)
+                                                },
+                                                onDrag = { amount ->
+                                                    reorder.drag(
+                                                        amount,
+                                                        reorderableKeys = reorderableKeys,
+                                                    ) { fromId, toId ->
+                                                        viewModel.moveInReorder(fromId, toId)
+                                                    }
+                                                },
+                                                onDragEnd = {
+                                                    reorder.end()
+                                                    viewModel.commitReorder()
+                                                },
+                                                onMoveUp = if (index > 0) {
+                                                    { viewModel.nudge(card.monitor.id, -1) }
+                                                } else {
+                                                    null
+                                                },
+                                                onMoveDown = if (index < visible.lastIndex) {
+                                                    { viewModel.nudge(card.monitor.id, 1) }
+                                                } else {
+                                                    null
+                                                },
+                                            )
+                                        }
+                                    } else {
+                                        null
+                                    },
+                                    // In selection mode a tap toggles instead of
+                                    // navigating: opening a monitor while picking
+                                    // several of them is never what was meant.
+                                    onOpen = {
+                                        if (selecting) {
+                                            viewModel.toggleSelected(card.monitor.id)
+                                        } else {
+                                            onOpenMonitor(card.monitor.id)
+                                        }
+                                    },
+                                    onLongPress = { viewModel.toggleSelected(card.monitor.id) },
+                                    onCheck = { viewModel.check(card.monitor.id) },
+                                    onToggle = { viewModel.setEnabled(card.monitor.id, it) },
+                                    onAcknowledge = { viewModel.acknowledgeUrgent(card.monitor.id) },
+                                )
+                            }
+                        }
+
+                        item(key = "footer", span = { GridItemSpan(maxLineSpan) }) {
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                text = if (selecting) {
+                                    "Tap to add or remove, long-press anywhere to start over"
+                                } else {
+                                    "Pull down and hold to re-check everything · long-press a " +
+                                        "card to select several"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = PulseColors.TextTertiary,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            )
+                        }
                     }
                 }
             }
         }
 
-        MorphingFab(
-            onClick = onAddMonitor,
+        // The FAB steps aside for the selection bar rather than sitting on top of
+        // it: "add a monitor" is meaningless while several are selected.
+        AnimatedVisibility(
+            visible = !selecting,
+            enter = fadeIn() + scaleIn(initialScale = 0.8f),
+            exit = fadeOut() + scaleOut(targetScale = 0.8f),
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(end = 22.dp, bottom = bottomInset + 26.dp),
+        ) {
+            MorphingFab(onClick = onAddMonitor)
+        }
+
+        SelectionBar(
+            count = viewModel.selection.size,
+            visible = selecting,
+            onPause = { viewModel.setEnabledForSelection(false) },
+            onResume = { viewModel.setEnabledForSelection(true) },
+            onMute = { viewModel.muteSelection(1) },
+            onDelete = viewModel::deleteSelection,
+            onSelectAll = viewModel::selectAllVisible,
+            onDone = viewModel::clearSelection,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(start = 14.dp, end = 14.dp, bottom = bottomInset + 18.dp),
         )
     }
 
     // Keep the list pinned to the top when a monitor is added.
     androidx.compose.runtime.LaunchedEffect(cards.size) {
-        if (cards.isNotEmpty() && listState.firstVisibleItemIndex <= 1) {
-            scope.launch { listState.animateScrollToItem(0) }
+        if (cards.isNotEmpty() && gridState.firstVisibleItemIndex <= 1) {
+            scope.launch { gridState.animateScrollToItem(0) }
         }
     }
 }
@@ -221,13 +445,45 @@ fun DashboardScreen(
  * the [FleetBanner] directly below, which can say it far louder.
  */
 @Composable
-private fun DashboardHeader(onOpenSettings: () -> Unit) {
+private fun DashboardHeader(
+    showTools: Boolean,
+    panel: DashboardPanel,
+    narrowing: Boolean,
+    onTogglePanel: (DashboardPanel) -> Unit,
+    onOpenSettings: () -> Unit,
+) {
     Row(
         Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         PulseWordmark()
         Spacer(Modifier.weight(1f))
+        // Entry points, not the controls themselves.
+        //
+        // The search field, five filter chips and five sort chips used to sit in a
+        // card that was on screen permanently — a slab of chrome between the fleet
+        // verdict and the monitors, present whether or not anyone was searching.
+        // Hidden below two monitors, where there is nothing to search or arrange.
+        if (showTools) {
+            GlassIconButton(
+                icon = PulseIcons.Search,
+                onClick = { onTogglePanel(DashboardPanel.SEARCH) },
+                contentDescription = "Search monitors",
+                size = 34.dp,
+                accent = PulseColors.TextSecondary,
+                active = panel == DashboardPanel.SEARCH,
+            )
+            GlassIconButton(
+                icon = PulseIcons.Funnel,
+                onClick = { onTogglePanel(DashboardPanel.TUNE) },
+                contentDescription = "Filter and sort",
+                size = 34.dp,
+                accent = PulseColors.TextSecondary,
+                active = panel == DashboardPanel.TUNE,
+                badged = narrowing,
+            )
+        }
         GlassIconButton(
             icon = PulseIcons.Sliders,
             onClick = onOpenSettings,
@@ -238,6 +494,9 @@ private fun DashboardHeader(onOpenSettings: () -> Unit) {
     }
 }
 
+/** Which disclosure panel, if any, is open under the header. */
+enum class DashboardPanel { NONE, SEARCH, TUNE }
+
 @Composable
 private fun PulseWordmark() {
     val sweep by rememberLoopingFloat(
@@ -246,6 +505,8 @@ private fun PulseWordmark() {
         durationMillis = 3_600,
         label = "sweep",
     )
+    val markStart = PulseColors.Aqua
+    val markEnd = PulseColors.Violet
     Row(verticalAlignment = Alignment.CenterVertically) {
         Canvas(Modifier.size(18.dp)) {
             val h = size.height
@@ -262,12 +523,12 @@ private fun PulseWordmark() {
             drawPath(
                 path,
                 brush = Brush.horizontalGradient(
-                    listOf(PulseColors.Aqua, PulseColors.Violet),
+                    listOf(markStart, markEnd),
                 ),
                 style = Stroke(width = 1.8.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round),
             )
             drawCircle(
-                color = PulseColors.Aqua,
+                color = markStart,
                 radius = 1.8.dp.toPx(),
                 center = Offset(w * sweep, h * 0.55f),
             )
@@ -286,12 +547,460 @@ private fun PulseWordmark() {
     }
 }
 
+/**
+ * The first-run surface.
+ *
+ * What used to be here was a single "Create a monitor" button opening a blank
+ * four-step wizard, which asks someone who has never used the app to make five
+ * decisions before seeing anything work. Each of these instead answers the
+ * kind-and-expectations questions and drops the user on the URL field.
+ *
+ * They pre-fill a draft rather than creating a monitor: the wizard still runs, the
+ * values are still visible and still editable, and nothing is saved until the user
+ * says so. A template that silently created a monitor would be a template that
+ * pages you at 3am about something you never read.
+ */
+@Composable
+private fun FirstRunStarter(
+    onPickTemplate: (String) -> Unit,
+    onBlank: () -> Unit,
+) {
+    Column {
+        GlassCard {
+            Text(
+                text = "Watch something",
+                style = MaterialTheme.typography.headlineMedium,
+                color = PulseColors.TextPrimary,
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "Pick a starting point and Pulse fills in the cadence, the " +
+                    "expectations and the alerting. You only need a URL — everything " +
+                    "else is still yours to change before it saves.",
+                style = MaterialTheme.typography.bodySmall,
+                color = PulseColors.TextTertiary,
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        MonitorTemplates.all.forEach { template ->
+            GlassCard(
+                onClick = { onPickTemplate(template.id) },
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = 16.dp,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconBadge(
+                        icon = when (template.id) {
+                            "website" -> PulseIcons.Globe
+                            "health-endpoint" -> PulseIcons.Shield
+                            "api-latency" -> PulseIcons.Gauge
+                            else -> PulseIcons.Pointer
+                        },
+                        accent = PulseColors.Aqua,
+                        size = 40.dp,
+                    )
+                    Spacer(Modifier.width(13.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = template.title,
+                            style = MaterialTheme.typography.titleLarge,
+                            color = PulseColors.TextPrimary,
+                        )
+                        Text(
+                            text = template.blurb,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = PulseColors.TextTertiary,
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Icon(
+                        PulseIcons.ChevronDown,
+                        contentDescription = null,
+                        tint = PulseColors.TextTertiary,
+                        modifier = Modifier.size(16.dp).graphicsLayer { rotationZ = -90f },
+                    )
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+        }
+        // Deliberately not full-width. The floating add button is anchored to the
+        // bottom-right corner and this is the last thing in the list, so a
+        // full-width button put two controls for the same action on top of each
+        // other. Leaving the right third clear keeps both legible and lets the FAB
+        // stay where every other dashboard state has it.
+        Row(Modifier.fillMaxWidth()) {
+            PulseButton(
+                text = "Start from scratch",
+                onClick = onBlank,
+                icon = PulseIcons.Plus,
+                tone = ButtonTone.Secondary,
+                modifier = Modifier.weight(0.68f),
+            )
+            Spacer(Modifier.weight(0.32f))
+        }
+    }
+}
+
+/**
+ * Search, filter and sort.
+ *
+ * Deliberately one card rather than a top app bar with a search icon: the fleet
+ * banner above it is the thing this screen exists to show, and a search field in
+ * the chrome would compete with it every time the app opens. Here it reads as
+ * "tools for the list below", which is what it is.
+ */
+@Composable
+private fun SearchPanel(
+    query: String,
+    shownCount: Int,
+    totalCount: Int,
+    onQuery: (String) -> Unit,
+    onClose: () -> Unit,
+) {
+    val focus = remember { FocusRequester() }
+    // Tapping search means you want to type. Anything else is a second tap for
+    // nothing.
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    GlassCard {
+        // No section header above the field. It would have said "Search" directly
+        // over a field already labelled SEARCH — duplicated text, and two nodes
+        // answering to the same name for a screen reader. The field is its own title;
+        // the close sits beside it.
+        Row(verticalAlignment = Alignment.Bottom) {
+            GlassField(
+                value = query,
+                onValueChange = onQuery,
+                label = "Search",
+                placeholder = "name, host or element",
+                leadingIcon = PulseIcons.Search,
+                imeAction = ImeAction.Search,
+                modifier = Modifier.weight(1f).focusRequester(focus),
+                trailing = if (query.isNotBlank()) {
+                    {
+                        GlassIconButton(
+                            icon = PulseIcons.Close,
+                            onClick = { onQuery("") },
+                            contentDescription = "Clear search",
+                            size = 30.dp,
+                        )
+                    }
+                } else {
+                    null
+                },
+            )
+            Spacer(Modifier.width(8.dp))
+            panelClose(onClose)()
+        }
+        Spacer(Modifier.height(10.dp))
+        Text(
+            text = if (query.isBlank()) {
+                "$totalCount monitors"
+            } else {
+                "$shownCount of $totalCount match"
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = PulseColors.TextTertiary,
+        )
+    }
+}
+
+/**
+ * The close affordance every disclosure panel carries.
+ *
+ * An X rather than a "Done" button. Dismissing a panel is the one action here with a
+ * genuinely universal glyph, it needs no label, and a text button at the foot of each
+ * panel was competing for weight with the controls the panel exists to show. Slots
+ * into [SectionHeader]'s trailing position so the title and its close share one row.
+ */
+private fun panelClose(onClose: () -> Unit): @Composable () -> Unit = {
+    GlassIconButton(
+        icon = PulseIcons.Close,
+        onClick = onClose,
+        contentDescription = "Close panel",
+        size = 32.dp,
+    )
+}
+
+@Composable
+private fun TunePanel(
+    spec: MonitorQuery.Spec,
+    shownCount: Int,
+    totalCount: Int,
+    onFilter: (MonitorQuery.Filter) -> Unit,
+    onSort: (MonitorQuery.Sort) -> Unit,
+    onClear: () -> Unit,
+    onClose: () -> Unit,
+) {
+    GlassCard {
+        SectionHeader(
+            "Show",
+            icon = PulseIcons.Eye,
+            accent = PulseColors.Aqua,
+            trailing = panelClose(onClose),
+        )
+        // Icon *and* text, which is what this component was built for and what the
+        // setup screen already does with monitor kinds. Icon-only would be wrong
+        // here: "Unacked" and "Least recent" have no glyph anyone would guess, and a
+        // row of six abstract marks is something you have to learn rather than read.
+        // The icon makes the row scannable; the label is what makes it legible.
+        ChipSelector(
+            options = MonitorQuery.Filter.entries.toList(),
+            selected = spec.filter,
+            onSelect = onFilter,
+            label = { it.label },
+            icon = { filter ->
+                when (filter) {
+                    MonitorQuery.Filter.ALL -> PulseIcons.Layers
+                    MonitorQuery.Filter.PROBLEMS -> PulseIcons.Warning
+                    MonitorQuery.Filter.UP -> PulseIcons.Check
+                    MonitorQuery.Filter.PAUSED -> PulseIcons.Pause
+                    MonitorQuery.Filter.UNACKNOWLEDGED -> PulseIcons.Zap
+                }
+            },
+        )
+        Spacer(Modifier.height(16.dp))
+        SectionHeader("Order", icon = PulseIcons.Sliders, accent = PulseColors.Violet)
+        ChipSelector(
+            options = MonitorQuery.Sort.entries.toList(),
+            selected = spec.sort,
+            onSelect = onSort,
+            label = { it.label },
+            accent = PulseColors.Violet,
+            icon = { sort ->
+                when (sort) {
+                    MonitorQuery.Sort.WORST_FIRST -> PulseIcons.Warning
+                    // The grip, literally: this is the mode where the grips appear.
+                    MonitorQuery.Sort.MANUAL -> PulseIcons.Grip
+                    MonitorQuery.Sort.NAME -> PulseIcons.SortLines
+                    MonitorQuery.Sort.SLOWEST -> PulseIcons.Gauge
+                    MonitorQuery.Sort.RECENT -> PulseIcons.Refresh
+                    MonitorQuery.Sort.STALEST -> PulseIcons.History
+                }
+            },
+        )
+        AnimatedVisibility(visible = spec.sort == MonitorQuery.Sort.MANUAL) {
+            Column {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = "Drag the grip on any card to arrange them. Nothing re-sorts " +
+                        "them behind your back while this is on.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = PulseColors.TextTertiary,
+                )
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                text = if (shownCount == totalCount) {
+                    "Showing all $totalCount"
+                } else {
+                    "Showing $shownCount of $totalCount"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = PulseColors.TextTertiary,
+                modifier = Modifier.weight(1f),
+            )
+            if (!spec.hidesNothing) {
+                PulseButton(
+                    text = "Show all",
+                    onClick = onClear,
+                    tone = ButtonTone.Secondary,
+                )
+            }
+            // "Show all" keeps its words: low-frequency, consequential, and no glyph
+            // says "stop hiding things" unambiguously.
+        }
+    }
+}
+
+/**
+ * The slim reminder that monitors are being hidden.
+ *
+ * Shown whenever a filter or a search is narrowing the list and the panel that set
+ * it is closed. Without it a filtered dashboard is just a short dashboard, which is
+ * indistinguishable from having lost monitors — the one thing this app must never
+ * look like.
+ */
+@Composable
+private fun NarrowingStrip(
+    spec: MonitorQuery.Spec,
+    shownCount: Int,
+    totalCount: Int,
+    onClear: () -> Unit,
+) {
+    GlassCard(accent = PulseColors.Amber, contentPadding = 12.dp) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Icon(
+                PulseIcons.Eye,
+                contentDescription = null,
+                tint = PulseColors.Amber,
+                modifier = Modifier.size(15.dp),
+            )
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "Showing $shownCount of $totalCount",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = PulseColors.TextPrimary,
+                )
+                Text(
+                    text = buildList {
+                        if (spec.filter != MonitorQuery.Filter.ALL) add(spec.filter.label)
+                        if (spec.query.isNotBlank()) add("“${spec.query.trim()}”")
+                    }.joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = PulseColors.TextTertiary,
+                )
+            }
+            PulseButton(text = "Show all", onClick = onClear, tone = ButtonTone.Secondary)
+        }
+    }
+}
+
+/**
+ * The bulk-action bar.
+ *
+ * Sits at the bottom, in the thumb's reach, and takes the FAB's place rather than
+ * sharing the corner with it. Delete asks first — it is the one action here that
+ * destroys history, and it can now destroy eight monitors' worth at once.
+ */
+@Composable
+private fun SelectionBar(
+    count: Int,
+    visible: Boolean,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
+    onMute: () -> Unit,
+    onDelete: () -> Unit,
+    onSelectAll: () -> Unit,
+    onDone: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var confirmDelete by remember { mutableStateOf(false) }
+    // Reset the confirmation whenever the bar goes away, so re-entering selection
+    // never lands on a primed Delete.
+    if (!visible && confirmDelete) confirmDelete = false
+
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn() + slideInVertically { it },
+        exit = fadeOut() + slideOutVertically { it },
+        modifier = modifier,
+    ) {
+        GlassCard(accent = if (confirmDelete) PulseColors.Rose else PulseColors.Aqua) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = if (count == 1) "1 selected" else "$count selected",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = PulseColors.TextPrimary,
+                    modifier = Modifier.weight(1f),
+                )
+                PulseButton(
+                    text = "Select all",
+                    onClick = onSelectAll,
+                    tone = ButtonTone.Secondary,
+                )
+                Spacer(Modifier.width(8.dp))
+                GlassIconButton(
+                    icon = PulseIcons.Close,
+                    onClick = onDone,
+                    contentDescription = "Leave selection mode",
+                    size = 34.dp,
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            if (confirmDelete) {
+                Text(
+                    text = "Delete ${if (count == 1) "this monitor" else "these $count monitors"}? " +
+                        "Their history and scheduled checks go with them.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = PulseColors.TextSecondary,
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    PulseButton(
+                        text = "Keep them",
+                        onClick = { confirmDelete = false },
+                        tone = ButtonTone.Secondary,
+                        modifier = Modifier.weight(1f),
+                    )
+                    PulseButton(
+                        text = "Delete",
+                        onClick = {
+                            confirmDelete = false
+                            onDelete()
+                        },
+                        tone = ButtonTone.Danger,
+                        icon = PulseIcons.Trash,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            } else {
+                // Two rows of two, not four across. Four weighted buttons plus an
+                // icon left roughly 55 dp of text width each, which wrapped the
+                // labels to "Pau / se" and "Res / um / e" on a normal phone.
+                //
+                // Delete is a labelled button rather than a bare trash icon for the
+                // same reason: it is the one action here that destroys history for
+                // several monitors at once, and it should be the least ambiguous
+                // thing on the bar rather than the most.
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PulseButton(
+                        text = "Pause",
+                        onClick = onPause,
+                        icon = PulseIcons.Pause,
+                        tone = ButtonTone.Secondary,
+                        modifier = Modifier.weight(1f),
+                    )
+                    PulseButton(
+                        text = "Resume",
+                        onClick = onResume,
+                        icon = PulseIcons.Play,
+                        tone = ButtonTone.Secondary,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PulseButton(
+                        text = "Mute 1h",
+                        onClick = onMute,
+                        icon = PulseIcons.BellOff,
+                        tone = ButtonTone.Secondary,
+                        modifier = Modifier.weight(1f),
+                    )
+                    PulseButton(
+                        text = "Delete",
+                        onClick = { confirmDelete = true },
+                        icon = PulseIcons.Trash,
+                        tone = ButtonTone.Danger,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+    }
+}
+
 // ----------------------------------------------------------------- list items
 
 @Composable
 private fun MonitorRowCard(
     card: MonitorCard,
+    certLevel: CertificateWatch.Level,
+    selecting: Boolean,
+    selected: Boolean,
+    dragging: Boolean,
+    dragDelta: Offset,
+    reorderHandle: (@Composable () -> Unit)?,
     onOpen: () -> Unit,
+    onLongPress: () -> Unit,
     onCheck: () -> Unit,
     onToggle: (Boolean) -> Unit,
     onAcknowledge: () -> Unit,
@@ -300,28 +1009,67 @@ private fun MonitorRowCard(
     val runtime = card.runtime
     val (accent, accentEnd) = accentFor(monitor.accent)
     val health = if (!monitor.enabled) Health.PAUSED else runtime.health
-    val muted = runtime.mutedUntil > System.currentTimeMillis()
+    val now = LocalNowMs.current
+    val muted = runtime.mutedUntil > now
     val urgentPending = monitor.urgent && runtime.urgentState.nagging
 
     GlassCard(
         // A muted monitor is a decision, not an emergency. Red is reserved for
         // "this needs you now"; once you've snoozed it the rim goes amber so
         // the card still stands out without competing with a live outage.
+        //
+        // Selection overrides both: while picking monitors, "is this one in the
+        // set" is the only question the rim needs to answer, and health is still
+        // carried by the pill and the orb.
         accent = when {
+            dragging -> PulseColors.Aqua
+            selected -> PulseColors.Aqua
             muted && healthRim(health) != Color.Transparent -> PulseColors.Amber
             else -> healthRim(health)
         },
+        // Elevation and shadow both grow while held, so the card reads as picked up
+        // off the surface rather than merely sliding along it.
+        elevation = if (dragging) 26.dp else 12.dp,
         onClick = onOpen,
+        onLongClick = onLongPress,
         modifier = Modifier
+            .then(
+                if (dragging) {
+                    Modifier
+                        .zIndex(1f)
+                        .graphicsLayer {
+                            translationX = dragDelta.x
+                            translationY = dragDelta.y
+                            // Just enough to lift it visually without the drop
+                            // target maths having to account for a scaled hit box.
+                            alpha = 0.94f
+                        }
+                } else {
+                    Modifier
+                },
+            )
             .fillMaxWidth()
             .semantics {
+                if (selecting) {
+                    this.selected = selected
+                }
                 contentDescription = buildString {
                     append(monitor.displayName)
                     append(", ")
                     append(health.label)
                     if (muted) append(", muted")
                     if (urgentPending) append(", urgent, not acknowledged")
-                    append(", open details")
+                    if (certLevel == CertificateWatch.Level.EXPIRED) {
+                        append(", certificate expired")
+                    } else if (certLevel == CertificateWatch.Level.WARN ||
+                        certLevel == CertificateWatch.Level.CRITICAL
+                    ) {
+                        append(
+                            ", certificate expires in " +
+                                "${CertificateWatch.daysLeft(runtime.certExpiresAt, now)} days",
+                        )
+                    }
+                    append(if (selecting) ", tap to select" else ", open details")
                 }
             },
     ) {
@@ -334,6 +1082,18 @@ private fun MonitorRowCard(
                 pageUrl = monitor.url,
                 enabled = monitor.kind == MonitorKind.WEBSITE_ELEMENT,
             )
+            // The grip lives in the title row, not down with the actions.
+            //
+            // The action row is already full — kind, method, interval, pause,
+            // re-check — and adding 48 dp of handle to it pushed the re-check button
+            // clean off the card. The title row has slack by construction: the
+            // name/host column is weighted and simply gives some up. Leading also
+            // keeps it away from the bottom-right corner, where the floating add
+            // button is drawn over whichever card happens to be at the fold.
+            reorderHandle?.let {
+                it()
+                Spacer(Modifier.width(6.dp))
+            }
             IconBadge(
                 icon = kindIcon(monitor.kind),
                 accent = accent,
@@ -358,7 +1118,11 @@ private fun MonitorRowCard(
                 )
             }
             Spacer(Modifier.width(10.dp))
-            StatusOrb(health = health, checking = card.checking, size = 11.dp)
+            if (selecting) {
+                SelectionTick(selected = selected)
+            } else {
+                StatusOrb(health = health, checking = card.checking, size = 11.dp)
+            }
         }
 
         Spacer(Modifier.height(13.dp))
@@ -416,10 +1180,31 @@ private fun MonitorRowCard(
                     text = runtime.lastCode.toString(),
                     color = if (runtime.health == Health.UP) PulseColors.Mint else PulseColors.Amber,
                 )
+                Spacer(Modifier.width(6.dp))
+            }
+            // A cert deadline earns a tag but never the card's rim: the service is
+            // up, and painting it amber would put a warning colour on something
+            // that is working. Red only for one already expired, which is an
+            // outage in every practical sense.
+            if (certLevel != CertificateWatch.Level.OK &&
+                certLevel != CertificateWatch.Level.UNKNOWN
+            ) {
+                MicroTag(
+                    text = CertificateWatch.tag(
+                        certLevel,
+                        CertificateWatch.daysLeft(runtime.certExpiresAt, now),
+                    ),
+                    color = if (certLevel == CertificateWatch.Level.EXPIRED) {
+                        PulseColors.Rose
+                    } else {
+                        PulseColors.Amber
+                    },
+                    icon = PulseIcons.Shield,
+                )
             }
             Spacer(Modifier.weight(1f))
             Text(
-                text = formatRelative(runtime.lastCheckedAt),
+                text = formatRelative(runtime.lastCheckedAt, now),
                 style = MaterialTheme.typography.bodySmall,
                 color = PulseColors.TextTertiary,
             )
@@ -517,20 +1302,48 @@ private fun MonitorRowCard(
             }
             MicroTag(text = "${monitor.intervalMinutes}m", color = PulseColors.TextTertiary, icon = PulseIcons.Clock)
             Spacer(Modifier.weight(1f))
-            GlassIconButton(
-                icon = if (monitor.enabled) PulseIcons.Pause else PulseIcons.Play,
-                onClick = { onToggle(!monitor.enabled) },
-                contentDescription = if (monitor.enabled) "Pause monitor" else "Resume monitor",
-                size = 34.dp,
-                accent = PulseColors.TextSecondary,
-            )
-            GlassIconButton(
-                icon = PulseIcons.Refresh,
-                onClick = onCheck,
-                contentDescription = "Check now",
-                size = 34.dp,
-                accent = accent,
-                enabled = !card.checking,
+            // Per-card actions step aside during selection: a re-check button that
+            // fires a real request is the last thing that should be one mis-tap
+            // away while the finger is busy picking rows.
+            if (!selecting) {
+                GlassIconButton(
+                    icon = if (monitor.enabled) PulseIcons.Pause else PulseIcons.Play,
+                    onClick = { onToggle(!monitor.enabled) },
+                    contentDescription = if (monitor.enabled) "Pause monitor" else "Resume monitor",
+                    size = 34.dp,
+                    accent = PulseColors.TextSecondary,
+                )
+                GlassIconButton(
+                    icon = PulseIcons.Refresh,
+                    onClick = onCheck,
+                    contentDescription = "Check now",
+                    size = 34.dp,
+                    accent = accent,
+                    enabled = !card.checking,
+                )
+            }
+        }
+    }
+}
+
+/** Checkbox in the orb's slot, so nothing on the card moves when the mode flips. */
+@Composable
+private fun SelectionTick(selected: Boolean) {
+    val shape = RoundedCornerShape(8.dp)
+    Box(
+        Modifier
+            .size(22.dp)
+            .clip(shape)
+            .background(if (selected) PulseColors.Aqua else PulseColors.sheen(0.07f))
+            .border(1.dp, if (selected) PulseColors.Aqua else PulseColors.sheen(0.16f), shape),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (selected) {
+            Icon(
+                PulseIcons.Check,
+                contentDescription = null,
+                tint = PulseColors.Void,
+                modifier = Modifier.size(14.dp),
             )
         }
     }
@@ -576,6 +1389,7 @@ fun MorphingFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
         }
     }
 
+    val halo = PulseColors.Aqua.copy(alpha = 0.10f)
     Box(modifier.size(96.dp), contentAlignment = Alignment.Center) {
         // One faint pool of light so the button doesn't float on nothing. The
         // pulsing halo that used to live here read as decoration, not affordance.
@@ -583,7 +1397,7 @@ fun MorphingFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
             val center = Offset(size.width / 2f, size.height / 2f)
             drawCircle(
                 brush = Brush.radialGradient(
-                    listOf(PulseColors.Aqua.copy(alpha = 0.10f), Color.Transparent),
+                    listOf(halo, Color.Transparent),
                     center = center,
                     radius = size.minDimension / 2f,
                 ),

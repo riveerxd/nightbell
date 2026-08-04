@@ -57,13 +57,30 @@ fun AuroraBackground(
         label = "breathe",
     )
 
-    val blobs = remember(tint, secondary) {
+    // Every colour is read here rather than inside the draw scope: a DrawScope is
+    // not a composition, so it cannot see which scheme is in force, and the
+    // remember below has to be keyed on the palette or a theme switch would leave
+    // the old blobs on screen.
+    val indigo = PulseColors.Indigo
+    val aqua = PulseColors.Aqua
+    val base = PulseColors.Void
+    val mid = PulseColors.Ink
+    val grainTint = PulseColors.sheen(1f)
+    // The vignette darkens on dark and *lightens* on light. Painting black over
+    // off-white at 0.72 would put a bruise around the edge of every screen.
+    val vignette = if (PulseColors.isDark) {
+        Color.Black.copy(alpha = 0.72f)
+    } else {
+        base.copy(alpha = 0.85f)
+    }
+
+    val blobs = remember(tint, secondary, indigo, aqua) {
         listOf(
             // Kept faint on purpose: the backdrop should suggest depth, not
             // announce itself. Anything brighter and every screen glows.
             Blob(tint, 0.18f, 0.12f, 0.62f, 0.04f, 0.03f, 0f, 0.10f),
-            Blob(PulseColors.Indigo, 0.86f, 0.24f, 0.58f, 0.03f, 0.04f, 1.9f, 0.075f),
-            Blob(PulseColors.Aqua, 0.30f, 0.78f, 0.70f, 0.04f, 0.03f, 3.4f, 0.055f),
+            Blob(indigo, 0.86f, 0.24f, 0.58f, 0.03f, 0.04f, 1.9f, 0.075f),
+            Blob(aqua, 0.30f, 0.78f, 0.70f, 0.04f, 0.03f, 3.4f, 0.055f),
         )
     }
     val grain = remember {
@@ -75,17 +92,19 @@ fun AuroraBackground(
         Canvas(Modifier.fillMaxSize()) {
             drawRect(
                 Brush.verticalGradient(
-                    0f to PulseColors.Void,
-                    0.55f to PulseColors.Ink,
-                    1f to Color.Black,
+                    0f to base,
+                    0.55f to mid,
+                    // Was hard black, which is the bottom of the dark scheme and
+                    // nowhere at all in the light one.
+                    1f to base,
                 ),
             )
             blobs.forEach { blob -> drawBlob(blob, drift, breathe, intensity) }
-            drawGrain(grain)
+            drawGrain(grain, grainTint)
             // Vignette keeps the eye centred and hides blob edges.
             drawRect(
                 Brush.radialGradient(
-                    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.72f)),
+                    colors = listOf(Color.Transparent, vignette),
                     center = Offset(size.width / 2f, size.height * 0.42f),
                     radius = size.maxDimension * 0.78f,
                 ),
@@ -114,10 +133,10 @@ private fun DrawScope.drawBlob(blob: Blob, drift: Float, breathe: Float, intensi
     )
 }
 
-private fun DrawScope.drawGrain(points: List<Pair<Offset, Float>>) {
+private fun DrawScope.drawGrain(points: List<Pair<Offset, Float>>, tint: Color) {
     points.forEach { (position, seed) ->
         drawCircle(
-            color = Color.White.copy(alpha = 0.012f + seed * 0.022f),
+            color = tint.copy(alpha = tint.alpha * (0.012f + seed * 0.022f)),
             radius = 0.6f + seed * 0.9f,
             center = Offset(position.x * size.width, position.y * size.height),
         )
