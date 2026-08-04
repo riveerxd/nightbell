@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The URGENT page: the call card's shape, with our own button labels.
+
+    `CallStyle` will not give up its wording. Its decline and answer actions are
+    not in the notification at all — SystemUI generates them at draw time from
+    platform strings, which is why overwriting every action title on the built
+    notification renamed only the app's own third button. So the card is ours.
+
+    ### Why this layout is so short
+    A heads-up has a height budget, and a layout that exceeds it is **squashed
+    vertically only** — the views keep their width. Measured on a 420dpi device: a
+    38dp control kept its 100px width and came out 61px tall, so a circle rendered
+    as a wide oval and a stadium as a lozenge. Nothing about corner radii or
+    `scaleType` can correct that; the fix is to stay inside the budget so no
+    squash is applied at all. Hence one line of text here and the failure detail
+    moved to the expanded view, which has room for it.
+
+    The controls are `ImageView`s carrying bitmaps drawn by [UrgentPills] rather
+    than text over shape drawables, because a shape's corner radius resolves at a
+    different density from the view in front of it — see that file.
+
+    No avatar badge: the system already draws the small icon immediately to the
+    left of this view, and a second mark read as two warning glyphs.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="#FFB3121F"
+    android:paddingStart="4dp"
+    android:paddingEnd="10dp"
+    android:paddingTop="6dp"
+    android:paddingBottom="6dp">
+
+    <TextView
+        android:id="@+id/urgent_name"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:textColor="#FFFFFFFF"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/urgent_detail"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:textColor="#D9FFFFFF"
+        android:textSize="12sp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="5dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <ImageView
+            android:id="@+id/urgent_ack"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:minWidth="0dp"
+            android:adjustViewBounds="true"
+            android:scaleType="fitCenter"
+            android:contentDescription="@string/urgent_action_acknowledge" />
+
+        <ImageView
+            android:id="@+id/urgent_recheck"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:layout_marginStart="6dp"
+            android:minWidth="0dp"
+            android:adjustViewBounds="true"
+            android:scaleType="fitCenter"
+            android:contentDescription="@string/urgent_action_recheck" />
+
+        <ImageView
+            android:id="@+id/urgent_mute"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:layout_marginStart="6dp"
+            android:minWidth="0dp"
+            android:adjustViewBounds="true"
+            android:scaleType="fitCenter"
+            android:contentDescription="@string/urgent_action_mute" />
+    </LinearLayout>
+</LinearLayout>

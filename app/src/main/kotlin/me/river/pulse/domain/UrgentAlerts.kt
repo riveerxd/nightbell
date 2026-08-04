@@ -26,6 +26,18 @@ object UrgentAlerts {
         /** True while the loop still owes the user a notification. */
         val nagging: Boolean get() = active && !acknowledged
 
+        /**
+         * True once this outage is over as far as paging is concerned: either it
+         * recovered (back to [Idle]) or the user said they had seen it.
+         *
+         * Distinct from `!nagging`, which is also true while merely *suspended* —
+         * muted, in quiet hours, below the failure threshold. Anything that
+         * belongs to the outage rather than to the nag (how long it has been down,
+         * how many times it has been paged) must survive a suspension and die
+         * here. See [me.river.pulse.domain.MonitorRuntime.withUrgentState].
+         */
+        val ended: Boolean get() = this == Idle || acknowledged
+
         companion object {
             val Idle = State()
         }

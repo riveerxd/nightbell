@@ -11,6 +11,7 @@ import me.river.pulse.domain.CheckerHealth
 import me.river.pulse.domain.CheckerStreak
 import me.river.pulse.domain.GlobalSettings
 import me.river.pulse.domain.Health
+import me.river.pulse.domain.UrgentAlerts
 import me.river.pulse.domain.LegacyCrashRepair
 import me.river.pulse.domain.Monitor
 import me.river.pulse.domain.MonitorCard
@@ -135,7 +136,14 @@ class PulseStore(
             runtimes = snap.runtimes.mapValues { (mid, rt) ->
                 when {
                     mid != id -> rt
+                    // Pausing ends the outage as far as paging is concerned.
+                    // Clearing `health` alone was not enough: the urgent state
+                    // stayed active, so the service kept itself alive and kept
+                    // paging about a monitor the user had just switched off, and
+                    // the page is un-dismissable by design. Same class of bug as
+                    // the 1.1.2 orphan, reached by a different door.
                     !enabled -> rt.copy(health = Health.PAUSED, alerting = false)
+                        .withUrgentState(UrgentAlerts.State.Idle)
                     // Resuming clears the due-clock, so the monitor is checked at
                     // once rather than waiting out an interval measured from before
                     // it was paused — and so a monitor paused for a day is not

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Custom heads-up body for the URGENT page.
+
+    Android 12 stopped letting an app own the whole notification area, so this
+    lives *inside* the system's decoration rather than replacing it — and the
+    heads-up slot it lives in is only about two short lines tall. The first cut
+    of this layout was four stacked TextViews and the monitor name was sliced in
+    half on the device; everything here is sized to survive that budget.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="#FFFF4D57"
+    android:paddingStart="14dp"
+    android:paddingEnd="14dp"
+    android:paddingTop="8dp"
+    android:paddingBottom="9dp">
+
+    <TextView
+        android:id="@+id/urgent_name"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:textColor="#FF000000"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/urgent_detail"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="1dp"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:textColor="#E6000000"
+        android:textSize="13sp" />
+
+    <TextView
+        android:id="@+id/urgent_meta"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="1dp"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:textColor="#A6000000"
+        android:textSize="11sp" />
+</LinearLayout>

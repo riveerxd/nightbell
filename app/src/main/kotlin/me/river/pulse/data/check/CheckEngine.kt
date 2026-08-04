@@ -17,6 +17,7 @@ import me.river.pulse.domain.MonitorKind
 import me.river.pulse.domain.MonitorRuntime
 import me.river.pulse.domain.NetworkBaseline
 import me.river.pulse.domain.UrgentAlerts
+import me.river.pulse.domain.runCatchingCancellable
 import java.util.Calendar
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.cancellation.CancellationException
@@ -344,7 +345,7 @@ class CheckEngine(
             nowMs = result.at,
             repeatMinutes = monitor.urgentRepeatMinutes,
         )
-        applyUrgent(monitor, urgentOutcome, result, policy)
+        val urgentMutation = applyUrgent(monitor, urgentOutcome, result, policy, after)
 
         // NonCancellable, and this is load-bearing.
         //
@@ -378,6 +379,7 @@ class CheckEngine(
                         health = if (!monitor.enabled) Health.PAUSED else after.health,
                     )
                     .withUrgentState(urgentOutcome.state)
+                    .let(urgentMutation)
             }
         }
         onStateChanged?.invoke()
@@ -450,29 +452,82 @@ class CheckEngine(
         return !quiet || policy.criticalBypassesQuiet
     }
 
+    /**
+     * Applies one urgent outcome.
+     *
+     * The page itself is *not* posted here any more. It is the foreground
+     * service's own notification, because `setColorized` — the only way to have
+     * the platform paint the whole card in the down colour — is honoured for
+     * nothing else; verified on a device. So this records that a page is owed and
+     * lets [me.river.pulse.data.work.PulseMonitorService] render it, falling back
+     * to an ordinary post when that service could not be started.
+     *
+     * @return the runtime mutation this outcome implies.
+     */
     private fun applyUrgent(
         monitor: Monitor,
         outcome: UrgentAlerts.Outcome,
         result: CheckResult?,
         policy: AlertPolicy,
-    ) {
+        runtime: MonitorRuntime,
+    ): (MonitorRuntime) -> MonitorRuntime {
         when (outcome.action) {
-            UrgentAlerts.Action.START, UrgentAlerts.Action.REPEAT -> alerts.notifyUrgent(
-                monitor = monitor,
-                result = result ?: CheckResult(
+            UrgentAlerts.Action.START, UrgentAlerts.Action.REPEAT -> {
+                val at = nowMs()
+                val evidence = result ?: CheckResult(
                     ok = false,
-                    latencyMs = 0,
+                    latencyMs = runtime.lastLatencyMs,
                     failureKind = FailureKind.UNKNOWN,
-                    message = "Still down",
-                    at = nowMs(),
-                ),
-                policy = policy,
-                repeatCount = if (outcome.action == UrgentAlerts.Action.REPEAT) 1 else 0,
-            )
+                    message = runtime.lastMessage.ifBlank { "Still down" },
+                    at = at,
+                )
+                pageWanted = true
+                // The service owns the loud copy. If it is not running — Android 12+
+                // refuses a background foreground-service start without an
+                // exemption — this at least still interrupts the user.
+                if (!serviceIsPaging()) {
+                    val since = if (runtime.urgentSinceAt == 0L) at else runtime.urgentSinceAt
+                    alerts.postUrgentPageFallback(
+                        monitor = monitor,
+                        result = evidence,
+                        policy = policy,
+                        downForMs = at - since,
+                        pageCount = runtime.urgentPageCount + 1,
+                    )
+                }
+                return { it.withUrgentPaged(at) }
+            }
 
-            UrgentAlerts.Action.CLEAR -> alerts.cancelUrgent(monitor.id)
-            UrgentAlerts.Action.NONE -> Unit
+            UrgentAlerts.Action.CLEAR -> {
+                alerts.cancelUrgent(monitor.id)
+                return { it }
+            }
+
+            UrgentAlerts.Action.NONE -> return { it }
         }
+    }
+
+    /**
+     * Whether the foreground service is currently the thing showing the page.
+     *
+     * Wired by the graph. Defaults to false so the engine stays testable and so
+     * the fallback post — the safe direction — is what happens when nothing has
+     * told us otherwise.
+     */
+    var serviceIsPaging: () -> Boolean = { false }
+
+    /**
+     * Set whenever a page is owed, so the service knows to re-render and start
+     * making noise without re-deriving the decision. Read-and-cleared by
+     * [consumePageWanted].
+     */
+    @Volatile
+    private var pageWanted: Boolean = false
+
+    fun consumePageWanted(): Boolean {
+        val wanted = pageWanted
+        pageWanted = false
+        return wanted
     }
 
     // ---- checker health ------------------------------------------------------
@@ -662,13 +717,31 @@ class CheckEngine(
                 repeatMinutes = monitor.urgentRepeatMinutes,
             )
             if (outcome.action == UrgentAlerts.Action.NONE) continue
-            applyUrgent(monitor, outcome, lastResultFor(runtime), policy)
+
+            // A repeat asserts "this is *still* down", and a page is a much
+            // stronger claim than a row in the shade. Re-check first when the last
+            // verdict is older than the repeat gap: with strict mode off no checks
+            // are running between ticks, so the old code could page three times off
+            // one observation a quarter of an hour stale — and page about a monitor
+            // that had already come back.
+            if (outcome.action == UrgentAlerts.Action.REPEAT && staleEvidence(monitor, runtime, now)) {
+                Log.i(TAG, "Re-checking ${monitor.displayName} before paging again")
+                val fresh = runCatchingCancellable { run(monitor.id, force = true) }.getOrNull()
+                if (fresh == null || fresh.ok) continue
+                // `run` has already folded the failure through this same machine,
+                // paged if it was due, and persisted. Nothing left to do here.
+                fired++
+                continue
+            }
+            val mutation = applyUrgent(monitor, outcome, lastResultFor(runtime), policy, runtime)
             // `applyUrgent` has already posted and vibrated. Losing this write
             // would drop the repeat cooldown it just earned, so the next tick — or
             // the next process to start the service — would nag again immediately
             // instead of after `urgentRepeatMinutes`.
             withContext(NonCancellable) {
-                store.updateRuntime(monitor.id) { it.withUrgentState(outcome.state) }
+                store.updateRuntime(monitor.id) {
+                    it.withUrgentState(outcome.state).let(mutation)
+                }
             }
             if (outcome.action == UrgentAlerts.Action.REPEAT) fired++
         }
@@ -718,6 +791,22 @@ class CheckEngine(
             if (id !in legitimate) alerts.cancelById(id)
         }
     }
+
+    /**
+     * Whether the newest verdict is too old to justify another page.
+     *
+     * "Too old" is one repeat gap: if the monitor is being checked at least as
+     * often as it is paged, the evidence behind every page is fresh by
+     * construction and this never fires.
+     */
+    private fun staleEvidence(monitor: Monitor, runtime: MonitorRuntime, nowMs: Long): Boolean {
+        if (runtime.lastCheckedAt <= 0L) return true
+        val gap = monitor.urgentRepeatMinutes.coerceAtLeast(1) * 60_000L
+        return nowMs - runtime.lastCheckedAt >= gap
+    }
+
+    /** Re-hydrates enough of the last failure for the page to describe it. */
+    fun pageEvidence(runtime: MonitorRuntime): CheckResult = lastResultFor(runtime)
 
     /** Re-hydrates enough of the last failure to re-post a useful notification. */
     private fun lastResultFor(runtime: MonitorRuntime): CheckResult = CheckResult(

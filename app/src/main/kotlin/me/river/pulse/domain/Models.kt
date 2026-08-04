@@ -436,6 +436,18 @@ data class MonitorRuntime(
     /** The user acknowledged the current outage; stays true until recovery. */
     val urgentAcknowledged: Boolean = false,
     val lastUrgentAlertAt: Long = 0L,
+    /**
+     * How many times this outage has been paged, counting the first.
+     *
+     * Persisted rather than derived so the page can say "reminder 4" truthfully
+     * across a process restart. Up to 2.0.0 the notification hardcoded
+     * "Reminder #1" on every repeat, which made a working escalation look stuck.
+     * Reset by recovery and by acknowledgement, both of which end the outage as
+     * far as paging is concerned.
+     */
+    val urgentPageCount: Int = 0,
+    /** When this outage was first observed, for the "down for …" line. */
+    val urgentSinceAt: Long = 0L,
 
     val samples: List<Sample> = emptyList(),
 ) {
@@ -447,6 +459,22 @@ data class MonitorRuntime(
         urgentActive = state.active,
         urgentAcknowledged = state.acknowledged,
         lastUrgentAlertAt = state.lastAlertAt,
+        // The counter and the clock belong to one outage, so they die with it —
+        // whether it ended by recovery (Idle) or by the user saying they have seen
+        // it (acknowledged).
+        //
+        // Deliberately *not* keyed on `nagging`: being muted, in quiet hours or
+        // below the failure threshold also stops the nag, but the outage is still
+        // running. Resetting there would restart "down for" at zero every time a
+        // mute expired, and re-number the reminders from one.
+        urgentPageCount = if (state.ended) 0 else urgentPageCount,
+        urgentSinceAt = if (state.ended) 0L else urgentSinceAt,
+    )
+
+    /** Records that a page just went out. */
+    fun withUrgentPaged(atMs: Long): MonitorRuntime = copy(
+        urgentPageCount = urgentPageCount + 1,
+        urgentSinceAt = if (urgentSinceAt == 0L) atMs else urgentSinceAt,
     )
 
     val uptimePercent: Float

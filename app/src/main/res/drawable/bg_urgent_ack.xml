@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Primary control: solid near-black on the red card, the highest-contrast pair
+    available without introducing a second hue.
+
+    Radius is exactly half the 38dp height. A large "just make it round" value was
+    clamped by the renderer into a lumpy near-hexagon.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#FF0C0206" />
+    <corners android:radius="19dp" />
+</shape>

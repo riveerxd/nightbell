@@ -69,8 +69,25 @@ android {
         // The store itself is untouched: the DataStore name, its key and
         // SCHEMA_VERSION were never derived from the package, so an imported
         // snapshot lands in exactly the shape it left.
-        versionCode = 11
-        versionName = "2.0.0"
+        // 2.1.0 makes URGENT actually page. Up to 2.0.0 it posted an ordinary
+        // HIGH-importance notification: no screen wake, nothing on a locked phone
+        // beyond a normal row, one chime and then minutes of silence, and — on any
+        // install that had ever run 1.1.0 — no Do Not Disturb bypass at all,
+        // because a channel's importance and DND flags are frozen at creation and
+        // the id had never changed. The page is now the foreground service's own
+        // notification (the only place Android honours `setColorized`, so the only
+        // place the card is red), it loops an alarm-stream sound until
+        // acknowledged, it carries Ack / Re-check / Mute-1h, and it escalates to a
+        // full-screen alert on a locked device. Four paging bugs went with it: the
+        // repeat loop and the reconciliation sweep now also run from `SweepWorker`
+        // instead of only inside a service that Android often refuses to start
+        // from the background; a repeat re-checks rather than re-asserting a
+        // verdict up to a quarter of an hour old; pausing a monitor ends its page
+        // instead of leaving an un-dismissable one; and `sync()` no longer stops a
+        // service that has not yet promoted itself, which was killing the process
+        // with ForegroundServiceDidNotStartInTimeException.
+        versionCode = 12
+        versionName = "2.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

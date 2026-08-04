@@ -55,6 +55,9 @@ object Pulse {
             // stays free of Android plumbing and remains unit-testable.
             engine.onStateChanged = ::notifyStateChanged
             engine.isOnline = network::isOnline
+            // Lets the engine skip its fallback post when the service is already
+            // showing the (fully red, looping) page for that outage.
+            engine.serviceIsPaging = PulseMonitorService::isPaging
 
             // Coming back online should feel immediate rather than "sometime
             // within the next interval" — the phone was in a tunnel, and the

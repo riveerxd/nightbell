@@ -5,4 +5,14 @@
     <string name="widget_name">Pulse status</string>
     <string name="widget_description">Monitor health at a glance, worst first.</string>
     <string name="widget_settings">Widget settings</string>
+
+    <!-- URGENT page actions. In resources rather than inline because they are
+         also the notification action labels, and the two must never drift. -->
+    <string name="urgent_action_acknowledge">Acknowledge</string>
+    <!-- What the pill on the page actually shows. The long form above stays as
+         the accessibility label and as the notification action label, so a screen
+         reader never has to announce "Ack". -->
+    <string name="urgent_action_acknowledge_short">Ack</string>
+    <string name="urgent_action_recheck">Re-check</string>
+    <string name="urgent_action_mute">Mute for 1 hour</string>
 </resources>

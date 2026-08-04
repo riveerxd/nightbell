@@ -21,6 +21,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import me.river.pulse.MainActivity
+import me.river.pulse.UrgentAlertActivity
 import me.river.pulse.R
 import me.river.pulse.domain.AlertPolicy
 import me.river.pulse.domain.CheckResult
@@ -187,6 +188,158 @@ class AlertCenter(private val context: Context) {
     }
 
     fun cancelUrgent(monitorId: String) = compat.cancel(monitorId.urgentNotificationId())
+
+    // ---- the URGENT page ---------------------------------------------------
+
+    /**
+     * Builds the page — the red call-shaped card the user actually gets paged by.
+     *
+     * Returned rather than posted, because *where* it is posted decides how it
+     * looks. `setColorized(true)` is honoured only for a foreground-service
+     * notification, so the fully red card exists only when
+     * [me.river.pulse.data.work.PulseMonitorService] posts this as its own
+     * foreground notification. Verified on a device: the identical builder sent
+     * through `NotificationManager.notify` renders as a white card with a red
+     * block inside it.
+     *
+     * @param otherPending how many *other* monitors are also unacknowledged, so
+     *   one card can honestly stand for a multi-monitor incident.
+     */
+    fun urgentPage(
+        monitor: Monitor,
+        result: CheckResult,
+        policy: AlertPolicy,
+        downForMs: Long,
+        pageCount: Int,
+        otherPending: Int = 0,
+    ): Notification {
+        val headline = result.message.ifBlank { result.failureKind.headline }
+        val content = UrgentPageContent(
+            monitorName = monitor.displayName,
+            headline = if (otherPending > 0) "$headline · +$otherPending more down" else headline,
+            url = monitor.url,
+            downFor = formatDownFor(downForMs),
+            failedChecks = 0,
+            reminderNumber = (pageCount - 1).coerceAtLeast(0),
+            repeatMinutes = monitor.urgentRepeatMinutes,
+        )
+        return UrgentPageStyles.build(
+            context = context,
+            style = UrgentPageStyle.CALL_CUSTOM,
+            channelId = urgentChannel(policy),
+            content = content,
+            actions = urgentActions(monitor),
+        )
+    }
+
+    /** The page's three buttons, plus its locked-screen escalation. */
+    private fun urgentActions(monitor: Monitor) = UrgentPageActions(
+        acknowledge = AlertActionReceiver.pendingIntent(
+            context,
+            AlertActionReceiver.ACTION_ACK_URGENT,
+            monitor.id,
+        ),
+        open = openMonitorIntent(monitor.id),
+        recheck = AlertActionReceiver.pendingIntent(
+            context,
+            AlertActionReceiver.ACTION_RECHECK,
+            monitor.id,
+        ),
+        mute = AlertActionReceiver.pendingIntent(
+            context,
+            AlertActionReceiver.ACTION_MUTE_1H,
+            monitor.id,
+        ),
+        // Only takes the screen while the device is locked; unlocked, the heads-up
+        // above is what arrives. Null when the permission is not granted so the
+        // notification is never rejected for carrying an intent it may not use.
+        fullScreen = if (canUseFullScreenIntent()) fullScreenPageIntent(monitor) else null,
+    )
+
+    private fun fullScreenPageIntent(monitor: Monitor): PendingIntent {
+        val intent = Intent(context, UrgentAlertActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            putExtra(UrgentAlertActivity.EXTRA_MONITOR_ID, monitor.id)
+            putExtra(UrgentAlertActivity.EXTRA_MONITOR_NAME, monitor.displayName)
+            putExtra(UrgentAlertActivity.EXTRA_URL, monitor.url)
+            putExtra(UrgentAlertActivity.EXTRA_REPEAT_MINUTES, monitor.urgentRepeatMinutes)
+        }
+        return PendingIntent.getActivity(
+            context,
+            monitor.id.urgentNotificationId(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
+    /**
+     * The degraded page, for when the foreground service could not start.
+     *
+     * Android 12+ refuses a background `startForegroundService` without an
+     * exemption, and the repeat loop and the red card both live in that service.
+     * Posting the same card the ordinary way still interrupts the user — it just
+     * arrives as a red block inside a system-coloured card and does not loop.
+     * Losing the styling is acceptable; losing the page is not.
+     */
+    fun postUrgentPageFallback(
+        monitor: Monitor,
+        result: CheckResult,
+        policy: AlertPolicy,
+        downForMs: Long,
+        pageCount: Int,
+    ): Boolean = post(
+        monitor.id.urgentNotificationId(),
+        urgentPage(monitor, result, policy, downForMs, pageCount),
+    )
+
+    /** Renders a duration the way the page says it. */
+    fun formatDownFor(ms: Long): String {
+        val seconds = (ms / 1000L).coerceAtLeast(0L)
+        val hours = seconds / 3600
+        val minutes = (seconds % 3600) / 60
+        return when {
+            hours > 0 -> "${hours}h ${minutes}m"
+            minutes > 0 -> "${minutes}m ${seconds % 60}s"
+            else -> "${seconds}s"
+        }
+    }
+
+    // ---- can this app actually page the user? ------------------------------
+
+    /**
+     * Whether a full-screen intent would be honoured.
+     *
+     * Not pre-granted above API 33 for anything but calling and alarm apps, so
+     * this is normally false until the user grants it by hand.
+     */
+    fun canUseFullScreenIntent(): Boolean = runCatching {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return@runCatching true
+        manager.canUseFullScreenIntent()
+    }.getOrDefault(false)
+
+    fun fullScreenIntentSettingsIntent(): Intent =
+        Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT)
+            .setData(Uri.parse("package:${context.packageName}"))
+
+    /**
+     * Whether `setBypassDnd(true)` on the urgent channel actually took effect.
+     *
+     * The setter needs notification-policy access, which is a separate grant.
+     * Without it the flag is dropped silently and Do Not Disturb — bedtime mode
+     * included — mutes the page completely.
+     */
+    fun urgentBypassesDnd(): Boolean = runCatching {
+        manager.isNotificationPolicyAccessGranted
+    }.getOrDefault(false)
+
+    fun dndAccessIntent(): Intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
+
+    /** Whether the urgent channel is still allowed to interrupt. */
+    fun urgentChannelEnabled(policy: AlertPolicy): Boolean = runCatching {
+        val channel = manager.getNotificationChannel(urgentChannel(policy))
+            ?: return@runCatching true
+        channel.importance != NotificationManager.IMPORTANCE_NONE
+    }.getOrDefault(true)
 
     /** "Up, but slow." Deliberately quieter than a down alert. */
     fun notifyDegraded(
@@ -492,8 +645,14 @@ class AlertCenter(private val context: Context) {
      */
     fun urgentChannel(policy: AlertPolicy): String {
         val style = policy.vibrationStyle
-        val id = "pulse.urgent.${style.name.lowercase()}"
+        // v2, and the version suffix is load-bearing. Android freezes a channel's
+        // importance, sound and DND bypass at creation and ignores every later
+        // change, so the 1.1.0-era `pulse.urgent.*` channels on an existing
+        // install could never be given `setBypassDnd`. A new id is the only way
+        // the fix reaches a device that already ran an older build.
+        val id = "$URGENT_CHANNEL_V2.${style.name.lowercase()}"
         if (manager.getNotificationChannel(id) != null) return id
+        runCatching { manager.deleteNotificationChannel("pulse.urgent.${style.name.lowercase()}") }
         val channel = NotificationChannel(id, "Urgent · ${style.label}", NotificationManager.IMPORTANCE_HIGH).apply {
             group = GROUP_URGENT
             description = "Repeats until acknowledged when an URGENT monitor goes down."
@@ -723,6 +882,13 @@ class AlertCenter(private val context: Context) {
         private const val NOTIFICATION_GROUP = "pulse.alerts"
         const val SERVICE_CHANNEL = "pulse.service.strict"
         const val HEALTH_CHANNEL = "pulse.health.checker"
+
+        /**
+         * Versioned on purpose. A channel's importance, sound and DND bypass are
+         * frozen at creation, so correcting any of them means a new id and
+         * deleting the old one — see [urgentChannel].
+         */
+        const val URGENT_CHANNEL_V2 = "pulse.urgent.v2"
         const val SERVICE_NOTIFICATION_ID = 4242
 
         /**

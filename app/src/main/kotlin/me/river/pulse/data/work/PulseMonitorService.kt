@@ -10,6 +10,7 @@ import android.os.IBinder
 import android.util.Log
 import me.river.pulse.data.Pulse
 import me.river.pulse.data.alerts.AlertCenter
+import me.river.pulse.data.alerts.UrgentAlarm
 import me.river.pulse.domain.Summary
 import me.river.pulse.domain.runCatchingCancellable
 import kotlinx.coroutines.CoroutineScope
@@ -58,9 +59,32 @@ class PulseMonitorService : Service() {
     private var loop: Job? = null
     private var started = false
 
+    /** The looping page sound. Owned here because this service's lifetime is
+     *  exactly "something is unacknowledged". */
+    private val alarm by lazy { UrgentAlarm(applicationContext) }
+
+    override fun onCreate() {
+        super.onCreate()
+        // As early as Android allows. `startForegroundService` opens a ~5s window
+        // in which this process is killed unless `startForeground` has been
+        // called, and that window is not cancelled by the service being stopped
+        // again in the meantime — see [sync].
+        promoteImmediately()
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // FIRST, before anything that could be slow. Android gives a service
+        // started with `startForegroundService` about five seconds to call
+        // `startForeground`, and kills the *process* with
+        // ForegroundServiceDidNotStartInTimeException if it misses. Building the
+        // object graph — DataStore, OkHttp, the network monitor — used to happen
+        // ahead of this, which is fine in a warm process and a crash in a cold
+        // one. `AlertCenter` needs nothing but a Context, so the placeholder
+        // notification is always cheap; the real content lands on the next tick.
+        promoteImmediately()
+
         val graph = Pulse.install(applicationContext)
 
         if (intent?.action == ACTION_STOP) {
@@ -73,7 +97,6 @@ class PulseMonitorService : Service() {
             return START_NOT_STICKY
         }
 
-        promote(graph.alerts, "Starting…", "Working out what needs checking.")
         if (loop == null) {
             loop = scope.launch { runLoop() }
         }
@@ -115,6 +138,62 @@ class PulseMonitorService : Service() {
             runCatchingCancellable { graph.engine.tickUrgent() }
                 .onFailure { Log.e(TAG, "Urgent tick failed", it) }
 
+            // ---- the page ----------------------------------------------------
+            //
+            // While anything is unacknowledged, *this* service's own notification
+            // is the page. That is not a stylistic choice: `setColorized(true)` is
+            // honoured only for a foreground-service notification, so the red card
+            // exists here and nowhere else — the identical builder sent through
+            // `NotificationManager.notify` renders as a white card with a red block
+            // in it. One card at a time, oldest outage first, with the others
+            // counted on it.
+            val paging = runCatchingCancellable { graph.store.currentSnapshot() }
+                .getOrNull()
+                ?.let { snap ->
+                    snap.monitors
+                        .filter { it.urgent && snap.runtimes[it.id]?.urgentState?.nagging == true }
+                        .sortedBy { snap.runtimes[it.id]?.urgentSinceAt ?: Long.MAX_VALUE }
+                        .let { pending ->
+                            pending.firstOrNull()?.let { first -> first to pending.size - 1 }
+                        }
+                }
+
+            if (paging != null) {
+                val (monitor, others) = paging
+                val snapshot2 = runCatchingCancellable { graph.store.currentSnapshot() }.getOrNull()
+                val runtime = snapshot2?.runtimes?.get(monitor.id)
+                val policy = if (monitor.useGlobalAlerts) {
+                    snapshot2?.settings?.defaultAlert
+                } else {
+                    monitor.alert
+                }
+                if (runtime != null && policy != null) {
+                    val since = runtime.urgentSinceAt.takeIf { it > 0L } ?: System.currentTimeMillis()
+                    promoteWith(
+                        graph.alerts.urgentPage(
+                            monitor = monitor,
+                            result = graph.engine.pageEvidence(runtime),
+                            policy = policy,
+                            downForMs = System.currentTimeMillis() - since,
+                            pageCount = runtime.urgentPageCount.coerceAtLeast(1),
+                            otherPending = others,
+                        ),
+                    )
+                    // Looping, because a channel's sound fires once per post and a
+                    // five-minute gap between chimes is a reminder, not a pager.
+                    alarm.start(policy.vibrationStyle, vibrate = true)
+                    paging_ = true
+                    // The per-monitor fallback copy, if an earlier pass posted one
+                    // before this service could start, would now be a duplicate.
+                    graph.alerts.cancelUrgent(monitor.id)
+                    delay(runCatchingCancellable { graph.engine.nextWakeDelayMs() }.getOrDefault(CheckEngine_MIN_TICK))
+                    continue
+                }
+            }
+            // Nothing to page about: silence, and go back to the strict-mode notice.
+            alarm.stop()
+            paging_ = false
+
             val fleet = runCatchingCancellable {
                 graph.store.currentSnapshot().let { Summary.of(it.monitors, it.runtimes) }
             }.getOrNull()
@@ -150,8 +229,29 @@ class PulseMonitorService : Service() {
         }
     }
 
-    private fun promote(alerts: AlertCenter, title: String, body: String) {
-        val notification = alerts.serviceNotification(title, body, stopPendingIntent())
+    /**
+     * Enters the foreground with a placeholder, using nothing that can block.
+     *
+     * Idempotent: after the first call [started] is true and this is a plain
+     * notification update, so calling it at the top of every `onStartCommand`
+     * costs nothing.
+     */
+    private fun promoteImmediately() {
+        val alerts = AlertCenter(applicationContext)
+        promote(alerts, "Starting…", "Working out what needs checking.")
+    }
+
+    private fun promote(alerts: AlertCenter, title: String, body: String) =
+        promoteWith(alerts.serviceNotification(title, body, stopPendingIntent()))
+
+    /**
+     * Posts [notification] as this service's foreground notification.
+     *
+     * Shared by the strict-mode notice and the URGENT page so both go through one
+     * `startForeground`/`notify` decision — the service must never have two
+     * different ideas of what its foreground notification is.
+     */
+    private fun promoteWith(notification: android.app.Notification) {
         if (!started) {
             runCatching {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -174,6 +274,9 @@ class PulseMonitorService : Service() {
     }
 
     private fun stopSelfSafely() {
+        // Before anything else: the noise must not outlive the page.
+        alarm.stop()
+        paging_ = false
         // Cancelling the loop cancels whatever check it had in flight. That is
         // correct and unavoidable — and up to 1.5.0 it was reported to the user
         // as "Checker crashed". `CheckEngine` now records nothing for a cancelled
@@ -195,12 +298,28 @@ class PulseMonitorService : Service() {
     )
 
     override fun onDestroy() {
+        alarm.stop()
+        paging_ = false
         scope.cancel()
         super.onDestroy()
     }
 
     companion object {
         private const val TAG = "PulseMonitorService"
+
+        /**
+         * Whether this service is currently the thing showing the URGENT page.
+         *
+         * Process-wide rather than per-instance because the engine has to know
+         * before it decides whether to post its own fallback copy, and it has no
+         * handle on the service. False whenever the service is not running, which
+         * is the safe default: it makes the engine post, and a duplicate is
+         * cancelled on the next tick whereas a missed page is missed.
+         */
+        @Volatile
+        private var paging_: Boolean = false
+
+        fun isPaging(): Boolean = paging_
         private const val CheckEngine_MIN_TICK = 15_000L
         const val ACTION_SYNC = "me.river.pulse.action.SERVICE_SYNC"
         const val ACTION_STOP = "me.river.pulse.action.SERVICE_STOP"
@@ -236,7 +355,15 @@ class PulseMonitorService : Service() {
                         }
                     }.onFailure { Log.w(TAG, "Foreground start refused: ${it.message}") }
                 } else {
-                    runCatching { app.stopService(intent) }
+                    // Deliberately *not* `stopService`. Android does not cancel the
+                    // "you must call startForeground" promise when a service is
+                    // stopped, so a start and a stop landing in the same few
+                    // milliseconds — two state changes in quick succession, which
+                    // is routine — killed the process with
+                    // ForegroundServiceDidNotStartInTimeException. The loop already
+                    // shuts itself down on the first tick where neither strict mode
+                    // nor a page needs it, so there is nothing to command here.
+                    Log.i(TAG, "Nothing needs the service; it will stand down on its next tick")
                 }
             }
         }

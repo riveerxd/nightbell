@@ -9,6 +9,25 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!--
+        The URGENT page. CallStyle is demoted to an ordinary notification unless
+        the notification is tied to a foreground service or carries a full-screen
+        intent, and a page arriving on a locked phone should wake the screen.
+
+        Not pre-granted at targetSdk 34+ for anything but calling and alarm apps,
+        so the app must check `canUseFullScreenIntent()` and send the user to
+        ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT — the heads-up has to keep
+        working on its own when this is denied.
+    -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
+    <!--
+        Without this, `NotificationChannel.setBypassDnd(true)` is silently
+        dropped and Do Not Disturb mutes the page completely. Declaring it is
+        only half the job: the user still has to grant policy access.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+
+    <!--
         Strict monitoring runs a foreground service so checks keep their cadence
         in Doze. SPECIAL_USE rather than DATA_SYNC: dataSync is capped at six
         hours a day on API 34+, which would silently break the one guarantee
@@ -49,6 +68,22 @@
             </intent-filter>
         </activity>
 
+        <!--
+            Full-screen-intent target for an URGENT page. `singleInstance` plus
+            `excludeFromRecents` so a repeat can never stack a second copy and so
+            an emergency surface does not linger in the recents list.
+        -->
+        <activity
+            android:name=".UrgentAlertActivity"
+            android:exported="false"
+            android:launchMode="singleInstance"
+            android:excludeFromRecents="true"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:taskAffinity=""
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode|density"
+            android:theme="@style/Theme.Pulse" />
+
         <activity
             android:name=".widget.WidgetConfigActivity"
             android:exported="true"
@@ -66,6 +101,20 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Keeps user-configured uptime checks on their exact schedule and repeats an unacknowledged URGENT outage alert until the user confirms it." />
+        </service>
+
+        <!--
+            Posts a sample URGENT page as a real foreground-service notification,
+            because `setColorized` — the only way to have the system paint the
+            whole card red — is ignored for anything else. Stops itself.
+        -->
+        <service
+            android:name=".data.alerts.UrgentPagePreviewService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Shows the user what an URGENT outage page will look and sound like before they have to trust it with a real outage." />
         </service>
 
         <receiver

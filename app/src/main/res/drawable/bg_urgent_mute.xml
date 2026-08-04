@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Mute disc, matched to the secondary control.
+
+    A rectangle with a half-height radius rather than shape="oval": the oval came
+    out of the notification renderer as a rounded square, while 19dp on a 38dp box
+    is a circle by definition.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#2EFFFFFF" />
+    <corners android:radius="19dp" />
+</shape>

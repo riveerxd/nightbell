@@ -126,6 +126,18 @@ class SweepWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
             // this sweep. It now updates periodic work in place and cancels
             // nothing.
             graph.scheduler.syncAll(snapshot.monitors, snapshot.settings)
+
+            // The urgent tick, and the reconciliation sweep inside it, used to run
+            // from [PulseMonitorService] and nowhere else. That service is started
+            // by a background `startForegroundService`, which Android 12+ refuses
+            // without an exemption — and the refusal is caught and logged. So with
+            // strict mode off, the first page went out and then nothing ever
+            // repeated it, and no orphaned page could ever be cleared, until the
+            // user next opened the app. Which is exactly the moment they no longer
+            // need paging. Driving it from here too means the escalation survives
+            // the phone being in a pocket.
+            val paged = graph.engine.tickUrgent()
+            if (paged > 0) Log.i(TAG, "Sweep re-paged $paged monitor(s)")
             Log.i(TAG, "Sweep ran $ran monitor(s)")
             Result.success()
         } catch (cancellation: CancellationException) {

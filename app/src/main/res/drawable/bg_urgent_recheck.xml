@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Secondary control: a white wash, not a black one. Translucent black over this
+    red muddies into brown and reads cheap; white keeps the same hue and just
+    lifts it. No stroke — a 1dp outline on a small pill renders as faceting rather
+    than as an edge.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#2EFFFFFF" />
+    <corners android:radius="19dp" />
+</shape>

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Bell-with-a-slash for the mute control.
+
+    Separate from ic_stat_mute because that one draws its slash in white on top of
+    a white bell — correct as a status-bar silhouette, invisible once filled. Here
+    the cut is drawn as a gap: a wide stroke in the card's red, then a thin white
+    line inside it.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M12,22 a2.2,2.2 0 0,0 2.2,-2.2 h-4.4 A2.2,2.2 0 0,0 12,22 Z M18,16 v-5 a6,6 0 0,0 -4.5,-5.8 V4.5 a1.5,1.5 0 0,0 -3,0 v0.7 A6,6 0 0,0 6,11 v5 l-2,2 v1 h16 v-1 Z" />
+    <path android:fillColor="#FFFF4D57"
+        android:pathData="M2.2,3.6 L5.2,0.6 L23.4,18.8 L20.4,21.8 Z" />
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M3.7,3.5 L4.9,2.3 L21.7,19.1 L20.5,20.3 Z" />
+</vector>
