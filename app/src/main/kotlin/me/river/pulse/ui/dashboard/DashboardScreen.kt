@@ -93,6 +93,7 @@ import me.river.pulse.ui.components.GlassField
 import me.river.pulse.ui.components.MicroTag
 import me.river.pulse.ui.components.PullToRefreshLayout
 import me.river.pulse.ui.components.PulseButton
+import me.river.pulse.ui.components.PulseMark
 import me.river.pulse.ui.components.SectionHeader
 import me.river.pulse.ui.components.SAMPLE_WINDOW
 import me.river.pulse.ui.components.Sparkline
@@ -499,40 +500,15 @@ enum class DashboardPanel { NONE, SEARCH, TUNE }
 
 @Composable
 private fun PulseWordmark() {
-    val sweep by rememberLoopingFloat(
-        initialValue = 0.5f,
-        targetValue = 1f,
-        durationMillis = 3_600,
-        label = "sweep",
-    )
-    val markStart = PulseColors.Aqua
-    val markEnd = PulseColors.Violet
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Canvas(Modifier.size(18.dp)) {
-            val h = size.height
-            val w = size.width
-            val path = androidx.compose.ui.graphics.Path().apply {
-                moveTo(0f, h * 0.55f)
-                lineTo(w * 0.22f, h * 0.55f)
-                lineTo(w * 0.36f, h * 0.2f)
-                lineTo(w * 0.55f, h * 0.86f)
-                lineTo(w * 0.7f, h * 0.45f)
-                lineTo(w * 0.8f, h * 0.55f)
-                lineTo(w, h * 0.55f)
-            }
-            drawPath(
-                path,
-                brush = Brush.horizontalGradient(
-                    listOf(markStart, markEnd),
-                ),
-                style = Stroke(width = 1.8.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round),
-            )
-            drawCircle(
-                color = markStart,
-                radius = 1.8.dp.toPx(),
-                center = Offset(w * sweep, h * 0.55f),
-            )
-        }
+        // 34dp to match the GlassIconButtons at the other end of this row — the mark and
+        // the controls now sit on one optical line instead of the mark looking like an
+        // afterthought beside them.
+        //
+        // Static, where the old one had a dot sweeping along the trace. The fleet banner
+        // directly underneath is already a live, moving thing, and a header with two
+        // independent animations in it reads as restless rather than alive.
+        PulseMark(size = 34.dp)
         Spacer(Modifier.width(8.dp))
         // Small and tracked-out: the banner underneath is the loud thing now, and
         // two competing headlines at the top of one screen is one too many.
@@ -1218,16 +1194,20 @@ private fun MonitorRowCard(
             Spacer(Modifier.height(12.dp))
             // A single data point isn't a trend — the strip alone reads better.
             if (history.size >= 2) {
+                // No accent passed: the chart takes the operational green from its
+                // default rather than the card's per-monitor blue. The monitor's own
+                // accent still colours its badge and rim above.
                 Sparkline(
                     samples = history,
-                    accent = accentEnd,
                     modifier = Modifier.fillMaxWidth().height(44.dp),
                 )
                 Spacer(Modifier.height(8.dp))
             }
+            // Same reasoning as the sparkline above, and the same colour: the comment
+            // there is right that these two read as a single figure, so a green line
+            // over a blue strip was the one arrangement guaranteed to look like a bug.
             HistoryStrip(
                 samples = history,
-                accent = accent,
                 modifier = Modifier.fillMaxWidth().height(5.dp),
             )
         }

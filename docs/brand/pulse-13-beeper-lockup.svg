@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 320" width="880" height="320" role="img" aria-label="Pulse">
+  <rect width="880" height="320" fill="#0B0E13"/>
+  <g transform="translate(-50.0 -74.4) scale(0.9375)"><g transform="translate(0 16)">
+    <rect x="352" y="102" width="20" height="52" rx="10" fill="#F2F5F8"/>
+    <rect x="96" y="146" width="320" height="220" rx="34" fill="#F2F5F8"/>
+    <rect x="128" y="180" width="256" height="106" rx="14" fill="#0B0E13"/>
+    <path d="M152 233H188L204 205L226 261L242 233H360" fill="none" stroke="#2FD98A" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+    <g fill="#0B0E13" opacity="0.22">
+      <rect x="286" y="312" width="44" height="24" rx="12"/>
+      <rect x="342" y="312" width="44" height="24" rx="12"/>
+    </g>
+    <circle cx="150" cy="324" r="17" fill="#FF4D57"/>
+  </g></g>
+  <text x="412" y="197" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="104" font-weight="800" letter-spacing="4" fill="#F2F5F8">PULSE</text>
+</svg>

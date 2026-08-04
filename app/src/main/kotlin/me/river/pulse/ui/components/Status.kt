@@ -259,7 +259,10 @@ private fun sampleCenterX(index: Int, count: Int, width: Float, gap: Float): Flo
 fun Sparkline(
     samples: List<Sample>,
     modifier: Modifier = Modifier,
-    accent: Color = PulseColors.Aqua,
+    // Mint, not the brand blue: the line is a picture of something working, and it
+    // should agree with the orb and the pill on the same card. Failed samples still
+    // bleed to Rose inside the draw below.
+    accent: Color = PulseColors.Mint,
     animate: Boolean = true,
 ) {
     val motion = LocalPulseMotion.current
@@ -353,7 +356,8 @@ fun Sparkline(
 fun LatencyBars(
     samples: List<Sample>,
     modifier: Modifier = Modifier,
-    accent: Color = PulseColors.Aqua,
+    /** Green for the same reason as [Sparkline]; a failed bar is drawn in Rose. */
+    accent: Color = PulseColors.Mint,
 ) {
     val motion = LocalPulseMotion.current
     val grow = remember(samples.size) { Animatable(if (motion.enabled) 0f else 1f) }

@@ -802,7 +802,11 @@ class AlertCenter(private val context: Context) {
     /** The persistent notification strict mode runs behind. */
     fun serviceNotification(title: String, body: String, stopIntent: PendingIntent?): Notification {
         val builder = NotificationCompat.Builder(context, ensureServiceChannel())
-            .setSmallIcon(R.drawable.ic_stat_refresh)
+            // The brand mark rather than a status glyph: this is the only notification
+            // that reports on Pulse itself instead of on a monitor, so it is the only
+            // one where "which app is this" is the useful thing to show. A refresh
+            // arrow here read as a monitor being re-checked, which it never was.
+            .setSmallIcon(R.drawable.ic_stat_brand)
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))

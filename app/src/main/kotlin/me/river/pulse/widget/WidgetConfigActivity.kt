@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -57,6 +58,7 @@ import me.river.pulse.ui.components.ButtonTone
 import me.river.pulse.ui.components.ChipSelector
 import me.river.pulse.ui.components.GlassCard
 import me.river.pulse.ui.components.PulseButton
+import me.river.pulse.ui.components.PulseMark
 import me.river.pulse.ui.components.SectionHeader
 import me.river.pulse.ui.components.StepperRow
 import me.river.pulse.ui.components.ToggleRow
@@ -319,12 +321,35 @@ private fun ConfigBody(
             item(key = "content") {
                 GlassCard {
                     SectionHeader("Content", icon = PulseIcons.Layers, accent = PulseColors.Violet)
+                    // Three switches rather than one, because "clean" means different things
+                    // to different people: some want the mark and nothing else, some want
+                    // the status line and no branding at all.
                     ToggleRow(
-                        title = "App title and logo",
-                        subtitle = if (config.showTitle) "Header row is shown" else "More room for monitors",
+                        title = "Logo",
+                        subtitle = if (config.showLogo) "The mark, top left" else "Hidden",
+                        checked = config.showLogo,
+                        onCheckedChange = { onChange(config.copy(showLogo = it)) },
+                        icon = PulseIcons.Activity,
+                        accent = PulseColors.Violet,
+                    )
+                    ToggleRow(
+                        title = "App name",
+                        subtitle = if (config.showTitle) "\"Pulse\" beside the logo" else "Hidden",
                         checked = config.showTitle,
                         onCheckedChange = { onChange(config.copy(showTitle = it)) },
                         icon = PulseIcons.Sparkle,
+                        accent = PulseColors.Violet,
+                    )
+                    ToggleRow(
+                        title = "Fleet summary",
+                        subtitle = if (config.showHeadline) {
+                            "\"${fleet.headline}\" in the header"
+                        } else {
+                            "Hidden"
+                        },
+                        checked = config.showHeadline,
+                        onCheckedChange = { onChange(config.copy(showHeadline = it)) },
+                        icon = PulseIcons.Gauge,
                         accent = PulseColors.Violet,
                     )
                     ToggleRow(
@@ -365,16 +390,36 @@ private fun ConfigBody(
                     )
                     Spacer(Modifier.height(6.dp))
                     StepperRow(
-                        title = "Rows",
+                        title = "Monitors",
                         value = config.maxRows,
                         onValueChange = { onChange(config.copy(maxRows = it)) },
                         range = 1..PulseWidgetProvider.MAX_ROWS,
                         icon = PulseIcons.Layers,
                         accent = PulseColors.Violet,
                     )
+                    Spacer(Modifier.height(14.dp))
                     Text(
-                        text = "A widget can only draw what fits its cell — resize it on the " +
-                            "home screen if rows are cut off.",
+                        text = "Columns",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = PulseColors.TextTertiary,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                    ChipSelector(
+                        options = listOf(0) + (1..WidgetLayout.MAX_COLUMNS).toList(),
+                        selected = config.columns.coerceIn(0, WidgetLayout.MAX_COLUMNS),
+                        onSelect = { onChange(config.copy(columns = it)) },
+                        label = { if (it == 0) "Auto" else it.toString() },
+                        accent = PulseColors.Aqua,
+                    )
+                    Text(
+                        text = if (config.columns == 0) {
+                            "Automatic spills monitors into a second column when the widget " +
+                                "is too short to stack them — make it flatter and they move " +
+                                "sideways instead of disappearing."
+                        } else {
+                            "Fixed at ${config.columns}. Columns still collapse if the widget " +
+                                "is dragged too narrow to read them."
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = PulseColors.TextTertiary,
                     )
@@ -432,6 +477,67 @@ private fun SwatchGrid(swatches: List<Int>, selected: Int, onSelect: (Int) -> Un
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * Width the preview claims to be when planning a fixed column count.
+ *
+ * Only ever used to let [WidgetLayout.plan]'s width cap pass, so an explicitly chosen
+ * two or three columns previews as two or three. Not a measurement of anything.
+ */
+private const val PREVIEW_WIDTH_DP = 400
+
+/** One monitor in the preview. Extracted so both columns draw the identical thing. */
+@Composable
+private fun PreviewRow(
+    entry: Summary.Entry,
+    detailed: Boolean,
+    showValue: Boolean,
+    primary: Color,
+    tertiary: Color,
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size(9.dp)
+                .clip(CircleShape)
+                .background(healthColor(entry.health)),
+        )
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = if (entry.urgentNagging) "⚠ ${entry.name}" else entry.name,
+                style = MaterialTheme.typography.bodyMedium,
+                color = primary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (detailed) {
+                Text(
+                    text = entry.message.ifBlank { entry.host },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = tertiary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        if (showValue) {
+            Text(
+                text = when {
+                    entry.health == Health.DOWN -> "DOWN"
+                    entry.health == Health.PAUSED -> "PAUSED"
+                    entry.latencyMs > 0 -> "${entry.latencyMs} ms"
+                    else -> "—"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = if (entry.health == Health.UP) tertiary else healthColor(entry.health),
+            )
         }
     }
 }
@@ -496,15 +602,41 @@ private fun WidgetPreview(config: WidgetConfig, fleet: Summary.Fleet) {
             .border(1.dp, Color(palette.border), RoundedCornerShape(20.dp))
             .padding(14.dp),
     ) {
-        if (config.showTitle) {
+        if (config.headerVisible || config.showSettingsButton) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Pulse", style = MaterialTheme.typography.titleMedium, color = primary)
+                if (config.showLogo) {
+                    // Fixed brand colours rather than the theme-aware ones, because that is
+                    // what ic_widget_mark draws. Using Mint/Rose here would make this a
+                    // nicer picture of a widget that does not exist.
+                    PulseMark(
+                        size = 18.dp,
+                        ring = Color(0xFF2F6BFF),
+                        trace = Color(0xFFFF4D57),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                }
+                if (config.showTitle) {
+                    Text("Pulse", style = MaterialTheme.typography.titleMedium, color = primary)
+                }
                 Spacer(Modifier.weight(1f))
-                Text(
-                    text = fleet.headline,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = tertiary,
-                )
+                if (config.showHeadline) {
+                    Text(
+                        text = fleet.headline,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = tertiary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                if (config.showSettingsButton) {
+                    Spacer(Modifier.width(8.dp))
+                    Icon(
+                        imageVector = PulseIcons.Sliders,
+                        contentDescription = null,
+                        tint = tertiary,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
             }
             Spacer(Modifier.height(8.dp))
         }
@@ -515,46 +647,31 @@ private fun WidgetPreview(config: WidgetConfig, fleet: Summary.Fleet) {
                 color = tertiary,
             )
         }
-        rows.forEach { entry ->
-            Row(
-                Modifier.fillMaxWidth().padding(vertical = 5.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    Modifier
-                        .size(9.dp)
-                        .clip(CircleShape)
-                        .background(healthColor(entry.health)),
-                )
-                Spacer(Modifier.width(10.dp))
+        // Columns, laid out by the same planner the widget uses.
+        //
+        // The preview is a fixed-width card with unbounded height, so there is no real
+        // measurement to plan against: an explicit column count is honoured, and Auto
+        // previews as one column rather than inventing a widget size and showing a layout
+        // the user might never get. The caption under the Columns chips says so.
+        val plan = WidgetLayout.plan(
+            config = config,
+            wanted = rows.size,
+            widthDp = if (config.columns > 0) PREVIEW_WIDTH_DP else 0,
+            heightDp = 0,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            WidgetLayout.distribute(rows, plan).forEach { column ->
                 Column(Modifier.weight(1f)) {
-                    Text(
-                        text = if (entry.urgentNagging) "⚠ ${entry.name}" else entry.name,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = primary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (config.density == WidgetDensity.DETAILED) {
-                        Text(
-                            text = entry.message.ifBlank { entry.host },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = tertiary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                    column.forEach { entry ->
+                        PreviewRow(
+                            entry = entry,
+                            detailed = config.density == WidgetDensity.DETAILED,
+                            showValue = plan.showValues,
+                            primary = primary,
+                            tertiary = tertiary,
                         )
                     }
                 }
-                Text(
-                    text = when {
-                        entry.health == Health.DOWN -> "DOWN"
-                        entry.health == Health.PAUSED -> "PAUSED"
-                        entry.latencyMs > 0 -> "${entry.latencyMs} ms"
-                        else -> "—"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (entry.health == Health.UP) tertiary else healthColor(entry.health),
-                )
             }
         }
         if (config.showTimestamp) {

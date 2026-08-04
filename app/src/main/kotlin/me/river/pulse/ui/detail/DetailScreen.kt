@@ -206,7 +206,6 @@ fun DetailScreen(
                         SectionHeader("Response time", icon = PulseIcons.Chart, accent = accentEnd)
                         LatencyBars(
                             samples = runtime.samples.takeLast(40),
-                            accent = accentEnd,
                             modifier = Modifier.fillMaxWidth().height(112.dp),
                         )
                         Spacer(Modifier.height(12.dp))

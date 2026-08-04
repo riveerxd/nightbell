@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    One column of monitors, added dynamically into `widget_columns`.
+
+    `layout_width="0dp"` with `layout_weight="1"` is what makes however many columns get
+    added share the width evenly. RemoteViews cannot set LayoutParams, so those have to be
+    baked into the root of this file — which is the reason a column is its own layout
+    rather than something assembled in code.
+
+    Rows are then added into `column_rows` on this RemoteViews before it is added to the
+    parent; nested addView is fine, the actions are just replayed in order.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/column_rows"
+    android:layout_width="0dp"
+    android:layout_weight="1"
+    android:layout_height="wrap_content"
+    android:orientation="vertical" />

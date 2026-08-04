@@ -94,11 +94,20 @@
                 android:contentDescription="@string/widget_settings" />
         </LinearLayout>
 
+        <!--
+            Monitors, in one or more columns.
+
+            Horizontal: `widget_column.xml` instances are added into this, and rows are
+            added into those. A short, wide widget spills monitors sideways instead of
+            hiding them below the fold, which is what the vertical-only container used to
+            do. WidgetLayout decides how many columns from the launcher's reported size.
+        -->
         <LinearLayout
-            android:id="@+id/widget_rows"
+            android:id="@+id/widget_columns"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical" />
+            android:orientation="horizontal"
+            android:baselineAligned="false" />
 
         <TextView
             android:id="@+id/widget_empty"

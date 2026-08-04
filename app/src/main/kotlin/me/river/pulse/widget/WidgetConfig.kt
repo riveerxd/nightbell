@@ -96,11 +96,39 @@ enum class WidgetDensity {
 data class WidgetConfig(
     val theme: WidgetTheme = WidgetTheme.BLACK,
     val density: WidgetDensity = WidgetDensity.COMPACT,
+
+    /**
+     * The three header pieces, independently switchable.
+     *
+     * They used to be one flag. [showTitle] hid the mark, the word "Pulse" and the
+     * "all 6 operational" line together, which meant the only way to drop the
+     * headline was to lose the branding with it and the only way to keep the
+     * branding was to accept a line of prose on a widget the size of a stamp.
+     * Anyone tuning a widget down to something clean wants to make those calls
+     * separately.
+     *
+     * [WidgetConfigStore.decode] maps a pre-split config onto all three, so a
+     * widget already on someone's home screen looks the same after the update.
+     */
+    val showLogo: Boolean = true,
     val showTitle: Boolean = true,
+    val showHeadline: Boolean = true,
+
     val showTimestamp: Boolean = true,
     /** Hide healthy monitors so the widget only speaks up when it matters. */
     val onlyProblems: Boolean = false,
     val maxRows: Int = 5,
+
+    /**
+     * Monitor columns: `0` sizes itself, `1`–[WidgetLayout.MAX_COLUMNS] forces it.
+     *
+     * Automatic is the default because a widget's height is whatever the user
+     * dragged it to, and the interesting case — squashing it flat until only two
+     * rows fit — should spill monitors sideways rather than hide them. The manual
+     * override exists because "always two columns" is a look, and a layout that
+     * silently rearranges itself as you resize is not one you can commit to.
+     */
+    val columns: Int = 0,
 
     // ---- custom colours (theme == CUSTOM) -----------------------------------
     /**
@@ -266,10 +294,27 @@ object WidgetConfigStore {
         }.onFailure { Log.e(TAG, "Could not remap widget configs", it) }
     }
 
-    private fun decode(raw: String?): WidgetConfig {
+    /**
+     * Reads a stored config, migrating the header flag that used to be one value.
+     *
+     * `showTitle` once covered the mark, the wordmark and the fleet headline. Those are
+     * three fields now, and all three default to true — so a widget saved with
+     * `showTitle: false` would decode as *header showing*, quietly turning the header
+     * back on for everyone who had switched it off. Absence of the new keys is the
+     * signal that this document predates the split, so the old flag is copied across.
+     *
+     * Checked against the raw text rather than by comparing to a default, because
+     * `showLogo: true` is both the default and a perfectly ordinary saved value —
+     * there is no way to tell those apart after decoding.
+     */
+    // internal so the migration can be tested without a Context: the interesting cases are
+    // all about what an older build wrote, which is a string, not a device.
+    internal fun decode(raw: String?): WidgetConfig {
         if (raw.isNullOrBlank()) return WidgetConfig()
-        return runCatching { json.decodeFromString<WidgetConfig>(raw) }
+        val config = runCatching { json.decodeFromString<WidgetConfig>(raw) }
             .getOrDefault(WidgetConfig())
+        if (raw.contains("\"showLogo\"")) return config
+        return config.copy(showLogo = config.showTitle, showHeadline = config.showTitle)
     }
 
     private const val TAG = "WidgetConfigStore"

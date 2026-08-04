@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 320" width="880" height="320" role="img" aria-label="Pulse">
+  <rect width="880" height="320" fill="#0B0E13"/>
+  <g transform="translate(-35.6 -41.6) scale(0.7875)"><circle cx="256" cy="256" r="150" fill="none" stroke="#2FD98A" stroke-width="20" opacity="0.34"/>
+  <path d="M150 150A150 150 0 0 1 362 150" fill="none" stroke="#2FD98A" stroke-width="20" stroke-linecap="round"/>
+  <circle cx="256" cy="256" r="56" fill="#2FD98A"/>
+  <circle cx="362" cy="150" r="34" fill="#FF4D57"/></g>
+  <text x="364" y="208" font-family="'Iowan Old Style', Georgia, 'Times New Roman', serif" font-size="132" font-weight="400" letter-spacing="2" fill="#F2F5F8">Pulse</text>
+</svg>

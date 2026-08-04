@@ -71,11 +71,35 @@ class WidgetInstrumentedTest {
         ),
     )
 
-    /** Inflates the RemoteViews the way the launcher would. */
-    private fun inflate(config: WidgetConfig, appWidgetId: Int = 7): View {
-        val views = PulseWidgetProvider.build(appContext, config, fleet, appWidgetId)
+    /**
+     * Inflates the RemoteViews the way the launcher would.
+     *
+     * [widthDp] and [heightDp] stand in for what the launcher reports about a placed
+     * widget's size. Zero is the honest default: that is what the very first render after
+     * a drop actually sees.
+     */
+    private fun inflate(
+        config: WidgetConfig,
+        appWidgetId: Int = 7,
+        widthDp: Int = 0,
+        heightDp: Int = 0,
+    ): View {
+        val views = PulseWidgetProvider.build(
+            appContext,
+            config,
+            fleet,
+            appWidgetId,
+            widthDp,
+            heightDp,
+        )
         val parent = FrameLayout(appContext)
         return views.apply(appContext, parent)
+    }
+
+    /** Every column container the widget actually drew. */
+    private fun columns(root: View): List<View> = buildList {
+        val container = root.findViewById<android.view.ViewGroup>(me.river.pulse.R.id.widget_columns)
+        for (i in 0 until container.childCount) add(container.getChildAt(i))
     }
 
     /**
@@ -339,5 +363,84 @@ class WidgetInstrumentedTest {
     fun refreshIsSafeWithNoWidgetsPlaced() {
         // The common case: nobody has added the widget. Must not throw.
         PulseWidgetProvider.refresh(appContext)
+    }
+
+    // ---- the header, piece by piece -----------------------------------------
+
+    @Test
+    fun theLogoTheNameAndTheSummaryHideIndependently() {
+        // One flag used to hide all three, so the only way to lose the fleet summary was
+        // to lose the branding with it.
+        val onlyLogo = inflate(WidgetConfig(showTitle = false, showHeadline = false))
+        assertEquals(View.VISIBLE, onlyLogo.findViewById<View>(R.id.widget_logo).visibility)
+        assertFalse("the name should be gone", texts(onlyLogo).any { it == "Pulse" })
+        assertFalse("the summary should be gone", texts(onlyLogo).any { it == fleet.headline })
+
+        val onlySummary = inflate(WidgetConfig(showLogo = false, showTitle = false))
+        assertEquals(View.GONE, onlySummary.findViewById<View>(R.id.widget_logo).visibility)
+        assertTrue("the summary should remain", texts(onlySummary).any { it == fleet.headline })
+    }
+
+    @Test
+    fun theWholeHeaderCanBeHiddenWhileMonitorsStillRender() {
+        val root = inflate(
+            WidgetConfig(
+                showLogo = false,
+                showTitle = false,
+                showHeadline = false,
+                showSettingsButton = false,
+                maxRows = 4,
+            ),
+        )
+        assertEquals(View.GONE, root.findViewById<View>(R.id.widget_header).visibility)
+        assertTrue(
+            "monitors must survive a hidden header: ${texts(root)}",
+            texts(root).any { it.contains("Charlie") },
+        )
+    }
+
+    // ---- columns ------------------------------------------------------------
+
+    @Test
+    fun aTallWidgetDrawsOneColumn() {
+        val root = inflate(WidgetConfig(maxRows = 4), widthDp = 250, heightDp = 320)
+        assertEquals("plenty of height means no need to spill", 1, columns(root).size)
+        assertTrue(texts(root).any { it.contains("Charlie") })
+    }
+
+    @Test
+    fun aShortWideWidgetSpillsIntoASecondColumn() {
+        val root = inflate(WidgetConfig(maxRows = 4), widthDp = 250, heightDp = 110)
+        assertTrue(
+            "a squashed widget should use its spare width, drew ${columns(root).size} column(s)",
+            columns(root).size >= 2,
+        )
+    }
+
+    @Test
+    fun aForcedColumnCountIsHonoured() {
+        val root = inflate(WidgetConfig(columns = 2, maxRows = 4), widthDp = 300, heightDp = 320)
+        assertEquals(2, columns(root).size)
+    }
+
+    @Test
+    fun everyRenderedColumnHoldsAtLeastOneMonitor() {
+        // An empty column would show up as dead space on the home screen.
+        val root = inflate(WidgetConfig(columns = 3, maxRows = 2), widthDp = 400, heightDp = 320)
+        columns(root).forEachIndexed { index, column ->
+            val group = column as android.view.ViewGroup
+            assertTrue("column $index is empty", group.childCount > 0)
+        }
+    }
+
+    @Test
+    fun columnsDoNotDuplicateAMonitor() {
+        val root = inflate(WidgetConfig(maxRows = 4), widthDp = 320, heightDp = 110)
+        val names = texts(root).filter { name -> listOf("Alpha", "Bravo", "Charlie").any(name::contains) }
+        assertEquals(
+            "each monitor should appear once across all columns: $names",
+            names.size,
+            names.distinct().size,
+        )
     }
 }

@@ -62,11 +62,28 @@
         Backup and transfer stays the only way across, and it scrubs that state on
         purpose.
     -->
+    <!--
+        android:icon is a plain drawable, not @mipmap/ic_launcher, and there is no
+        roundIcon.
+
+        AdaptiveIconDrawable.draw() fills its layer bitmap with Color.BLACK before it
+        composites the background and foreground layers, because the format assumes an
+        opaque background. A transparent <background> therefore renders as solid black
+        everywhere the framework draws the icon — launcher and Settings' app-info screen
+        alike — which is neither a launcher bug nor a stale cache. A transparent app icon
+        has to be a legacy one.
+
+        The cost is themed ("monochrome") icons, which only the adaptive format carries.
+        ic_launcher_foreground and ic_launcher_monochrome are kept, unused, for whenever
+        a plate is wanted back.
+
+        roundIcon goes with it: it only ever pointed at the same adaptive pair, and a
+        legacy icon needs no circular variant.
+    -->
     <application
         android:name=".PulseApplication"
         android:allowBackup="false"
-        android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:icon="@drawable/ic_launcher_mark"
         android:label="@string/app_name"
         android:hardwareAccelerated="true"
         android:supportsRtl="true"

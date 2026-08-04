@@ -87,10 +87,30 @@ class PulseWidgetProvider : AppWidgetProvider() {
             val graph = Pulse.install(app)
             val snapshot = graph.store.snapshot.value
             val fleet = Summary.of(snapshot.monitors, snapshot.runtimes)
+            val size = measure(manager, appWidgetId)
             runCatching {
-                manager.updateAppWidget(appWidgetId, build(app, config, fleet, appWidgetId))
+                manager.updateAppWidget(
+                    appWidgetId,
+                    build(app, config, fleet, appWidgetId, size.first, size.second),
+                )
             }.onFailure { Log.e(TAG, "Could not update widget $appWidgetId", it) }
         }
+
+        /**
+         * The widget's size in dp, as width to height.
+         *
+         * MIN_WIDTH with MAX_HEIGHT is the portrait box: the launcher reports the two
+         * extremes of each axis for the two orientations, and a widget is nearly always
+         * viewed in the one the phone is held in. Zeroes mean the launcher has not
+         * reported yet — [WidgetLayout.plan] treats that as "one column", and
+         * `onAppWidgetOptionsChanged` arrives with real numbers moments later.
+         */
+        private fun measure(manager: AppWidgetManager, appWidgetId: Int): Pair<Int, Int> =
+            runCatching {
+                val options = manager.getAppWidgetOptions(appWidgetId) ?: return 0 to 0
+                options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0) to
+                    options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 0)
+            }.getOrDefault(0 to 0)
 
         @JvmOverloads
         internal fun build(
@@ -98,6 +118,8 @@ class PulseWidgetProvider : AppWidgetProvider() {
             config: WidgetConfig,
             fleet: Summary.Fleet,
             appWidgetId: Int = AppWidgetManager.INVALID_APPWIDGET_ID,
+            widthDp: Int = 0,
+            heightDp: Int = 0,
         ): RemoteViews {
             val views = RemoteViews(context.packageName, R.layout.widget_pulse)
             val palette = config.palette
@@ -113,17 +135,17 @@ class PulseWidgetProvider : AppWidgetProvider() {
             views.setInt(R.id.widget_surface_border, "setColorFilter", opaque(palette.border))
             views.setInt(R.id.widget_surface_border, "setImageAlpha", alphaOf(palette.border))
 
-            // The header row stays when the title is off, so the settings cog does
-            // not disappear with it — a hidden title must not also hide the only
-            // route back into the widget's own configuration.
+            // The header row survives every piece of it being switched off, so the cog does
+            // not disappear with them — a hidden title must not also hide the only route
+            // back into the widget's own configuration on API 26–30.
             val showCog = config.showSettingsButton && appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID
             views.setViewVisibility(
                 R.id.widget_header,
-                if (config.showTitle || showCog) VISIBLE else GONE,
+                if (config.headerVisible || showCog) VISIBLE else GONE,
             )
-            views.setViewVisibility(R.id.widget_logo, if (config.showTitle) VISIBLE else GONE)
+            views.setViewVisibility(R.id.widget_logo, if (config.showLogo) VISIBLE else GONE)
             views.setViewVisibility(R.id.widget_title, if (config.showTitle) VISIBLE else GONE)
-            views.setViewVisibility(R.id.widget_headline, if (config.showTitle) VISIBLE else GONE)
+            views.setViewVisibility(R.id.widget_headline, if (config.showHeadline) VISIBLE else GONE)
             views.setViewVisibility(R.id.widget_settings, if (showCog) VISIBLE else GONE)
             views.setInt(R.id.widget_settings, "setColorFilter", opaque(palette.tertiary))
             views.setInt(R.id.widget_settings, "setImageAlpha", alphaOf(palette.tertiary))
@@ -139,12 +161,42 @@ class PulseWidgetProvider : AppWidgetProvider() {
 
             views.setOnClickPendingIntent(R.id.widget_root, openDashboard(context))
 
-            views.removeAllViews(R.id.widget_rows)
-            val shown = fleet.ranked
+            views.removeAllViews(R.id.widget_columns)
+            val candidates = fleet.ranked
                 .filter { !config.onlyProblems || it.health != Health.UP }
                 .take(config.maxRows.coerceIn(1, MAX_ROWS))
 
-            shown.forEach { entry -> views.addView(R.id.widget_rows, row(context, config, palette, entry)) }
+            // Plan against what the user asked for, then trim to what actually fits. Doing
+            // it the other way round would let the plan size itself to a list it had
+            // already truncated, and the widget would settle on one column however short
+            // it got dragged.
+            val plan = WidgetLayout.plan(
+                config = config,
+                wanted = candidates.size,
+                widthDp = widthDp,
+                heightDp = heightDp,
+                // A footer only exists if there is a timestamp or something hidden, and
+                // whether anything is hidden depends on the plan. Assuming a footer when
+                // the timestamp is on is the safe direction: over-reserving costs one row
+                // of height, under-reserving clips the last row of every column.
+                mightHaveFooter = config.showTimestamp || candidates.size < fleet.ranked.size,
+            )
+            val shown = candidates.take(plan.capacity)
+            val gapPx = (WidgetLayout.COLUMN_GAP_DP * context.resources.displayMetrics.density).toInt()
+            WidgetLayout.distribute(shown, plan).forEachIndexed { index, column ->
+                val columnViews = RemoteViews(context.packageName, R.layout.widget_column)
+                // The gutter goes on every column but the first, as padding rather than a
+                // margin: RemoteViews can set padding on a view it owns, but not
+                // LayoutParams. Without it a column's "4100 ms" touches the next one's dot.
+                if (index > 0) columnViews.setViewPadding(R.id.column_rows, gapPx, 0, 0, 0)
+                column.forEach { entry ->
+                    columnViews.addView(
+                        R.id.column_rows,
+                        row(context, config, palette, entry, plan.showValues),
+                    )
+                }
+                views.addView(R.id.widget_columns, columnViews)
+            }
 
             val emptyText = when {
                 fleet.total == 0 -> "No monitors yet — tap to add one."
@@ -155,7 +207,7 @@ class PulseWidgetProvider : AppWidgetProvider() {
             if (emptyText.isNotEmpty()) views.setTextViewText(R.id.widget_empty, emptyText)
 
             val hidden = fleet.ranked.size - shown.size
-            val footer = buildString {
+            val footer = if (plan.suppressFooter) "" else buildString {
                 if (config.showTimestamp) {
                     val newest = fleet.entries.maxOfOrNull { it.lastCheckedAt } ?: 0L
                     append(if (newest > 0L) "Checked ${relative(newest)}" else "Not checked yet")
@@ -175,6 +227,7 @@ class PulseWidgetProvider : AppWidgetProvider() {
             config: WidgetConfig,
             palette: WidgetPalette,
             entry: Summary.Entry,
+            showValue: Boolean = true,
         ): RemoteViews {
             val row = RemoteViews(context.packageName, R.layout.widget_row)
             val color = healthColor(entry.health)
@@ -184,6 +237,9 @@ class PulseWidgetProvider : AppWidgetProvider() {
                 if (entry.urgentNagging) "⚠ ${entry.name}" else entry.name,
             )
             row.setTextColor(R.id.row_name, palette.primary)
+            // In a narrow column the name is worth more than the number: the dot already
+            // says whether this monitor is healthy, and the latency is one tap away.
+            row.setViewVisibility(R.id.row_value, if (showValue) VISIBLE else GONE)
             row.setTextColor(R.id.row_value, if (entry.health == Health.UP) palette.secondary else color)
             row.setTextViewText(
                 R.id.row_value,

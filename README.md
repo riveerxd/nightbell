@@ -8,8 +8,8 @@ Uptime monitoring that lives on your phone and actually wakes you up.
   <img src="https://img.shields.io/badge/UI-Jetpack%20Compose-4285F4?logo=jetpackcompose&logoColor=white" alt="Jetpack Compose" />
   <img src="https://img.shields.io/badge/minSdk-26-blue" alt="minSdk 26" />
   <img src="https://img.shields.io/badge/targetSdk-36-blue" alt="targetSdk 36" />
-  <img src="https://img.shields.io/badge/release-2.3.0-FF4D57" alt="Release 2.3.0" />
-  <img src="https://img.shields.io/badge/tests-299%20JVM%20%2B%20146%20on--device-2FD98A" alt="Tests" />
+  <img src="https://img.shields.io/badge/release-2.4.0-FF4D57" alt="Release 2.4.0" />
+  <img src="https://img.shields.io/badge/tests-323%20JVM%20%2B%20157%20on--device-2FD98A" alt="Tests" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/licence-Apache%202.0-blue" alt="Apache 2.0" /></a>
 </p>
 
@@ -86,6 +86,28 @@ Urgent pages follow your ringer switch by default. Vibrate mode gets haptics
 only. There is a setting to override that if you want a pager that answers to
 nothing.
 
+## The home-screen widget
+
+Worst monitor first, tap a row to open it, tap the cog to reconfigure it. Every
+piece of the header switches off independently — the mark, the word Pulse, the
+"1 of 6 is down" summary, the cog — because "make it clean" means different
+things to different people and one flag for all four meant losing the summary to
+keep the branding.
+
+Monitors flow into columns. A widget dragged flat has spare width and no height,
+so instead of pushing monitors below the fold and counting them in "+4 more",
+they move sideways:
+
+<p align="center">
+  <img src="docs/screens/widget-sizes.png" width="760" alt="The widget at four cell sizes, spilling into two columns as it gets shorter" />
+</p>
+
+Columns are chosen from the size the launcher reports, capped by width — no
+number of monitors justifies a column too narrow to read a name in. Below about
+150dp per column the trailing latency is dropped so the name keeps its room, and
+a widget too short for a footer *and* a monitor drops the footer rather than
+clipping both. `Columns: Auto` in the widget settings, or pin it to 1–3.
+
 ## Install
 
 Grab the APK from [Releases](../../releases), or from `artifacts/` in this repo,
@@ -93,7 +115,7 @@ and sideload it. It is signed with my own key, so Play Protect will ask you to
 confirm. There is no Play listing.
 
 ```
-adb install -r artifacts/Pulse-2.3.0-release.apk
+adb install -r artifacts/Pulse-2.4.0-release.apk
 ```
 
 Anything from 2.0.0 onward updates in place and keeps your monitors. 1.x used a
@@ -107,7 +129,7 @@ Needs JDK 17 and an Android SDK with API 36. `local.properties` wants
 ```bash
 ./gradlew :app:assembleDebug          # debuggable
 ./gradlew :app:assembleRelease        # minified, needs keystore/keystore.properties
-./gradlew :app:testDebugUnitTest      # 299 JVM tests
+./gradlew :app:testDebugUnitTest      # 323 JVM tests
 ```
 
 Release builds are signed from `keystore/keystore.properties`, which is
@@ -116,12 +138,15 @@ just unsigned.
 
 ## Tests
 
-299 JVM tests cover the pure logic: the alert state machines, escalation,
-quiet-hours arithmetic, assertions, the latency baseline, backup round-trips.
-146 instrumented tests cover the parts that need a real Android, which is most of
+323 JVM tests cover the pure logic: the alert state machines, escalation,
+quiet-hours arithmetic, assertions, the latency baseline, backup round-trips, and
+the widget's column arithmetic — which decides whether a monitor is visible at all
+and can otherwise only be exercised by dragging a widget around a home screen.
+157 instrumented tests cover the parts that need a real Android, which is most of
 the interesting ones. Notifications, channels, the foreground service, the
-WebView element checker, widgets, and a suite that drives a genuine
-connection-refused outage all the way to a red page on screen.
+WebView element checker, widgets, the launcher icon's transparency, and a suite
+that drives a genuine connection-refused outage all the way to a red page on
+screen.
 
 ```bash
 # one class at a time, the emulator does not enjoy the whole suite at once

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 320" width="880" height="320" role="img" aria-label="Pulse">
+  <rect width="880" height="320" fill="#0B0E13"/>
+  <g transform="translate(-71.1 -52.2) scale(0.8289)"><g fill="none" stroke="#2FD98A" stroke-width="28" stroke-linejoin="round">
+    <path d="M204 118H148V394H204"/>
+    <path d="M308 118H364V394H308"/>
+  </g>
+  <circle cx="256" cy="256" r="52" fill="#FF4D57"/></g>
+  <text x="314" y="205" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="124" font-weight="600" letter-spacing="2" fill="#F2F5F8">pulse</text>
+</svg>

@@ -45,7 +45,15 @@ class PulseColorScheme(
     val Ink: Color,
     val Slate: Color,
 
-    // Brand. One blue family — chrome, charts and per-monitor identity.
+    // Brand. One blue family — chrome, controls and per-monitor identity.
+    //
+    // Briefly this was green, to match the mark. That went too far: with chrome and
+    // status sharing one hue, a button, a chip and a healthy monitor were all the same
+    // colour, and "green" stopped meaning anything in particular. Blue is the app's
+    // colour; green is reserved for the thing it measures.
+    //
+    // What that means in practice is that charts do *not* take their colour from here
+    // — see [Mint].
     val Aqua: Color,
     val Violet: Color,
     val Indigo: Color,
@@ -53,6 +61,19 @@ class PulseColorScheme(
     // Status. These carry *meaning*, so they must never be folded into the brand
     // blue: a monitor that is down has to read as red from across the room, and
     // "degraded" has to be distinguishable from both.
+
+    /**
+     * Operational. "Up", and the colour data is drawn in.
+     *
+     * Doing double duty on purpose: a latency line is a picture of something working,
+     * so drawing it in the brand blue said nothing, while drawing it green makes the
+     * chart agree with the orb, the pill and the mark above it. [Sparkline] and
+     * [LatencyBars] default to this rather than to [Aqua] — that default is the single
+     * place "charts are green" is decided.
+     *
+     * The failure colour still overrides it per sample: a chart bleeds to [Rose] at a
+     * failed check, which is the whole reason the line is worth looking at.
+     */
     val Mint: Color,
     val Amber: Color,
     val Rose: Color,

@@ -174,10 +174,15 @@ A worst-first list of monitors, configurable per instance:
   alike, and translucency cannot promise that.
 - **Density**: compact (dot · name · status) or detailed (adds host, latency and
   the failure message).
-- Show/hide the app title and logo, show/hide the last-checked footer, and
-  optionally hide healthy monitors entirely.
-- Row cap, with any overflow disclosed as "+N more" rather than silently
+- **Header pieces, independently**: the mark, the word "Pulse", the fleet
+  summary ("1 of 6 is down") and the settings cog each switch off on their own.
+  They used to be one flag, which meant the only way to drop the summary was to
+  lose the branding with it.
+- Show/hide the last-checked footer, and optionally hide healthy monitors
+  entirely.
+- Monitor cap, with any overflow disclosed as "+N more" rather than silently
   truncated.
+- **Columns**: automatic, or pinned to 1-3. See below.
 
 Tapping the widget opens the dashboard; tapping a row deep-links to that
 monitor's detail screen. Placing several widgets gives each its own
@@ -200,6 +205,45 @@ exist below Android 12:
 Reported as a real problem: once the widget was on the home screen its
 configuration was unreachable.
 
+### Columns
+
+A widget's height is whatever the user dragged it to. Flatten one and the old
+single-column layout stopped drawing monitors past the fold — they were still in
+the list, still counted in "+3 more", and invisible. A short widget has spare
+*width*, so monitors spill sideways into a second or third column instead.
+
+`WidgetLayout` decides the shape from `OPTION_APPWIDGET_MIN_WIDTH` and
+`OPTION_APPWIDGET_MAX_HEIGHT`, which the launcher reports through
+`onAppWidgetOptionsChanged`. It is a pure function with no Android types in it,
+because it is the arithmetic that decides whether a monitor is visible at all and
+the only other way to exercise it is to drag a widget around a home screen by
+hand — which is to say, never. Nineteen unit tests cover the cell sizes a phone
+launcher actually offers.
+
+Three rules earn their keep:
+
+- **Width always caps the column count.** No number of monitors justifies a
+  column too narrow to read a name in, so a forced count of 3 still collapses on
+  a two-cell-wide widget. The floor is about 104dp a column, which is what lets a
+  standard four-cell widget have two.
+- **Below roughly 150dp a column, the trailing value is dropped.** Two columns in
+  a four-cell widget leaves about 105dp each, and "DOWN" or "4100 ms" was eating
+  enough of that to truncate "Marketing site" to "Market…". The dot already
+  carries health and the number is one tap away, so the name wins.
+- **A widget too short for both a footer and a monitor drops the footer.** A
+  header, one row and a footer come to more than a four-by-two widget's 110dp.
+  "Checked just now" is worth less than the monitor it was pushing off the bottom,
+  and the alternative was not a missing footer but a clipped one.
+
+`RemoteViews` has no flexbox and cannot set `LayoutParams`, so a column is its
+own layout file carrying `layout_weight="1"`, added into a horizontal container,
+with rows added into it before it is added to the parent. The gutter between
+columns is `setViewPadding` on every column but the first, since padding is
+remotable and margins are not.
+
+Rows fill column-major, so the worst-first ordering still reads top to bottom in
+the first column before continuing in the second.
+
 ### Colours and transparency
 
 Three presets (black, white, blue) plus **Custom**: a background colour, a text
@@ -217,6 +261,65 @@ Presets deliberately ignore the opacity slider: they are defined surfaces with
 known contrast, and letting a stray opacity value apply to them would quietly
 turn a legible preset illegible. Picking a pale custom background moves the text
 colour to something readable *unless* you have already chosen one yourself.
+
+## The launcher icon
+
+The mark is direction 30 from `docs/brand` — a ring with a red trace cutting
+through it. The exploration draws that ring green, under the rule that green means
+working; the app draws it in the brand blue, because in the app green is the colour
+of the *data* (charts, history strip, status orbs) and a green mark read as one more
+status indicator rather than as the app's identity. The trace stays red either way:
+it is the one element that means failure.
+
+It ships as a **legacy** icon rather than an adaptive one. That is deliberate, and the reason is worth writing down because it cost two
+rounds of chasing the wrong thing.
+
+The mark was originally drawn on an opaque ink plate. Asked to make the
+background transparent, the obvious move is an `<adaptive-icon>` whose
+`<background>` is `@android:color/transparent`. It renders solid black.
+`AdaptiveIconDrawable.draw()` fills its layer bitmap with `Color.BLACK` before it
+composites the background and foreground, because the format assumes the
+background is opaque. So the black is not a launcher bug and not a stale icon
+cache — it reproduces in Settings' app-info screen, and survives clearing the
+launcher's data.
+
+What Android actually guarantees is that an app icon gets a *filled shape*:
+
+| Icon format | Result |
+| --- | --- |
+| Adaptive with a transparent background | the framework fills it black |
+| Legacy with transparency | most launchers wrap it in a light plate |
+
+There is no transparent app icon on Android. Legacy is nonetheless the closer of
+the two: it is genuinely transparent wherever a launcher does not apply its
+legacy wrapping, and where one does the result is a clean light plate rather than
+a black one. The cost is themed ("monochrome") icons, which only the adaptive
+format carries — `ic_launcher_foreground` and `ic_launcher_monochrome` are kept,
+unused, for whenever a plate is wanted back.
+
+`LauncherIconInstrumentedTest` pins the two things that are actually in the app's
+control: that the manifest does not point at an adaptive icon, and that the
+drawable it does point at has transparent corners and a real gap in the ring.
+Both were invisible to review — a dark icon on a dark background looks the same
+either way.
+
+### One geometry, five copies
+
+The mark exists as the launcher icon, the widget header mark, a notification
+silhouette, an adaptive foreground and a Compose composable, each needing
+different stroke weights on a different canvas. They are generated from the
+brand drawing by `docs/brand/android_assets.py` rather than scaled by hand,
+because the first hand-scaled set shipped a Compose mark whose ring gap was half
+the width of the vectors' and a legacy icon whose trace vertices were simply
+wrong. Run it after changing any geometry:
+
+```bash
+python3 docs/brand/android_assets.py
+```
+
+The ring is two arcs with a real gap, not a full circle with the gap faked by a
+casing stroke in the background colour. The faked version is what made the plate
+impossible to remove.
 
 ## Moving between installs
 
