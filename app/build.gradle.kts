@@ -105,8 +105,13 @@ android {
         // re-checks on resume so it advances by itself. It gates once and is
         // skippable — a monitoring app that will not show you your monitors until
         // you have flipped four toggles is worse than one with a degraded pager.
-        versionCode = 13
-        versionName = "2.2.0"
+        // 2.2.1 fixes the pager-setup screen's primary button, which built its
+        // label by lowercasing the row title and so read "Set up get through do
+        // not disturb". Each step now has its own wording, and it says whether the
+        // tap opens a dialog ("Allow …") or leaves for Settings ("Open …") — which
+        // is the difference between one tap and a round trip.
+        versionCode = 14
+        versionName = "2.2.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

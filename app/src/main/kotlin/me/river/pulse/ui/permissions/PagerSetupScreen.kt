@@ -203,7 +203,7 @@ fun PagerSetupScreen(onDone: () -> Unit) {
         val next = state.next
         if (next != null) {
             PulseButton(
-                text = "Set up ${label(next).lowercase()}",
+                text = actionLabel(next),
                 onClick = { grant(next) },
                 modifier = Modifier.fillMaxWidth(),
                 accent = PulseColors.Rose,
@@ -289,6 +289,21 @@ private fun label(requirement: Requirement): String = when (requirement) {
     Requirement.BATTERY_EXEMPTION -> "Unrestricted battery"
     Requirement.FULL_SCREEN -> "Full-screen alerts"
     Requirement.DND_BYPASS -> "Get through Do Not Disturb"
+}
+
+/**
+ * What the primary button promises.
+ *
+ * Written out per requirement rather than composed from [label]: lowercasing the
+ * row titles produced "Set up get through do not disturb", and the wording also
+ * has to tell the user whether they are about to get a dialog or be sent to
+ * Settings — which is the difference between one tap and a round trip.
+ */
+private fun actionLabel(requirement: Requirement): String = when (requirement) {
+    Requirement.NOTIFICATIONS -> "Allow notifications"
+    Requirement.BATTERY_EXEMPTION -> "Allow unrestricted battery"
+    Requirement.FULL_SCREEN -> "Open full-screen alert settings"
+    Requirement.DND_BYPASS -> "Open Do Not Disturb access"
 }
 
 private fun blurb(requirement: Requirement): String = when (requirement) {
