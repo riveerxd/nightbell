@@ -10,6 +10,7 @@ Uptime monitoring that lives on your phone and actually wakes you up.
   <img src="https://img.shields.io/badge/targetSdk-36-blue" alt="targetSdk 36" />
   <img src="https://img.shields.io/badge/release-2.2.2-FF4D57" alt="Release 2.2.2" />
   <img src="https://img.shields.io/badge/tests-249%20JVM%20%2B%2098%20on--device-2FD98A" alt="Tests" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/licence-Apache%202.0-blue" alt="Apache 2.0" /></a>
 </p>
 
 <p align="center">
@@ -158,3 +159,11 @@ awkward parts.
   default is wrong and is the next thing I want to fix properly, with a
   migration rather than a flipped constant.
 - No CI. The test commands above are run by hand.
+
+## Licence
+
+Apache 2.0, see [LICENSE](LICENSE). Same licence as everything it depends on
+(androidx, Compose, OkHttp, kotlinx), so there is nothing awkward to reason
+about if you want to fork it or lift a piece of it.
+
+Do what you like with it. Keep the notice, and say what you changed.
