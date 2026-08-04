@@ -55,7 +55,25 @@ object Pulse {
          */
         fun notifyStateChanged() {
             PulseWidgetProvider.refresh(context)
+
+            // Silence first, and directly. The loop is what normally stops the
+            // alarm, and it only checks between sleeps — so acknowledging left the
+            // phone vibrating for up to a minute. This is best-effort: the snapshot
+            // flow can still be a beat behind the write that just happened, which
+            // is why the loop is also woken below rather than relied on to notice
+            // on its own schedule.
+            if (!anythingPaging()) alarm.stop()
+
             PulseMonitorService.sync(context)
+            PulseMonitorService.wake()
+        }
+
+        /** Whether any monitor still owes the user a page. */
+        private fun anythingPaging(): Boolean {
+            val snap = store.snapshot.value
+            return snap.monitors.any { monitor ->
+                monitor.urgent && snap.runtimes[monitor.id]?.urgentState?.nagging == true
+            }
         }
 
         init {

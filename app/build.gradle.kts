@@ -110,8 +110,20 @@ android {
         // not disturb". Each step now has its own wording, and it says whether the
         // tap opens a dialog ("Allow …") or leaves for Settings ("Open …") — which
         // is the difference between one tap and a round trip.
-        versionCode = 14
-        versionName = "2.2.1"
+        // 2.2.2 makes acknowledging instant. The service loop is the only thing
+        // that stops the looping alarm and re-renders the page, and after a page it
+        // slept on a plain `delay` for `nextWakeDelayMs()` — floored at 15s, capped
+        // at 60s. So an ack cancelled the notification and persisted the state
+        // immediately, then the phone kept vibrating for up to a minute. `sync()`
+        // could not help: it re-delivers `onStartCommand`, which sees the loop
+        // already running and returns. The sleep is now interruptible by a
+        // conflated wake signal, the alarm is a single instance shared through the
+        // graph so an ack can silence it directly, and both are driven from
+        // `notifyStateChanged` — so acknowledge, mute and recovery are all felt at
+        // once. Regression test asserts under two seconds and was confirmed to
+        // fail against the old code.
+        versionCode = 15
+        versionName = "2.2.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

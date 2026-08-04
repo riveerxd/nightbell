@@ -18,7 +18,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -59,9 +61,12 @@ class PulseMonitorService : Service() {
     private var loop: Job? = null
     private var started = false
 
-    /** The looping page sound. Owned here because this service's lifetime is
-     *  exactly "something is unacknowledged". */
-    private val alarm by lazy { UrgentAlarm(applicationContext) }
+    /**
+     * The looping page sound. Taken from the graph rather than constructed here,
+     * so acknowledging can silence *this* player directly instead of waiting for
+     * the loop to come round and notice.
+     */
+    private val alarm: UrgentAlarm get() = Pulse.install(applicationContext).alarm
 
     override fun onCreate() {
         super.onCreate()
@@ -197,7 +202,10 @@ class PulseMonitorService : Service() {
                     // The per-monitor fallback copy, if an earlier pass posted one
                     // before this service could start, would now be a duplicate.
                     graph.alerts.cancelUrgent(monitor.id)
-                    delay(runCatchingCancellable { graph.engine.nextWakeDelayMs() }.getOrDefault(CheckEngine_MIN_TICK))
+                    sleepUnlessWoken(
+                        runCatchingCancellable { graph.engine.nextWakeDelayMs() }
+                            .getOrDefault(CheckEngine_MIN_TICK),
+                    )
                     continue
                 }
             }
@@ -236,8 +244,23 @@ class PulseMonitorService : Service() {
 
             val delayMs = runCatchingCancellable { graph.engine.nextWakeDelayMs() }
                 .getOrDefault(CheckEngine_MIN_TICK)
-            delay(delayMs)
+            sleepUnlessWoken(delayMs)
         }
+    }
+
+    /**
+     * Sleeps, unless something asks for attention first.
+     *
+     * A plain `delay` here is what made acknowledging feel broken. The loop is the
+     * only thing that stops the alarm and re-renders the page, and after a page it
+     * sleeps for `nextWakeDelayMs()` — floored at 15s and capped at 60s. So an ack
+     * cancelled the notification and persisted the state instantly, and then the
+     * phone carried on vibrating for up to a minute until the loop woke on its own
+     * schedule. `sync()` could not help: it re-delivers `onStartCommand`, which
+     * sees the loop already running and returns.
+     */
+    private suspend fun sleepUnlessWoken(ms: Long) {
+        withTimeoutOrNull(ms) { wakeSignal.receive() }
     }
 
     /**
@@ -331,6 +354,23 @@ class PulseMonitorService : Service() {
         private var paging_: Boolean = false
 
         fun isPaging(): Boolean = paging_
+
+        /**
+         * Conflated: several state changes in quick succession are one reason to
+         * wake up, and a signal sent while the loop is working is kept so the next
+         * sleep returns at once rather than missing it.
+         */
+        private val wakeSignal = Channel<Unit>(Channel.CONFLATED)
+
+        /**
+         * Cuts the loop's sleep short. Called from
+         * [me.river.pulse.data.Pulse.Graph.notifyStateChanged], so anything that
+         * changes paging state — an acknowledgement above all — is acted on in
+         * milliseconds instead of on the next tick.
+         */
+        fun wake() {
+            wakeSignal.trySend(Unit)
+        }
         private const val CheckEngine_MIN_TICK = 15_000L
         const val ACTION_SYNC = "me.river.pulse.action.SERVICE_SYNC"
         const val ACTION_STOP = "me.river.pulse.action.SERVICE_STOP"

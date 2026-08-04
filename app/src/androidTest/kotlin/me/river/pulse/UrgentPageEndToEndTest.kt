@@ -134,6 +134,42 @@ class UrgentPageEndToEndTest {
     }
 
     /**
+     * Acknowledging has to be felt at once.
+     *
+     * The alarm is stopped by the service loop, and the loop used to sleep on a
+     * plain `delay` for `nextWakeDelayMs()` — floored at 15s, capped at 60s. So an
+     * ack cancelled the notification and wrote the state immediately and the phone
+     * kept vibrating for up to a minute. Two seconds is far inside that old window
+     * and far outside anything the fix should need.
+     */
+    @Test
+    fun acknowledgingStopsThePageAtOnce() {
+        addFailingUrgentMonitor()
+        val graph = Pulse.install(context)
+        runBlocking { graph.engine.run("e2e-urgent") }
+
+        PulseMonitorService.sync(context)
+        PulseTestSupport.awaitTrue(timeoutMs = 20_000, description = "service is paging") {
+            PulseMonitorService.isPaging()
+        }
+
+        val startedAt = System.currentTimeMillis()
+        runBlocking { graph.engine.acknowledgeUrgent("e2e-urgent") }
+        PulseTestSupport.awaitTrue(timeoutMs = 2_000, description = "paging stopped") {
+            !PulseMonitorService.isPaging()
+        }
+        val took = System.currentTimeMillis() - startedAt
+        assertTrue(
+            "acknowledging must not wait for the loop's own tick; took ${took}ms",
+            took < 2_000,
+        )
+        assertTrue(
+            "the alarm must not still be playing",
+            !graph.alarm.isPlaying,
+        )
+    }
+
+    /**
      * The service's foreground notification must *become* the page — that is the
      * only place the platform honours colorisation, so it is the only place the
      * card is red.
