@@ -9,4 +9,6 @@
     <color name="live_down">#FFFF4D57</color>
     <color name="live_unknown">#FF565E6E</color>
     <color name="live_ahead">#FF2B303B</color>
+    <!-- Countdown label on the dark shade. -->
+    <color name="live_label">#FFD6D6D6</color>
 </resources>

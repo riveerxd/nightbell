@@ -19,4 +19,11 @@
     <color name="live_unknown">#FF8B93A3</color>
     <!-- The unelapsed tail. Reads as track rather than as a verdict. -->
     <color name="live_ahead">#FFD5DAE3</color>
+    <!--
+        The countdown drawn at the end of the line. No container behind it, so it
+        has to carry its own contrast against whatever surface the shade uses —
+        which is why it follows uiMode like the tones above rather than being a
+        fixed ink. Dark slate for the light shade.
+    -->
+    <color name="live_label">#FF3C424E</color>
 </resources>

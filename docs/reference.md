@@ -314,6 +314,33 @@ monitor's failure with green — the line drew green to the right edge under a r
 tracker and a "1 DOWN" chip. Each monitor now carries its own last verdict before the
 fleet merge.
 
+### The countdown on the line
+
+The tail's width says *how much* of the wait is left; the label at the end of the line
+says how much in words — "15m", "4m", "now". Both come from the same `nextCheckInMs`,
+so they cannot disagree.
+
+`ProgressStyle` carries no text: segments and points take a colour and nothing else. It
+does take an icon at each end, and an icon is a bitmap, so the label is drawn into one.
+Three things about that slot were learned the hard way, on a device:
+
+- **It centre-crops to a square.** A bitmap sized to its text is trimmed from both ends —
+  "1h20m" rendered as "h20", "now" as "how". The canvas is square and the text is fitted
+  into it, so a short label renders larger than a long one.
+- **It renders full colour**, not the alpha mask a status-bar small icon gets. Proven by
+  posting red/green/blue stripes into it and getting three stripes back.
+- **Glyphs must be filled, not knocked out.** The first version punched the text out of a
+  pill, which put the card behind it — a colour this code neither chooses nor can
+  measure — on one side of the contrast ratio. It measured 2.5:1 and was reported from a
+  device, accurately, as unreadable.
+
+There is no container behind the label now, so the ink follows `uiMode` exactly as the
+tones do: dark slate on the light shade, light grey on the dark one. One limit worth
+knowing: a *colourised* card is pinned to `pulse_ink` whatever the system theme is, so on
+a light-themed phone whose card wins promotion the ink resolves the wrong way. The same
+inversion already affects the segment colours, and fixing it means deciding colourisation
+before the style is built rather than after.
+
 ### The tail is a gauge, not a measurement
 
 It is the only part of the drawing not to scale, deliberately. To scale it cannot

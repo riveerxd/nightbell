@@ -6,6 +6,7 @@ import me.river.pulse.domain.Monitor
 import me.river.pulse.domain.MonitorRuntime
 import me.river.pulse.domain.Sample
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -278,6 +279,57 @@ class LiveTimelineTest {
         assertEquals("a just-checked pacer should fill the budget", LiveTimeline.BUCKETS / 6, fresh)
         assertTrue("mid-cycle should be roughly half: $mid", mid in 2..(fresh - 2))
         assertTrue("nearly due should be near empty: $late", late < mid)
+    }
+
+    @Test
+    fun `the countdown label agrees with the tail it sits at the end of`() {
+        val monitors = listOf(monitor("a", intervalMinutes = 15))
+        val history = samples(*(0L..60L).map { (it * 15) to true }.toTypedArray())
+        fun at(minutesSinceCheck: Long) =
+            LiveTimeline.of(monitors, mapOf("a" to history.copy(lastCheckedAt = now - minutesSinceCheck * minute)), now)!!
+
+        // Rounded up, so a check still pending never reads as zero.
+        assertEquals("15m", at(0).countdownLabel)
+        assertEquals("8m", at(7).countdownLabel)
+        assertEquals("1m", at(14).countdownLabel)
+        assertEquals("now", at(15).countdownLabel)
+
+        // And the label shrinks in step with the grey it labels.
+        assertTrue(
+            "a wider tail must mean a longer countdown",
+            at(0).bands.last().length > at(7).bands.last().length,
+        )
+        assertTrue(at(0).nextCheckInMs > at(7).nextCheckInMs)
+    }
+
+    @Test
+    fun `an overdue or never-checked monitor reads as due now`() {
+        val monitors = listOf(monitor("a", intervalMinutes = 15))
+        val history = samples(*(0L..60L).map { (it * 15) to true }.toTypedArray())
+
+        val overdue = LiveTimeline.of(monitors, mapOf("a" to history.copy(lastCheckedAt = now - 40 * minute)), now)!!
+        assertEquals("now", overdue.countdownLabel)
+        assertEquals(0L, overdue.nextCheckInMs)
+
+        val never = LiveTimeline.of(monitors, mapOf("a" to history.copy(lastCheckedAt = 0L)), now)!!
+        assertEquals("now", never.countdownLabel)
+    }
+
+    @Test
+    fun `a long interval stays short enough to draw in an icon`() {
+        // The label goes inside a notification icon slot, so it has a couple of
+        // characters to work with. Nothing may render as "1h 23m" there.
+        val history = samples(*(0L..60L).map { (it * 60) to true }.toTypedArray())
+        for (interval in listOf(1, 5, 15, 60, 180, 720, 1440)) {
+            val monitors = listOf(monitor("a", intervalMinutes = interval))
+            val label = LiveTimeline.of(
+                monitors,
+                mapOf("a" to history.copy(lastCheckedAt = now)),
+                now,
+            )!!.countdownLabel
+            assertTrue("\"$label\" is too long to draw at icon size", label.length <= 5)
+            assertFalse("the label must not contain spaces: \"$label\"", label.contains(" "))
+        }
     }
 
     @Test

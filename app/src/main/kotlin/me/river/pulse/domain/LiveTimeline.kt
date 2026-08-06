@@ -91,6 +91,14 @@ object LiveTimeline {
         val current: Tone,
         /** Status-bar chip text. A handful of characters beside the clock. */
         val chip: String,
+        /**
+         * How long until the next check, in millis. Zero means due now.
+         *
+         * The same number the [Tone.AHEAD] tail's width comes from, so a label drawn
+         * from it agrees with the grey it sits at the end of. Without that they would
+         * be two independent claims about the same wait.
+         */
+        val nextCheckInMs: Long,
     ) {
         /**
          * The platform derives the line's length from its segments and takes no
@@ -112,6 +120,28 @@ object LiveTimeline {
                     minutes < 60 -> "${minutes}m"
                     minutes % 60 == 0L -> "${minutes / 60}h"
                     else -> "${minutes / 60}h ${minutes % 60}m"
+                }
+            }
+
+        /**
+         * The countdown, short enough to draw inside an icon.
+         *
+         * Whole minutes, rounded up, and never seconds. The card is redrawn by a loop
+         * that sleeps 15 to 60 seconds, so a seconds display would be wrong for most
+         * of its life — it would tick down, freeze, then jump. A minute is the finest
+         * unit this notification can honestly claim.
+         *
+         * Rounded *up* so it never reads "0m" while a check is still pending: the last
+         * minute counts as one, and zero is reserved for actually due.
+         */
+        val countdownLabel: String
+            get() {
+                if (nextCheckInMs <= 0L) return "now"
+                val minutes = (nextCheckInMs + 59_999L) / 60_000L
+                return when {
+                    minutes < 60 -> "${minutes}m"
+                    minutes % 60 == 0L -> "${minutes / 60}h"
+                    else -> "${minutes / 60}h${minutes % 60}m"
                 }
             }
     }
@@ -205,8 +235,9 @@ object LiveTimeline {
 
         val elapsed = capBands(coalesce(tones))
         val fleet = Summary.of(monitors, runtimes)
+        val pacing = pacing(active, runtimes, nowMs)
         return Timeline(
-            bands = elapsed + Band(aheadLength(active, runtimes, nowMs), Tone.AHEAD),
+            bands = elapsed + Band(aheadLength(pacing), Tone.AHEAD),
             markers = markers(elapsed),
             // Merging preserves total length, so the elapsed part is still exactly
             // BUCKETS wide however many bands it ended up as.
@@ -214,6 +245,7 @@ object LiveTimeline {
             spanMs = spanMs,
             current = current(fleet, offline),
             chip = chip(fleet, offline),
+            nextCheckInMs = pacing.waitMs,
         )
     }
 
@@ -251,29 +283,34 @@ object LiveTimeline {
      * The floor of one keeps the tracker off the extreme edge, where the platform
      * draws it half outside the bar.
      */
-    private fun aheadLength(
+    /** The wait the tail draws and the label states, so the two cannot disagree. */
+    private data class Pacing(val waitMs: Long, val intervalMs: Long) {
+        val fraction: Double get() = waitMs.toDouble() / intervalMs
+    }
+
+    /**
+     * The countdown to the next check, paced by one monitor — the fastest — rather
+     * than by whichever of them is due soonest.
+     *
+     * "Soonest across the fleet" is the literal next check and it is useless as a
+     * gauge. Eight monitors on a fifteen-minute interval are staggered, so one of them
+     * is always nearly due: the minimum sits near zero and resets every time *any* of
+     * them fires, about every two minutes. Reported from a device as the tail "not
+     * moving at all" — it was moving, in a fast erratic sawtooth around the floor,
+     * which is indistinguishable from stuck.
+     *
+     * One monitor's own cycle gives a countdown with a period you can actually see,
+     * and the fastest is the right one: it is the fleet's real cadence, and the
+     * monitor whose next check arrives first on average. Ties broken by id so the
+     * choice does not wander between renders and make the tail jump.
+     */
+    private fun pacing(
         active: List<Monitor>,
         runtimes: Map<String, MonitorRuntime>,
         nowMs: Long,
-    ): Int {
-        val budget = BUCKETS / 6
-
-        // Paced by one monitor — the fastest — rather than by whichever of them is due
-        // soonest.
-        //
-        // "Soonest across the fleet" is the literal next check and it is useless as a
-        // gauge. Eight monitors on a fifteen-minute interval are staggered, so one of
-        // them is always nearly due: the minimum sits near zero and resets every time
-        // *any* of them fires, about every two minutes. Reported from a device as the
-        // tail "not moving at all" — it was moving, in a fast erratic sawtooth around
-        // the floor, which is indistinguishable from stuck.
-        //
-        // One monitor's own cycle gives a countdown with a period you can actually
-        // see, and the fastest is the right one: it is the fleet's real cadence, and
-        // it is the monitor whose next check arrives first on average. Ties broken by
-        // id so the choice does not wander between renders and make the tail jump.
+    ): Pacing {
         val pacer = active.minWithOrNull(compareBy({ it.intervalMinutes }, { it.id }))
-            ?: return budget
+            ?: return Pacing(waitMs = 0L, intervalMs = 60_000L)
         val intervalMs = pacer.intervalMinutes.coerceAtLeast(1) * 60_000L
         val last = runtimes[pacer.id]?.lastCheckedAt ?: 0L
         // Never checked, or a stamp in the future because the wall clock moved
@@ -283,7 +320,12 @@ object LiveTimeline {
         } else {
             (last + intervalMs - DueCheck.SLACK_MS - nowMs).coerceIn(0L, intervalMs)
         }
-        return Math.round(budget * (waitMs.toDouble() / intervalMs)).toInt().coerceIn(1, budget)
+        return Pacing(waitMs = waitMs, intervalMs = intervalMs)
+    }
+
+    private fun aheadLength(pacing: Pacing): Int {
+        val budget = BUCKETS / 6
+        return Math.round(budget * pacing.fraction).toInt().coerceIn(1, budget)
     }
 
     private fun rank(tone: Tone): Int = when (tone) {

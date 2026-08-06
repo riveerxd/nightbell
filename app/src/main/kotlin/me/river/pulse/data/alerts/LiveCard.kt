@@ -6,6 +6,8 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Rect
+import android.graphics.Typeface
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
@@ -118,7 +120,18 @@ object LiveCard {
             .setProgressTrackerIcon(
                 IconCompat.createWithBitmap(trackerBitmap(colorFor(context, timeline.current))),
             )
-
+            // The countdown, at the end of the line the tail belongs to. The bar
+            // itself takes no text — segments and points carry a colour and nothing
+            // else — so an icon slot is the only place on the line a number can go
+            // without a custom content view, which would cost promotion outright.
+            .setProgressEndIcon(
+                IconCompat.createWithBitmap(
+                    countdownBitmap(
+                        label = timeline.countdownLabel,
+                        ink = ContextCompat.getColor(context, R.color.live_label),
+                    ),
+                ),
+            )
         builder
             .setStyle(style)
             // Read by API 37 and up. On Android 16 it is inert — the platform had
@@ -224,6 +237,62 @@ object LiveCard {
      * The tracker: a filled disc in the current tone with a white core, which is
      * the dashboard's leading "now" dot at notification scale.
      */
+    /**
+     * The countdown, drawn as the line's end icon: "15m", "4m", "now".
+     *
+     * ### Square, because the slot crops to square
+     * The slot is a fixed 20dp square with `centerCrop`, so a bitmap sized to its text
+     * is trimmed from both ends — measured on a device, "1h20m" rendered as "h20" and
+     * "now" as "how". The canvas is square and the *text* is fitted into it instead:
+     * measured once, then scaled by the ratio it overflows by. A short label therefore
+     * renders larger than a long one, which is the right way round.
+     *
+     * ### No container, so the ink has to carry the contrast
+     * There were two earlier versions. The first punched the glyphs out of a filled
+     * pill with `PorterDuff.CLEAR`, which put a colour this code cannot measure — the
+     * card behind — on one side of the contrast ratio; it came out at 2.5:1 and was
+     * reported from a device, accurately, as unreadable. The second drew filled text on
+     * a pill, which is legible but reads as a chip bolted onto the end of the line.
+     *
+     * This one drops the container, which means nothing stands between the glyphs and
+     * whatever surface the shade is using. `R.color.live_label` therefore follows
+     * uiMode exactly as the tones do — dark slate on the light shade, light grey on the
+     * dark one. Losing the pill also buys back its margin, so the glyphs are drawn
+     * larger, which is the thing legibility actually turned on.
+     *
+     * Worth stating as a known limit: a *colourised* card is pinned to `pulse_ink`
+     * whatever the system theme is, so on a light-themed phone whose card wins
+     * promotion the ink resolves light-for-dark and the label loses contrast. The same
+     * inversion already affects the segment colours; fixing it means deciding
+     * colourisation before the style is built rather than after.
+     */
+    private fun countdownBitmap(label: String, ink: Int): Bitmap {
+        val size = COUNTDOWN_SIZE_PX
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textAlign = Paint.Align.CENTER
+            color = ink
+        }
+
+        // Fit to whichever constraint binds: the width the glyphs need, or the height
+        // one may be. Scaling by the measured overflow lands in one step where a loop
+        // would only converge on the same number slowly.
+        val usable = size * COUNTDOWN_INSET
+        paint.textSize = usable
+        val bounds = Rect()
+        paint.getTextBounds(label, 0, label.length, bounds)
+        paint.textSize = minOf(usable, usable * usable / bounds.width().coerceAtLeast(1))
+
+        val bitmap = createBitmap(size, size)
+        Canvas(bitmap).drawText(
+            label,
+            size / 2f,
+            size / 2f - (paint.descent() + paint.ascent()) / 2f,
+            paint,
+        )
+        return bitmap
+    }
+
     private fun trackerBitmap(color: Int, size: Int = 96): Bitmap {
         val bitmap = createBitmap(size, size)
         val canvas = Canvas(bitmap)
@@ -236,4 +305,16 @@ object LiveCard {
         canvas.drawCircle(size / 2f, size / 2f, size * 0.20f, paint)
         return bitmap
     }
+
+
+    /** Nominal edge of the countdown square before the platform scales it. */
+    private const val COUNTDOWN_SIZE_PX = 144
+
+    /**
+     * Share of the square the glyphs may occupy.
+     *
+     * Higher than it was with a pill behind it: that version had to leave room for
+     * the container, and this one only has to stay clear of the slot's own edge.
+     */
+    private const val COUNTDOWN_INSET = 0.92f
 }
