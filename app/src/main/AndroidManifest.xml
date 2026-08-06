@@ -36,6 +36,19 @@
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
 
     <!--
+        Lets the strict-monitoring notice be a Live Update: the ProgressStyle line
+        of check outcomes, a chip in the status bar, and an expanded card on the
+        lock screen. See data/alerts/LiveCard.kt.
+
+        Not defined on Android 16 itself — `pm list permissions` on an API 36
+        device does not list it, and promotion there needs only the requested-ongoing
+        extra plus a notification that breaks none of the disqualifying rules. It is
+        declared because later releases do gate promotion on it, and an undefined
+        permission is ignored rather than fatal.
+    -->
+    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
+
+    <!--
         Strict monitoring runs a foreground service so checks keep their cadence
         in Doze. SPECIAL_USE rather than DATA_SYNC: dataSync is capped at six
         hours a day on API 34+, which would silently break the one guarantee

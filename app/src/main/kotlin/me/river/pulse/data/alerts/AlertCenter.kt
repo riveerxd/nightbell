@@ -29,6 +29,7 @@ import java.util.Locale
 import me.river.pulse.domain.AlertPolicy
 import me.river.pulse.domain.CertificateWatch
 import me.river.pulse.domain.CheckResult
+import me.river.pulse.domain.LiveTimeline
 import me.river.pulse.domain.Monitor
 import me.river.pulse.domain.SoundChoice
 import me.river.pulse.domain.VibrationStyle
@@ -799,8 +800,21 @@ class AlertCenter(private val context: Context) {
         return SERVICE_CHANNEL
     }
 
-    /** The persistent notification strict mode runs behind. */
-    fun serviceNotification(title: String, body: String, stopIntent: PendingIntent?): Notification {
+    /**
+     * The persistent notification strict mode runs behind.
+     *
+     * With a [timeline] on API 36+ this is a live update: the check history drawn
+     * as `ProgressStyle`'s segmented line, a chip in the status bar, and an
+     * expanded card on the lock screen. See [LiveCard] for what disqualifies that
+     * — in short, nothing on this builder may be a custom view or colorised, and
+     * neither is.
+     */
+    fun serviceNotification(
+        title: String,
+        body: String,
+        stopIntent: PendingIntent?,
+        timeline: LiveTimeline.Timeline? = null,
+    ): Notification {
         val builder = NotificationCompat.Builder(context, ensureServiceChannel())
             // The brand mark rather than a status glyph: this is the only notification
             // that reports on Pulse itself instead of on a monitor, so it is the only
@@ -809,7 +823,6 @@ class AlertCenter(private val context: Context) {
             .setSmallIcon(R.drawable.ic_stat_brand)
             .setContentTitle(title)
             .setContentText(body)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setContentIntent(openMonitorIntent(""))
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
@@ -817,10 +830,25 @@ class AlertCenter(private val context: Context) {
             .setSilent(true)
             .setShowWhen(false)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+        // The line replaces the expanded paragraph rather than joining it: a
+        // notification carries one style, and the platform draws no big text
+        // alongside ProgressStyle.
+        val live = timeline != null && LiveCard.apply(context, builder, timeline)
+        if (!live) {
+            builder.setStyle(NotificationCompat.BigTextStyle().bigText(body))
+        }
         if (stopIntent != null) {
             builder.addAction(R.drawable.ic_stat_mute, "Stop strict mode", stopIntent)
         }
-        return builder.build()
+        // Built through LiveCard when there is a line, because whether the card has
+        // to be colourised to earn its chip is a question only the device can
+        // answer — see [LiveCard.earnPromotion]. The action above is added first so
+        // both candidate builds carry it.
+        return if (live && timeline != null) {
+            LiveCard.earnPromotion(context, builder, timeline)
+        } else {
+            builder.build()
+        }
     }
 
     /** Materialises (once) the channel that matches this exact policy. */

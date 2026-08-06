@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Dark-scheme tones for the live-update line: the app's own palette, which
+        was designed against black.
+    -->
+    <color name="live_up">#FF2FD98A</color>
+    <color name="live_degraded">#FFFFB020</color>
+    <color name="live_down">#FFFF4D57</color>
+    <color name="live_unknown">#FF565E6E</color>
+    <color name="live_ahead">#FF2B303B</color>
+</resources>

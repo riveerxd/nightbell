@@ -2,4 +2,21 @@
 <resources>
     <color name="pulse_void">#FF06070E</color>
     <color name="pulse_ink">#FF0B0D18</color>
+
+    <!--
+        The live-update line's tones, resolved per system theme rather than
+        hardcoded like the URGENT page's reds.
+
+        The shade is drawn by SystemUI in the *system's* light or dark theme, not
+        in whichever one the app was told to use, so these have to come from a
+        resource that follows uiMode. These are the light-scheme values, and they
+        are the ones 2.3.0 re-picked for the light theme rather than the dark
+        palette's: Mint #2FD98A is 1.9:1 on white.
+    -->
+    <color name="live_up">#FF07834B</color>
+    <color name="live_degraded">#FF8A5200</color>
+    <color name="live_down">#FFC4111F</color>
+    <color name="live_unknown">#FF8B93A3</color>
+    <!-- The unelapsed tail. Reads as track rather than as a verdict. -->
+    <color name="live_ahead">#FFD5DAE3</color>
 </resources>

@@ -262,6 +262,73 @@ known contrast, and letting a stray opacity value apply to them would quietly
 turn a legible preset illegible. Picking a pale custom background moves the text
 colour to something readable *unless* you have already chosen one yourself.
 
+## The live strict-monitoring card
+
+On Android 16 the strict-monitoring notice draws its own history. `ProgressStyle` —
+the template rideshare and delivery apps use — gives a horizontal line of coloured
+segments with milestone points and a tracker riding along it, and it is the only
+template the platform will promote to a status-bar chip and expand on the lock
+screen. `LiveTimeline` turns the check history into that shape; `LiveCard` hands it
+to the notification.
+
+Reading the line:
+
+| What you see | What it is |
+| --- | --- |
+| Green / red stretch | a **band** — one run of an outcome, as wide as it actually lasted |
+| Taller red block | a **marker** — where an outage *began* |
+| Grey tail past the dot | the wait until the next check |
+
+The marker is not redundant with the band it sits on. The shortest possible outage
+is one bucket, a couple of per cent of the width, which on screen reads as a
+rendering artefact — the block is what makes a single failed check findable, and the
+band is what makes a long one measurable.
+
+### Three things it used to get wrong
+
+All three were reported from a device and none was visible from reading the code.
+
+**The window was measured from checks it could not draw.** The span came from the
+oldest retained sample of any age and was then clamped to 24 hours, so one straggler
+older than a day stretched the line to a full day and was immediately skipped for
+falling before the window start. Every bucket between the left edge and the first
+drawable check stayed unknown, and carrying forward cannot rescue them — it
+propagates left to right and there is no earlier bucket to inherit from. Half a bar
+of grey under a label claiming a day of history. Samples older than the ceiling are
+now dropped *before* the span is measured, so the label describes the line drawn.
+
+**Compression invented outages.** Capping the band count used to absorb the shortest
+non-outage band into a neighbour — and the neighbours of an up-band are outages by
+construction, since same-tone runs are already fused, so the absorbed uptime could
+only ever be handed to an outage, and the adjacency pass then merged the two red runs
+into one. Measured on a monitor that alternated pass/fail every half hour for a day:
+24 buckets genuinely failed, the line drew 40, and the longest drawn run was 33 — a
+claimed sixteen and a half hours of continuous downtime that never happened. The old
+guarantee that outages are never merged *away* was true and beside the point.
+Compression now reports each group's real composition, so the drawn red total matches
+the real one exactly, at the cost of approximating order within a group.
+
+**A live outage could be painted over.** Carry-forward ran on the fleet-merged tone,
+so a monitor checking every five minutes filled every bucket after an hourly
+monitor's failure with green — the line drew green to the right edge under a red
+tracker and a "1 DOWN" chip. Each monitor now carries its own last verdict before the
+fleet merge.
+
+### The tail is a gauge, not a measurement
+
+It is the only part of the drawing not to scale, deliberately. To scale it cannot
+move: a bucket is `spanMs / 48`, so on the fifteen-odd hours a real fleet accumulates
+a bucket is nearly nineteen minutes and a fifteen-minute countdown floors to the same
+value full and empty alike. It spends a fixed sixth of the bar and empties across it
+instead.
+
+It is also paced by **one** monitor — the fastest, ties broken by id — rather than by
+whichever is due soonest. "Soonest across the fleet" is the literal next check and is
+useless as a gauge: eight monitors on a fifteen-minute interval are staggered, so one
+is always nearly due, the value sits near its floor and resets every couple of
+minutes. Reported as the tail "not moving at all"; it was moving, in a fast erratic
+sawtooth indistinguishable from stuck.
+
 ## The launcher icon
 
 The mark is direction 30 from `docs/brand` — a ring with a red trace cutting

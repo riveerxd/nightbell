@@ -10,7 +10,9 @@ import android.os.IBinder
 import android.util.Log
 import me.river.pulse.data.Pulse
 import me.river.pulse.data.alerts.AlertCenter
+import me.river.pulse.data.alerts.LiveCard
 import me.river.pulse.data.alerts.UrgentAlarm
+import me.river.pulse.domain.LiveTimeline
 import me.river.pulse.domain.Summary
 import me.river.pulse.domain.runCatchingCancellable
 import kotlinx.coroutines.CoroutineScope
@@ -213,10 +215,21 @@ class PulseMonitorService : Service() {
             alarm.stop()
             paging_ = false
 
-            val fleet = runCatchingCancellable {
-                graph.store.currentSnapshot().let { Summary.of(it.monitors, it.runtimes) }
-            }.getOrNull()
+            val latest = runCatchingCancellable { graph.store.currentSnapshot() }.getOrNull()
+            val fleet = latest?.let { Summary.of(it.monitors, it.runtimes) }
             val offline = !graph.network.isOnline()
+            // The check history as a ride-card line, on the releases that can draw
+            // one. Built from the same snapshot as the verdict above it, or the bar
+            // and the headline could disagree by one check. Not built at all where
+            // nothing can render it — this loop runs every 15 to 60 seconds forever.
+            val timeline = latest?.takeIf { LiveCard.supported }?.let {
+                LiveTimeline.of(
+                    monitors = it.monitors,
+                    runtimes = it.runtimes,
+                    nowMs = System.currentTimeMillis(),
+                    offline = offline,
+                )
+            }
             promote(
                 alerts = graph.alerts,
                 title = when {
@@ -231,15 +244,25 @@ class PulseMonitorService : Service() {
                 body = buildString {
                     if (offline) {
                         append("No connection — checks resume automatically.")
+                    } else if (timeline != null && fleet != null && fleet.total > 0) {
+                        // With the line drawn, the paragraph explaining what strict
+                        // mode is has nowhere to go: ProgressStyle draws no big text,
+                        // so it was being clipped mid-sentence two lines in. What is
+                        // worth those two lines instead is what the bar covers —
+                        // there is no axis on it, so an outage a third of the way
+                        // along could be ten bad minutes or eight bad hours.
+                        append("${fleet.total} monitors · ${fleet.down} down · ${fleet.degraded} slow")
+                        append(" · last ${timeline.spanLabel}")
                     } else if (strict) {
                         append("Checking on schedule instead of waiting for Android to batch work.")
                     } else {
                         append("Keeping the urgent alert alive until it's acknowledged.")
                     }
-                    if (fleet != null && fleet.total > 0) {
+                    if (timeline == null && fleet != null && fleet.total > 0) {
                         append("\n${fleet.total} monitor(s) · ${fleet.down} down · ${fleet.degraded} slow")
                     }
                 },
+                timeline = timeline,
             )
 
             val delayMs = runCatchingCancellable { graph.engine.nextWakeDelayMs() }
@@ -275,8 +298,12 @@ class PulseMonitorService : Service() {
         promote(alerts, "Starting…", "Working out what needs checking.")
     }
 
-    private fun promote(alerts: AlertCenter, title: String, body: String) =
-        promoteWith(alerts.serviceNotification(title, body, stopPendingIntent()))
+    private fun promote(
+        alerts: AlertCenter,
+        title: String,
+        body: String,
+        timeline: LiveTimeline.Timeline? = null,
+    ) = promoteWith(alerts.serviceNotification(title, body, stopPendingIntent(), timeline))
 
     /**
      * Posts [notification] as this service's foreground notification.

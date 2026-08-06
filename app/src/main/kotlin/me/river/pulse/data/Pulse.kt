@@ -12,11 +12,14 @@ import me.river.pulse.data.icons.FaviconStore
 import me.river.pulse.data.net.NetworkMonitor
 import me.river.pulse.data.work.MonitorScheduler
 import me.river.pulse.data.work.PulseMonitorService
+import me.river.pulse.domain.Summary
 import me.river.pulse.domain.runCatchingCancellable
 import me.river.pulse.widget.PulseWidgetProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
@@ -49,13 +52,17 @@ object Pulse {
         val limits = SystemLimits(context, isOnline = network::isOnline)
 
         /**
-         * Pushes current state to the two surfaces that live outside the
-         * activity: placed widgets, and the strict/urgent foreground service
-         * (which may need to start or stop as a result).
+         * Pushes current state to the strict/urgent foreground service, which may
+         * need to start or stop as a result.
+         *
+         * Placed widgets are deliberately **not** refreshed from here any more.
+         * They follow [PulseStore.snapshot] instead — see the collector in `init`.
+         * Being pushed meant a refresh happened once per *check*, which missed
+         * every change that was only a store write: saving a paused monitor never
+         * calls into the engine, so a rename could sit stale on the home screen
+         * indefinitely.
          */
         fun notifyStateChanged() {
-            PulseWidgetProvider.refresh(context)
-
             // Silence first, and directly. The loop is what normally stops the
             // alarm, and it only checks between sleeps — so acknowledging left the
             // phone vibrating for up to a minute. This is best-effort: the snapshot
@@ -77,6 +84,26 @@ object Pulse {
         }
 
         init {
+            // Widgets follow the data.
+            //
+            // Every placed widget renders exactly what `Summary.of` returns, so that
+            // is what is watched: `distinctUntilChanged` over the fleet means a write
+            // the widget cannot show — a latency-reference sample, a checker streak,
+            // a settings toggle — costs no RemoteViews IPC, while anything it *can*
+            // show is guaranteed to reach it. Includes `lastCheckedAt`, so the
+            // footer's "Checked 2m ago" still moves with each check.
+            //
+            // Pulling rather than being pushed also removes the ordering problem
+            // outright: there is no longer a caller that writes and then asks for a
+            // render, so there is no window in which the render can precede the write
+            // becoming visible.
+            appScope.launch {
+                store.snapshot
+                    .map { Summary.of(it.monitors, it.runtimes) }
+                    .distinctUntilChanged()
+                    .collect { PulseWidgetProvider.refresh(context) }
+            }
+
             // Wired here rather than inside CheckEngine so the engine itself
             // stays free of Android plumbing and remains unit-testable.
             engine.onStateChanged = ::notifyStateChanged

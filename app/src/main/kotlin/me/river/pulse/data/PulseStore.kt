@@ -20,13 +20,13 @@ import me.river.pulse.domain.ReferenceSample
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -51,6 +51,19 @@ data class PulseSnapshot(
      * [CheckerStreak] for why this cannot live in memory alone.
      */
     val checkerStreak: CheckerStreak = CheckerStreak(),
+    /**
+     * Monotonic write counter, bumped by every [PulseStore.mutate].
+     *
+     * A total order on committed state, which is what lets the in-memory snapshot
+     * be updated from two directions — the write that just happened, and the
+     * DataStore flow catching up — without either being able to overwrite
+     * something newer. See [PulseStore.publish].
+     *
+     * Persisted because the ordering has to survive a process death: an in-memory
+     * counter would restart at zero and the first write of a new process would
+     * look older than the state it is replacing.
+     */
+    val revision: Long = 0L,
 ) {
     companion object {
         const val SCHEMA_VERSION = 1
@@ -78,13 +91,82 @@ class PulseStore(
     /** Set while a check is in flight so the UI can show its live shimmer. */
     private val inFlight = MutableStateFlow<Set<String>>(emptySet())
 
-    val snapshot: StateFlow<PulseSnapshot> = context.pulseDataStore.data
-        .catch { error ->
-            Log.e(TAG, "DataStore read failed, falling back to empty store", error)
-            emit(androidx.datastore.preferences.core.emptyPreferences())
+    private val live = MutableStateFlow(PulseSnapshot())
+    private val loadedFlag = MutableStateFlow(false)
+
+    /**
+     * Current state, readable synchronously.
+     *
+     * **Updated by the write itself**, before [mutate] returns — not only when the
+     * DataStore flow gets around to emitting. That distinction is the whole point
+     * of this being a hand-rolled [MutableStateFlow] rather than a `stateIn` over
+     * `dataStore.data`.
+     *
+     * With `stateIn`, a caller that wrote and then read `.value` observed the state
+     * from *before* its own write, because the emission is delivered on this
+     * store's collector coroutine and nothing orders that against the writer
+     * continuing. Every surface outside Compose reads `.value` — the home-screen
+     * widget most visibly — so the widget rendered the previous verdict of
+     * whichever monitor had just been checked: a monitor that recovered was drawn
+     * DOWN, and stayed DOWN until the next check, while the app showed it up.
+     *
+     * [loaded] says whether the first read has landed; until it has, this is
+     * [PulseSnapshot] defaults and means "not known yet" rather than "empty".
+     */
+    val snapshot: StateFlow<PulseSnapshot> = live.asStateFlow()
+
+    /**
+     * Whether the first read from disk has completed.
+     *
+     * Readers that would otherwise present "not loaded" as "nothing here" have to
+     * check this. A widget rendered from a cold process — the launcher's 30-minute
+     * `updatePeriodMillis` is enough to cause one — would otherwise paint "No
+     * monitors yet" over a working fleet.
+     */
+    val loaded: Boolean get() = loadedFlag.value
+
+    init {
+        // The only reader of `dataStore.data`. Everything else in the app goes
+        // through `live`, so a decode of the JSON document happens once per commit
+        // rather than once per interested party.
+        scope.launch {
+            context.pulseDataStore.data
+                .catch { error ->
+                    Log.e(TAG, "DataStore read failed, falling back to empty store", error)
+                    emit(androidx.datastore.preferences.core.emptyPreferences())
+                }
+                .collect { prefs ->
+                    publish(decode(prefs[key]))
+                    loadedFlag.value = true
+                }
         }
-        .map { prefs -> decode(prefs[key]) }
-        .stateIn(scope, SharingStarted.Eagerly, PulseSnapshot())
+    }
+
+    /**
+     * Adopts [next] unless what we already hold is newer.
+     *
+     * Both callers race by design: a write publishes the value it just committed,
+     * and the DataStore collector publishes every commit a beat later. Revisions
+     * are a total order on committed state, so "arrived second but older" is
+     * decidable and simply loses. The loop is a CAS retry because the two can
+     * genuinely land on different threads.
+     *
+     * Also protects against the `catch` above: a transient read failure emits
+     * empty preferences, which would otherwise blow away live state that is
+     * perfectly good.
+     */
+    private fun publish(next: PulseSnapshot) {
+        while (true) {
+            val current = live.value
+            // Not gated on `loaded`: the first emission from disk can itself arrive
+            // after a write this process already made, and it is the older of the
+            // two. Equal revisions adopt, which is what makes a legacy store (no
+            // counter, so revision 0) and the initial default (also 0) resolve to
+            // the disk copy rather than sticking on empty.
+            if (next.revision < current.revision) return
+            if (live.compareAndSet(current, next)) return
+        }
+    }
 
     val cards: Flow<List<MonitorCard>> = combine(snapshot, inFlight) { snap, busy ->
         snap.monitors.map { monitor ->
@@ -206,11 +288,21 @@ class PulseStore(
     }
 
     private suspend fun mutate(transform: (PulseSnapshot) -> PulseSnapshot) {
+        var written: PulseSnapshot? = null
         context.pulseDataStore.edit { prefs ->
             val current = decode(prefs[key])
-            val next = transform(current)
+            // The revision is stamped here rather than by the transform, so it is
+            // assigned under DataStore's write lock and cannot be skipped. It also
+            // means an imported backup (`replaceAll`) is renumbered onto the end of
+            // this store's history instead of carrying whatever counter the file was
+            // written with, which could be lower than what is on disk.
+            val next = transform(current).copy(revision = current.revision + 1)
+            written = next
             prefs[key] = json.encodeToString(next)
         }
+        // Before returning, so a caller that writes and then reads `snapshot.value`
+        // sees its own write. `edit` has already committed at this point.
+        written?.let(::publish)
     }
 
     private fun decode(raw: String?): PulseSnapshot {

@@ -85,6 +85,22 @@ class PulseWidgetProvider : AppWidgetProvider() {
             val app = context.applicationContext
             val config = WidgetConfigStore.loadBlocking(app, appWidgetId)
             val graph = Pulse.install(app)
+
+            // "Not loaded yet" is not "no monitors".
+            //
+            // `onUpdate` arrives in whatever process the launcher wakes, and the
+            // 30-minute `updatePeriodMillis` is enough to make that a cold one. The
+            // store's first read from disk is asynchronous, so rendering here would
+            // paint "No monitors yet — tap to add one." over a working fleet — and
+            // nothing re-rendered until the next check completed.
+            //
+            // Leaving the previous render in place is the correct fallback: the
+            // store's own collector fires a refresh the moment the load lands, which
+            // is milliseconds away.
+            if (!graph.store.loaded) {
+                Log.i(TAG, "Store still loading; leaving widget $appWidgetId as it is")
+                return
+            }
             val snapshot = graph.store.snapshot.value
             val fleet = Summary.of(snapshot.monitors, snapshot.runtimes)
             val size = measure(manager, appWidgetId)
