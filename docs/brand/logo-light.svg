@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="190" viewBox="0 0 760 190">
+  <g transform="translate(150,95)">
+    <g transform="scale(6.2) translate(-12,-12)">
+      <path d="M2.51,11.87 L6.39,11.87 L8.43,6.52 L11.75,17.48 L13.78,11.87 L21.49,11.87"
+            fill="none" stroke="#2F6BFF" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+  </g>
+  <text x="300" y="126" font-family="DejaVu Sans, Arial, sans-serif" font-weight="bold"
+        font-size="110" fill="#0B0D18" letter-spacing="-2">Pulse</text>
+</svg>

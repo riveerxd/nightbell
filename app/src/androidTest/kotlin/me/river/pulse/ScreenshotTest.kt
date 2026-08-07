@@ -35,6 +35,7 @@ import me.river.pulse.domain.Sample
 import me.river.pulse.domain.SoundChoice
 import me.river.pulse.domain.StatusExpectation
 import me.river.pulse.domain.StatusMode
+import me.river.pulse.domain.ThemeChoice
 import me.river.pulse.domain.VibrationStyle
 import kotlin.math.sin
 import kotlin.random.Random
@@ -200,6 +201,9 @@ class ScreenshotTest {
                     runtimes = runtimes,
                     settings = GlobalSettings(
                         motionIntensity = 0f,
+                        // Dark, always, for the README — the brand's default look and the
+                        // one that does not read as a stock light-mode emulator capture.
+                        theme = ThemeChoice.DARK,
                         // Past the pager-setup gate, or every capture below is a
                         // photograph of the permissions screen.
                         hasSeenPagerSetup = true,
