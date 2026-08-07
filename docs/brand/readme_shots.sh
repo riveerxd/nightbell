@@ -34,7 +34,7 @@ frame 10-dashboard.png d.png 0.46; frame urgent-fullscreen.png u.png 0.46; frame
 magick montage "$TMP/d.png" "$TMP/u.png" "$TMP/t.png" -tile 3x1 -geometry +34+0 -background none "$TMP/hrow.png"
 magick -size 1960x1680 "$GLOW" "$TMP/hbg.png"
 magick "$TMP/hbg.png" \( "$OUT/logo-dark.png" -resize 1040x \) -gravity North -geometry +0+70 -composite \
-  "$TMP/hrow.png" -gravity South -geometry +0+40 -composite "$OUT/hero.png"
+  "$TMP/hrow.png" -gravity South -geometry +0+40 -composite "$OUT/hero-243.png"
 
 # create-a-monitor wizard
 for i in 16-setup-kind 17-setup-target 18-setup-expectations 19-setup-cadence-alerts; do frame "$i.png" "$i.png" 0.40; done
@@ -49,7 +49,7 @@ band "$OUT/settings-group.png" "$TMP/grow.png" 160 140
 # widget column-flow strip (raw widget bitmaps, not phone-framed)
 magick montage "$RAW/widget-4x4.png" "$RAW/widget-two-columns.png" "$RAW/widget-wide-flat.png" \
   -tile 3x1 -geometry +46+0 -background none "$TMP/wrow.png"
-band "$OUT/widget-sizes.png" "$TMP/wrow.png" 160 140
+band "$OUT/widget-243.png" "$TMP/wrow.png" 160 140
 
 # single framed urgent for the Why section
 frame urgent-fullscreen.png urg.png 0.46; cp "$TMP/urg.png" "$OUT/urgent.png"

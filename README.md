@@ -35,7 +35,7 @@
   <a href="#install">Install</a>
 </p>
 
-<img src="docs/screens/hero.png" width="880" alt="The dashboard worst-first, a full-screen urgent page, and a monitor detail with its latency chart" />
+<img src="docs/screens/hero-243.png" width="880" alt="The dashboard worst-first, a full-screen urgent page, and a monitor detail with its latency chart" />
 
 </div>
 
@@ -138,7 +138,7 @@ so instead of pushing monitors below the fold and counting them in "+4 more",
 they move sideways:
 
 <div align="center">
-  <img src="docs/screens/widget-sizes.png" width="820" alt="The widget tall in one column, spilling into two columns, and flat in a single wide row" />
+  <img src="docs/screens/widget-243.png" width="820" alt="The widget tall in one column, spilling into two columns, and flat in a single wide row" />
 </div>
 
 Columns are chosen from the size the launcher reports, capped by width — no
