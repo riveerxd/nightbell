@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/screens/hero-243.png" width="900" alt="Pulse — the dashboard worst-first, a full-screen urgent page, and a monitor detail" />
+<img src="docs/screens/hero-b.png" width="900" alt="Pulse — the dashboard worst-first, an urgent alert, and a monitor detail" />
 
 ### Uptime monitoring that lives on your phone and actually wakes you up.
 
@@ -52,7 +52,7 @@ call, with a looping alarm that keeps going until you acknowledge it, and it
 wakes the screen if the phone is locked.
 
 <div align="center">
-  <img src="docs/screens/urgent.png" width="260" alt="A full-screen urgent page: DOWN, the monitor name, and Acknowledge / Re-check" />
+  <img src="docs/screens/urgent-b.png" width="260" alt="The urgent alert: a red heads-up with Acknowledge, Re-check and Mute" />
 </div>
 
 > [!NOTE]
@@ -92,6 +92,10 @@ specific about.
 > Android will happily let an app *think* it is alerting you while delivering
 > nothing. Pulse needs four grants, and there is a screen on first launch that
 > walks you through them.
+
+<div align="center">
+  <img src="docs/screens/setup-b.png" width="260" alt="The first-launch setup screen: notifications, unrestricted battery, full-screen alerts, and Do Not Disturb access" />
+</div>
 
 | Grant | What breaks without it |
 | --- | --- |
