@@ -1,9 +1,6 @@
 <div align="center">
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/screens/logo-dark.png">
-  <img alt="Pulse" src="docs/screens/logo-light.png" width="380">
-</picture>
+<img src="docs/screens/hero-243.png" width="900" alt="Pulse — the dashboard worst-first, a full-screen urgent page, and a monitor detail" />
 
 ### Uptime monitoring that lives on your phone and actually wakes you up.
 
@@ -34,8 +31,6 @@
   <a href="#how-it-works">How it works</a> &nbsp;·&nbsp;
   <a href="#install">Install</a>
 </p>
-
-<img src="docs/screens/hero-243.png" width="880" alt="The dashboard worst-first, a full-screen urgent page, and a monitor detail with its latency chart" />
 
 </div>
 
