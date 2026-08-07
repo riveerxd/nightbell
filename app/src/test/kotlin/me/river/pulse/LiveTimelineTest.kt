@@ -333,6 +333,22 @@ class LiveTimelineTest {
     }
 
     @Test
+    fun `the short span label fits an icon at every window size`() {
+        // Drawn into the 20dp square at the start of the line, which crops to square:
+        // past three characters it arrives unreadable.
+        val monitors = listOf(monitor("a", intervalMinutes = 15))
+        for (historyMinutes in listOf(5L, 45L, 90L, 600L, 1_439L)) {
+            val history = samples(
+                *(0L..(historyMinutes / 15)).map { (it * 15) to true }.toTypedArray(),
+            )
+            val timeline = LiveTimeline.of(monitors, mapOf("a" to history), now)!!
+            val label = timeline.spanShortLabel
+            assertTrue("\"$label\" is too long for the slot", label.length <= 3)
+            assertFalse("the label must not contain spaces: \"$label\"", label.contains(" "))
+        }
+    }
+
+    @Test
     fun `an unbroken healthy history is one green run`() {
         val monitors = listOf(monitor("a"))
         val timeline = LiveTimeline.of(monitors, mapOf("a" to healthyHour()), now)!!

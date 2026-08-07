@@ -138,7 +138,7 @@ class LiveCardInstrumentedTest {
         // reads as a download, so the line is not applied at all.
         val timeline = timelineOf(seed())!!
         val notification = AlertCenter(appContext)
-            .serviceNotification("Strict monitoring · 1 of 3 is down", "body", null, timeline)
+            .serviceNotification("Strict monitoring · 1 of 3 is down", "body", timeline)
         assertEquals(
             Notification.BigTextStyle::class.java.name,
             notification.extras.getString(Notification.EXTRA_TEMPLATE),
@@ -151,7 +151,7 @@ class LiveCardInstrumentedTest {
         requireBaklava()
         val timeline = timelineOf(seed())!!
         val notification = AlertCenter(appContext)
-            .serviceNotification("Strict monitoring · 1 of 3 is down", "body", null, timeline)
+            .serviceNotification("Strict monitoring · 1 of 3 is down", "body", timeline)
 
         assertEquals(
             Notification.ProgressStyle::class.java.name,
@@ -166,7 +166,7 @@ class LiveCardInstrumentedTest {
         requireBaklava()
         val timeline = timelineOf(seed())!!
         val notification = AlertCenter(appContext)
-            .serviceNotification("Strict monitoring · 1 of 3 is down", "body", null, timeline)
+            .serviceNotification("Strict monitoring · 1 of 3 is down", "body", timeline)
 
         if (LiveCard.allowedByUser(appContext)) {
             assertTrue(
@@ -234,7 +234,7 @@ class LiveCardInstrumentedTest {
         // No history yet, or an older release: the notice keeps the paragraph of
         // text it has always had rather than degrading to a featureless bar.
         val notification = AlertCenter(appContext)
-            .serviceNotification("Starting…", "Working out what needs checking.", null, null)
+            .serviceNotification("Starting…", "Working out what needs checking.", null)
         assertEquals(
             Notification.BigTextStyle::class.java.name,
             notification.extras.getString(Notification.EXTRA_TEMPLATE),
@@ -270,7 +270,6 @@ class LiveCardInstrumentedTest {
         val notification = alerts.serviceNotification(
             title = "Strict monitoring · 1 of 3 is down",
             body = "3 monitors · 1 down · 0 slow · last ${timeline.spanLabel}",
-            stopIntent = null,
             timeline = timeline,
         )
         // No assertion about promotion here on purpose — the shade renders the line

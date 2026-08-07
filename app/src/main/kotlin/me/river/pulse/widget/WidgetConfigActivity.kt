@@ -605,13 +605,12 @@ private fun WidgetPreview(config: WidgetConfig, fleet: Summary.Fleet) {
         if (config.headerVisible || config.showSettingsButton) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (config.showLogo) {
-                    // Fixed brand colours rather than the theme-aware ones, because that is
-                    // what ic_widget_mark draws. Using Mint/Rose here would make this a
-                    // nicer picture of a widget that does not exist.
+                    // The fixed brand blue rather than the theme-aware Aqua, because that is
+                    // what ic_widget_mark draws — the light scheme's darker Aqua here would
+                    // make this a nicer picture of a widget that does not exist.
                     PulseMark(
                         size = 18.dp,
-                        ring = Color(0xFF2F6BFF),
-                        trace = Color(0xFFFF4D57),
+                        color = Color(0xFF2F6BFF),
                     )
                     Spacer(Modifier.width(8.dp))
                 }

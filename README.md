@@ -8,8 +8,8 @@ Uptime monitoring that lives on your phone and actually wakes you up.
   <img src="https://img.shields.io/badge/UI-Jetpack%20Compose-4285F4?logo=jetpackcompose&logoColor=white" alt="Jetpack Compose" />
   <img src="https://img.shields.io/badge/minSdk-26-blue" alt="minSdk 26" />
   <img src="https://img.shields.io/badge/targetSdk-36-blue" alt="targetSdk 36" />
-  <img src="https://img.shields.io/badge/release-2.4.2-FF4D57" alt="Release 2.4.2" />
-  <img src="https://img.shields.io/badge/tests-358%20JVM%20%2B%20173%20on--device-2FD98A" alt="Tests" />
+  <img src="https://img.shields.io/badge/release-2.4.3-FF4D57" alt="Release 2.4.3" />
+  <img src="https://img.shields.io/badge/tests-359%20JVM%20%2B%20173%20on--device-2FD98A" alt="Tests" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/licence-Apache%202.0-blue" alt="Apache 2.0" /></a>
 </p>
 
@@ -115,7 +115,7 @@ and sideload it. It is signed with my own key, so Play Protect will ask you to
 confirm. There is no Play listing.
 
 ```
-adb install -r artifacts/Pulse-2.4.2-release.apk
+adb install -r artifacts/Pulse-2.4.3-release.apk
 ```
 
 Anything from 2.0.0 onward updates in place and keeps your monitors. 1.x used a
@@ -129,7 +129,7 @@ Needs JDK 17 and an Android SDK with API 36. `local.properties` wants
 ```bash
 ./gradlew :app:assembleDebug          # debuggable
 ./gradlew :app:assembleRelease        # minified, needs keystore/keystore.properties
-./gradlew :app:testDebugUnitTest      # 358 JVM tests
+./gradlew :app:testDebugUnitTest      # 359 JVM tests
 ```
 
 Release builds are signed from `keystore/keystore.properties`, which is
@@ -138,7 +138,7 @@ just unsigned.
 
 ## Tests
 
-358 JVM tests cover the pure logic: the alert state machines, escalation,
+359 JVM tests cover the pure logic: the alert state machines, escalation,
 quiet-hours arithmetic, assertions, the latency baseline, backup round-trips, and
 the widget's column arithmetic — which decides whether a monitor is visible at all
 and can otherwise only be exercised by dragging a widget around a home screen.

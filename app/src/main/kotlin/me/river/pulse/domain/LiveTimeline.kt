@@ -124,6 +124,22 @@ object LiveTimeline {
             }
 
         /**
+         * How far back the line reaches, short enough to draw inside an icon.
+         *
+         * The coarser sibling of [spanLabel]: "23h" where that says "23h 12m". The
+         * icon slot at the start of the line is a 20dp square that crops to square, so
+         * anything past three characters arrives unreadable — the minutes have to go.
+         * Rounded down, because the line genuinely does not reach further back than
+         * this, and a label that overstates its own window is the bug this file spent
+         * a release fixing.
+         */
+        val spanShortLabel: String
+            get() {
+                val minutes = spanMs / 60_000
+                return if (minutes < 60) "${minutes}m" else "${minutes / 60}h"
+            }
+
+        /**
          * The countdown, short enough to draw inside an icon.
          *
          * Whole minutes, rounded up, and never seconds. The card is redrawn by a loop

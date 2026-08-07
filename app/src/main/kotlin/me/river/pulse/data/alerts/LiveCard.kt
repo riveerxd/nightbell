@@ -124,9 +124,20 @@ object LiveCard {
             // itself takes no text — segments and points carry a colour and nothing
             // else — so an icon slot is the only place on the line a number can go
             // without a custom content view, which would cost promotion outright.
+            // The other end of the axis. ProgressStyle draws no scale, so a bar with an
+            // outage a third of the way along could be a bad ten minutes or a bad eight
+            // hours; the two labels are that scale, one at each end.
+            .setProgressStartIcon(
+                IconCompat.createWithBitmap(
+                    labelBitmap(
+                        label = timeline.spanShortLabel,
+                        ink = ContextCompat.getColor(context, R.color.live_label),
+                    ),
+                ),
+            )
             .setProgressEndIcon(
                 IconCompat.createWithBitmap(
-                    countdownBitmap(
+                    labelBitmap(
                         label = timeline.countdownLabel,
                         ink = ContextCompat.getColor(context, R.color.live_label),
                     ),
@@ -141,6 +152,19 @@ object LiveCard {
             // else. Without this the chip falls back to the notification's `when`,
             // which on a permanently-posted notice is meaningless.
             .setShortCriticalText(timeline.chip)
+            // A per-second countdown in the header, ticked by the platform rather than
+            // by us. The line can only move when the service loop redraws it, which is
+            // every 15 to 60 seconds, so the bar steps; this does not, and it costs no
+            // wakeups because nothing here is what advances it.
+            //
+            // `when` is the instant the next check falls due, and `setShowWhen` has to
+            // be turned back on: the notice sets it false, because a permanently posted
+            // card showing the time it was first posted is noise. A target, rather than
+            // a timestamp, is worth showing.
+            .setShowWhen(true)
+            .setWhen(System.currentTimeMillis() + timeline.nextCheckInMs)
+            .setUsesChronometer(true)
+            .setChronometerCountDown(true)
         return true
     }
 
@@ -238,7 +262,8 @@ object LiveCard {
      * the dashboard's leading "now" dot at notification scale.
      */
     /**
-     * The countdown, drawn as the line's end icon: "15m", "4m", "now".
+     * A short label drawn into one of the line's end slots: the window it reaches
+     * back over on the left, the wait until the next check on the right.
      *
      * ### Square, because the slot crops to square
      * The slot is a fixed 20dp square with `centerCrop`, so a bitmap sized to its text
@@ -266,7 +291,7 @@ object LiveCard {
      * inversion already affects the segment colours; fixing it means deciding
      * colourisation before the style is built rather than after.
      */
-    private fun countdownBitmap(label: String, ink: Int): Bitmap {
+    private fun labelBitmap(label: String, ink: Int): Bitmap {
         val size = COUNTDOWN_SIZE_PX
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)

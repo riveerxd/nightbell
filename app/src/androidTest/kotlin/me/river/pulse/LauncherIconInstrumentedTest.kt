@@ -51,7 +51,7 @@ class LauncherIconInstrumentedTest {
     fun theLauncherIconHasATransparentBackground() {
         val bitmap = render(R.drawable.ic_launcher_mark, size = 108)
 
-        // The corners sit well outside the ring, so nothing the mark draws can reach them.
+        // The corners sit well outside the trace, so nothing the mark draws can reach them.
         for ((x, y) in listOf(2 to 2, 105 to 2, 2 to 105, 105 to 105)) {
             assertEquals(
                 "corner ($x,$y) must be fully transparent, not a plate",
@@ -62,31 +62,34 @@ class LauncherIconInstrumentedTest {
     }
 
     @Test
-    fun theRingIsOpenWhereTheTracePassesThrough() {
+    fun theMarkIsABlueTraceWithNoRing() {
         val bitmap = render(R.drawable.ic_launcher_mark, size = 108)
 
-        // Not centre-height itself: the trace runs along it, which is the whole point of the
-        // opening. The clear band sits just above the trace and just inside the ring's
-        // outer edge — between half a trace-width and a full trace-width above centre, on
-        // the ring's own radius. Scanned as a patch rather than probed as a single pixel so
-        // antialiasing on the arc ends cannot decide the result.
-        val clear = (92..102).flatMap { x -> (43..49).map { y -> bitmap.getPixel(x, y) } }
-            .count { it.ushr(24) == 0 }
+        // The trace's baseline runs across the middle. Sample the solid interior of the
+        // right-hand flat segment: it must be opaque and the brand blue (#2F6BFF, so the
+        // blue channel sits far above red and green) — not the old red trace, not empty.
+        val px = bitmap.getPixel(90, 54)
+        val a = px ushr 24 and 0xFF
+        val r = px ushr 16 and 0xFF
+        val g = px ushr 8 and 0xFF
+        val b = px and 0xFF
+        assertTrue("the mark must draw ink on its baseline (found nothing at 90,54)", a > 0)
         assertTrue(
-            "the ring must be genuinely open where the trace crosses it — found no fully " +
-                "transparent pixels in the gap, which is what a casing stroke painted in a " +
-                "background colour would look like",
-            clear > 8,
+            "the mark must be the brand blue, not the old red trace or a grey — got " +
+                "r=$r g=$g b=$b",
+            b > 150 && b > r + 60 && b > g + 40,
         )
 
-        // The ring still has to be there either side of that opening.
-        assertTrue(
-            "the ring should be drawn across the top of the icon",
-            bitmap.getPixel(54, 8).ushr(24) > 0,
-        )
-        assertTrue(
-            "the ring should still be drawn just beyond the gap",
-            bitmap.getPixel(96, 40).ushr(24) > 0,
+        // The ring is gone. It used to arc across the very top of the icon; the trace's
+        // highest point sits well below the top band, so that band must now be completely
+        // empty. Any ink there is exactly the ring this release removed. Scanned as a band
+        // rather than one pixel so a stray arc anywhere across the top is caught.
+        val topBand = (0 until 108).flatMap { x -> (4..14).map { y -> bitmap.getPixel(x, y) } }
+            .count { it.ushr(24) > 0 }
+        assertEquals(
+            "no ring: the top of the icon must be empty, but found $topBand painted pixels",
+            0,
+            topBand,
         )
     }
 

@@ -358,12 +358,13 @@ sawtooth indistinguishable from stuck.
 
 ## The launcher icon
 
-The mark is direction 30 from `docs/brand` — a ring with a red trace cutting
-through it. The exploration draws that ring green, under the rule that green means
-working; the app draws it in the brand blue, because in the app green is the colour
-of the *data* (charts, history strip, status orbs) and a green mark read as one more
-status indicator rather than as the app's identity. The trace stays red either way:
-it is the one element that means failure.
+The mark is direction 30 from `docs/brand` — a heartbeat trace. Direction 30 ringed
+it; 2.4.3 dropped the ring, so the trace is the whole mark. It is the brand blue: the
+trace was red — the one element that meant failure — but with the ring gone the trace
+*is* the identity, and a logo drawn as one red line reads as permanently broken. Red
+still means failure everywhere the *data* lives (charts, history strip, status orbs),
+and green still means working there; the mark just stays out of that vocabulary now,
+the same reason it was never drawn green.
 
 It ships as a **legacy** icon rather than an adaptive one. That is deliberate, and the reason is worth writing down because it cost two
 rounds of chasing the wrong thing.
@@ -391,11 +392,11 @@ a black one. The cost is themed ("monochrome") icons, which only the adaptive
 format carries — `ic_launcher_foreground` and `ic_launcher_monochrome` are kept,
 unused, for whenever a plate is wanted back.
 
-`LauncherIconInstrumentedTest` pins the two things that are actually in the app's
+`LauncherIconInstrumentedTest` pins the things that are actually in the app's
 control: that the manifest does not point at an adaptive icon, and that the
-drawable it does point at has transparent corners and a real gap in the ring.
-Both were invisible to review — a dark icon on a dark background looks the same
-either way.
+drawable it does point at has transparent corners, draws its trace in the brand
+blue, and no longer paints the ring across the top. All of it was invisible to
+review — a dark icon on a dark background looks the same either way.
 
 ### One geometry, five copies
 
@@ -403,17 +404,18 @@ The mark exists as the launcher icon, the widget header mark, a notification
 silhouette, an adaptive foreground and a Compose composable, each needing
 different stroke weights on a different canvas. They are generated from the
 brand drawing by `docs/brand/android_assets.py` rather than scaled by hand,
-because the first hand-scaled set shipped a Compose mark whose ring gap was half
-the width of the vectors' and a legacy icon whose trace vertices were simply
-wrong. Run it after changing any geometry:
+because the first hand-scaled set shipped a legacy icon whose trace vertices were
+simply wrong and a Compose mark that did not match the vectors. Run it after
+changing any geometry:
 
 ```bash
 python3 docs/brand/android_assets.py
 ```
 
-The ring is two arcs with a real gap, not a full circle with the gap faked by a
-casing stroke in the background colour. The faked version is what made the plate
-impossible to remove.
+As of 2.4.3 each copy is the single trace path — the ring direction 30 drew around
+it is gone — fitted to its canvas and vertically centred. The generator computes
+that fit from the trace's own bounding box, so `size` still means the drawn mark's
+extent and the copies cannot drift apart.
 
 ## Moving between installs
 

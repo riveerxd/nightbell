@@ -812,7 +812,6 @@ class AlertCenter(private val context: Context) {
     fun serviceNotification(
         title: String,
         body: String,
-        stopIntent: PendingIntent?,
         timeline: LiveTimeline.Timeline? = null,
     ): Notification {
         val builder = NotificationCompat.Builder(context, ensureServiceChannel())
@@ -837,13 +836,11 @@ class AlertCenter(private val context: Context) {
         if (!live) {
             builder.setStyle(NotificationCompat.BigTextStyle().bigText(body))
         }
-        if (stopIntent != null) {
-            builder.addAction(R.drawable.ic_stat_mute, "Stop strict mode", stopIntent)
-        }
         // Built through LiveCard when there is a line, because whether the card has
         // to be colourised to earn its chip is a question only the device can
-        // answer — see [LiveCard.earnPromotion]. The action above is added first so
-        // both candidate builds carry it.
+        // answer — see [LiveCard.earnPromotion]. No action buttons: the notice reports
+        // on Pulse itself and strict mode is turned off in Settings, so a button here
+        // was one more thing on a permanent notification rather than a useful control.
         return if (live && timeline != null) {
             LiveCard.earnPromotion(context, builder, timeline)
         } else {

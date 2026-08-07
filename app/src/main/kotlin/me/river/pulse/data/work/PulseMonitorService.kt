@@ -1,9 +1,10 @@
 package me.river.pulse.data.work
 
-import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
@@ -70,8 +71,37 @@ class PulseMonitorService : Service() {
      */
     private val alarm: UrgentAlarm get() = Pulse.install(applicationContext).alarm
 
+    /**
+     * Re-issues the page's haptics the instant the screen turns off.
+     *
+     * The system cancels an ongoing vibration on screen-off (the vibrator history logs it
+     * as `cancelled_by_screen_off`), so pressing the power button silenced a page set to
+     * vibrate — the one thing a pager must never let the user do by accident. A vibration
+     * *re-issued* while the screen is already off runs normally, so this catches the
+     * transition and starts it again. Only while actually paging; the alarm no-ops when
+     * nothing should be buzzing. `ACTION_SCREEN_ON` is caught too, as a cheap belt-and-
+     * braces revive if a device cancels on wake as well. These are runtime-only
+     * broadcasts — they cannot be declared in the manifest.
+     */
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (isPaging()) alarm.reassertVibration()
+        }
+    }
+    private var screenReceiverRegistered = false
+
     override fun onCreate() {
         super.onCreate()
+        runCatching {
+            registerReceiver(
+                screenReceiver,
+                IntentFilter().apply {
+                    addAction(Intent.ACTION_SCREEN_OFF)
+                    addAction(Intent.ACTION_SCREEN_ON)
+                },
+            )
+            screenReceiverRegistered = true
+        }.onFailure { Log.w(TAG, "Could not register screen receiver", it) }
         // As early as Android allows. `startForegroundService` opens a ~5s window
         // in which this process is killed unless `startForeground` has been
         // called, and that window is not cancelled by the service being stopped
@@ -91,18 +121,6 @@ class PulseMonitorService : Service() {
         // one. `AlertCenter` needs nothing but a Context, so the placeholder
         // notification is always cheap; the real content lands on the next tick.
         promoteImmediately()
-
-        val graph = Pulse.install(applicationContext)
-
-        if (intent?.action == ACTION_STOP) {
-            // Explicit "stop strict mode" from the notification: flip the
-            // setting too, otherwise the next sync would start us straight back.
-            scope.launch {
-                graph.store.updateSettings { it.copy(strictForegroundMonitoring = false) }
-                stopSelfSafely()
-            }
-            return START_NOT_STICKY
-        }
 
         if (loop == null) {
             loop = scope.launch { runLoop() }
@@ -303,7 +321,7 @@ class PulseMonitorService : Service() {
         title: String,
         body: String,
         timeline: LiveTimeline.Timeline? = null,
-    ) = promoteWith(alerts.serviceNotification(title, body, stopPendingIntent(), timeline))
+    ) = promoteWith(alerts.serviceNotification(title, body, timeline))
 
     /**
      * Posts [notification] as this service's foreground notification.
@@ -351,16 +369,13 @@ class PulseMonitorService : Service() {
         stopSelf()
     }
 
-    private fun stopPendingIntent(): PendingIntent = PendingIntent.getService(
-        this,
-        1,
-        Intent(this, PulseMonitorService::class.java).setAction(ACTION_STOP),
-        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-    )
-
     override fun onDestroy() {
         alarm.stop()
         paging_ = false
+        if (screenReceiverRegistered) {
+            runCatching { unregisterReceiver(screenReceiver) }
+            screenReceiverRegistered = false
+        }
         scope.cancel()
         super.onDestroy()
     }
@@ -400,7 +415,6 @@ class PulseMonitorService : Service() {
         }
         private const val CheckEngine_MIN_TICK = 15_000L
         const val ACTION_SYNC = "me.river.pulse.action.SERVICE_SYNC"
-        const val ACTION_STOP = "me.river.pulse.action.SERVICE_STOP"
 
         /**
          * Starts or stops the service to match the current store.

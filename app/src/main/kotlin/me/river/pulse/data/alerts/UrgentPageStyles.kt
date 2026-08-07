@@ -8,6 +8,7 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.os.Build
 import android.util.TypedValue
+import android.view.View
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
@@ -161,6 +162,14 @@ object UrgentPageStyles {
     private const val DECLINE_SLOT_COLOR: Int = 0xFFE8402C.toInt()
     private const val ANSWER_SLOT_COLOR: Int = 0xFF157F3C.toInt()
 
+    /**
+     * The page's own pill colours: Acknowledge in green, Re-check in the brand blue.
+     * White text on both, on the deep-red card. (The call card's own red/green slots
+     * above are kept for the CallStyle variants that still use them.)
+     */
+    private const val ACK_PILL_COLOR: Int = 0xFF157F3C.toInt()      // green
+    private const val RECHECK_PILL_COLOR: Int = 0xFF2F6BFF.toInt()  // brand blue
+
     fun build(
         context: Context,
         style: UrgentPageStyle,
@@ -269,7 +278,13 @@ object UrgentPageStyles {
         actions: UrgentPageActions,
         silent: Boolean,
     ): Notification {
-        val views = RemoteViews(context.packageName, R.layout.notification_urgent_call).apply {
+        // Two fills of one layout. The collapsed row is height-capped by the shade and
+        // clips whatever overflows — with the pill row present that cut the controls in
+        // half, which is what read as broken when collapsed. So the collapsed card hides
+        // the pills and carries only the verdict; the expanded and heads-up cards, which
+        // have the height, carry the controls. Hiding the row rather than shipping a
+        // second layout keeps the two from drifting.
+        fun card(withActions: Boolean) = RemoteViews(context.packageName, R.layout.notification_urgent_call).apply {
             setTextViewText(R.id.urgent_name, "${content.monitorName} is down")
             setTextViewText(
                 R.id.urgent_detail,
@@ -278,23 +293,34 @@ object UrgentPageStyles {
                     if (content.downFor.isNotBlank()) append(" · down for ").append(content.downFor)
                 },
             )
-            // The pills the call card would have drawn, with our wording. Same
-            // three colours the platform uses: its decline red, its answer green,
-            // and white for the neutral one.
+            if (!withActions) {
+                setViewVisibility(R.id.urgent_actions, View.GONE)
+                return@apply
+            }
+            // The pills the call card would have drawn, with our wording, our own
+            // colours and a glyph in each: Acknowledge a check on green, Re-check a
+            // refresh on the brand blue, and the crossed bell on white for mute. Icons
+            // and text are white so they read on the coloured fills.
             setImageViewBitmap(
                 R.id.urgent_ack,
-                UrgentPills.label(
+                UrgentPills.iconLabel(
+                    context = context,
+                    iconRes = R.drawable.ic_stat_ok,
                     text = context.getString(R.string.urgent_action_acknowledge_short),
-                    fill = DECLINE_SLOT_COLOR,
+                    fill = ACK_PILL_COLOR,
                     textColor = 0xFFFFFFFF.toInt(),
+                    tint = 0xFFFFFFFF.toInt(),
                 ),
             )
             setImageViewBitmap(
                 R.id.urgent_recheck,
-                UrgentPills.label(
+                UrgentPills.iconLabel(
+                    context = context,
+                    iconRes = R.drawable.ic_stat_refresh,
                     text = context.getString(R.string.urgent_action_recheck),
-                    fill = ANSWER_SLOT_COLOR,
+                    fill = RECHECK_PILL_COLOR,
                     textColor = 0xFFFFFFFF.toInt(),
+                    tint = 0xFFFFFFFF.toInt(),
                 ),
             )
             setImageViewBitmap(
@@ -323,12 +349,13 @@ object UrgentPageStyles {
                 }
             }
         }
+        val expanded = card(withActions = true)
         return base(context, channelId, content, actions, silent)
             .setContentTitle("${content.monitorName} is down")
             .setContentText(content.headline)
-            .setCustomContentView(views)
-            .setCustomHeadsUpContentView(views)
-            .setCustomBigContentView(views)
+            .setCustomContentView(card(withActions = false))
+            .setCustomHeadsUpContentView(expanded)
+            .setCustomBigContentView(expanded)
             .setColor(DEEP_DOWN_COLOR)
             // Paints the strip around our layout to match it, so the card does not
             // read as a red panel floating in a white one.

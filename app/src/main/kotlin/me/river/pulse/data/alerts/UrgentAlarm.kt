@@ -44,6 +44,10 @@ class UrgentAlarm(private val context: Context) {
     private var player: MediaPlayer? = null
     private var vibrating = false
 
+    /** The style of the haptic loop that should be running, kept so it can be re-issued
+     *  after the system cancels it on screen-off. Null when nothing should vibrate. */
+    private var vibeStyle: VibrationStyle? = null
+
     /** Which usage [player] was built for, so a ringer flip can rebuild it. */
     private var usage: Int? = null
 
@@ -101,15 +105,36 @@ class UrgentAlarm(private val context: Context) {
             stopSound()
         }
         if (output.vibrate) {
+            vibeStyle = style
             if (!vibrating) startVibration(style)
         } else if (vibrating) {
             runCatching { resolveVibrator()?.cancel() }
             vibrating = false
+            vibeStyle = null
         }
+    }
+
+    /**
+     * Re-issues the haptic loop if one should be running.
+     *
+     * The system cancels an ongoing vibration the instant the screen turns off — the
+     * vibrator history logs it verbatim as `cancelled_by_screen_off` — and because
+     * [start] is idempotent on [vibrating], the service loop never revives it. So a page
+     * set to vibrate went silent the moment the user pressed the power button, which is
+     * the opposite of a pager. A vibration *started* while the screen is already off runs
+     * normally, so re-issuing it from a screen-off receiver keeps it buzzing until the
+     * page is actually acknowledged. Idempotent and a no-op when nothing should vibrate.
+     */
+    fun reassertVibration() {
+        val style = vibeStyle ?: return
+        runCatching { resolveVibrator()?.cancel() }
+        vibrating = false
+        startVibration(style)
     }
 
     fun stop() {
         stopSound()
+        vibeStyle = null
         if (vibrating) {
             runCatching { resolveVibrator()?.cancel() }
             vibrating = false
