@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Nightbell">
+  <rect width="512" height="512" rx="112" fill="#0B0E13"/>
+  <circle cx="256" cy="256" r="146" fill="none" stroke="#2F6BFF" stroke-width="32"/>
+  <circle cx="256" cy="182" r="13" fill="#2F6BFF"/>
+  <path d="M256 198C220 198 199 236 197 290L182 306V320H330V306L315 290C313 236 292 198 256 198Z" fill="#2F6BFF"/>
+  <circle cx="256" cy="344" r="16" fill="#2F6BFF"/>
+</svg>

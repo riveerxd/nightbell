@@ -10,7 +10,7 @@
   <img src="https://img.shields.io/badge/Jetpack%20Compose-4285F4?style=flat-square&logo=jetpackcompose&logoColor=white" alt="Jetpack Compose" />
   <img src="https://img.shields.io/badge/minSdk-26-3a3f4b?style=flat-square" alt="minSdk 26" />
   <img src="https://img.shields.io/badge/targetSdk-36-3a3f4b?style=flat-square" alt="targetSdk 36" />
-  <img src="https://img.shields.io/badge/release-2.4.3-2F6BFF?style=flat-square" alt="Release 2.4.3" />
+  <img src="https://img.shields.io/badge/release-3.0.0-2F6BFF?style=flat-square" alt="Release 3.0.0" />
   <img src="https://img.shields.io/badge/tests-359%20JVM%20+%20173%20on--device-2FD98A?style=flat-square" alt="Tests" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/licence-Apache%202.0-3a3f4b?style=flat-square" alt="Apache 2.0" /></a>
 </p>
@@ -192,14 +192,24 @@ Grab the APK from [Releases](../../releases), or from `artifacts/` in this repo,
 and sideload it.
 
 ```bash
-adb install -r artifacts/Pulse-2.4.3-release.apk
+adb install -r artifacts/Nightbell-3.0.0-release.apk
 ```
 
-> [!NOTE]
-> It is signed with my own key, so Play Protect will ask you to confirm — there
-> is no Play listing. Anything from 2.0.0 onward updates in place and keeps your
-> monitors. 1.x used a different application id, so the only way across is the
-> JSON export in Settings.
+> [!IMPORTANT]
+> **3.0.0 does not update a 2.x install.** The app was called Pulse until 3.0.0
+> and its application id moved with the name, from `me.river.pulse` to
+> `me.river.nightbell`. Android identifies an app by that id, so 3.0.0 installs
+> beside the old one with an empty data directory. No signing key or manifest
+> setting changes that.
+>
+> To carry your monitors across: export the JSON from Settings in 2.4.3, install
+> 3.0.0, import it, then uninstall Pulse. Placed widgets and your notification
+> channel settings do not survive, because a launcher stores a widget provider as
+> a fully-qualified `ComponentName` and channel grants belong to the old package.
+> Full detail in [docs/MIGRATION_3.0.0.md](docs/MIGRATION_3.0.0.md).
+>
+> It is signed with my own key, so Play Protect will ask you to confirm — there is
+> no Play listing. 3.0.0 onward updates in place as usual.
 
 ## Build
 
@@ -232,8 +242,8 @@ connection-refused outage all the way to a red page on screen.
 
 ```bash
 # one class at a time, the emulator does not enjoy the whole suite at once
-adb shell am instrument -w -e class me.river.pulse.UrgentPageEndToEndTest \
-  me.river.pulse.debug.test/androidx.test.runner.AndroidJUnitRunner
+adb shell am instrument -w -e class me.river.nightbell.UrgentPageEndToEndTest \
+  me.river.nightbell.debug.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
 The urgent path has a habit of breaking in ways only a device shows — the alarm

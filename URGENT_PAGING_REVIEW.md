@@ -38,9 +38,9 @@ DND exceptions. Bedtime mode is exactly when a page matters most.
 
 **P4 — The channel on your device is frozen and cannot be fixed in place.**
 `urgentChannel()` returns early when `getNotificationChannel(id) != null`, and
-Android freezes importance, sound and DND-bypass at creation. `pulse.urgent.*`
+Android freezes importance, sound and DND-bypass at creation. `nightbell.urgent.*`
 has existed on your install since 1.1.0. Any change to importance/sound/bypass
-must ship under a **new channel id** (e.g. `pulse.urgent.v2.*`) with the old one
+must ship under a **new channel id** (e.g. `nightbell.urgent.v2.*`) with the old one
 deleted, or it will do nothing on upgrade.
 
 **P5 — The alarm sound fires once, then silence for `urgentRepeatMinutes`.**
@@ -171,7 +171,7 @@ colorised card.
    route the user to `ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT` when denied
    (targetSdk 36 means it is **not** pre-granted). Degrade to heads-up + looping
    alarm when it is not granted — never fail closed.
-3. New channel family `pulse.urgent.v2.*`, delete `pulse.urgent.*`; declare
+3. New channel family `nightbell.urgent.v2.*`, delete `nightbell.urgent.*`; declare
    `ACCESS_NOTIFICATION_POLICY` and prompt for policy access so DND bypass is
    real.
 4. Looping alarm audio on `USAGE_ALARM` owned by the service, stopped on
@@ -196,8 +196,8 @@ Fixed:
   notification is never rejected for carrying an intent it may not use.
 - **P3 — DND.** `ACCESS_NOTIFICATION_POLICY` declared; `urgentBypassesDnd()` and
   `dndAccessIntent()` expose whether the grant actually exists.
-- **P4 — the frozen channel.** New family `pulse.urgent.v2.*`, with the 1.1.0-era
-  `pulse.urgent.*` deleted on first use. Without this, none of P3 could reach an
+- **P4 — the frozen channel.** New family `nightbell.urgent.v2.*`, with the 1.1.0-era
+  `nightbell.urgent.*` deleted on first use. Without this, none of P3 could reach an
   existing install.
 - **P5 — one chime.** `UrgentAlarm` loops the alarm-stream sound and the monitor's
   haptic pattern until acknowledged, owned by the service so it cannot outlive the

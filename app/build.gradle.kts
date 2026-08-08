@@ -13,11 +13,11 @@ val keystoreProps = Properties().apply {
 }
 
 android {
-    namespace = "me.river.pulse"
+    namespace = "me.river.nightbell"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "me.river.pulse"
+        applicationId = "me.river.nightbell"
         minSdk = 26
         targetSdk = 36
         // 1.1.0 adds strict foreground monitoring, URGENT mode, latency SLOs,
@@ -122,8 +122,29 @@ android {
         // `notifyStateChanged` — so acknowledge, mute and recovery are all felt at
         // once. Regression test asserts under two seconds and was confirmed to
         // fail against the old code.
-        versionCode = 21
-        versionName = "2.5.0"
+        // 3.0.0 renames the app to Nightbell and moves applicationId to
+        // me.river.nightbell. Second in the list that does NOT update an earlier
+        // install, for exactly the reason 2.0.0 did not: a different applicationId
+        // is a different app. A 2.x install stays where it is, side by side, and
+        // the only route across is export/import driven by hand. Placed widgets do
+        // not survive, because a launcher stores the provider as a fully-qualified
+        // ComponentName.
+        //
+        // Pulse was not a defensible name. Pulse Pager and Pulse UpTime both ship
+        // uptime monitoring under the same word, with two more alongside them, so
+        // the brand term was unwinnable before a line of it was written.
+        //
+        // Because the package moves anyway, the persisted identifiers moved with
+        // it: the DataStore names, the notification channel ids, the WorkManager
+        // unique names and the backup filename prefix are all `nightbell.*` now.
+        // Those were frozen through the 2.5.0 rename precisely because they would
+        // have orphaned a live install's channels and monitors. A new package has
+        // no live install to orphan, so keeping `pulse.*` inside an app called
+        // Nightbell would have been carrying the cost of a migration nobody gets.
+        // Backups written by 2.x still import: the reader validates the JSON
+        // envelope's `format`, never the filename.
+        versionCode = 22
+        versionName = "3.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

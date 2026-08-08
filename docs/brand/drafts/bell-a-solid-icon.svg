@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Nightbell">
+  <rect width="512" height="512" rx="112" fill="#0B0E13"/>
+  <circle cx="256" cy="124" r="19" fill="#2F6BFF"/>
+  <path d="M256 146C198 146 162 208 158 296L134 324V344H378V324L354 296C350 208 314 146 256 146Z" fill="#2F6BFF"/>
+  <circle cx="256" cy="384" r="24" fill="#2F6BFF"/>
+</svg>

@@ -1,0 +1,25 @@
+<!--
+  The Nightbell mark: the heartbeat trace knocked out of a bell.
+
+  The trace is the same six points the Pulse mark drew, placed and scaled rather
+  than redrawn, so the old identity survives inside the new one. It is a real
+  mask cutout and not a dark shape painted over the plate, which is what lets the
+  bare mark sit on a light page as well as on this one.
+
+  Geometry lives here and in docs/brand/android_assets.py, which recomputes it
+  for each Android canvas. Change one, run the other.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Nightbell">
+  <defs>
+    <mask id="nb-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512">
+      <path d="M256 146C198 146 162 208 158 296L134 324V344H378V324L354 296C350 208 314 146 256 146Z" fill="#fff"/>
+      <circle cx="256" cy="124" r="19" fill="#fff"/>
+      <circle cx="256" cy="384" r="24" fill="#fff"/>
+      <g transform="translate(148.48 149.64) scale(0.42)">
+        <path d="M76 256H168L200 172L252 344L284 256H436" fill="none" stroke="#000" stroke-width="45" stroke-linecap="round" stroke-linejoin="round"/>
+      </g>
+    </mask>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#0B0E13"/>
+  <rect width="512" height="512" fill="#2F6BFF" mask="url(#nb-cut)"/>
+</svg>

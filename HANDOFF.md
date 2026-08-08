@@ -1,6 +1,6 @@
 # Nightbell — handoff
 
-## 2.0.0 — the app id is `me.river.pulse`
+## 2.0.0 — the app id is `me.river.nightbell`
 
 **2.0.0 does not update an earlier install. It installs beside it.**
 
@@ -22,7 +22,7 @@ monitors, and no code here can get them back.
 Everything else in the tree moved with the id — `namespace`, all four Kotlin
 source roots, the broadcast action strings in the manifest, the R8 keep rules and
 the baseline profile's class descriptors. Notification channel ids, the DataStore
-name (`pulse_store`), its key (`snapshot_v1`) and the WorkManager unique names are
+name (`nightbell_store`), its key (`snapshot_v1`) and the WorkManager unique names are
 hardcoded strings and were **not** derived from the package, so an import lands in
 a store that is byte-identical in shape to the one it was exported from.
 
@@ -202,11 +202,11 @@ property of the type rather than a code path that could be forgotten.
 **3 · Nothing cancels a check in flight any more.** Cadence is now a per-monitor
 `PeriodicWorkRequest` with `ExistingPeriodicWorkPolicy.UPDATE`, which applies to
 the next period and does not touch a running worker. `requestImmediate` moved to
-its own unique name (`pulse.monitor.now.<id>`) with `KEEP`, so "check now" can
+its own unique name (`nightbell.monitor.now.<id>`) with `KEEP`, so "check now" can
 neither cancel the periodic worker nor cancel itself. No worker re-arms itself.
 `MonitorWorker` now respects `CheckEngine.isDue` unless explicitly forced, which
 kills the duplicate-check bursts. `syncAll` also cancels the legacy
-`pulse.monitor.<id>` chain once, so upgrades do not leave an orphan.
+`nightbell.monitor.<id>` chain once, so upgrades do not leave an orphan.
 
 **4 · The third state now exists.** `CheckerLimit` / `CheckerLimits` +
 `data/health/SystemLimits` diagnose *why* checks are late — offline, metered,
@@ -249,7 +249,7 @@ checker-health id synchronously before any worker in the process can run.
 
 ### Store compatibility
 
-`applicationId`, the DataStore name (`pulse_store`), the key (`snapshot_v1`) and
+`applicationId`, the DataStore name (`nightbell_store`), the key (`snapshot_v1`) and
 `SCHEMA_VERSION` are all unchanged. No field was removed or renamed; nothing new
 is persisted. 1.5.0 installs update in place and keep their monitors, settings,
 notification preferences and widget configuration.
@@ -287,9 +287,9 @@ notification preferences and widget configuration.
     genuinely untouched.
 - **`UPDATE` throws `UnsupportedOperationException` if the existing spec under that
   unique name is one-time work.** This is why the periodic name is
-  `pulse.monitor.periodic.<id>` and *not* the 1.5.0 name `pulse.monitor.<id>`,
+  `nightbell.monitor.periodic.<id>` and *not* the 1.5.0 name `nightbell.monitor.<id>`,
   which held one-shots. Do not "tidy" the names back together — upgrading installs
-  would throw on first sync. `pulse.sweep` was already periodic, so it is safe.
+  would throw on first sync. `nightbell.sweep` was already periodic, so it is safe.
 - **`UPDATE` preserves `lastEnqueueTime`, so a *shortened* interval only takes
   effect at the next period boundary.** Changing a monitor from 4 h to 15 min can
   leave up to 4 h before the new cadence engages. Covered rather than ignored:
@@ -816,7 +816,7 @@ emulator; 175 automated tests pass (118 JVM + 57 on-device).
 | Gradle output (release) | `app/build/outputs/apk/release/app-release.apk` |
 | Screenshots (27) | `artifacts/screenshots/` |
 
-APK facts: `me.river.pulse` · versionName `1.1.0` · versionCode `2` ·
+APK facts: `me.river.nightbell` · versionName `1.1.0` · versionCode `2` ·
 minSdk 26 · targetSdk 36 · signed `CN=Pulse Monitor, O=Bohemian Karst, C=CZ`.
 
 **Keep the mapping file.** Release is obfuscated now, so a stack trace is
@@ -904,12 +904,12 @@ installed release. Every reflective path was driven through the UI:
 - **WorkManager** — jobs present in `dumpsys jobscheduler` after the update.
 - **Notification action receivers** — `RECHECK` and `ACK_URGENT` resolve by name.
 - **Foreground service** — enters the foreground with
-  `types=40000000` (`SPECIAL_USE`) and posts on `pulse.service.strict`.
+  `types=40000000` (`SPECIAL_USE`) and posts on `nightbell.service.strict`.
 - **Widget provider** — registered in `dumpsys appwidget`.
 - **Multi-element** — captured two nodes on one page, test reported
   *"All 2 elements matched in 843ms"*.
 - **URGENT** — killed the fixture server, both monitors went down, an urgent
-  notification appeared on `pulse.urgent.double_pulse`
+  notification appeared on `nightbell.urgent.double_pulse`
   (`importance=4 category=alarm flags=0x2 actions=2`, separate id from the down
   notification), the dashboard read *"urgent, not acknowledged"*, and tapping
   Acknowledge cancelled **only** the urgent notification while the monitor
@@ -936,16 +936,16 @@ cd "/home/river/Projects/monitoring app"
 
 adb install -r -t app/build/outputs/apk/debug/app-debug.apk
 adb install -r -t app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-adb shell pm grant me.river.pulse.debug android.permission.POST_NOTIFICATIONS
+adb shell pm grant me.river.nightbell.debug android.permission.POST_NOTIFICATIONS
 for C in AlertsInstrumentedTest ElementMonitorTest UrgentModeInstrumentedTest \
          WidgetInstrumentedTest NightbellE2ETest ScreenshotTest; do
-  adb shell am instrument -w -e class me.river.pulse.$C \
-    me.river.pulse.debug.test/androidx.test.runner.AndroidJUnitRunner
+  adb shell am instrument -w -e class me.river.nightbell.$C \
+    me.river.nightbell.debug.test/androidx.test.runner.AndroidJUnitRunner
 done
 
 # Screenshots (internal storage; adb shell cannot read Android/data on API 30+)
-for f in $(adb exec-out run-as me.river.pulse.debug ls files/screenshots/ | tr -d '\r'); do
-  adb exec-out run-as me.river.pulse.debug cat "files/screenshots/$f" > "artifacts/screenshots/$f"
+for f in $(adb exec-out run-as me.river.nightbell.debug ls files/screenshots/ | tr -d '\r'); do
+  adb exec-out run-as me.river.nightbell.debug cat "files/screenshots/$f" > "artifacts/screenshots/$f"
 done
 ```
 
@@ -983,7 +983,7 @@ code waiting for a consumer.
 3. Phone side: `implementation("com.google.android.gms:play-services-wearable")`,
    and in `Nightbell.Graph.notifyStateChanged()` also push a compact payload —
    `Summary.Fleet.worst` plus the counts — via
-   `DataClient.putDataItem("/pulse/summary")`. That hook already exists and is
+   `DataClient.putDataItem("/nightbell/summary")`. That hook already exists and is
    already called from every place state changes.
 4. Wear side: `WearableListenerService` caches the payload to its own DataStore;
    `TileService` renders it with `androidx.wear.protolayout`
@@ -1010,7 +1010,7 @@ service locator and store decode, every `@Serializable` model, the theme, the
 dashboard, and (as post-startup) detail, setup and the check pipeline. AGP
 merges it into `assets/dexopt/baseline.prof` (4,855 B + 612 B `.profm`) and
 rewrites it through the R8 mapping — verified by finding renamed entries like
-`HSPLw5/m;->c(Lme/river/pulse/domain/Health;)J` (that is
+`HSPLw5/m;->c(Lme/river/nightbell/domain/Health;)J` (that is
 `ThemeKt.healthColor`) in the final merged profile.
 
 **Honest caveat:** class-level rules (`Lcom/…;`) land reliably; some of the

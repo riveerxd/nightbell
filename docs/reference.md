@@ -336,7 +336,7 @@ Three things about that slot were learned the hard way, on a device:
 
 There is no container behind the label now, so the ink follows `uiMode` exactly as the
 tones do: dark slate on the light shade, light grey on the dark one. One limit worth
-knowing: a *colourised* card is pinned to `pulse_ink` whatever the system theme is, so on
+knowing: a *colourised* card is pinned to `nightbell_ink` whatever the system theme is, so on
 a light-themed phone whose card wins promotion the ink resolves the wrong way. The same
 inversion already affects the segment colours, and fixing it means deciding colourisation
 before the style is built rather than after.
@@ -358,13 +358,25 @@ sawtooth indistinguishable from stuck.
 
 ## The launcher icon
 
-The mark is direction 30 from `docs/brand` — a heartbeat trace. Direction 30 ringed
-it; 2.4.3 dropped the ring, so the trace is the whole mark. It is the brand blue: the
-trace was red — the one element that meant failure — but with the ring gone the trace
-*is* the identity, and a logo drawn as one red line reads as permanently broken. Red
-still means failure everywhere the *data* lives (charts, history strip, status orbs),
-and green still means working there; the mark just stays out of that vocabulary now,
-the same reason it was never drawn green.
+The mark is a bell with a heartbeat trace knocked out of it, and it is the brand
+blue. The trace is the same six points that *were* the whole mark from 2.4.3 to
+2.5.0, scaled to 0.42 and centred inside the bell rather than redrawn, so 3.0.0's
+rename kept the old drawing instead of discarding it. A bell says the name; the
+trace says what the app does.
+
+Blue and not red or green, for a reason the palette cares about. The trace used to
+be red, the one element that meant failure, and a logo drawn as one red line reads
+as permanently broken. Red still means failure everywhere the *data* lives (charts,
+history strip, status orbs), and green still means working there. The mark stays out
+of that vocabulary entirely.
+
+The cutout is a real hole rather than a dark line painted over the bell, which
+matters in the two places the system tints the icon flat from its alpha channel: the
+themed launcher icon and the status-bar glyph. A painted-on hole would vanish there
+and leave a solid bell. `docs/brand/android_assets.py` computes the hole as a
+subpath and fills with `evenOdd`, because a vector drawable has no `<mask>`. At 18dp
+the slot is under two pixels, so the widget header and the notification icon use the
+solid bell on purpose.
 
 It ships as a **legacy** icon rather than an adaptive one. That is deliberate, and the reason is worth writing down because it cost two
 rounds of chasing the wrong thing.
@@ -425,7 +437,7 @@ needs no storage permission, the destination is yours to pick, and nothing is
 uploaded anywhere.
 
 It also exists because **2.0.0 changed the app's `applicationId` to
-`me.river.pulse`, and that is not a rename.** Android identifies an app by that
+`me.river.nightbell`, and that is not a rename.** Android identifies an app by that
 id, so 2.0.0 installs *beside* an earlier version rather than updating it: new
 data directory, no monitors, and no way for it to read the older install's files.
 No signing key or manifest setting changes that. Export from the old install,
@@ -556,7 +568,7 @@ Release signing reads `keystore/keystore.properties`; when it is absent the
 release build is simply unsigned. Regenerate with:
 
 ```bash
-keytool -genkeypair -v -keystore keystore/pulse-release.jks -alias pulse \
+keytool -genkeypair -v -keystore keystore/nightbell-release.jks -alias pulse \
   -keyalg RSA -keysize 4096 -validity 10000 \
   -storepass <pw> -keypass <pw> -dname "CN=Pulse Monitor, O=Bohemian Karst, C=CZ"
 ```

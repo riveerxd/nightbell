@@ -61,7 +61,7 @@
         Auto Backup is off, deliberately.
 
         `allowBackup="true"` with `fullBackupContent="true"` and no exclusion rules
-        was uploading `datastore/pulse_store.preferences_pb` to the user's Google
+        was uploading `datastore/nightbell_store.preferences_pb` to the user's Google
         Drive — and that document holds every monitor's request headers, which is
         exactly where an `Authorization: Bearer …` lives. An app whose pitch is
         "no server, no account, no third party" cannot ship its users' API tokens
@@ -119,7 +119,7 @@
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <data android:scheme="pulse" android:host="monitor" />
+                <data android:scheme="nightbell" android:host="monitor" />
             </intent-filter>
         </activity>
 
@@ -176,9 +176,9 @@
             android:name=".data.alerts.AlertActionReceiver"
             android:exported="false">
             <intent-filter>
-                <action android:name="me.river.pulse.action.RECHECK" />
-                <action android:name="me.river.pulse.action.MUTE_1H" />
-                <action android:name="me.river.pulse.action.ACK_URGENT" />
+                <action android:name="me.river.nightbell.action.RECHECK" />
+                <action android:name="me.river.nightbell.action.MUTE_1H" />
+                <action android:name="me.river.nightbell.action.ACK_URGENT" />
             </intent-filter>
         </receiver>
 
@@ -198,11 +198,11 @@
             android:label="@string/widget_name">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="me.river.pulse.action.WIDGET_REFRESH" />
+                <action android:name="me.river.nightbell.action.WIDGET_REFRESH" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
-                android:resource="@xml/widget_pulse_info" />
+                android:resource="@xml/widget_nightbell_info" />
         </receiver>
     </application>
 </manifest>
