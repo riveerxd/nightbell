@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the app's Android vector drawables from the Pulse mark geometry.
+"""Generate the app's Android vector drawables from the Nightbell mark geometry.
 
     python3 docs/brand/android_assets.py
 
@@ -7,7 +7,7 @@ The mark is the heartbeat trace on its own. The ring that direction 30 drew arou
 dropped in 2.4.3, so every copy is now the one path. It still exists in five places — the
 launcher icon, an adaptive foreground, a themed silhouette, the widget header and the
 notification small icon — and each needs a different stroke weight on a different canvas
-in a different colour. They are derived from the numbers in `pulse-30-ringpulse-icon.svg`
+in a different colour. They are derived from the numbers in `nightbell-30-ringpulse-icon.svg`
 rather than scaled by hand: the first hand-scaled set shipped a Compose mark and a legacy
 icon whose trace vertices were plain wrong, and anything with this much repeated arithmetic
 should be computed.
@@ -111,7 +111,7 @@ ASSETS = {
     ),
     "drawable/ic_stat_brand.xml": dict(
         canvas=24, fill=0.86, colour=WHITE, tint=True, trace_scale=1.1,
-        note="Notification small icon, for the one notification about Pulse itself\n"
+        note="Notification small icon, for the one notification about Nightbell itself\n"
              "    rather than about a monitor. The heartbeat alone, and white because the\n"
              "    status-bar mask tints it flat — colour is the system's to choose, not ours.",
     ),

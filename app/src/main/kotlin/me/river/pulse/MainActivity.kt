@@ -13,8 +13,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
-import me.river.pulse.data.Pulse
-import me.river.pulse.ui.PulseApp
+import me.river.pulse.data.Nightbell
+import me.river.pulse.ui.NightbellApp
 
 class MainActivity : ComponentActivity() {
 
@@ -29,13 +29,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
-        Pulse.install(applicationContext)
+        Nightbell.install(applicationContext)
         pendingMonitorId = monitorIdFrom(intent)
         requestNotificationPermissionIfNeeded()
 
         setContent {
             val monitorId = pendingMonitorId
-            PulseApp(initialMonitorId = monitorId)
+            NightbellApp(initialMonitorId = monitorId)
         }
     }
 
@@ -70,7 +70,7 @@ class MainActivity : ComponentActivity() {
             Manifest.permission.POST_NOTIFICATIONS,
         ) == android.content.pm.PackageManager.PERMISSION_GRANTED
         if (granted) return
-        val setupWillAsk = !Pulse.install(this).store.snapshot.value.settings.hasSeenPagerSetup
+        val setupWillAsk = !Nightbell.install(this).store.snapshot.value.settings.hasSeenPagerSetup
         if (setupWillAsk) return
         notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
     }

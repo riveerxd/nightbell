@@ -1,4 +1,4 @@
-# Pulse brand assets
+# Nightbell brand assets
 
 Thirty logo directions, each as a square icon plate and a landscape wordmark lockup.
 Open `logos.html` in a browser for the presentation sheet with rationale, size
@@ -8,8 +8,8 @@ tests and notes.
 
 | File | Canvas | Use |
 | --- | --- | --- |
-| `pulse-NN-slug-icon.svg` (01–30) | 512 × 512, `rx=112` | Launcher icon, favicon, avatar |
-| `pulse-NN-slug-lockup.svg` | 880 × 320 | README header, in-app title, docs |
+| `nightbell-NN-slug-icon.svg` (01–30) | 512 × 512, `rx=112` | Launcher icon, favicon, avatar |
+| `nightbell-NN-slug-lockup.svg` | 1130 × 320 | README header, in-app title, docs |
 | `png/*-512.png`, `png/*-192.png` | — | Raster icon exports |
 | `png/*-lockup.png` | 1760 × 640 | Raster lockup exports |
 
@@ -54,7 +54,7 @@ python3 docs/brand/build.py --png    # also re-export png/ (needs rsvg-convert)
 | 27 | Rows | The list, with one row down. Obviously the product; least logo-like. |
 | 28 | Crosshair | What it is pointed at. Very strong silhouette; targeting overtones. |
 | 29 | Halftone | The trace, in beads. Most crafted; beads merge below 48px. |
-| 30 | Ring Pulse | The trace cutting through the ring. Best badge form; busiest centre. |
+| 30 | Ring Nightbell | The trace cutting through the ring. Best badge form; busiest centre. |
 
 ## Colour
 
@@ -71,8 +71,8 @@ A light-ground variant is a two-value swap: plate `#0B0E13` → `#F2F5F8`, glyph
 
 ## What the app actually ships
 
-Direction **30 (Ring Pulse)** is the chosen mark. In the app it lives in five
-places, all generated from `pulse-30-ringpulse-icon.svg` by
+Direction **30 (Ring Nightbell)** is the chosen mark. In the app it lives in five
+places, all generated from `nightbell-30-ringpulse-icon.svg` by
 `android_assets.py` — run that, not a text editor, when the geometry changes:
 
 | Where | File |

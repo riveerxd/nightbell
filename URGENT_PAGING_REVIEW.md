@@ -8,8 +8,8 @@
 Reviewed at 2.0.0 (versionCode 11), targetSdk 36, minSdk 26. Read paths:
 `domain/UrgentAlerts.kt`, `data/alerts/AlertCenter.kt`,
 `data/alerts/AlertActionReceiver.kt`, `data/check/CheckEngine.kt`,
-`data/work/PulseMonitorService.kt`, `data/work/MonitorWorkers.kt`,
-`data/PulseStore.kt`, `AndroidManifest.xml`.
+`data/work/NightbellMonitorService.kt`, `data/work/MonitorWorkers.kt`,
+`data/NightbellStore.kt`, `AndroidManifest.xml`.
 
 ## Why it does not page today
 
@@ -33,7 +33,7 @@ completely.** That setter requires Notification Policy Access.
 `android.permission.ACCESS_NOTIFICATION_POLICY` is not declared and the user has
 never been sent to `ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS`, so the flag is
 discarded at channel creation. The KDoc on `urgentChannel` claims DND "can be
-configured to let it through" — only true if the user hand-adds Pulse to their
+configured to let it through" — only true if the user hand-adds Nightbell to their
 DND exceptions. Bedtime mode is exactly when a page matters most.
 
 **P4 — The channel on your device is frozen and cannot be fixed in place.**
@@ -52,9 +52,9 @@ full-screen activity, stopped on acknowledge/recover.
 **P6 — The repeat loop only exists inside the foreground service, and that
 service often cannot start.** `tickUrgent()` — the repeat *and* the
 reconciliation sweep — is called from exactly one place:
-`PulseMonitorService.runLoop`. Neither `MonitorWorker` nor `SweepWorker` calls
-it. The service is started from `Pulse.notifyStateChanged() →
-PulseMonitorService.sync()`; on Android 12+ a background
+`NightbellMonitorService.runLoop`. Neither `MonitorWorker` nor `SweepWorker` calls
+it. The service is started from `Nightbell.notifyStateChanged() →
+NightbellMonitorService.sync()`; on Android 12+ a background
 `startForegroundService` throws `ForegroundServiceStartNotAllowedException`,
 which `sync()` catches and logs as "Foreground start refused". So with strict
 mode off and the phone in your pocket: the first page posts (from the
@@ -96,7 +96,7 @@ Correct today, and worth not regressing:
   way to see an orphaned `ongoing` alert
 - per-monitor `Mutex` around `run`/`acknowledgeUrgent`, and every state commit
   wrapped in `NonCancellable`
-- checker faults have their own track and channel, so a Pulse bug is never
+- checker faults have their own track and channel, so a Nightbell bug is never
   reported as someone's site being down
 
 Remaining risks:
@@ -109,7 +109,7 @@ notification row; it should re-check first, or refuse to escalate to full-screen
 when the last verdict is older than the repeat gap.
 
 **F2 — Pausing a monitor does not tear its page down.**
-`PulseStore.setEnabled(false)` sets `health = PAUSED, alerting = false` but
+`NightbellStore.setEnabled(false)` sets `health = PAUSED, alerting = false` but
 leaves `urgentActive = true` and never calls `alerts.cancelAll`. The ongoing,
 un-swipeable urgent notification survives until `tickUrgent` next runs — which
 needs the service (see P6). `sync()`'s `nagging` check also ignores `enabled`,
@@ -143,7 +143,7 @@ the docs does not settle:
    icon was red. Confirms P2 empirically.
 2. **The same builder posted as a foreground-service notification renders the
    whole card in the down colour.** This is the only route to a system-drawn red
-   container, and Pulse already runs a foreground service for exactly the period
+   container, and Nightbell already runs a foreground service for exactly the period
    an urgent page is unacknowledged.
 3. **`CallStyle` is not demoted** once a full-screen intent is attached, and
    produces the real call container with round Decline/Answer buttons. The button

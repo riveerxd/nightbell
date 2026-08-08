@@ -10,12 +10,12 @@ import android.view.ViewGroup
 import android.widget.TextView
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import me.river.pulse.PulseTestSupport.appContext
-import me.river.pulse.PulseTestSupport.resetApp
-import me.river.pulse.data.Pulse
+import me.river.pulse.NightbellTestSupport.appContext
+import me.river.pulse.NightbellTestSupport.resetApp
+import me.river.pulse.data.Nightbell
 import me.river.pulse.domain.Health
 import me.river.pulse.domain.Monitor
-import me.river.pulse.widget.PulseWidgetProvider
+import me.river.pulse.widget.NightbellWidgetProvider
 import me.river.pulse.widget.WidgetConfig
 import me.river.pulse.widget.WidgetConfigStore
 import kotlinx.coroutines.runBlocking
@@ -41,7 +41,7 @@ import org.junit.runner.RunWith
 class WidgetHostInstrumentedTest {
 
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
-    private val store get() = Pulse.install(appContext).store
+    private val store get() = Nightbell.install(appContext).store
 
     private lateinit var host: RecordingHost
     private var widgetId = AppWidgetManager.INVALID_APPWIDGET_ID
@@ -82,7 +82,7 @@ class WidgetHostInstrumentedTest {
         resetApp()
 
         val manager = AppWidgetManager.getInstance(appContext)
-        val provider = ComponentName(appContext, PulseWidgetProvider::class.java)
+        val provider = ComponentName(appContext, NightbellWidgetProvider::class.java)
         onMain {
             // A previous run's host may still own ids for this host id.
             RecordingHost(appContext, HOST_ID).deleteHost()

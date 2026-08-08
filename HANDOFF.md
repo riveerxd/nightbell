@@ -1,4 +1,4 @@
-# Pulse — handoff
+# Nightbell — handoff
 
 ## 2.0.0 — the app id is `me.river.pulse`
 
@@ -49,8 +49,8 @@ went out when it did.
 
 ### The format
 
-`data/transfer/PulseBackup.kt`. The envelope is thin on purpose — it is the
-store's own `PulseSnapshot` plus provenance (`app`, `versionName`, `versionCode`,
+`data/transfer/NightbellBackup.kt`. The envelope is thin on purpose — it is the
+store's own `NightbellSnapshot` plus provenance (`app`, `versionName`, `versionCode`,
 `exportedAt`, `monitorCount`) and a `format` integer. Reusing the snapshot rather
 than defining a schema means the export cannot drift away from what the app
 actually stores, and `ignoreUnknownKeys` plus a default on everything added since
@@ -160,7 +160,7 @@ cancels the work it replaces**:
   with `REPLACE`, under **its own unique name**, while still running. Every
   scheduled check cancelled itself on the way out.
 - `MonitorScheduler.syncAll()` did the same `REPLACE` across *every* monitor, and
-  it was called from `PulseApplication.onCreate`, `BootReceiver`, every settings
+  it was called from `NightbellApplication.onCreate`, `BootReceiver`, every settings
   write, and — crucially — from the 15-minute `SweepWorker`, *after* that sweep
   had already run `runAllDue()`.
 
@@ -227,7 +227,7 @@ all six cards red, would let `reconcileNotifications` keep the down notification
 alive (it treats `health == DOWN` as legitimate), and would have `lastResultFor`
 re-hydrate the string verbatim into every urgent re-nag.
 
-`domain/LegacyCrashRepair` scrubs it, and `PulseStore.migrate` applies it **on
+`domain/LegacyCrashRepair` scrubs it, and `NightbellStore.migrate` applies it **on
 read** — in force from the first moment the new build runs, with no write to
 schedule and no race against a worker that starts before a startup repair would
 have finished. Rules:
@@ -244,7 +244,7 @@ have finished. Rules:
   failure *and* carry the exact sentinel note, which no genuine verdict does.
 
 `REPAIR_VERSION` is bumped to 5 so the one-time `cancelEverything()` clears the
-standing notifications, and `PulseApplication.onCreate` additionally cancels the
+standing notifications, and `NightbellApplication.onCreate` additionally cancels the
 checker-health id synchronously before any worker in the process can run.
 
 ### Store compatibility
@@ -311,7 +311,7 @@ The ones worth remembering:
   `NO_TRANSITION` for the whole outage. Wiping the shade without clearing the
   bookkeeping left a live outage with no notification and none coming.
   `repairNotificationsIfNeeded` now resets `alerting`/`lastAlertAt` fleet-wide via
-  `PulseStore.updateAllRuntimes`.
+  `NightbellStore.updateAllRuntimes`.
 - **`urgentAcknowledged` is the field that silences urgent *permanently*.**
   `UrgentAlerts.evaluate` returns `NONE` for an acknowledged monitor and only clears
   the acknowledgement on a **successful** check — which never arrives while a site is
@@ -329,7 +329,7 @@ The ones worth remembering:
   spec FAILED. That monitor would then never be checked again and every later
   `syncAll` would be a silent no-op. `MonitorScheduler.clearIfDead` cancels a spec
   whose every `WorkInfo` is finished before re-enqueueing — and only then, so it can
-  never touch work in flight. `Pulse.install` also moved inside both workers' `try`.
+  never touch work in flight. `Nightbell.install` also moved inside both workers' `try`.
 - **A gate is only as good as where it is evaluated.** `MonitorWorker` checked
   `isDue` and then blocked on the per-monitor mutex behind the sweep's check of the
   same monitor, so it ran anyway. `run()` now re-checks inside the lock, and takes a
@@ -483,7 +483,7 @@ less than a real degradation written off as bad wifi.
 - **One probe per pass, not per check.** It was in `runLocked` first, which meant
   a reference the network blocks added its whole timeout to every check — the
   measurement was unaffected, but the pass got slower for nothing. This showed up
-  as a flaky `PulseE2ETest`, not as an obvious failure. Probes also back off
+  as a flaky `NightbellE2ETest`, not as an obvious failure. Probes also back off
   exponentially while failing, so a network that blocks the endpoint costs one
   wasted request per half hour.
 - **Not ICMP.** Raw sockets need root on Android. This is HTTP round trip to
@@ -612,7 +612,7 @@ because validation only appears after the framework's own probe to a Google
 endpoint succeeds. So `VALIDATED` is absent in three unrelated situations — no
 connectivity, a captive portal, and *a perfectly good network whose probe cannot
 get out*: a firewalled office LAN, DNS filtering, a pi-hole, a sandboxed
-emulator. Requiring it means Pulse silently stops monitoring on networks where it
+emulator. Requiring it means Nightbell silently stops monitoring on networks where it
 works fine.
 
 That failure is strictly worse than the bug being fixed. Spam is visible and
@@ -707,7 +707,7 @@ string, so the banner, the widget and the service notification cannot disagree.
 **Three things this broke, all fixed — none caught by compilation:**
 
 1. **`clearAndSetSemantics` on the headline row wiped its text nodes.** Three
-   `PulseE2ETest` assertions went red because `onNodeWithText("All 1 operational")`
+   `NightbellE2ETest` assertions went red because `onNodeWithText("All 1 operational")`
    could no longer see through the merged node. The fix is the pattern
    `SectionHeader` already used: leave the visible `Text` alone and put the
    human-readable form in `contentDescription`. `Mono` now takes a `spoken`
@@ -727,7 +727,7 @@ string, so the banner, the widget and the service notification cannot disagree.
 > it on decorative rows (the tick strip) and `contentDescription` on the leaf
 > for everything that carries words.
 
-**Verified:** 119 JVM + 62 on-device tests pass (`PulseE2ETest` 8,
+**Verified:** 119 JVM + 62 on-device tests pass (`NightbellE2ETest` 8,
 `AlertsInstrumentedTest` 11, `ElementMonitorTest` 10,
 `UrgentModeInstrumentedTest` 13, `WidgetInstrumentedTest` 17, `ScreenshotTest` 3).
 The signed minified release was installed **over the previous release install**
@@ -783,7 +783,7 @@ swiped away either — the only remaining escape was clearing app data.
 
 Plus a **per-monitor `Mutex`** in `CheckEngine`, so same-monitor checks cannot
 interleave and re-create the race; `mute()` collapsed from two writes to one for
-the same reason; and a **one-time upgrade repair** (`PulseApplication`,
+the same reason; and a **one-time upgrade repair** (`NightbellApplication`,
 `GlobalSettings.notificationsRepairedForVersion`) that clears the slate once
 after updating, because orphans left by 1.1.0/1.1.1 cannot be enumerated from
 state.
@@ -853,7 +853,7 @@ Compose BOM 2025.10.01 (Compose 1.9.4, Material3 1.4.0) · compileSdk 36 ·
 | --- | --- | --- |
 | 1 | Baseline profile + startup pass | `app/src/main/baselineProfiles/baseline-prof.txt` |
 | 2 | R8 + resource shrinking | `app/build.gradle.kts`, `app/proguard-rules.pro` |
-| 3 | Strict foreground monitoring | `data/work/PulseMonitorService.kt` |
+| 3 | Strict foreground monitoring | `data/work/NightbellMonitorService.kt` |
 | 4 | URGENT mode | `domain/UrgentAlerts.kt`, `data/check/CheckEngine.kt`, `data/alerts/AlertCenter.kt` |
 | 5 | Latency SLOs + DEGRADED alerts | `domain/AlertDecider.decideDegraded`, `Monitor.latencySloMs` |
 | 6 | Multi-element page monitors | `Monitor.elements`, `PickerScripts.locateMany`, `ElementChecker.locateAll` |
@@ -885,7 +885,7 @@ Gotchas:
 | `ElementMonitorTest` | OK (10) |
 | `UrgentModeInstrumentedTest` | OK (8) |
 | `WidgetInstrumentedTest` | OK (17) |
-| `PulseE2ETest` | OK (8) |
+| `NightbellE2ETest` | OK (8) |
 | `ScreenshotTest` | OK (3) |
 
 ### The minified build, exercised on a device
@@ -938,7 +938,7 @@ adb install -r -t app/build/outputs/apk/debug/app-debug.apk
 adb install -r -t app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
 adb shell pm grant me.river.pulse.debug android.permission.POST_NOTIFICATIONS
 for C in AlertsInstrumentedTest ElementMonitorTest UrgentModeInstrumentedTest \
-         WidgetInstrumentedTest PulseE2ETest ScreenshotTest; do
+         WidgetInstrumentedTest NightbellE2ETest ScreenshotTest; do
   adb shell am instrument -w -e class me.river.pulse.$C \
     me.river.pulse.debug.test/androidx.test.runner.AndroidJUnitRunner
 done
@@ -981,7 +981,7 @@ code waiting for a consumer.
    `applicationId` **identical** to the phone app (Wear requires this for a
    paired install) but its own `versionCode` line.
 3. Phone side: `implementation("com.google.android.gms:play-services-wearable")`,
-   and in `Pulse.Graph.notifyStateChanged()` also push a compact payload —
+   and in `Nightbell.Graph.notifyStateChanged()` also push a compact payload —
    `Summary.Fleet.worst` plus the counts — via
    `DataClient.putDataItem("/pulse/summary")`. That hook already exists and is
    already called from every place state changes.
@@ -1044,7 +1044,7 @@ highest-value follow-up for startup.
   scroll area's bottom padding.
 - **Infinite animations vs. Compose tests.** Every looping animation goes
   through `rememberLoopingFloat`, which collapses to a constant when
-  `PulseMotion.enabled` is false. Tests set `motionIntensity = 0f` *before*
+  `NightbellMotion.enabled` is false. Tests set `motionIntensity = 0f` *before*
   launching the activity. If you add a new `rememberInfiniteTransition`
   directly, the UI test suite will hang. The new hold-to-confirm timer respects
   this too — at zero motion it commits in 1 ms instead of 2 s.
@@ -1071,7 +1071,7 @@ highest-value follow-up for startup.
   so a visibility assertion has to stop at the hidden container.
 - **Run the on-device suites one class at a time.** Instrumenting everything in a
   single `am instrument` reliably kills this emulator partway through
-  `PulseE2ETest`. Confirmed environmental.
+  `NightbellE2ETest`. Confirmed environmental.
 
 ## Next polish ideas
 

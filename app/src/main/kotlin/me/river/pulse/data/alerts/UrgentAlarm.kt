@@ -35,7 +35,7 @@ import me.river.pulse.domain.VibrationStyle
  * Haptics always use the alarm vibration usage, because vibrating is precisely
  * what a phone set to vibrate is asking for.
  *
- * Single instance, owned by [me.river.pulse.data.work.PulseMonitorService], which
+ * Single instance, owned by [me.river.pulse.data.work.NightbellMonitorService], which
  * is alive for exactly as long as a page is unacknowledged. [stop] is idempotent
  * and safe to call from any of the several paths that end an outage.
  */

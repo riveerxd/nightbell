@@ -16,7 +16,7 @@ import kotlinx.coroutines.flow.asStateFlow
  * Exists because a check run with no connectivity fails for a reason that has
  * nothing to do with the thing being monitored, and every monitor fails at once
  * — which is a burst of "your site is down" notifications that are all wrong.
- * Losing signal is not an outage, so Pulse stops checking instead of reporting
+ * Losing signal is not an outage, so Nightbell stops checking instead of reporting
  * one.
  *
  * [isOnline] is the authority for decisions: it asks the framework at the moment
@@ -49,7 +49,7 @@ class NetworkMonitor(context: Context) {
      * three very different situations: no connectivity, a captive portal, and *a
      * perfectly good network whose probe cannot get out* — a firewalled office
      * LAN, a DNS-filtered network, a pi-hole, or (as caught here) an emulator
-     * whose probes fail. Requiring it means Pulse quietly stops monitoring on
+     * whose probes fail. Requiring it means Nightbell quietly stops monitoring on
      * networks where it works fine, which is a far worse bug than the one this
      * class fixes: spam is visible and annoying, silence is invisible and lets a
      * real outage pass unnoticed. `CAPTIVE_PORTAL` still catches the hotel-wifi
@@ -105,7 +105,7 @@ class NetworkMonitor(context: Context) {
         val now = isOnline()
         val was = _online.value
         _online.value = now
-        // Worth a line in the log: "why did Pulse stop checking" is otherwise
+        // Worth a line in the log: "why did Nightbell stop checking" is otherwise
         // only answerable by guessing, and this is the answer.
         if (now != was) Log.i(TAG, "Connectivity changed: online=$now")
         if (now && !was) onReconnected?.invoke()

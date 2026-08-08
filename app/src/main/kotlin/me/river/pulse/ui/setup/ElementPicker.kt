@@ -64,11 +64,11 @@ import me.river.pulse.data.web.PickerScripts
 import me.river.pulse.ui.components.ButtonTone
 import me.river.pulse.ui.components.GlassIconButton
 import me.river.pulse.ui.components.MicroTag
-import me.river.pulse.ui.components.PulseButton
+import me.river.pulse.ui.components.NightbellButton
 import me.river.pulse.ui.components.SpinnerDot
-import me.river.pulse.ui.icons.PulseIcons
-import me.river.pulse.ui.theme.PulseColors
-import me.river.pulse.ui.theme.PulseRadii
+import me.river.pulse.ui.icons.NightbellIcons
+import me.river.pulse.ui.theme.NightbellColors
+import me.river.pulse.ui.theme.NightbellRadii
 import me.river.pulse.ui.theme.glass
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -201,7 +201,7 @@ private fun PickerContent(
     Box(
         Modifier
             .fillMaxSize()
-            .background(PulseColors.Void),
+            .background(NightbellColors.Void),
     ) {
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.height(WindowInsets.statusBars.asPaddingValues().calculateTopPadding()))
@@ -214,10 +214,10 @@ private fun PickerContent(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 GlassIconButton(
-                    icon = PulseIcons.Close,
+                    icon = NightbellIcons.Close,
                     onClick = onDismiss,
                     contentDescription = "Close preview",
-                    accent = PulseColors.TextSecondary,
+                    accent = NightbellColors.TextSecondary,
                     size = 38.dp,
                 )
                 Spacer(Modifier.width(12.dp))
@@ -225,24 +225,24 @@ private fun PickerContent(
                     Text(
                         text = pageTitle.ifBlank { "Loading page…" },
                         style = MaterialTheme.typography.titleMedium,
-                        color = PulseColors.TextPrimary,
+                        color = NightbellColors.TextPrimary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
                         text = url,
                         style = MaterialTheme.typography.bodySmall,
-                        color = PulseColors.TextTertiary,
+                        color = NightbellColors.TextTertiary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
                 Spacer(Modifier.width(12.dp))
                 GlassIconButton(
-                    icon = PulseIcons.Refresh,
+                    icon = NightbellIcons.Refresh,
                     onClick = { webView?.reload() },
                     contentDescription = "Reload page",
-                    accent = PulseColors.TextSecondary,
+                    accent = NightbellColors.TextSecondary,
                     size = 38.dp,
                 )
             }
@@ -257,13 +257,13 @@ private fun PickerContent(
                 Modifier
                     .fillMaxWidth()
                     .height(2.dp)
-                    .background(PulseColors.sheen(0.05f)),
+                    .background(NightbellColors.sheen(0.05f)),
             ) {
                 Box(
                     Modifier
                         .fillMaxWidth(if (loading) barWidth.coerceIn(0.02f, 1f) else 0f)
                         .height(2.dp)
-                        .background(PulseColors.Aqua),
+                        .background(NightbellColors.Aqua),
                 )
             }
 
@@ -271,7 +271,7 @@ private fun PickerContent(
             // Resolved out here: an AndroidView factory runs outside composition,
             // and a WebView painted the dark scheme's ink on a light page flashes
             // black on every load.
-            val webBackground = PulseColors.Ink.toArgb()
+            val webBackground = NightbellColors.Ink.toArgb()
             Box(Modifier.weight(1f)) {
                 AndroidView(
                     modifier = Modifier.fillMaxSize(),
@@ -338,16 +338,16 @@ private fun PickerContent(
                     Box(
                         Modifier
                             .fillMaxSize()
-                            .background(PulseColors.Void.copy(alpha = 0.86f)),
+                            .background(NightbellColors.Void.copy(alpha = 0.86f)),
                         contentAlignment = Alignment.Center,
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            SpinnerDot(color = PulseColors.Aqua, size = 30.dp)
+                            SpinnerDot(color = NightbellColors.Aqua, size = 30.dp)
                             Spacer(Modifier.height(14.dp))
                             Text(
                                 "Rendering the real page…",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = PulseColors.TextSecondary,
+                                color = NightbellColors.TextSecondary,
                             )
                         }
                     }
@@ -358,21 +358,21 @@ private fun PickerContent(
                         Modifier
                             .align(Alignment.TopCenter)
                             .padding(16.dp)
-                            .glass(RoundedCornerShape(16.dp), corner = 16.dp, accent = PulseColors.Rose)
+                            .glass(RoundedCornerShape(16.dp), corner = 16.dp, accent = NightbellColors.Rose)
                             .padding(14.dp),
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                PulseIcons.Warning,
+                                NightbellIcons.Warning,
                                 contentDescription = null,
-                                tint = PulseColors.Rose,
+                                tint = NightbellColors.Rose,
                                 modifier = Modifier.size(16.dp),
                             )
                             Spacer(Modifier.width(10.dp))
                             Text(
                                 error,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = PulseColors.TextSecondary,
+                                color = NightbellColors.TextSecondary,
                             )
                         }
                     }
@@ -411,8 +411,8 @@ private fun PickerBottomBar(
         Modifier
             .fillMaxWidth()
             .glass(
-                shape = RoundedCornerShape(topStart = PulseRadii.sheet, topEnd = PulseRadii.sheet),
-                corner = PulseRadii.sheet,
+                shape = RoundedCornerShape(topStart = NightbellRadii.sheet, topEnd = NightbellRadii.sheet),
+                corner = NightbellRadii.sheet,
                 elevation = 16.dp,
             )
             .padding(start = 18.dp, end = 18.dp, top = 16.dp)
@@ -425,15 +425,15 @@ private fun PickerBottomBar(
                     .size(36.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(
-                        if (pickMode) PulseColors.Aqua.copy(alpha = 0.22f)
-                        else PulseColors.sheen(0.06f),
+                        if (pickMode) NightbellColors.Aqua.copy(alpha = 0.22f)
+                        else NightbellColors.sheen(0.06f),
                     ),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = PulseIcons.Pointer,
+                    imageVector = NightbellIcons.Pointer,
                     contentDescription = null,
-                    tint = if (pickMode) PulseColors.Aqua else PulseColors.TextTertiary,
+                    tint = if (pickMode) NightbellColors.Aqua else NightbellColors.TextTertiary,
                     modifier = Modifier.size(17.dp),
                 )
             }
@@ -442,7 +442,7 @@ private fun PickerBottomBar(
                 Text(
                     text = if (pickMode) "Tap any element to select it" else "Browsing — links are live",
                     style = MaterialTheme.typography.titleMedium,
-                    color = PulseColors.TextPrimary,
+                    color = NightbellColors.TextPrimary,
                 )
                 Text(
                     text = if (pickMode) {
@@ -451,7 +451,7 @@ private fun PickerBottomBar(
                         "Turn on select mode when you've found the right view."
                     },
                     style = MaterialTheme.typography.bodySmall,
-                    color = PulseColors.TextTertiary,
+                    color = NightbellColors.TextTertiary,
                 )
             }
             Spacer(Modifier.width(10.dp))
@@ -459,12 +459,12 @@ private fun PickerBottomBar(
                 checked = pickMode,
                 onCheckedChange = onPickModeChange,
                 colors = androidx.compose.material3.SwitchDefaults.colors(
-                    checkedThumbColor = PulseColors.Void,
-                    checkedTrackColor = PulseColors.Aqua,
-                    checkedBorderColor = PulseColors.Aqua,
-                    uncheckedThumbColor = PulseColors.TextTertiary,
-                    uncheckedTrackColor = PulseColors.sheen(0.06f),
-                    uncheckedBorderColor = PulseColors.sheen(0.16f),
+                    checkedThumbColor = NightbellColors.Void,
+                    checkedTrackColor = NightbellColors.Aqua,
+                    checkedBorderColor = NightbellColors.Aqua,
+                    uncheckedThumbColor = NightbellColors.TextTertiary,
+                    uncheckedTrackColor = NightbellColors.sheen(0.06f),
+                    uncheckedBorderColor = NightbellColors.sheen(0.16f),
                 ),
             )
         }
@@ -476,27 +476,27 @@ private fun PickerBottomBar(
                     Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
-                        .background(PulseColors.sheen(0.05f))
-                        .border(1.dp, PulseColors.Aqua.copy(alpha = 0.28f), RoundedCornerShape(16.dp))
+                        .background(NightbellColors.sheen(0.05f))
+                        .border(1.dp, NightbellColors.Aqua.copy(alpha = 0.28f), RoundedCornerShape(16.dp))
                         .padding(13.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        MicroTag("<${element.tagName}>", color = PulseColors.Violet)
+                        MicroTag("<${element.tagName}>", color = NightbellColors.Violet)
                         if (element.unique) {
-                            MicroTag("unique", color = PulseColors.Mint, icon = PulseIcons.Check)
+                            MicroTag("unique", color = NightbellColors.Mint, icon = NightbellIcons.Check)
                         } else {
                             MicroTag(
                                 "${element.matchCount} matches",
-                                color = PulseColors.Amber,
-                                icon = PulseIcons.Warning,
+                                color = NightbellColors.Amber,
+                                icon = NightbellIcons.Warning,
                             )
                         }
                     }
                     Text(
                         text = element.cssSelector.ifBlank { element.xpath },
                         style = MaterialTheme.typography.bodySmall,
-                        color = PulseColors.Aqua,
+                        color = NightbellColors.Aqua,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -505,7 +505,7 @@ private fun PickerBottomBar(
                         Text(
                             text = "“${element.text.take(140)}”",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = PulseColors.TextSecondary,
+                            color = NightbellColors.TextSecondary,
                             maxLines = 3,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -518,7 +518,7 @@ private fun PickerBottomBar(
             Text(
                 text = "Replacing: $existingSelector",
                 style = MaterialTheme.typography.bodySmall,
-                color = PulseColors.TextTertiary,
+                color = NightbellColors.TextTertiary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -527,7 +527,7 @@ private fun PickerBottomBar(
                 text = "$alreadyWatching element${if (alreadyWatching == 1) "" else "s"} already " +
                     "watched on this page — all checked in one load.",
                 style = MaterialTheme.typography.bodySmall,
-                color = PulseColors.TextTertiary,
+                color = NightbellColors.TextTertiary,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -535,18 +535,18 @@ private fun PickerBottomBar(
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             if (picked != null) {
-                PulseButton(
+                NightbellButton(
                     text = "Clear",
                     onClick = onClear,
                     tone = ButtonTone.Secondary,
-                    icon = PulseIcons.Close,
+                    icon = NightbellIcons.Close,
                 )
             }
-            PulseButton(
+            NightbellButton(
                 text = if (picked != null) "Use this element" else "Pick an element",
                 onClick = onConfirm,
                 enabled = picked != null,
-                icon = PulseIcons.Check,
+                icon = NightbellIcons.Check,
                 modifier = Modifier.weight(1f),
             )
         }

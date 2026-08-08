@@ -28,7 +28,7 @@ package me.river.pulse.domain
  * dropped when it is *both* a failure *and* carries the sentinel note, which no
  * genuine verdict ever does.
  *
- * Pure and idempotent, so `PulseStore` can apply it on every read — in force from
+ * Pure and idempotent, so `NightbellStore` can apply it on every read — in force from
  * the first moment the new build runs, with no write to schedule and no race
  * against a worker that starts before a startup repair would have finished.
  */

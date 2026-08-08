@@ -79,19 +79,19 @@ import me.river.pulse.ui.components.GlassIconButton
 import me.river.pulse.ui.components.IconBadge
 import me.river.pulse.ui.components.MicroTag
 import me.river.pulse.ui.components.ProgressPips
-import me.river.pulse.ui.components.PulseButton
+import me.river.pulse.ui.components.NightbellButton
 import me.river.pulse.ui.components.SectionHeader
 import me.river.pulse.ui.components.SegmentedSelector
 import me.river.pulse.ui.components.StepperRow
 import me.river.pulse.ui.components.ToggleRow
 import me.river.pulse.ui.components.formatLatency
 import me.river.pulse.ui.dashboard.kindIcon
-import me.river.pulse.ui.icons.PulseIcons
+import me.river.pulse.ui.icons.NightbellIcons
 import me.river.pulse.ui.rememberSetupViewModel
 import me.river.pulse.ui.theme.BackdropHost
 import me.river.pulse.ui.theme.BackdropScope
-import me.river.pulse.ui.theme.PulseColors
-import me.river.pulse.ui.theme.PulseRadii
+import me.river.pulse.ui.theme.NightbellColors
+import me.river.pulse.ui.theme.NightbellRadii
 import me.river.pulse.ui.theme.accentFor
 import me.river.pulse.ui.theme.readableContentPadding
 import me.river.pulse.ui.theme.sheetSurface
@@ -259,7 +259,7 @@ fun SetupScreen(
             Box(
                 Modifier
                     .fillMaxSize()
-                    .background(PulseColors.Void.copy(alpha = 0.7f)),
+                    .background(NightbellColors.Void.copy(alpha = 0.7f)),
             )
         }
         Spacer(Modifier.height(topInset))
@@ -284,7 +284,7 @@ private fun DiscardDraftPrompt(
         Box(
             Modifier
                 .fillMaxSize()
-                .background(PulseColors.Void.copy(alpha = 0.72f))
+                .background(NightbellColors.Void.copy(alpha = 0.72f))
                 // Swallows taps so the form underneath cannot be edited while the
                 // prompt is up, and doubles as tap-outside-to-cancel.
                 .clickable(
@@ -295,11 +295,11 @@ private fun DiscardDraftPrompt(
                 .padding(horizontal = 26.dp),
             contentAlignment = Alignment.Center,
         ) {
-            GlassCard(accent = PulseColors.Amber, contentPadding = 20.dp) {
+            GlassCard(accent = NightbellColors.Amber, contentPadding = 20.dp) {
                 Text(
                     text = if (editing) "Discard your changes?" else "Discard this monitor?",
                     style = MaterialTheme.typography.titleLarge,
-                    color = PulseColors.TextPrimary,
+                    color = NightbellColors.TextPrimary,
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
@@ -310,21 +310,21 @@ private fun DiscardDraftPrompt(
                             "any elements you captured — goes with it."
                     },
                     style = MaterialTheme.typography.bodySmall,
-                    color = PulseColors.TextTertiary,
+                    color = NightbellColors.TextTertiary,
                 )
                 Spacer(Modifier.height(16.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    PulseButton(
+                    NightbellButton(
                         text = "Keep editing",
                         onClick = onKeepEditing,
                         tone = ButtonTone.Secondary,
                         modifier = Modifier.weight(1f),
                     )
-                    PulseButton(
+                    NightbellButton(
                         text = "Discard",
                         onClick = onDiscard,
                         tone = ButtonTone.Danger,
-                        icon = PulseIcons.Trash,
+                        icon = NightbellIcons.Trash,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -357,10 +357,10 @@ private fun SetupHeader(step: Int, editing: Boolean, accent: Color, onClose: () 
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             GlassIconButton(
-                icon = PulseIcons.Close,
+                icon = NightbellIcons.Close,
                 onClick = onClose,
                 contentDescription = "Cancel setup",
-                accent = PulseColors.TextSecondary,
+                accent = NightbellColors.TextSecondary,
                 size = 38.dp,
             )
             Spacer(Modifier.width(14.dp))
@@ -373,13 +373,13 @@ private fun SetupHeader(step: Int, editing: Boolean, accent: Color, onClose: () 
                 Text(
                     text = stepTitles.getOrElse(step) { "" },
                     style = MaterialTheme.typography.headlineMedium,
-                    color = PulseColors.TextPrimary,
+                    color = NightbellColors.TextPrimary,
                 )
             }
             Text(
                 text = "${step + 1}/${stepTitles.size}",
                 style = MaterialTheme.typography.labelMedium,
-                color = PulseColors.TextTertiary,
+                color = NightbellColors.TextTertiary,
             )
         }
         Spacer(Modifier.height(14.dp))
@@ -407,35 +407,35 @@ private fun SetupFooter(
             .fillMaxWidth()
             // Real frosted glass on API 31+: the form scrolls visibly out of
             // focus underneath. Falls back to the opaque pane below that.
-            .softShadow(corner = PulseRadii.sheet, radius = 20.dp, strength = 1.6f)
+            .softShadow(corner = NightbellRadii.sheet, radius = 20.dp, strength = 1.6f)
             .sheetSurface(backdrop)
             .padding(horizontal = 18.dp, vertical = 16.dp)
             .padding(bottom = bottomInset),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        PulseButton(
+        NightbellButton(
             text = if (step == 0) "Cancel" else "Back",
             onClick = onBack,
             tone = ButtonTone.Secondary,
-            icon = if (step == 0) PulseIcons.Close else PulseIcons.ArrowLeft,
+            icon = if (step == 0) NightbellIcons.Close else NightbellIcons.ArrowLeft,
         )
         if (step < SetupViewModel.LAST_STEP) {
-            PulseButton(
+            NightbellButton(
                 text = "Continue",
                 onClick = onNext,
                 enabled = canContinue,
-                icon = PulseIcons.ArrowRight,
+                icon = NightbellIcons.ArrowRight,
                 accent = accent,
                 accentEnd = accentEnd,
                 modifier = Modifier.weight(1f),
             )
         } else {
-            PulseButton(
+            NightbellButton(
                 text = if (editing) "Save changes" else "Create monitor",
                 onClick = onSave,
                 enabled = canSave,
-                icon = PulseIcons.Check,
+                icon = NightbellIcons.Check,
                 accent = accent,
                 accentEnd = accentEnd,
                 modifier = Modifier.weight(1f),
@@ -451,7 +451,7 @@ private fun StepKind(draft: Monitor, onSelect: (MonitorKind) -> Unit) {
     Text(
         text = "Pick the kind of check. You can change everything later.",
         style = MaterialTheme.typography.bodyMedium,
-        color = PulseColors.TextSecondary,
+        color = NightbellColors.TextSecondary,
     )
     MonitorKind.entries.forEachIndexed { index, kind ->
         val selected = draft.kind == kind
@@ -465,7 +465,7 @@ private fun StepKind(draft: Monitor, onSelect: (MonitorKind) -> Unit) {
             Modifier
                 .fillMaxWidth()
                 .graphicsLayer { scaleX = scale; scaleY = scale }
-                .clip(RoundedCornerShape(PulseRadii.card))
+                .clip(RoundedCornerShape(NightbellRadii.card))
                 .background(
                     if (selected) {
                         Brush.linearGradient(
@@ -473,14 +473,14 @@ private fun StepKind(draft: Monitor, onSelect: (MonitorKind) -> Unit) {
                         )
                     } else {
                         Brush.linearGradient(
-                            listOf(PulseColors.sheen(0.06f), PulseColors.sheen(0.03f)),
+                            listOf(NightbellColors.sheen(0.06f), NightbellColors.sheen(0.03f)),
                         )
                     },
                 )
                 .border(
                     1.dp,
-                    if (selected) accent.copy(alpha = 0.6f) else PulseColors.sheen(0.09f),
-                    RoundedCornerShape(PulseRadii.card),
+                    if (selected) accent.copy(alpha = 0.6f) else NightbellColors.sheen(0.09f),
+                    RoundedCornerShape(NightbellRadii.card),
                 )
                 .clickable { onSelect(kind) }
                 .padding(16.dp)
@@ -493,18 +493,18 @@ private fun StepKind(draft: Monitor, onSelect: (MonitorKind) -> Unit) {
                 Text(
                     text = kind.label,
                     style = MaterialTheme.typography.titleLarge,
-                    color = PulseColors.TextPrimary,
+                    color = NightbellColors.TextPrimary,
                 )
                 Spacer(Modifier.height(3.dp))
                 Text(
                     text = kind.blurb,
                     style = MaterialTheme.typography.bodySmall,
-                    color = PulseColors.TextTertiary,
+                    color = NightbellColors.TextTertiary,
                 )
             }
             AnimatedVisibility(visible = selected, enter = fadeIn(), exit = fadeOut()) {
                 Icon(
-                    PulseIcons.Check,
+                    NightbellIcons.Check,
                     contentDescription = null,
                     tint = accent,
                     modifier = Modifier.size(20.dp),
@@ -529,7 +529,7 @@ private fun StepTarget(
         label = "Name",
         placeholder = "My API, marketing site, …",
         note = report.of(Validation.Field.NAME),
-        leadingIcon = PulseIcons.Sparkle,
+        leadingIcon = NightbellIcons.Sparkle,
         accent = accent,
     )
     GlassField(
@@ -538,7 +538,7 @@ private fun StepTarget(
         label = "URL",
         placeholder = "https://example.com/health",
         note = report.of(Validation.Field.URL),
-        leadingIcon = PulseIcons.Link,
+        leadingIcon = NightbellIcons.Link,
         accent = accent,
         keyboardType = KeyboardType.Uri,
     )
@@ -548,7 +548,7 @@ private fun StepTarget(
     }
 
     if (draft.kind == MonitorKind.ADVANCED_REQUEST) {
-        SectionHeader("Request", icon = PulseIcons.Braces, accent = accent)
+        SectionHeader("Request", icon = NightbellIcons.Braces, accent = accent)
         SegmentedSelector(
             options = HttpMethod.entries.toList(),
             selected = draft.method,
@@ -573,7 +573,7 @@ private fun StepTarget(
                     onValueChange = { value -> viewModel.update { it.copy(contentType = value) } },
                     label = "Content type",
                     placeholder = "application/json",
-                    leadingIcon = PulseIcons.Layers,
+                    leadingIcon = NightbellIcons.Layers,
                     accent = accent,
                 )
                 GlassField(
@@ -609,11 +609,11 @@ private fun ElementCaptureCard(
     val elements = draft.targets
     val urlUsable = Validation.urlNote(draft.url)?.severity != Validation.Severity.ERROR
 
-    GlassCard(accent = if (elements.isNotEmpty()) PulseColors.Mint else Color.Transparent) {
+    GlassCard(accent = if (elements.isNotEmpty()) NightbellColors.Mint else Color.Transparent) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconBadge(
-                icon = if (elements.isNotEmpty()) PulseIcons.Target else PulseIcons.Pointer,
-                accent = if (elements.isNotEmpty()) PulseColors.Mint else accent,
+                icon = if (elements.isNotEmpty()) NightbellIcons.Target else NightbellIcons.Pointer,
+                accent = if (elements.isNotEmpty()) NightbellColors.Mint else accent,
                 size = 40.dp,
             )
             Spacer(Modifier.width(13.dp))
@@ -625,7 +625,7 @@ private fun ElementCaptureCard(
                         else -> "${elements.size} elements captured"
                     },
                     style = MaterialTheme.typography.titleMedium,
-                    color = PulseColors.TextPrimary,
+                    color = NightbellColors.TextPrimary,
                 )
                 Text(
                     text = if (elements.isEmpty()) {
@@ -634,7 +634,7 @@ private fun ElementCaptureCard(
                         "All checked on one page load. Any mismatch fails the check."
                     },
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (elements.isEmpty()) PulseColors.TextTertiary else PulseColors.Mint,
+                    color = if (elements.isEmpty()) NightbellColors.TextTertiary else NightbellColors.Mint,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -656,11 +656,11 @@ private fun ElementCaptureCard(
         }
 
         Spacer(Modifier.height(13.dp))
-        PulseButton(
+        NightbellButton(
             text = if (elements.isEmpty()) "Open live preview" else "Add another element",
             onClick = { viewModel.openPicker(-1) },
             enabled = urlUsable,
-            icon = if (elements.isEmpty()) PulseIcons.Eye else PulseIcons.Plus,
+            icon = if (elements.isEmpty()) NightbellIcons.Eye else NightbellIcons.Plus,
             tone = if (elements.isEmpty()) ButtonTone.Primary else ButtonTone.Secondary,
             accent = accent,
             modifier = Modifier.fillMaxWidth(),
@@ -670,7 +670,7 @@ private fun ElementCaptureCard(
             Text(
                 text = "Enter a valid URL first.",
                 style = MaterialTheme.typography.bodySmall,
-                color = PulseColors.Amber,
+                color = NightbellColors.Amber,
             )
         }
         report.of(Validation.Field.ELEMENT)?.let {
@@ -678,7 +678,7 @@ private fun ElementCaptureCard(
             Text(
                 text = it.message,
                 style = MaterialTheme.typography.bodySmall,
-                color = PulseColors.Rose,
+                color = NightbellColors.Rose,
             )
         }
     }
@@ -699,8 +699,8 @@ private fun CapturedElementRow(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(15.dp))
-            .background(PulseColors.sheen(0.05f))
-            .border(1.dp, PulseColors.sheen(0.08f), RoundedCornerShape(15.dp))
+            .background(NightbellColors.sheen(0.05f))
+            .border(1.dp, NightbellColors.sheen(0.08f), RoundedCornerShape(15.dp))
             .padding(12.dp)
             .semantics { contentDescription = "Element ${index + 1}: ${element.displayLabel}" },
     ) {
@@ -711,41 +711,41 @@ private fun CapturedElementRow(
                 Text(
                     text = element.displayLabel,
                     style = MaterialTheme.typography.titleMedium,
-                    color = PulseColors.TextPrimary,
+                    color = NightbellColors.TextPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = element.displaySelector,
                     style = MaterialTheme.typography.bodySmall,
-                    color = PulseColors.TextTertiary,
+                    color = NightbellColors.TextTertiary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
             if (total > 1) {
                 GlassIconButton(
-                    icon = PulseIcons.ChevronDown,
+                    icon = NightbellIcons.ChevronDown,
                     onClick = onMoveUp,
                     contentDescription = "Move element ${index + 1} up",
                     size = 30.dp,
-                    accent = PulseColors.TextTertiary,
+                    accent = NightbellColors.TextTertiary,
                     enabled = index > 0,
                     modifier = Modifier.graphicsLayer { rotationZ = 180f },
                 )
                 Spacer(Modifier.width(6.dp))
                 GlassIconButton(
-                    icon = PulseIcons.ChevronDown,
+                    icon = NightbellIcons.ChevronDown,
                     onClick = onMoveDown,
                     contentDescription = "Move element ${index + 1} down",
                     size = 30.dp,
-                    accent = PulseColors.TextTertiary,
+                    accent = NightbellColors.TextTertiary,
                     enabled = index < total - 1,
                 )
                 Spacer(Modifier.width(6.dp))
             }
             GlassIconButton(
-                icon = PulseIcons.Eye,
+                icon = NightbellIcons.Eye,
                 onClick = onRePick,
                 contentDescription = "Re-pick element ${index + 1}",
                 size = 30.dp,
@@ -753,11 +753,11 @@ private fun CapturedElementRow(
             )
             Spacer(Modifier.width(6.dp))
             GlassIconButton(
-                icon = PulseIcons.Trash,
+                icon = NightbellIcons.Trash,
                 onClick = onRemove,
                 contentDescription = "Remove element ${index + 1}",
                 size = 30.dp,
-                accent = PulseColors.Rose,
+                accent = NightbellColors.Rose,
             )
         }
         if (element.textSnippet.isNotBlank()) {
@@ -765,7 +765,7 @@ private fun CapturedElementRow(
             Text(
                 text = "“${element.textSnippet.take(120)}”",
                 style = MaterialTheme.typography.bodySmall,
-                color = PulseColors.TextSecondary,
+                color = NightbellColors.TextSecondary,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -783,11 +783,11 @@ private fun HeadersEditor(
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SectionHeader(
             title = "Headers",
-            icon = PulseIcons.Layers,
+            icon = NightbellIcons.Layers,
             accent = accent,
             trailing = {
                 GlassIconButton(
-                    icon = PulseIcons.Plus,
+                    icon = NightbellIcons.Plus,
                     onClick = { onChange(headers + HeaderPair()) },
                     contentDescription = "Add header",
                     size = 30.dp,
@@ -797,9 +797,9 @@ private fun HeadersEditor(
         )
         if (headers.isEmpty()) {
             Text(
-                text = "No custom headers. Pulse always sends a descriptive User-Agent.",
+                text = "No custom headers. Nightbell always sends a descriptive User-Agent.",
                 style = MaterialTheme.typography.bodySmall,
-                color = PulseColors.TextTertiary,
+                color = NightbellColors.TextTertiary,
             )
         }
         headers.forEachIndexed { index, header ->
@@ -830,11 +830,11 @@ private fun HeadersEditor(
                 )
                 Box(Modifier.padding(bottom = 4.dp)) {
                     GlassIconButton(
-                        icon = PulseIcons.Trash,
+                        icon = NightbellIcons.Trash,
                         onClick = { onChange(headers.filterIndexed { i, _ -> i != index }) },
                         contentDescription = "Remove header ${index + 1}",
                         size = 38.dp,
-                        accent = PulseColors.Rose,
+                        accent = NightbellColors.Rose,
                     )
                 }
             }
@@ -844,9 +844,9 @@ private fun HeadersEditor(
                 text = note.message,
                 style = MaterialTheme.typography.bodySmall,
                 color = if (note.severity == Validation.Severity.ERROR) {
-                    PulseColors.Rose
+                    NightbellColors.Rose
                 } else {
-                    PulseColors.Amber
+                    NightbellColors.Amber
                 },
             )
         }
@@ -865,11 +865,11 @@ private fun StepExpectations(
     if (draft.kind == MonitorKind.WEBSITE_ELEMENT) {
         val elements = draft.targets
         if (elements.isEmpty()) {
-            GlassCard(accent = PulseColors.Amber, contentPadding = 16.dp) {
+            GlassCard(accent = NightbellColors.Amber, contentPadding = 16.dp) {
                 Text(
                     text = "Go back a step and capture at least one element first.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = PulseColors.TextSecondary,
+                    color = NightbellColors.TextSecondary,
                 )
             }
             return
@@ -889,13 +889,13 @@ private fun StepExpectations(
                 text = "Every element has to match. One mismatch marks the whole monitor down, " +
                     "and the alert names the first thing that broke.",
                 style = MaterialTheme.typography.bodySmall,
-                color = PulseColors.TextTertiary,
+                color = NightbellColors.TextTertiary,
             )
         }
         return
     }
 
-    SectionHeader("Status code", icon = PulseIcons.Server, accent = accent)
+    SectionHeader("Status code", icon = NightbellIcons.Server, accent = accent)
     SegmentedSelector(
         options = StatusMode.entries.toList(),
         selected = draft.status.mode,
@@ -915,7 +915,7 @@ private fun StepExpectations(
                 value = draft.status.code,
                 onValueChange = { code -> viewModel.update { it.copy(status = it.status.copy(code = code)) } },
                 range = 100..599,
-                icon = PulseIcons.Target,
+                icon = NightbellIcons.Target,
                 accent = accent,
                 note = report.of(Validation.Field.STATUS),
             )
@@ -955,7 +955,7 @@ private fun StepExpectations(
     }
 
     Spacer(Modifier.height(10.dp))
-    SectionHeader("Response body", icon = PulseIcons.Braces, accent = accent)
+    SectionHeader("Response body", icon = NightbellIcons.Braces, accent = accent)
     ChipSelector(
         options = AssertionMode.entries.toList(),
         selected = draft.assertion.mode,
@@ -974,7 +974,7 @@ private fun StepExpectations(
             label = "JSON path",
             placeholder = "data.status  ·  items[0].id",
             note = report.of(Validation.Field.JSON_PATH),
-            leadingIcon = PulseIcons.Filter,
+            leadingIcon = NightbellIcons.Filter,
             accent = accent,
         )
     }
@@ -997,7 +997,7 @@ private fun StepExpectations(
                     else -> "ok"
                 },
                 note = report.of(Validation.Field.ASSERTION),
-                leadingIcon = PulseIcons.Search,
+                leadingIcon = NightbellIcons.Search,
                 accent = accent,
                 singleLine = draft.assertion.mode != AssertionMode.EXACT,
                 minLines = if (draft.assertion.mode == AssertionMode.EXACT) 3 else 1,
@@ -1009,7 +1009,7 @@ private fun StepExpectations(
                 onCheckedChange = { v ->
                     viewModel.update { it.copy(assertion = it.assertion.copy(caseSensitive = v)) }
                 },
-                icon = PulseIcons.Filter,
+                icon = NightbellIcons.Filter,
                 accent = accent,
             )
         }
@@ -1029,13 +1029,13 @@ private fun ElementExpectationCard(
     GlassCard(contentPadding = 16.dp) {
         SectionHeader(
             title = if (total == 1) "Element expectation" else "Element ${index + 1}",
-            icon = PulseIcons.Target,
+            icon = NightbellIcons.Target,
             accent = accent,
         )
         Text(
             text = element.displaySelector,
             style = MaterialTheme.typography.bodySmall,
-            color = PulseColors.TextTertiary,
+            color = NightbellColors.TextTertiary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -1048,7 +1048,7 @@ private fun ElementExpectationCard(
                 label = "Nickname",
                 placeholder = element.tagName.ifBlank { "price, stock badge…" },
                 helper = "Shown in alerts so you know which element broke.",
-                leadingIcon = PulseIcons.Sparkle,
+                leadingIcon = NightbellIcons.Sparkle,
                 accent = accent,
             )
             Spacer(Modifier.height(12.dp))
@@ -1074,7 +1074,7 @@ private fun ElementExpectationCard(
                     label = "Expected text",
                     placeholder = element.textSnippet.take(40).ifBlank { "In stock" },
                     note = note,
-                    leadingIcon = PulseIcons.Search,
+                    leadingIcon = NightbellIcons.Search,
                     accent = accent,
                     singleLine = false,
                     minLines = 2,
@@ -1088,7 +1088,7 @@ private fun ElementExpectationCard(
             label = "Compare an attribute instead (optional)",
             placeholder = "href, value, data-state…",
             helper = "Leave empty to compare the element's visible text.",
-            leadingIcon = PulseIcons.Braces,
+            leadingIcon = NightbellIcons.Braces,
             accent = accent,
         )
         Spacer(Modifier.height(8.dp))
@@ -1100,7 +1100,7 @@ private fun ElementExpectationCard(
 private fun SelectorSummary(element: me.river.pulse.domain.ElementTarget, accent: Color) {
     if (!element.isCaptured) return
     GlassCard(contentPadding = 15.dp) {
-        SectionHeader("Stored signature", icon = PulseIcons.Layers, accent = accent)
+        SectionHeader("Stored signature", icon = NightbellIcons.Layers, accent = accent)
         SummaryLine("CSS", element.cssSelector)
         SummaryLine("XPath", element.xpath)
         SummaryLine("Tag", element.tagName)
@@ -1111,7 +1111,7 @@ private fun SelectorSummary(element: me.river.pulse.domain.ElementTarget, accent
             text = "Checks try id → CSS → XPath → text fingerprint, in that order, so " +
                 "small markup changes won't false-alarm.",
             style = MaterialTheme.typography.bodySmall,
-            color = PulseColors.TextTertiary,
+            color = NightbellColors.TextTertiary,
         )
     }
 }
@@ -1123,13 +1123,13 @@ private fun SummaryLine(label: String, value: String) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
-            color = PulseColors.TextTertiary,
+            color = NightbellColors.TextTertiary,
             modifier = Modifier.width(96.dp),
         )
         Text(
             text = value,
             style = MaterialTheme.typography.bodySmall,
-            color = PulseColors.TextSecondary,
+            color = NightbellColors.TextSecondary,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
@@ -1145,7 +1145,7 @@ private fun StepSchedule(
     report: Validation.Report,
     accent: Color,
 ) {
-    SectionHeader("Cadence", icon = PulseIcons.Clock, accent = accent)
+    SectionHeader("Cadence", icon = NightbellIcons.Clock, accent = accent)
     StepperRow(
         title = "Check every",
         value = draft.intervalMinutes,
@@ -1153,7 +1153,7 @@ private fun StepSchedule(
         range = 1..1440,
         step = 1,
         suffix = "m",
-        icon = PulseIcons.Clock,
+        icon = NightbellIcons.Clock,
         accent = accent,
         note = report.of(Validation.Field.INTERVAL),
     )
@@ -1170,7 +1170,7 @@ private fun StepSchedule(
         onValueChange = { v -> viewModel.update { it.copy(timeoutSeconds = v) } },
         range = 1..120,
         suffix = "s",
-        icon = PulseIcons.Gauge,
+        icon = NightbellIcons.Gauge,
         accent = accent,
         note = report.of(Validation.Field.TIMEOUT),
     )
@@ -1180,7 +1180,7 @@ private fun StepSchedule(
             subtitle = if (draft.followRedirects) "3xx responses are followed" else "3xx is reported as-is",
             checked = draft.followRedirects,
             onCheckedChange = { v -> viewModel.update { it.copy(followRedirects = v) } },
-            icon = PulseIcons.Link,
+            icon = NightbellIcons.Link,
             accent = accent,
         )
     }
@@ -1189,19 +1189,19 @@ private fun StepSchedule(
         subtitle = if (draft.enabled) "Runs on schedule" else "Paused — manual checks only",
         checked = draft.enabled,
         onCheckedChange = { v -> viewModel.update { it.copy(enabled = v) } },
-        icon = PulseIcons.Power,
+        icon = NightbellIcons.Power,
         accent = accent,
     )
 
     Spacer(Modifier.height(12.dp))
-    SectionHeader("Latency budget", icon = PulseIcons.Gauge, accent = PulseColors.Amber)
+    SectionHeader("Latency budget", icon = NightbellIcons.Gauge, accent = NightbellColors.Amber)
     LatencySloEditor(
         value = draft.latencySloMs,
         onChange = { v -> viewModel.update { it.copy(latencySloMs = v) } },
     )
 
     Spacer(Modifier.height(12.dp))
-    SectionHeader("Urgent", icon = PulseIcons.Zap, accent = PulseColors.Rose)
+    SectionHeader("Urgent", icon = NightbellIcons.Zap, accent = NightbellColors.Rose)
     UrgentEditor(
         urgent = draft.urgent,
         repeatMinutes = draft.urgentRepeatMinutes,
@@ -1210,7 +1210,7 @@ private fun StepSchedule(
     )
 
     Spacer(Modifier.height(12.dp))
-    SectionHeader("Alerts", icon = PulseIcons.Bell, accent = accent)
+    SectionHeader("Alerts", icon = NightbellIcons.Bell, accent = accent)
     ToggleRow(
         title = "Use my global alert settings",
         subtitle = if (draft.useGlobalAlerts) {
@@ -1220,7 +1220,7 @@ private fun StepSchedule(
         },
         checked = draft.useGlobalAlerts,
         onCheckedChange = { v -> viewModel.update { it.copy(useGlobalAlerts = v) } },
-        icon = PulseIcons.Shield,
+        icon = NightbellIcons.Shield,
         accent = accent,
     )
     AnimatedVisibility(
@@ -1252,8 +1252,8 @@ private fun LatencySloEditor(value: Int, onChange: (Int) -> Unit) {
         },
         checked = value > 0,
         onCheckedChange = { on -> onChange(if (on) DEFAULT_SLO_MS else 0) },
-        icon = PulseIcons.Gauge,
-        accent = PulseColors.Amber,
+        icon = NightbellIcons.Gauge,
+        accent = NightbellColors.Amber,
     )
     AnimatedVisibility(
         visible = value > 0,
@@ -1269,22 +1269,22 @@ private fun LatencySloEditor(value: Int, onChange: (Int) -> Unit) {
                 range = 100..60_000,
                 step = 100,
                 suffix = "ms",
-                icon = PulseIcons.Activity,
-                accent = PulseColors.Amber,
+                icon = NightbellIcons.Activity,
+                accent = NightbellColors.Amber,
             )
             ChipSelector(
                 options = listOf(500, 1_000, 2_500, 5_000, 10_000),
                 selected = value,
                 onSelect = onChange,
                 label = { if (it >= 1_000) "${it / 1000}s" else "${it}ms" },
-                accent = PulseColors.Amber,
+                accent = NightbellColors.Amber,
             )
             Spacer(Modifier.height(8.dp))
             Text(
                 text = "A response slower than this is DEGRADED — up, but not well. " +
                     "Turn on latency alerts under Alerts to hear about it.",
                 style = MaterialTheme.typography.bodySmall,
-                color = PulseColors.TextTertiary,
+                color = NightbellColors.TextTertiary,
             )
         }
     }
@@ -1311,8 +1311,8 @@ private fun UrgentEditor(
         },
         checked = urgent,
         onCheckedChange = onUrgentChange,
-        icon = PulseIcons.Zap,
-        accent = PulseColors.Rose,
+        icon = NightbellIcons.Zap,
+        accent = NightbellColors.Rose,
     )
     AnimatedVisibility(
         visible = urgent,
@@ -1327,25 +1327,25 @@ private fun UrgentEditor(
                 onValueChange = onRepeatChange,
                 range = 1..120,
                 suffix = "m",
-                icon = PulseIcons.History,
-                accent = PulseColors.Rose,
+                icon = NightbellIcons.History,
+                accent = NightbellColors.Rose,
             )
             Spacer(Modifier.height(8.dp))
             Box(
                 Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(14.dp))
-                    .background(PulseColors.Rose.copy(alpha = 0.09f))
+                    .background(NightbellColors.Rose.copy(alpha = 0.09f))
                     .padding(13.dp),
             ) {
                 Text(
                     text = "Acknowledge from the notification or the monitor screen. " +
                         "The card stays red until it recovers, and the next outage " +
-                        "shouts again.\n\nWhile an urgent outage is unacknowledged Pulse " +
+                        "shouts again.\n\nWhile an urgent outage is unacknowledged Nightbell " +
                         "runs a foreground service to keep the interval — expect a " +
                         "persistent notification and extra battery use until you confirm it.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = PulseColors.TextSecondary,
+                    color = NightbellColors.TextSecondary,
                 )
             }
         }
@@ -1367,12 +1367,12 @@ private fun TestPanel(
     onTest: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        PulseButton(
+        NightbellButton(
             text = if (testing) "Running check…" else "Test now",
             onClick = onTest,
             enabled = canTest && !testing,
             loading = testing,
-            icon = PulseIcons.Zap,
+            icon = NightbellIcons.Zap,
             tone = ButtonTone.Secondary,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -1380,7 +1380,7 @@ private fun TestPanel(
             Text(
                 text = blockingMessage,
                 style = MaterialTheme.typography.bodySmall,
-                color = PulseColors.Amber,
+                color = NightbellColors.Amber,
             )
         }
         AnimatedVisibility(
@@ -1395,11 +1395,11 @@ private fun TestPanel(
 
 @Composable
 private fun TestResultCard(result: CheckResult, accent: Color) {
-    val tone = if (result.ok) PulseColors.Mint else PulseColors.Rose
+    val tone = if (result.ok) NightbellColors.Mint else NightbellColors.Rose
     GlassCard(accent = tone, contentPadding = 16.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconBadge(
-                icon = if (result.ok) PulseIcons.Check else PulseIcons.Warning,
+                icon = if (result.ok) NightbellIcons.Check else NightbellIcons.Warning,
                 accent = tone,
                 size = 38.dp,
             )
@@ -1413,7 +1413,7 @@ private fun TestResultCard(result: CheckResult, accent: Color) {
                 Text(
                     text = result.message,
                     style = MaterialTheme.typography.bodySmall,
-                    color = PulseColors.TextSecondary,
+                    color = NightbellColors.TextSecondary,
                 )
             }
         }
@@ -1422,9 +1422,9 @@ private fun TestResultCard(result: CheckResult, accent: Color) {
             if (result.statusCode > 0) {
                 MicroTag("HTTP ${result.statusCode}", color = accent)
             }
-            MicroTag(formatLatency(result.latencyMs), color = PulseColors.TextSecondary, icon = PulseIcons.Gauge)
+            MicroTag(formatLatency(result.latencyMs), color = NightbellColors.TextSecondary, icon = NightbellIcons.Gauge)
             if (result.elementText.isNotBlank()) {
-                MicroTag("element text", color = PulseColors.Violet, icon = PulseIcons.Target)
+                MicroTag("element text", color = NightbellColors.Violet, icon = NightbellIcons.Target)
             }
         }
         if (!result.ok && result.failureKind.hint.isNotBlank()) {
@@ -1432,7 +1432,7 @@ private fun TestResultCard(result: CheckResult, accent: Color) {
             Text(
                 text = result.failureKind.hint,
                 style = MaterialTheme.typography.bodySmall,
-                color = PulseColors.Amber,
+                color = NightbellColors.Amber,
             )
         }
         if (result.detail.isNotBlank()) {
@@ -1440,7 +1440,7 @@ private fun TestResultCard(result: CheckResult, accent: Color) {
             Text(
                 text = result.detail,
                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
-                color = PulseColors.TextTertiary,
+                color = NightbellColors.TextTertiary,
                 maxLines = 6,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -1450,7 +1450,7 @@ private fun TestResultCard(result: CheckResult, accent: Color) {
             Text(
                 text = "“${result.elementText.take(200)}”",
                 style = MaterialTheme.typography.bodyMedium,
-                color = PulseColors.TextSecondary,
+                color = NightbellColors.TextSecondary,
                 maxLines = 4,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -1466,7 +1466,7 @@ private fun TestResultCard(result: CheckResult, accent: Color) {
                 Text(
                     text = result.bodyPreview.take(600),
                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                    color = PulseColors.TextSecondary,
+                    color = NightbellColors.TextSecondary,
                     maxLines = 10,
                     overflow = TextOverflow.Ellipsis,
                 )

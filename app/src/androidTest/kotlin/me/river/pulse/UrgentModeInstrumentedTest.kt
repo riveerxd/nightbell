@@ -2,10 +2,10 @@ package me.river.pulse
 
 import android.content.Intent
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import me.river.pulse.PulseTestSupport.appContext
-import me.river.pulse.PulseTestSupport.awaitTrue
-import me.river.pulse.PulseTestSupport.resetApp
-import me.river.pulse.data.Pulse
+import me.river.pulse.NightbellTestSupport.appContext
+import me.river.pulse.NightbellTestSupport.awaitTrue
+import me.river.pulse.NightbellTestSupport.resetApp
+import me.river.pulse.data.Nightbell
 import me.river.pulse.data.alerts.AlertActionReceiver
 import me.river.pulse.domain.AlertPolicy
 import me.river.pulse.domain.GlobalSettings
@@ -37,7 +37,7 @@ import org.junit.runner.RunWith
 class UrgentModeInstrumentedTest {
 
     private lateinit var server: TinyHttpServer
-    private val graph get() = Pulse.install(appContext)
+    private val graph get() = Nightbell.install(appContext)
 
     /** Flipped by the tests to take the endpoint up and down mid-run. */
     @Volatile

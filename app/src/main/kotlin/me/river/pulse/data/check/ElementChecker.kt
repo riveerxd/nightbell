@@ -375,7 +375,7 @@ class ElementChecker(
         private const val SETTLE_BUDGET_MS = 6_000L
         const val MOBILE_UA =
             "Mozilla/5.0 (Linux; Android 14; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) " +
-                "Chrome/125.0.0.0 Mobile Safari/537.36 PulseMonitor/1.0"
+                "Chrome/125.0.0.0 Mobile Safari/537.36 NightbellMonitor/1.0"
     }
 }
 

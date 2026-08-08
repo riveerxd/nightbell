@@ -1,9 +1,9 @@
 package me.river.pulse
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import me.river.pulse.PulseTestSupport.appContext
-import me.river.pulse.PulseTestSupport.resetApp
-import me.river.pulse.data.Pulse
+import me.river.pulse.NightbellTestSupport.appContext
+import me.river.pulse.NightbellTestSupport.resetApp
+import me.river.pulse.data.Nightbell
 import me.river.pulse.domain.Health
 import me.river.pulse.domain.Monitor
 import me.river.pulse.domain.MonitorRuntime
@@ -16,7 +16,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Read-after-write on [me.river.pulse.data.PulseStore.snapshot].
+ * Read-after-write on [me.river.pulse.data.NightbellStore.snapshot].
  *
  * Needs a real DataStore, hence on-device: the bug being pinned here was
  * entirely about *when* DataStore's flow delivers, so a fake would assert
@@ -29,7 +29,7 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class StoreFreshnessInstrumentedTest {
 
-    private val store get() = Pulse.install(appContext).store
+    private val store get() = Nightbell.install(appContext).store
 
     private fun monitor(id: String) =
         Monitor(id = id, name = id, url = "https://$id.example.com")
@@ -59,7 +59,7 @@ class StoreFreshnessInstrumentedTest {
      * The bug as the user reported it: widget says DOWN, app says UP.
      *
      * Drives the same fold the widget does — `Summary.of` over `snapshot.value`,
-     * exactly as `PulseWidgetProvider.render` does it — immediately after a
+     * exactly as `NightbellWidgetProvider.render` does it — immediately after a
      * recovery lands.
      */
     @Test

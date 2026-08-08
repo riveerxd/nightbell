@@ -3,7 +3,7 @@ package me.river.pulse.domain
 /**
  * The TLS certificate track.
  *
- * A certificate about to expire is the one outage you can see coming, and Pulse
+ * A certificate about to expire is the one outage you can see coming, and Nightbell
  * was throwing the evidence away: the expiry date arrives free with every HTTPS
  * handshake the checker already performs, and until now nothing read it. The
  * failure mode it prevents is specific and common — a cert lapses at 03:00, every

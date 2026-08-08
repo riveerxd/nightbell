@@ -63,7 +63,7 @@ private fun animatorScale(context: android.content.Context): Float =
  *
  * Speeding an infinite animation up isn't the same as turning it off: the frame
  * clock never goes idle, which burns battery and hangs any test framework that
- * waits for quiescence. When [PulseMotion.enabled] is false this collapses to a
+ * waits for quiescence. When [NightbellMotion.enabled] is false this collapses to a
  * plain constant and no animation is registered at all.
  */
 @Composable
@@ -75,7 +75,7 @@ fun rememberLoopingFloat(
     easing: Easing = LinearEasing,
     label: String = "loop",
 ): State<Float> {
-    val motion = LocalPulseMotion.current
+    val motion = LocalNightbellMotion.current
     if (!motion.enabled) {
         return remember(initialValue) { mutableFloatStateOf(initialValue) }
     }

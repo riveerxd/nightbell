@@ -206,6 +206,6 @@ class HttpChecker(
         private val CN_IN_DN = Regex("""CN=((?:\\.|[^,])*)""")
         private const val MAX_BODY_BYTES = 512 * 1024
         private const val MAX_PREVIEW = 4_000
-        const val USER_AGENT = "PulseMonitor/1.0 (Android)"
+        const val USER_AGENT = "NightbellMonitor/1.0 (Android)"
     }
 }

@@ -6,7 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import androidx.core.app.NotificationManagerCompat
-import me.river.pulse.data.Pulse
+import me.river.pulse.data.Nightbell
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -16,7 +16,7 @@ class AlertActionReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val monitorId = intent.getStringExtra(EXTRA_MONITOR_ID) ?: return
-        val graph = Pulse.install(context)
+        val graph = Nightbell.install(context)
         // goAsync() is only valid inside a real broadcast dispatch; it is null
         // when the receiver is invoked directly (tests, internal fan-out).
         val pending = runCatching { goAsync() }.getOrNull()

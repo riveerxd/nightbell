@@ -15,7 +15,7 @@ import kotlinx.serialization.json.JsonPrimitive
  */
 object PickerScripts {
 
-    const val BRIDGE_NAME = "PulseBridge"
+    const val BRIDGE_NAME = "NightbellBridge"
 
     private fun js(value: String): String = JsonPrimitive(value).toString()
 

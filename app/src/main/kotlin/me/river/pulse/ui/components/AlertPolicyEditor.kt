@@ -32,8 +32,8 @@ import androidx.compose.ui.unit.dp
 import me.river.pulse.domain.AlertPolicy
 import me.river.pulse.domain.SoundChoice
 import me.river.pulse.domain.VibrationStyle
-import me.river.pulse.ui.icons.PulseIcons
-import me.river.pulse.ui.theme.PulseColors
+import me.river.pulse.ui.icons.NightbellIcons
+import me.river.pulse.ui.theme.NightbellColors
 
 /** Renders a minute-of-day as 24h wall clock. */
 fun formatMinuteOfDay(minute: Int): String {
@@ -42,10 +42,10 @@ fun formatMinuteOfDay(minute: Int): String {
 }
 
 private fun soundIcon(choice: SoundChoice) = when (choice) {
-    SoundChoice.SILENT -> PulseIcons.VolumeOff
-    SoundChoice.DEFAULT_NOTIFICATION -> PulseIcons.Bell
-    SoundChoice.ALARM -> PulseIcons.Warning
-    SoundChoice.RINGTONE -> PulseIcons.Volume
+    SoundChoice.SILENT -> NightbellIcons.VolumeOff
+    SoundChoice.DEFAULT_NOTIFICATION -> NightbellIcons.Bell
+    SoundChoice.ALARM -> NightbellIcons.Warning
+    SoundChoice.RINGTONE -> NightbellIcons.Volume
 }
 
 /**
@@ -57,7 +57,7 @@ fun AlertPolicyEditor(
     policy: AlertPolicy,
     onChange: (AlertPolicy) -> Unit,
     modifier: Modifier = Modifier,
-    accent: Color = PulseColors.Aqua,
+    accent: Color = NightbellColors.Aqua,
     onPreviewVibration: (VibrationStyle) -> Unit = {},
     onSendTestAlert: (() -> Unit)? = null,
     showMasterToggle: Boolean = true,
@@ -70,7 +70,7 @@ fun AlertPolicyEditor(
                 subtitle = if (policy.enabled) policy.summary else "You won't be notified at all",
                 checked = policy.enabled,
                 onCheckedChange = { onChange(policy.copy(enabled = it)) },
-                icon = if (policy.enabled) PulseIcons.Bell else PulseIcons.BellOff,
+                icon = if (policy.enabled) NightbellIcons.Bell else NightbellIcons.BellOff,
                 accent = accent,
             )
         }
@@ -87,8 +87,8 @@ fun AlertPolicyEditor(
                     subtitle = "The main event",
                     checked = policy.alertOnDown,
                     onCheckedChange = { onChange(policy.copy(alertOnDown = it)) },
-                    icon = PulseIcons.Warning,
-                    accent = PulseColors.Rose,
+                    icon = NightbellIcons.Warning,
+                    accent = NightbellColors.Rose,
                 )
 
                 ToggleRow(
@@ -96,18 +96,18 @@ fun AlertPolicyEditor(
                     subtitle = "A quiet all-clear once it's healthy again",
                     checked = policy.alertOnRecovery,
                     onCheckedChange = { onChange(policy.copy(alertOnRecovery = it)) },
-                    icon = PulseIcons.Check,
-                    accent = PulseColors.Mint,
+                    icon = NightbellIcons.Check,
+                    accent = NightbellColors.Mint,
                 )
 
                 Spacer(Modifier.height(10.dp))
-                SectionHeader("Latency", icon = PulseIcons.Gauge, accent = PulseColors.Amber)
+                SectionHeader("Latency", icon = NightbellIcons.Gauge, accent = NightbellColors.Amber)
                 Text(
                     text = "Degraded is up-but-slow: the check passed, it just blew its " +
                         "latency budget. It has its own cooldown so a slow morning never " +
                         "eats the cooldown an outage needs.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = PulseColors.TextTertiary,
+                    color = NightbellColors.TextTertiary,
                     modifier = Modifier.padding(bottom = 6.dp),
                 )
                 ToggleRow(
@@ -119,8 +119,8 @@ fun AlertPolicyEditor(
                     },
                     checked = policy.alertOnDegraded,
                     onCheckedChange = { onChange(policy.copy(alertOnDegraded = it)) },
-                    icon = PulseIcons.Activity,
-                    accent = PulseColors.Amber,
+                    icon = NightbellIcons.Activity,
+                    accent = NightbellColors.Amber,
                 )
                 AnimatedVisibility(
                     visible = policy.alertOnDegraded,
@@ -133,8 +133,8 @@ fun AlertPolicyEditor(
                             subtitle = "All-clear when latency drops back under budget",
                             checked = policy.alertOnDegradedRecovery,
                             onCheckedChange = { onChange(policy.copy(alertOnDegradedRecovery = it)) },
-                            icon = PulseIcons.Check,
-                            accent = PulseColors.Amber,
+                            icon = NightbellIcons.Check,
+                            accent = NightbellColors.Amber,
                         )
                         StepperRow(
                             title = "Latency cooldown",
@@ -143,8 +143,8 @@ fun AlertPolicyEditor(
                             range = 0..720,
                             step = 5,
                             suffix = "m",
-                            icon = PulseIcons.Clock,
-                            accent = PulseColors.Amber,
+                            icon = NightbellIcons.Clock,
+                            accent = NightbellColors.Amber,
                         )
                         ToggleRow(
                             title = "Keep reminding me it's slow",
@@ -155,8 +155,8 @@ fun AlertPolicyEditor(
                             },
                             checked = policy.degradedRepeatEnabled,
                             onCheckedChange = { onChange(policy.copy(degradedRepeatEnabled = it)) },
-                            icon = PulseIcons.History,
-                            accent = PulseColors.Amber,
+                            icon = NightbellIcons.History,
+                            accent = NightbellColors.Amber,
                         )
                         AnimatedVisibility(
                             visible = policy.degradedRepeatEnabled,
@@ -172,15 +172,15 @@ fun AlertPolicyEditor(
                                 range = 5..1440,
                                 step = 5,
                                 suffix = "m",
-                                icon = PulseIcons.Refresh,
-                                accent = PulseColors.Amber,
+                                icon = NightbellIcons.Refresh,
+                                accent = NightbellColors.Amber,
                             )
                         }
                     }
                 }
 
                 Spacer(Modifier.height(10.dp))
-                SectionHeader("Sound", icon = PulseIcons.Volume, accent = accent)
+                SectionHeader("Sound", icon = NightbellIcons.Volume, accent = accent)
                 ChipSelector(
                     options = SoundChoice.entries.toList(),
                     selected = policy.sound,
@@ -191,15 +191,15 @@ fun AlertPolicyEditor(
                 )
                 Text(
                     text = "Android freezes sound and vibration onto a notification " +
-                        "channel, so Pulse creates one channel per combination. Long-press " +
-                        "any Pulse notification to fine-tune it in system settings.",
+                        "channel, so Nightbell creates one channel per combination. Long-press " +
+                        "any Nightbell notification to fine-tune it in system settings.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = PulseColors.TextTertiary,
+                    color = NightbellColors.TextTertiary,
                     modifier = Modifier.padding(top = 8.dp, start = 2.dp),
                 )
 
                 Spacer(Modifier.height(14.dp))
-                SectionHeader("Haptics", icon = PulseIcons.Vibrate, accent = accent)
+                SectionHeader("Haptics", icon = NightbellIcons.Vibrate, accent = accent)
                 ToggleRow(
                     title = "Vibrate",
                     subtitle = if (policy.vibrate) {
@@ -209,7 +209,7 @@ fun AlertPolicyEditor(
                     },
                     checked = policy.vibrate,
                     onCheckedChange = { onChange(policy.copy(vibrate = it)) },
-                    icon = PulseIcons.Vibrate,
+                    icon = NightbellIcons.Vibrate,
                     accent = accent,
                 )
                 AnimatedVisibility(
@@ -227,20 +227,20 @@ fun AlertPolicyEditor(
                                 onPreviewVibration(it)
                             },
                             label = { it.label },
-                            accent = PulseColors.Violet,
+                            accent = NightbellColors.Violet,
                         )
                     }
                 }
 
                 Spacer(Modifier.height(14.dp))
-                SectionHeader("Escalation", icon = PulseIcons.Zap, accent = accent)
+                SectionHeader("Escalation", icon = NightbellIcons.Zap, accent = accent)
 
                 StepperRow(
                     title = "Failures before alerting",
                     value = policy.failureThreshold,
                     onValueChange = { onChange(policy.copy(failureThreshold = it)) },
                     range = 1..10,
-                    icon = PulseIcons.Filter,
+                    icon = NightbellIcons.Filter,
                     accent = accent,
                 )
                 Text(
@@ -250,7 +250,7 @@ fun AlertPolicyEditor(
                         "Ignores blips: needs ${policy.failureThreshold} failures in a row."
                     },
                     style = MaterialTheme.typography.bodySmall,
-                    color = PulseColors.TextTertiary,
+                    color = NightbellColors.TextTertiary,
                     modifier = Modifier.padding(start = 2.dp, bottom = 8.dp),
                 )
 
@@ -261,13 +261,13 @@ fun AlertPolicyEditor(
                     range = 0..240,
                     step = 5,
                     suffix = "m",
-                    icon = PulseIcons.Clock,
+                    icon = NightbellIcons.Clock,
                     accent = accent,
                 )
                 Text(
                     text = "Minimum gap between two alerts for the same monitor.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = PulseColors.TextTertiary,
+                    color = NightbellColors.TextTertiary,
                     modifier = Modifier.padding(start = 2.dp, bottom = 8.dp),
                 )
 
@@ -280,8 +280,8 @@ fun AlertPolicyEditor(
                     },
                     checked = policy.repeatEnabled,
                     onCheckedChange = { onChange(policy.copy(repeatEnabled = it)) },
-                    icon = PulseIcons.History,
-                    accent = PulseColors.Amber,
+                    icon = NightbellIcons.History,
+                    accent = NightbellColors.Amber,
                 )
                 AnimatedVisibility(
                     visible = policy.repeatEnabled,
@@ -295,13 +295,13 @@ fun AlertPolicyEditor(
                         range = 5..720,
                         step = 5,
                         suffix = "m",
-                        icon = PulseIcons.Refresh,
-                        accent = PulseColors.Amber,
+                        icon = NightbellIcons.Refresh,
+                        accent = NightbellColors.Amber,
                     )
                 }
 
                 Spacer(Modifier.height(14.dp))
-                SectionHeader("Quiet hours", icon = PulseIcons.Moon, accent = accent)
+                SectionHeader("Quiet hours", icon = NightbellIcons.Moon, accent = accent)
                 ToggleRow(
                     title = "Silence overnight",
                     subtitle = if (policy.quietHoursEnabled) {
@@ -312,8 +312,8 @@ fun AlertPolicyEditor(
                     },
                     checked = policy.quietHoursEnabled,
                     onCheckedChange = { onChange(policy.copy(quietHoursEnabled = it)) },
-                    icon = PulseIcons.Moon,
-                    accent = PulseColors.Violet,
+                    icon = NightbellIcons.Moon,
+                    accent = NightbellColors.Violet,
                 )
                 AnimatedVisibility(
                     visible = policy.quietHoursEnabled,
@@ -332,18 +332,18 @@ fun AlertPolicyEditor(
                             subtitle = "Posts the alert with no sound or vibration",
                             checked = policy.criticalBypassesQuiet,
                             onCheckedChange = { onChange(policy.copy(criticalBypassesQuiet = it)) },
-                            icon = PulseIcons.Shield,
-                            accent = PulseColors.Violet,
+                            icon = NightbellIcons.Shield,
+                            accent = NightbellColors.Violet,
                         )
                     }
                 }
 
                 if (onSendTestAlert != null) {
                     Spacer(Modifier.height(16.dp))
-                    PulseButton(
+                    NightbellButton(
                         text = "Send a test alert",
                         onClick = onSendTestAlert,
-                        icon = PulseIcons.Bell,
+                        icon = NightbellIcons.Bell,
                         tone = ButtonTone.Secondary,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -389,28 +389,28 @@ private fun TimeStepper(
     Column(
         modifier
             .clip(RoundedCornerShape(16.dp))
-            .background(PulseColors.sheen(0.05f))
-            .border(1.dp, PulseColors.sheen(0.08f), RoundedCornerShape(16.dp))
+            .background(NightbellColors.sheen(0.05f))
+            .border(1.dp, NightbellColors.sheen(0.08f), RoundedCornerShape(16.dp))
             .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
         Text(
             text = label.uppercase(),
             style = MaterialTheme.typography.labelSmall,
-            color = PulseColors.TextTertiary,
+            color = NightbellColors.TextTertiary,
         )
         Spacer(Modifier.height(6.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            SmallStep(PulseIcons.ChevronLeft, "$label earlier") {
+            SmallStep(NightbellIcons.ChevronLeft, "$label earlier") {
                 onChange(((minute - 30) + 1440) % 1440)
             }
             Text(
                 text = formatMinuteOfDay(minute),
                 style = MaterialTheme.typography.titleLarge,
-                color = PulseColors.TextPrimary,
+                color = NightbellColors.TextPrimary,
                 modifier = Modifier.weight(1f),
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
-            SmallStep(PulseIcons.ChevronRight, "$label later") {
+            SmallStep(NightbellIcons.ChevronRight, "$label later") {
                 onChange((minute + 30) % 1440)
             }
         }
@@ -427,7 +427,7 @@ private fun SmallStep(
         Modifier
             .size(30.dp)
             .clip(RoundedCornerShape(10.dp))
-            .background(PulseColors.sheen(0.06f))
+            .background(NightbellColors.sheen(0.06f))
             .clickable(onClick = onClick)
             .semantics { contentDescription = description },
         verticalAlignment = Alignment.CenterVertically,
@@ -436,7 +436,7 @@ private fun SmallStep(
         Icon(
             icon,
             contentDescription = null,
-            tint = PulseColors.TextSecondary,
+            tint = NightbellColors.TextSecondary,
             modifier = Modifier.size(14.dp),
         )
     }

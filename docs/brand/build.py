@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate the Pulse lockups, the PNG exports and logos.html from the 30 icon SVGs.
+"""Regenerate the Nightbell lockups, the PNG exports and logos.html from the 30 icon SVGs.
 
 The icon SVGs are the only hand-authored source. Everything else derives from them:
 
@@ -44,7 +44,7 @@ CONCEPTS = [
      "language of audio waveforms — that ambiguity is the cost.",
      ["Ties to the charts", "Very legible small", "Reads as audio"]),
     ("06", "nightwatch", "Nightwatch", "For the 3am promise",
-     "A crescent broken by a pulse. The only mark about <em>when</em> Pulse matters rather than what "
+     "A crescent broken by a pulse. The only mark about <em>when</em> Nightbell matters rather than what "
      "it measures, and the old-style serif keeps it from looking like a sleep tracker.",
      ["Most memorable", "Owns the 3am story", "Least literal"]),
     ("07", "shield", "Shield", "Assurance framing",
@@ -64,7 +64,7 @@ CONCEPTS = [
      "behaves most like a brand rather than an illustration.",
      ["Most brand-like", "Strong at any size", "Needs the wordmark"]),
     ("11", "tower", "Tower", "Transmitting, not measuring",
-     "A mast with the ping leaving the top. Frames Pulse as the thing doing the reaching out, which "
+     "A mast with the ping leaving the top. Frames Nightbell as the thing doing the reaching out, which "
      "is literally true — the phone is the one making the request.",
      ["Clear category signal", "Good above 64px", "Reads telecom"]),
     ("12", "minute", "Minute", "The minute you lost",
@@ -139,7 +139,7 @@ CONCEPTS = [
      "The cardiogram rendered as overlapping dots, the peak swollen and red. The most crafted mark "
      "here and the one that loses the most detail when shrunk.",
      ["Most crafted", "Unusual texture", "Beads merge below 48px"]),
-    ("30", "ringpulse", "Ring Pulse", "The trace cutting through the ring",
+    ("30", "ringpulse", "Ring Nightbell", "The trace cutting through the ring",
      "Badge construction: containment plus the event, with the trace punching a clean gap through the "
      "ring rather than sitting on top of it. The most finished of the badge forms.",
      ["Best badge form", "Strong at 40px", "Busiest centre"]),
@@ -155,48 +155,48 @@ FAMILIES = {
     "mono":  "'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace",
 }
 WORDMARK = {
-    "01": dict(text="Pulse", size=142, weight="700", tracking="-5", family="sans"),
-    "02": dict(text="PULSE", size=98,  weight="600", tracking="16", family="sans"),
-    "03": dict(text="Pulse", size=142, weight="700", tracking="-4", family="sans"),
-    "04": dict(text="PULSE", size=106, weight="800", tracking="2",  family="sans"),
-    "05": dict(text="Pulse", size=142, weight="700", tracking="-3", family="sans"),
-    "06": dict(text="Pulse", size=132, weight="400", tracking="6",  family="serif"),
-    "07": dict(text="PULSE", size=98,  weight="700", tracking="10", family="sans"),
-    "08": dict(text="PULSE", size=88,  weight="500", tracking="14", family="mono"),
-    "09": dict(text="pulse", size=124, weight="500", tracking="2",  family="mono"),
-    "10": dict(text="Pulse", size=142, weight="800", tracking="-6", family="sans"),
-    "11": dict(text="Pulse", size=138, weight="700", tracking="-3", family="sans"),
-    "12": dict(text="PULSE", size=88,  weight="500", tracking="12", family="mono"),
-    "13": dict(text="PULSE", size=104, weight="800", tracking="4",  family="sans"),
-    "14": dict(text="PULSE", size=90,  weight="700", tracking="8",  family="mono"),
-    "15": dict(text="Pulse", size=146, weight="800", tracking="-6", family="sans"),
-    "16": dict(text="PULSE", size=86,  weight="400", tracking="10", family="mono"),
-    "17": dict(text="Pulse", size=138, weight="700", tracking="-4", family="sans"),
-    "18": dict(text="pulse", size=124, weight="500", tracking="0",  family="mono"),
-    "19": dict(text="Pulse", size=132, weight="400", tracking="4",  family="serif"),
-    "20": dict(text="PULSE", size=100, weight="600", tracking="2",  family="sans"),
-    "21": dict(text="PULSE", size=96,  weight="300", tracking="18", family="sans"),
-    "22": dict(text="PULSE", size=88,  weight="500", tracking="12", family="mono"),
-    "23": dict(text="PULSE", size=110, weight="800", tracking="0",  family="sans"),
-    "24": dict(text="pulse", size=124, weight="600", tracking="2",  family="mono"),
-    "25": dict(text="PULSE", size=98,  weight="500", tracking="12", family="sans"),
-    "26": dict(text="Pulse", size=132, weight="400", tracking="2",  family="serif"),
-    "27": dict(text="Pulse", size=136, weight="600", tracking="1",  family="sans"),
-    "28": dict(text="PULSE", size=88,  weight="500", tracking="16", family="mono"),
-    "29": dict(text="Pulse", size=142, weight="700", tracking="-4", family="sans"),
-    "30": dict(text="Pulse", size=142, weight="800", tracking="-5", family="sans"),
+    "01": dict(text="Nightbell", size=142, weight="700", tracking="-5", family="sans"),
+    "02": dict(text="NIGHTBELL", size=98,  weight="600", tracking="16", family="sans"),
+    "03": dict(text="Nightbell", size=142, weight="700", tracking="-4", family="sans"),
+    "04": dict(text="NIGHTBELL", size=106, weight="800", tracking="2",  family="sans"),
+    "05": dict(text="Nightbell", size=142, weight="700", tracking="-3", family="sans"),
+    "06": dict(text="Nightbell", size=132, weight="400", tracking="6",  family="serif"),
+    "07": dict(text="NIGHTBELL", size=98,  weight="700", tracking="10", family="sans"),
+    "08": dict(text="NIGHTBELL", size=88,  weight="500", tracking="14", family="mono"),
+    "09": dict(text="nightbell", size=124, weight="500", tracking="2",  family="mono"),
+    "10": dict(text="Nightbell", size=142, weight="800", tracking="-6", family="sans"),
+    "11": dict(text="Nightbell", size=138, weight="700", tracking="-3", family="sans"),
+    "12": dict(text="NIGHTBELL", size=88,  weight="500", tracking="12", family="mono"),
+    "13": dict(text="NIGHTBELL", size=104, weight="800", tracking="4",  family="sans"),
+    "14": dict(text="NIGHTBELL", size=90,  weight="700", tracking="8",  family="mono"),
+    "15": dict(text="Nightbell", size=146, weight="800", tracking="-6", family="sans"),
+    "16": dict(text="NIGHTBELL", size=86,  weight="400", tracking="10", family="mono"),
+    "17": dict(text="Nightbell", size=138, weight="700", tracking="-4", family="sans"),
+    "18": dict(text="nightbell", size=124, weight="500", tracking="0",  family="mono"),
+    "19": dict(text="Nightbell", size=132, weight="400", tracking="4",  family="serif"),
+    "20": dict(text="NIGHTBELL", size=100, weight="600", tracking="2",  family="sans"),
+    "21": dict(text="NIGHTBELL", size=96,  weight="300", tracking="18", family="sans"),
+    "22": dict(text="NIGHTBELL", size=88,  weight="500", tracking="12", family="mono"),
+    "23": dict(text="NIGHTBELL", size=110, weight="800", tracking="0",  family="sans"),
+    "24": dict(text="nightbell", size=124, weight="600", tracking="2",  family="mono"),
+    "25": dict(text="NIGHTBELL", size=98,  weight="500", tracking="12", family="sans"),
+    "26": dict(text="Nightbell", size=132, weight="400", tracking="2",  family="serif"),
+    "27": dict(text="Nightbell", size=136, weight="600", tracking="1",  family="sans"),
+    "28": dict(text="NIGHTBELL", size=88,  weight="500", tracking="16", family="mono"),
+    "29": dict(text="Nightbell", size=142, weight="700", tracking="-4", family="sans"),
+    "30": dict(text="Nightbell", size=142, weight="800", tracking="-5", family="sans"),
 }
 
 PLATE_RE = r'<rect width="512" height="512" rx="112" fill="([^"]+)"/>'
 
 # Lockup geometry: the mark is fitted into this box, then the wordmark follows it.
-CANVAS_W, CANVAS_H = 880, 320
+CANVAS_W, CANVAS_H = 1130, 320
 MARK_X, MARK_BOX_W, MARK_BOX_H = 40, 300, 252
 WORD_GAP = 72
 
 
 def icon_path(cid, slug):
-    return os.path.join(HERE, f"pulse-{cid}-{slug}-icon.svg")
+    return os.path.join(HERE, f"nightbell-{cid}-{slug}-icon.svg")
 
 
 def read_icon(cid, slug):
@@ -253,7 +253,7 @@ def build_lockups(bbox):
         baseline = round(CANVAS_H / 2 + 0.36 * w["size"])
         out = (
             f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {CANVAS_W} {CANVAS_H}"'
-            f' width="{CANVAS_W}" height="{CANVAS_H}" role="img" aria-label="Pulse">\n'
+            f' width="{CANVAS_W}" height="{CANVAS_H}" role="img" aria-label="Nightbell">\n'
             f'  <rect width="{CANVAS_W}" height="{CANVAS_H}" fill="#0B0E13"/>\n'
             f'  <g transform="translate({tx:.1f} {ty:.1f}) scale({scale:.4f})">{body}</g>\n'
             f'  <text x="{text_x}" y="{baseline}" font-family="{FAMILIES[w["family"]]}"'
@@ -261,14 +261,14 @@ def build_lockups(bbox):
             f' letter-spacing="{w["tracking"]}" fill="#F2F5F8">{w["text"]}</text>\n'
             '</svg>\n'
         )
-        open(os.path.join(HERE, f"pulse-{cid}-{slug}-lockup.svg"), "w").write(out)
+        open(os.path.join(HERE, f"nightbell-{cid}-{slug}-lockup.svg"), "w").write(out)
 
 
 def build_png():
     png = os.path.join(HERE, "png")
     os.makedirs(png, exist_ok=True)
     for cid, slug, *_ in CONCEPTS:
-        stem = f"pulse-{cid}-{slug}"
+        stem = f"nightbell-{cid}-{slug}"
         for width, suffix in ((512, "-512"), (192, "-192")):
             subprocess.run(["rsvg-convert", "-w", str(width), os.path.join(HERE, f"{stem}-icon.svg"),
                             "-o", os.path.join(png, f"{stem}-icon{suffix}.png")], check=True)
@@ -362,7 +362,7 @@ h1 em { font-style:normal; color:var(--red); }
 .chead h2 { margin:0; font-size:1.65rem; letter-spacing:-.02em; font-weight:700; }
 .tag { margin:0; grid-column:2; color:var(--green); font-family:var(--mono);
        font-size:.72rem; letter-spacing:.1em; text-transform:uppercase; }
-.lockup { display:block; width:100%; max-width:620px; height:auto; aspect-ratio:880/320;
+.lockup { display:block; width:100%; max-width:620px; height:auto; aspect-ratio:__ASPECT__;
           border-radius:4px; border:1px solid var(--line); }
 .copy { max-width:60ch; margin:24px 0 0; }
 .copy em { font-style:italic; }
@@ -399,10 +399,10 @@ def build_html():
     symbols, rows, tiles = [], [], []
     for cid, slug, name, tagline, copy, notes in CONCEPTS:
         icon, _, _ = read_icon(cid, slug)
-        lock = open(os.path.join(HERE, f"pulse-{cid}-{slug}-lockup.svg")).read()
+        lock = open(os.path.join(HERE, f"nightbell-{cid}-{slug}-lockup.svg")).read()
         lock_inner = re.search(r"<svg[^>]*>(.*)</svg>", lock, re.S).group(1).strip()
         symbols.append(f'<symbol id="i{cid}" viewBox="0 0 512 512">{icon}</symbol>')
-        symbols.append(f'<symbol id="w{cid}" viewBox="0 0 880 320">{lock_inner}</symbol>')
+        symbols.append(f'<symbol id="w{cid}" viewBox="0 0 {CANVAS_W} {CANVAS_H}">{lock_inner}</symbol>')
         tiles.append(f'<li><a href="#c{cid}"><svg aria-hidden="true"><use href="#i{cid}"/></svg>'
                      f'<span>{cid} {name}</span></a></li>')
         chips = "".join(f"<li>{c}</li>" for c in notes)
@@ -433,8 +433,8 @@ def build_html():
         f'<li><span class="swatch" style="background:{h}"></span><b>{n}</b><code>{h}</code>'
         f'<em>{u}</em></li>' for h, n, u in SWATCHES)
 
-    html = f'''<title>Pulse &mdash; Identity Exploration</title>
-<style>{CSS}</style>
+    html = f'''<title>Nightbell &mdash; Identity Exploration</title>
+<style>{CSS.replace("__ASPECT__", f"{CANVAS_W}/{CANVAS_H}")}</style>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">{"".join(symbols)}</svg>
 
@@ -447,7 +447,7 @@ def build_html():
   </div>
 
   <div class="masthead">
-    <p class="eyebrow">Pulse &mdash; uptime monitoring that lives on your phone</p>
+    <p class="eyebrow">Nightbell &mdash; uptime monitoring that lives on your phone</p>
     <h1>Thirty marks for an app whose job is to <em>interrupt you</em>.</h1>
     <p class="lede">Every direction ships as two files: a square plate for the launcher, and a
     landscape lockup with the wordmark. Each is shown at four sizes, because a monitoring icon that

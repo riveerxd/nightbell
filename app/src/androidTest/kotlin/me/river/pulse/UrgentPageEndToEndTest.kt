@@ -5,9 +5,9 @@ import android.content.Context
 import android.graphics.Bitmap
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import me.river.pulse.data.Pulse
+import me.river.pulse.data.Nightbell
 import me.river.pulse.data.alerts.AlertCenter
-import me.river.pulse.data.work.PulseMonitorService
+import me.river.pulse.data.work.NightbellMonitorService
 import me.river.pulse.domain.AlertPolicy
 import me.river.pulse.domain.GlobalSettings
 import me.river.pulse.domain.Monitor
@@ -42,7 +42,7 @@ class UrgentPageEndToEndTest {
 
     @Before
     fun setUp() {
-        PulseTestSupport.resetApp(
+        NightbellTestSupport.resetApp(
             GlobalSettings(
                 motionIntensity = 0f,
                 strictForegroundMonitoring = true,
@@ -60,9 +60,9 @@ class UrgentPageEndToEndTest {
     @After
     fun tearDown() {
         // No `stopService`: stopping a service that has not yet promoted itself
-        // kills the process (see PulseMonitorService.sync). Clearing the store is
+        // kills the process (see NightbellMonitorService.sync). Clearing the store is
         // enough — the loop stands down on its next tick.
-        runBlocking { PulseTestSupport.resetApp() }
+        runBlocking { NightbellTestSupport.resetApp() }
         manager.cancelAll()
     }
 
@@ -71,7 +71,7 @@ class UrgentPageEndToEndTest {
      * needs no fixture server, so the failure is real and the test is fast.
      */
     private fun addFailingUrgentMonitor(id: String = "e2e-urgent") {
-        val graph = Pulse.install(context)
+        val graph = Nightbell.install(context)
         runBlocking {
             graph.store.upsert(
                 Monitor(
@@ -90,7 +90,7 @@ class UrgentPageEndToEndTest {
     @Test
     fun aRealOutagePagesAndCountsItsReminders() {
         addFailingUrgentMonitor()
-        val graph = Pulse.install(context)
+        val graph = Nightbell.install(context)
 
         runBlocking { graph.engine.run("e2e-urgent") }
 
@@ -108,7 +108,7 @@ class UrgentPageEndToEndTest {
     @Test
     fun acknowledgingResetsTheCounterAndTheClock() {
         addFailingUrgentMonitor()
-        val graph = Pulse.install(context)
+        val graph = Nightbell.install(context)
         runBlocking {
             graph.engine.run("e2e-urgent")
             graph.engine.acknowledgeUrgent("e2e-urgent")
@@ -123,7 +123,7 @@ class UrgentPageEndToEndTest {
     @Test
     fun pausingAMonitorEndsItsPage() {
         addFailingUrgentMonitor()
-        val graph = Pulse.install(context)
+        val graph = Nightbell.install(context)
         runBlocking {
             graph.engine.run("e2e-urgent")
             graph.store.setEnabled("e2e-urgent", false)
@@ -145,18 +145,18 @@ class UrgentPageEndToEndTest {
     @Test
     fun acknowledgingStopsThePageAtOnce() {
         addFailingUrgentMonitor()
-        val graph = Pulse.install(context)
+        val graph = Nightbell.install(context)
         runBlocking { graph.engine.run("e2e-urgent") }
 
-        PulseMonitorService.sync(context)
-        PulseTestSupport.awaitTrue(timeoutMs = 20_000, description = "service is paging") {
-            PulseMonitorService.isPaging()
+        NightbellMonitorService.sync(context)
+        NightbellTestSupport.awaitTrue(timeoutMs = 20_000, description = "service is paging") {
+            NightbellMonitorService.isPaging()
         }
 
         val startedAt = System.currentTimeMillis()
         runBlocking { graph.engine.acknowledgeUrgent("e2e-urgent") }
-        PulseTestSupport.awaitTrue(timeoutMs = 2_000, description = "paging stopped") {
-            !PulseMonitorService.isPaging()
+        NightbellTestSupport.awaitTrue(timeoutMs = 2_000, description = "paging stopped") {
+            !NightbellMonitorService.isPaging()
         }
         val took = System.currentTimeMillis() - startedAt
         assertTrue(
@@ -177,12 +177,12 @@ class UrgentPageEndToEndTest {
     @Test
     fun theServiceNotificationBecomesThePage() {
         addFailingUrgentMonitor()
-        val graph = Pulse.install(context)
+        val graph = Nightbell.install(context)
         runBlocking { graph.engine.run("e2e-urgent") }
 
-        PulseMonitorService.sync(context)
-        PulseTestSupport.awaitTrue(timeoutMs = 20_000, description = "service is paging") {
-            PulseMonitorService.isPaging() &&
+        NightbellMonitorService.sync(context)
+        NightbellTestSupport.awaitTrue(timeoutMs = 20_000, description = "service is paging") {
+            NightbellMonitorService.isPaging() &&
                 manager.activeNotifications.any { it.id == AlertCenter.SERVICE_NOTIFICATION_ID }
         }
 

@@ -51,20 +51,20 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
-import me.river.pulse.data.Pulse
+import me.river.pulse.data.Nightbell
 import me.river.pulse.domain.Health
 import me.river.pulse.domain.Summary
 import me.river.pulse.ui.components.ButtonTone
 import me.river.pulse.ui.components.ChipSelector
 import me.river.pulse.ui.components.GlassCard
-import me.river.pulse.ui.components.PulseButton
-import me.river.pulse.ui.components.PulseMark
+import me.river.pulse.ui.components.NightbellButton
+import me.river.pulse.ui.components.NightbellMark
 import me.river.pulse.ui.components.SectionHeader
 import me.river.pulse.ui.components.StepperRow
 import me.river.pulse.ui.components.ToggleRow
-import me.river.pulse.ui.icons.PulseIcons
-import me.river.pulse.ui.theme.PulseColors
-import me.river.pulse.ui.theme.PulseTheme
+import me.river.pulse.ui.icons.NightbellIcons
+import me.river.pulse.ui.theme.NightbellColors
+import me.river.pulse.ui.theme.NightbellTheme
 import me.river.pulse.ui.theme.healthColor
 import kotlinx.coroutines.launch
 
@@ -82,7 +82,7 @@ class WidgetConfigActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        Pulse.install(applicationContext)
+        Nightbell.install(applicationContext)
 
         appWidgetId = intent?.extras?.getInt(
             AppWidgetManager.EXTRA_APPWIDGET_ID,
@@ -101,7 +101,7 @@ class WidgetConfigActivity : ComponentActivity() {
             var config by remember { mutableStateOf(WidgetConfig()) }
             var loaded by remember { mutableStateOf(false) }
             var reconfiguring by remember { mutableStateOf(false) }
-            val snapshot by Pulse.store.snapshot.collectAsState()
+            val snapshot by Nightbell.store.snapshot.collectAsState()
 
             LaunchedEffect(Unit) {
                 reconfiguring = WidgetConfigStore.exists(applicationContext, appWidgetId)
@@ -109,14 +109,14 @@ class WidgetConfigActivity : ComponentActivity() {
                 loaded = true
             }
 
-            PulseTheme(
+            NightbellTheme(
                 motionIntensity = snapshot.settings.motionIntensity,
                 theme = snapshot.settings.theme,
             ) {
                 Box(
                     Modifier
                         .fillMaxSize()
-                        .background(PulseColors.Void),
+                        .background(NightbellColors.Void),
                 ) {
                     if (loaded) {
                         ConfigBody(
@@ -136,7 +136,7 @@ class WidgetConfigActivity : ComponentActivity() {
     private fun commit(config: WidgetConfig) {
         lifecycleScope.launch {
             WidgetConfigStore.save(applicationContext, appWidgetId, config)
-            PulseWidgetProvider.refresh(applicationContext)
+            NightbellWidgetProvider.refresh(applicationContext)
             setResult(Activity.RESULT_OK, resultIntent())
             finish()
         }
@@ -172,7 +172,7 @@ private fun ConfigBody(
                 Text(
                     text = "Widget",
                     style = MaterialTheme.typography.displayMedium,
-                    color = PulseColors.TextPrimary,
+                    color = NightbellColors.TextPrimary,
                 )
                 Text(
                     text = if (reconfiguring) {
@@ -181,24 +181,24 @@ private fun ConfigBody(
                         "Monitors are always listed worst first."
                     },
                     style = MaterialTheme.typography.bodyMedium,
-                    color = PulseColors.TextSecondary,
+                    color = NightbellColors.TextSecondary,
                 )
             }
 
             item(key = "preview") {
                 GlassCard {
-                    SectionHeader("Preview", icon = PulseIcons.Eye, accent = PulseColors.Aqua)
+                    SectionHeader("Preview", icon = NightbellIcons.Eye, accent = NightbellColors.Aqua)
                     WidgetPreview(config, fleet)
                 }
             }
 
             item(key = "look") {
                 GlassCard {
-                    SectionHeader("Look", icon = PulseIcons.Sparkle, accent = PulseColors.Aqua)
+                    SectionHeader("Look", icon = NightbellIcons.Sparkle, accent = NightbellColors.Aqua)
                     Text(
                         text = "Theme",
                         style = MaterialTheme.typography.labelMedium,
-                        color = PulseColors.TextTertiary,
+                        color = NightbellColors.TextTertiary,
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
                     ChipSelector(
@@ -206,13 +206,13 @@ private fun ConfigBody(
                         selected = config.theme,
                         onSelect = { onChange(config.copy(theme = it)) },
                         label = { it.label },
-                        accent = PulseColors.Aqua,
+                        accent = NightbellColors.Aqua,
                     )
                     Spacer(Modifier.height(14.dp))
                     Text(
                         text = "Density",
                         style = MaterialTheme.typography.labelMedium,
-                        color = PulseColors.TextTertiary,
+                        color = NightbellColors.TextTertiary,
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
                     ChipSelector(
@@ -220,19 +220,19 @@ private fun ConfigBody(
                         selected = config.density,
                         onSelect = { onChange(config.copy(density = it)) },
                         label = { it.label },
-                        accent = PulseColors.Aqua,
+                        accent = NightbellColors.Aqua,
                     )
                 }
             }
 
             item(key = "colours") {
                 GlassCard {
-                    SectionHeader("Colours", icon = PulseIcons.Sparkle, accent = PulseColors.Mint)
+                    SectionHeader("Colours", icon = NightbellIcons.Sparkle, accent = NightbellColors.Mint)
                     if (config.theme == WidgetTheme.CUSTOM) {
                         Text(
                             text = "Background",
                             style = MaterialTheme.typography.labelMedium,
-                            color = PulseColors.TextTertiary,
+                            color = NightbellColors.TextTertiary,
                             modifier = Modifier.padding(bottom = 8.dp),
                         )
                         SwatchGrid(
@@ -261,7 +261,7 @@ private fun ConfigBody(
                         Text(
                             text = "Text",
                             style = MaterialTheme.typography.labelMedium,
-                            color = PulseColors.TextTertiary,
+                            color = NightbellColors.TextTertiary,
                             modifier = Modifier.padding(bottom = 8.dp),
                         )
                         SwatchGrid(
@@ -274,13 +274,13 @@ private fun ConfigBody(
                             Text(
                                 text = "Background opacity",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = PulseColors.TextTertiary,
+                                color = NightbellColors.TextTertiary,
                             )
                             Spacer(Modifier.weight(1f))
                             Text(
                                 text = "${(config.backgroundOpacity * 100).toInt()}%",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = PulseColors.TextSecondary,
+                                color = NightbellColors.TextSecondary,
                             )
                         }
                         Slider(
@@ -288,9 +288,9 @@ private fun ConfigBody(
                             onValueChange = { onChange(config.copy(backgroundOpacity = it)) },
                             valueRange = 0f..1f,
                             colors = SliderDefaults.colors(
-                                thumbColor = PulseColors.Mint,
-                                activeTrackColor = PulseColors.Mint,
-                                inactiveTrackColor = PulseColors.GlassFill,
+                                thumbColor = NightbellColors.Mint,
+                                activeTrackColor = NightbellColors.Mint,
+                                inactiveTrackColor = NightbellColors.GlassFill,
                             ),
                             modifier = Modifier.testTag("widget-opacity"),
                         )
@@ -304,7 +304,7 @@ private fun ConfigBody(
                                 else -> "Solid enough to stay readable over anything."
                             },
                             style = MaterialTheme.typography.bodySmall,
-                            color = PulseColors.TextTertiary,
+                            color = NightbellColors.TextTertiary,
                         )
                     } else {
                         Text(
@@ -312,7 +312,7 @@ private fun ConfigBody(
                                 "surface with known contrast. Choose Custom above to set your " +
                                 "own background, text colour and transparency.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = PulseColors.TextTertiary,
+                            color = NightbellColors.TextTertiary,
                         )
                     }
                 }
@@ -320,7 +320,7 @@ private fun ConfigBody(
 
             item(key = "content") {
                 GlassCard {
-                    SectionHeader("Content", icon = PulseIcons.Layers, accent = PulseColors.Violet)
+                    SectionHeader("Content", icon = NightbellIcons.Layers, accent = NightbellColors.Violet)
                     // Three switches rather than one, because "clean" means different things
                     // to different people: some want the mark and nothing else, some want
                     // the status line and no branding at all.
@@ -329,16 +329,16 @@ private fun ConfigBody(
                         subtitle = if (config.showLogo) "The mark, top left" else "Hidden",
                         checked = config.showLogo,
                         onCheckedChange = { onChange(config.copy(showLogo = it)) },
-                        icon = PulseIcons.Activity,
-                        accent = PulseColors.Violet,
+                        icon = NightbellIcons.Activity,
+                        accent = NightbellColors.Violet,
                     )
                     ToggleRow(
                         title = "App name",
-                        subtitle = if (config.showTitle) "\"Pulse\" beside the logo" else "Hidden",
+                        subtitle = if (config.showTitle) "\"Nightbell\" beside the logo" else "Hidden",
                         checked = config.showTitle,
                         onCheckedChange = { onChange(config.copy(showTitle = it)) },
-                        icon = PulseIcons.Sparkle,
-                        accent = PulseColors.Violet,
+                        icon = NightbellIcons.Sparkle,
+                        accent = NightbellColors.Violet,
                     )
                     ToggleRow(
                         title = "Fleet summary",
@@ -349,8 +349,8 @@ private fun ConfigBody(
                         },
                         checked = config.showHeadline,
                         onCheckedChange = { onChange(config.copy(showHeadline = it)) },
-                        icon = PulseIcons.Gauge,
-                        accent = PulseColors.Violet,
+                        icon = NightbellIcons.Gauge,
+                        accent = NightbellColors.Violet,
                     )
                     ToggleRow(
                         title = "Settings button",
@@ -361,8 +361,8 @@ private fun ConfigBody(
                         },
                         checked = config.showSettingsButton,
                         onCheckedChange = { onChange(config.copy(showSettingsButton = it)) },
-                        icon = PulseIcons.Sliders,
-                        accent = PulseColors.Violet,
+                        icon = NightbellIcons.Sliders,
+                        accent = NightbellColors.Violet,
                     )
                     ToggleRow(
                         title = "Last checked",
@@ -373,8 +373,8 @@ private fun ConfigBody(
                         },
                         checked = config.showTimestamp,
                         onCheckedChange = { onChange(config.copy(showTimestamp = it)) },
-                        icon = PulseIcons.Clock,
-                        accent = PulseColors.Violet,
+                        icon = NightbellIcons.Clock,
+                        accent = NightbellColors.Violet,
                     )
                     ToggleRow(
                         title = "Only show problems",
@@ -385,23 +385,23 @@ private fun ConfigBody(
                         },
                         checked = config.onlyProblems,
                         onCheckedChange = { onChange(config.copy(onlyProblems = it)) },
-                        icon = PulseIcons.Filter,
-                        accent = PulseColors.Violet,
+                        icon = NightbellIcons.Filter,
+                        accent = NightbellColors.Violet,
                     )
                     Spacer(Modifier.height(6.dp))
                     StepperRow(
                         title = "Monitors",
                         value = config.maxRows,
                         onValueChange = { onChange(config.copy(maxRows = it)) },
-                        range = 1..PulseWidgetProvider.MAX_ROWS,
-                        icon = PulseIcons.Layers,
-                        accent = PulseColors.Violet,
+                        range = 1..NightbellWidgetProvider.MAX_ROWS,
+                        icon = NightbellIcons.Layers,
+                        accent = NightbellColors.Violet,
                     )
                     Spacer(Modifier.height(14.dp))
                     Text(
                         text = "Columns",
                         style = MaterialTheme.typography.labelMedium,
-                        color = PulseColors.TextTertiary,
+                        color = NightbellColors.TextTertiary,
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
                     ChipSelector(
@@ -409,7 +409,7 @@ private fun ConfigBody(
                         selected = config.columns.coerceIn(0, WidgetLayout.MAX_COLUMNS),
                         onSelect = { onChange(config.copy(columns = it)) },
                         label = { if (it == 0) "Auto" else it.toString() },
-                        accent = PulseColors.Aqua,
+                        accent = NightbellColors.Aqua,
                     )
                     Text(
                         text = if (config.columns == 0) {
@@ -421,7 +421,7 @@ private fun ConfigBody(
                                 "is dragged too narrow to read them."
                         },
                         style = MaterialTheme.typography.bodySmall,
-                        color = PulseColors.TextTertiary,
+                        color = NightbellColors.TextTertiary,
                     )
                 }
             }
@@ -430,16 +430,16 @@ private fun ConfigBody(
         Row(
             Modifier
                 .fillMaxWidth()
-                .background(PulseColors.Ink)
+                .background(NightbellColors.Ink)
                 .padding(horizontal = 18.dp, vertical = 14.dp)
                 .padding(bottom = bottom),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            PulseButton("Cancel", onCancel, tone = ButtonTone.Secondary, icon = PulseIcons.Close)
-            PulseButton(
+            NightbellButton("Cancel", onCancel, tone = ButtonTone.Secondary, icon = NightbellIcons.Close)
+            NightbellButton(
                 text = if (reconfiguring) "Save" else "Add widget",
                 onClick = onSave,
-                icon = PulseIcons.Check,
+                icon = NightbellIcons.Check,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -469,7 +469,7 @@ private fun SwatchGrid(swatches: List<Int>, selected: Int, onSelect: (Int) -> Un
                             .background(Color(rgb or 0xFF000000.toInt()))
                             .border(
                                 width = if (isSelected) 2.dp else 1.dp,
-                                color = if (isSelected) PulseColors.Mint else PulseColors.sheen(0.18f),
+                                color = if (isSelected) NightbellColors.Mint else NightbellColors.sheen(0.18f),
                                 shape = RoundedCornerShape(10.dp),
                             )
                             .clickable { onSelect(rgb) }
@@ -563,7 +563,7 @@ private fun WidgetPreview(config: WidgetConfig, fleet: Summary.Fleet) {
 
     // A checkerboard behind the surface, so "fully transparent" previews as
     // see-through rather than as whatever colour this screen happens to be.
-    val checker = PulseColors.sheen(0.05f)
+    val checker = NightbellColors.sheen(0.05f)
     Box(
         Modifier
             .fillMaxWidth()
@@ -608,14 +608,14 @@ private fun WidgetPreview(config: WidgetConfig, fleet: Summary.Fleet) {
                     // The fixed brand blue rather than the theme-aware Aqua, because that is
                     // what ic_widget_mark draws — the light scheme's darker Aqua here would
                     // make this a nicer picture of a widget that does not exist.
-                    PulseMark(
+                    NightbellMark(
                         size = 18.dp,
                         color = Color(0xFF2F6BFF),
                     )
                     Spacer(Modifier.width(8.dp))
                 }
                 if (config.showTitle) {
-                    Text("Pulse", style = MaterialTheme.typography.titleMedium, color = primary)
+                    Text("Nightbell", style = MaterialTheme.typography.titleMedium, color = primary)
                 }
                 Spacer(Modifier.weight(1f))
                 if (config.showHeadline) {
@@ -630,7 +630,7 @@ private fun WidgetPreview(config: WidgetConfig, fleet: Summary.Fleet) {
                 if (config.showSettingsButton) {
                     Spacer(Modifier.width(8.dp))
                     Icon(
-                        imageVector = PulseIcons.Sliders,
+                        imageVector = NightbellIcons.Sliders,
                         contentDescription = null,
                         tint = tertiary,
                         modifier = Modifier.size(16.dp),
@@ -678,7 +678,7 @@ private fun WidgetPreview(config: WidgetConfig, fleet: Summary.Fleet) {
             val newest = fleet.entries.maxOfOrNull { it.lastCheckedAt } ?: 0L
             Text(
                 text = if (newest > 0L) {
-                    "Checked ${PulseWidgetProvider.relative(newest)}"
+                    "Checked ${NightbellWidgetProvider.relative(newest)}"
                 } else {
                     "Not checked yet"
                 },

@@ -355,7 +355,7 @@ class CheckerHealthTest {
     @Test
     fun `an error that ages the claim out withdraws it explicitly`() {
         // The one transition where `raised` goes true -> false. It must emit CLEAR:
-        // otherwise state says "no claim" while "Pulse can't complete its checks" is
+        // otherwise state says "no claim" while "Nightbell can't complete its checks" is
         // still on screen, and nothing left in the process would take it down —
         // `expireIfStale` only runs from the strict-mode service loop, and
         // `recordVerdict` skips the cancel because `raised` is already false.

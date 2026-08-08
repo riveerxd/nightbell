@@ -1,6 +1,6 @@
 package me.river.pulse
 
-import me.river.pulse.data.PulseSnapshot
+import me.river.pulse.data.NightbellSnapshot
 import me.river.pulse.domain.AlertPolicy
 import me.river.pulse.domain.AssertionMode
 import me.river.pulse.domain.BodyAssertion
@@ -186,7 +186,7 @@ class PersistenceTest {
 
     @Test
     fun `snapshot survives a full round trip`() {
-        val snapshot = PulseSnapshot(
+        val snapshot = NightbellSnapshot(
             monitors = listOf(
                 Monitor(
                     id = "a",
@@ -231,7 +231,7 @@ class PersistenceTest {
         )
 
         val encoded = json.encodeToString(snapshot)
-        val decoded = json.decodeFromString<PulseSnapshot>(encoded)
+        val decoded = json.decodeFromString<NightbellSnapshot>(encoded)
 
         assertEquals(snapshot, decoded)
         assertEquals(2, decoded.monitors.size)
@@ -247,7 +247,7 @@ class PersistenceTest {
             {"schema":1,"monitors":[{"id":"x","url":"https://a.b","futureField":42}],
              "runtimes":{},"settings":{"masterAlertsEnabled":true,"somethingNew":"?"}}
         """.trimIndent()
-        val decoded = json.decodeFromString<PulseSnapshot>(raw)
+        val decoded = json.decodeFromString<NightbellSnapshot>(raw)
         assertEquals(1, decoded.monitors.size)
         assertEquals("https://a.b", decoded.monitors[0].url)
         assertEquals(MonitorKind.HTTP_STATUS, decoded.monitors[0].kind)

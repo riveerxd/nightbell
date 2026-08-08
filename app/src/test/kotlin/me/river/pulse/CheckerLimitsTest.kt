@@ -101,9 +101,9 @@ class CheckerLimitsTest {
     @Test
     fun `strict mode means checks are running even with background checks off`() {
         // The two toggles are independent: nothing gates the strict switch on
-        // `backgroundChecksEnabled`, and PulseMonitorService never consults it. With
+        // `backgroundChecksEnabled`, and NightbellMonitorService never consults it. With
         // strict on, every monitor is being checked on its exact interval — so
-        // "Pulse only checks while you have it open" would be flatly false.
+        // "Nightbell only checks while you have it open" would be flatly false.
         val facts = healthy.copy(backgroundChecksEnabled = false, strictMode = true)
         assertEquals(CheckerLimit.NONE, CheckerLimits.diagnose(facts))
         assertEquals(

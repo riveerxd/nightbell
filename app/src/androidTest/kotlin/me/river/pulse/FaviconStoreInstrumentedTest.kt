@@ -3,7 +3,7 @@ package me.river.pulse
 import android.graphics.Bitmap
 import android.graphics.Color
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import me.river.pulse.PulseTestSupport.appContext
+import me.river.pulse.NightbellTestSupport.appContext
 import me.river.pulse.data.icons.FaviconStore
 import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.runBlocking

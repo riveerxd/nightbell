@@ -7,7 +7,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import me.river.pulse.data.Pulse
+import me.river.pulse.data.Nightbell
 import me.river.pulse.ui.permissions.TAG_DISMISS
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -20,7 +20,7 @@ import org.junit.runner.RunWith
  * The pager-setup gate: that it stands in front of the dashboard while grants are
  * missing, that dismissing it is recorded, and that it never returns afterwards.
  *
- * The one suite that opts *into* the gate — [PulseTestSupport.resetApp] skips it,
+ * The one suite that opts *into* the gate — [NightbellTestSupport.resetApp] skips it,
  * because on an emulator some grant is always missing and every other UI suite
  * would otherwise be asserting against this screen instead of the app.
  */
@@ -35,15 +35,15 @@ class PagerSetupInstrumentedTest {
     @After
     fun tearDown() {
         scenario?.close()
-        PulseTestSupport.resetApp()
+        NightbellTestSupport.resetApp()
     }
 
     @Test
     fun theGateStandsInFrontOfTheDashboardOnAFreshInstall() {
-        PulseTestSupport.resetAppAtPagerSetup()
+        NightbellTestSupport.resetAppAtPagerSetup()
         scenario = ActivityScenario.launch(MainActivity::class.java)
         composeRule.waitForIdle()
-        composeRule.onNodeWithText("Let Pulse wake you when something breaks").assertIsDisplayed()
+        composeRule.onNodeWithText("Let Nightbell wake you when something breaks").assertIsDisplayed()
     }
 
     /**
@@ -53,7 +53,7 @@ class PagerSetupInstrumentedTest {
      */
     @Test
     fun skippingIsRecordedAndOpensTheApp() {
-        PulseTestSupport.resetAppAtPagerSetup()
+        NightbellTestSupport.resetAppAtPagerSetup()
         scenario = ActivityScenario.launch(MainActivity::class.java)
         composeRule.waitForIdle()
 
@@ -62,16 +62,16 @@ class PagerSetupInstrumentedTest {
         composeRule.onNodeWithTag(TAG_DISMISS).performClick()
         composeRule.waitForIdle()
 
-        PulseTestSupport.awaitTrue(description = "the skip was persisted") {
+        NightbellTestSupport.awaitTrue(description = "the skip was persisted") {
             runBlocking {
-                Pulse.install(PulseTestSupport.appContext)
+                Nightbell.install(NightbellTestSupport.appContext)
                     .store.currentSnapshot().settings.hasSeenPagerSetup
             }
         }
         assertTrue(
             "the dashboard must be reachable after skipping",
             runBlocking {
-                Pulse.install(PulseTestSupport.appContext)
+                Nightbell.install(NightbellTestSupport.appContext)
                     .store.currentSnapshot().settings.hasSeenPagerSetup
             },
         )
@@ -79,9 +79,9 @@ class PagerSetupInstrumentedTest {
 
     @Test
     fun theGateDoesNotReturnOnceSeen() {
-        PulseTestSupport.resetApp()
+        NightbellTestSupport.resetApp()
         scenario = ActivityScenario.launch(MainActivity::class.java)
         composeRule.waitForIdle()
-        composeRule.onNodeWithText("PULSE").assertIsDisplayed()
+        composeRule.onNodeWithText("NIGHTBELL").assertIsDisplayed()
     }
 }

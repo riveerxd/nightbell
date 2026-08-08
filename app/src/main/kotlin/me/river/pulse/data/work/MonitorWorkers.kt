@@ -14,7 +14,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
-import me.river.pulse.data.Pulse
+import me.river.pulse.data.Nightbell
 import me.river.pulse.domain.GlobalSettings
 import me.river.pulse.domain.Monitor
 import java.util.concurrent.TimeUnit
@@ -31,7 +31,7 @@ import kotlinx.coroutines.flow.first
  * running. REPLACE cancels the work it replaces, so every scheduled check
  * cancelled itself on the way out. Worse, [MonitorScheduler.syncAll] did the same
  * REPLACE across every monitor, and it was called from the 15-minute
- * [SweepWorker], from `PulseApplication.onCreate`, from [BootReceiver] and from
+ * [SweepWorker], from `NightbellApplication.onCreate`, from [BootReceiver] and from
  * every settings write — so any of those killed whatever checks were in flight,
  * all of them at once.
  *
@@ -58,7 +58,7 @@ class MonitorWorker(context: Context, params: WorkerParameters) : CoroutineWorke
             // WorkerWrapper turns an escaped throwable into a **terminal FAILED**
             // state — from which `ExistingPeriodicWorkPolicy.UPDATE` cannot recover
             // this work at all. See MonitorScheduler.schedule.
-            val graph = Pulse.install(applicationContext)
+            val graph = Nightbell.install(applicationContext)
             val snapshot = graph.store.currentSnapshot()
             val monitor = snapshot.monitors.firstOrNull { it.id == monitorId }
                 ?: return Result.success() // deleted while queued
@@ -116,7 +116,7 @@ class SweepWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
     override suspend fun doWork(): Result {
         return try {
             // Inside the try — see MonitorWorker.doWork for why.
-            val graph = Pulse.install(applicationContext)
+            val graph = Nightbell.install(applicationContext)
             val snapshot = graph.store.currentSnapshot()
             if (!snapshot.settings.backgroundChecksEnabled) return Result.success()
             val ran = graph.engine.runAllDue()
@@ -128,7 +128,7 @@ class SweepWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
             graph.scheduler.syncAll(snapshot.monitors, snapshot.settings)
 
             // The urgent tick, and the reconciliation sweep inside it, used to run
-            // from [PulseMonitorService] and nowhere else. That service is started
+            // from [NightbellMonitorService] and nowhere else. That service is started
             // by a background `startForegroundService`, which Android 12+ refuses
             // without an exemption — and the refusal is caught and logged. So with
             // strict mode off, the first page went out and then nothing ever
@@ -309,7 +309,7 @@ class MonitorScheduler(private val context: Context) {
 
         /**
          * Android's minimum period for [PeriodicWorkRequest], in minutes. Not a
-         * choice Pulse gets to make — `PeriodicWorkRequest` clamps anything
+         * choice Nightbell gets to make — `PeriodicWorkRequest` clamps anything
          * shorter, silently, so the app clamps it visibly instead.
          */
         const val MIN_PERIODIC_MINUTES =

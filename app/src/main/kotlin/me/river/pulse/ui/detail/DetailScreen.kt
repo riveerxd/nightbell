@@ -54,7 +54,7 @@ import me.river.pulse.ui.components.IconBadge
 import me.river.pulse.ui.components.LatencyBars
 import me.river.pulse.ui.components.MetricTile
 import me.river.pulse.ui.components.MicroTag
-import me.river.pulse.ui.components.PulseButton
+import me.river.pulse.ui.components.NightbellButton
 import me.river.pulse.ui.components.SectionHeader
 import me.river.pulse.ui.components.StaggeredEntrance
 import me.river.pulse.ui.components.rememberEntranceLog
@@ -64,10 +64,10 @@ import me.river.pulse.ui.components.formatLatency
 import me.river.pulse.ui.components.formatRelative
 import me.river.pulse.ui.components.formatSpan
 import me.river.pulse.ui.dashboard.kindIcon
-import me.river.pulse.ui.icons.PulseIcons
+import me.river.pulse.ui.icons.NightbellIcons
 import me.river.pulse.ui.rememberDetailViewModel
 import me.river.pulse.ui.theme.LocalNowMs
-import me.river.pulse.ui.theme.PulseColors
+import me.river.pulse.ui.theme.NightbellColors
 import me.river.pulse.ui.theme.accentFor
 import me.river.pulse.ui.theme.readableContentPadding
 import me.river.pulse.ui.theme.healthColor
@@ -110,9 +110,9 @@ fun DetailScreen(
             EmptyState(
                 title = "Monitor not found",
                 message = "It may have been deleted from another screen.",
-                icon = PulseIcons.Warning,
-                accent = PulseColors.Amber,
-                action = { PulseButton("Back to dashboard", onBack, icon = PulseIcons.ArrowLeft) },
+                icon = NightbellIcons.Warning,
+                accent = NightbellColors.Amber,
+                action = { NightbellButton("Back to dashboard", onBack, icon = NightbellIcons.ArrowLeft) },
             )
         }
         return
@@ -135,10 +135,10 @@ fun DetailScreen(
         item(key = "top") {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 GlassIconButton(
-                    icon = PulseIcons.ArrowLeft,
+                    icon = NightbellIcons.ArrowLeft,
                     onClick = onBack,
                     contentDescription = "Back",
-                    accent = PulseColors.TextSecondary,
+                    accent = NightbellColors.TextSecondary,
                     size = 38.dp,
                 )
                 Spacer(Modifier.width(14.dp))
@@ -146,21 +146,21 @@ fun DetailScreen(
                     Text(
                         text = monitor.displayName,
                         style = MaterialTheme.typography.headlineMedium,
-                        color = PulseColors.TextPrimary,
+                        color = NightbellColors.TextPrimary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
                         text = monitor.url,
                         style = MaterialTheme.typography.bodySmall,
-                        color = PulseColors.TextTertiary,
+                        color = NightbellColors.TextTertiary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
                 Spacer(Modifier.width(10.dp))
                 GlassIconButton(
-                    icon = PulseIcons.Pencil,
+                    icon = NightbellIcons.Pencil,
                     onClick = { onEdit(monitor.id) },
                     contentDescription = "Edit monitor",
                     accent = accent,
@@ -203,7 +203,7 @@ fun DetailScreen(
             item(key = "chart") {
                 StaggeredEntrance(index = 2, key = "chart-${monitor.id}", log = entrance) {
                     GlassCard {
-                        SectionHeader("Response time", icon = PulseIcons.Chart, accent = accentEnd)
+                        SectionHeader("Response time", icon = NightbellIcons.Chart, accent = accentEnd)
                         LatencyBars(
                             samples = runtime.samples.takeLast(40),
                             modifier = Modifier.fillMaxWidth().height(112.dp),
@@ -219,13 +219,13 @@ fun DetailScreen(
                             MetricTile(
                                 label = "p95",
                                 value = formatLatency(runtime.p95LatencyMs),
-                                accent = PulseColors.Violet,
+                                accent = NightbellColors.Violet,
                                 modifier = Modifier.weight(1f),
                             )
                             MetricTile(
                                 label = "Checks",
                                 value = runtime.samples.size.toString(),
-                                accent = PulseColors.TextSecondary,
+                                accent = NightbellColors.TextSecondary,
                                 modifier = Modifier.weight(1f),
                             )
                         }
@@ -249,7 +249,7 @@ fun DetailScreen(
         }
 
         item(key = "events-header") {
-            SectionHeader("Recent checks", icon = PulseIcons.History, accent = accent)
+            SectionHeader("Recent checks", icon = NightbellIcons.History, accent = accent)
         }
 
         if (runtime.samples.isEmpty()) {
@@ -258,7 +258,7 @@ fun DetailScreen(
                     Text(
                         text = "No checks recorded yet. Run one now to start the history.",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = PulseColors.TextTertiary,
+                        color = NightbellColors.TextTertiary,
                     )
                 }
             }
@@ -280,14 +280,14 @@ fun DetailScreen(
             }
             if (all.size > EVENT_PREVIEW) {
                 item(key = "events-more") {
-                    PulseButton(
+                    NightbellButton(
                         text = if (showAllChecks) {
                             "Show fewer"
                         } else {
                             "Show all ${all.size} checks"
                         },
                         onClick = { showAllChecks = !showAllChecks },
-                        icon = if (showAllChecks) PulseIcons.ChevronUp else PulseIcons.History,
+                        icon = if (showAllChecks) NightbellIcons.ChevronUp else NightbellIcons.History,
                         tone = ButtonTone.Secondary,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -302,10 +302,10 @@ fun DetailScreen(
                 enter = fadeIn() + expandVertically(),
                 exit = fadeOut() + shrinkVertically(),
             ) {
-                PulseButton(
+                NightbellButton(
                     text = "Delete monitor",
                     onClick = { confirmDelete = true },
-                    icon = PulseIcons.Trash,
+                    icon = NightbellIcons.Trash,
                     tone = ButtonTone.Danger,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -315,31 +315,31 @@ fun DetailScreen(
                 enter = fadeIn() + expandVertically(),
                 exit = fadeOut() + shrinkVertically(),
             ) {
-                GlassCard(accent = PulseColors.Rose) {
+                GlassCard(accent = NightbellColors.Rose) {
                     Text(
                         text = "Delete “${monitor.displayName}”?",
                         style = MaterialTheme.typography.titleMedium,
-                        color = PulseColors.TextPrimary,
+                        color = NightbellColors.TextPrimary,
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
                         text = "Its history and scheduled checks go with it. This can't be undone.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = PulseColors.TextTertiary,
+                        color = NightbellColors.TextTertiary,
                     )
                     Spacer(Modifier.height(14.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        PulseButton(
+                        NightbellButton(
                             text = "Keep it",
                             onClick = { confirmDelete = false },
                             tone = ButtonTone.Secondary,
                             modifier = Modifier.weight(1f),
                         )
-                        PulseButton(
+                        NightbellButton(
                             text = "Delete",
                             onClick = { viewModel.delete(onBack) },
                             tone = ButtonTone.Danger,
-                            icon = PulseIcons.Trash,
+                            icon = NightbellIcons.Trash,
                             modifier = Modifier.weight(1f),
                         )
                     }
@@ -401,7 +401,7 @@ private fun HeroCard(
                         }
                     },
                     style = MaterialTheme.typography.bodySmall,
-                    color = PulseColors.TextSecondary,
+                    color = NightbellColors.TextSecondary,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -414,7 +414,7 @@ private fun HeroCard(
                 Text(
                     text = "Checked ${formatRelative(runtime.lastCheckedAt, LocalNowMs.current)}",
                     style = MaterialTheme.typography.bodySmall,
-                    color = PulseColors.TextTertiary,
+                    color = NightbellColors.TextTertiary,
                 )
             }
         }
@@ -424,13 +424,13 @@ private fun HeroCard(
                 Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(14.dp))
-                    .background(PulseColors.Rose.copy(alpha = 0.09f))
+                    .background(NightbellColors.Rose.copy(alpha = 0.09f))
                     .padding(13.dp),
             ) {
                 Text(
                     text = runtime.lastDetail,
                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
-                    color = PulseColors.TextSecondary,
+                    color = NightbellColors.TextSecondary,
                     maxLines = 8,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -454,24 +454,24 @@ private fun ActionsRow(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        PulseButton(
+        NightbellButton(
             text = if (busy) "Checking…" else "Check now",
             onClick = onCheck,
             loading = busy,
-            icon = PulseIcons.Refresh,
+            icon = NightbellIcons.Refresh,
             accent = accent,
             modifier = Modifier.weight(1f),
         )
-        PulseButton(
+        NightbellButton(
             text = if (enabled) "Pause" else "Resume",
             onClick = onToggle,
-            icon = if (enabled) PulseIcons.Pause else PulseIcons.Play,
+            icon = if (enabled) NightbellIcons.Pause else NightbellIcons.Play,
             tone = ButtonTone.Secondary,
         )
-        PulseButton(
+        NightbellButton(
             text = if (muted) "Un-mute" else "Mute 1h",
             onClick = if (muted) onUnmute else onMute,
-            icon = if (muted) PulseIcons.Bell else PulseIcons.BellOff,
+            icon = if (muted) NightbellIcons.Bell else NightbellIcons.BellOff,
             tone = ButtonTone.Secondary,
         )
     }
@@ -483,28 +483,28 @@ private fun ActionsRow(
  */
 @Composable
 private fun UrgentBanner(repeatMinutes: Int, onAcknowledge: () -> Unit) {
-    GlassCard(accent = PulseColors.Rose, contentPadding = 18.dp) {
+    GlassCard(accent = NightbellColors.Rose, contentPadding = 18.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconBadge(PulseIcons.Zap, PulseColors.Rose, size = 40.dp)
+            IconBadge(NightbellIcons.Zap, NightbellColors.Rose, size = 40.dp)
             Spacer(Modifier.width(13.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     text = "Urgent alert active",
                     style = MaterialTheme.typography.titleMedium,
-                    color = PulseColors.Rose,
+                    color = NightbellColors.Rose,
                 )
                 Text(
                     text = "Repeating every $repeatMinutes min until acknowledged.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = PulseColors.TextSecondary,
+                    color = NightbellColors.TextSecondary,
                 )
             }
         }
         Spacer(Modifier.height(13.dp))
-        PulseButton(
+        NightbellButton(
             text = "I've got it — acknowledge",
             onClick = onAcknowledge,
-            icon = PulseIcons.Check,
+            icon = NightbellIcons.Check,
             tone = ButtonTone.Danger,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -513,7 +513,7 @@ private fun UrgentBanner(repeatMinutes: Int, onAcknowledge: () -> Unit) {
             text = "The monitor stays down until it recovers. Acknowledging only stops " +
                 "the repeats for this outage — the next one will shout again.",
             style = MaterialTheme.typography.bodySmall,
-            color = PulseColors.TextTertiary,
+            color = NightbellColors.TextTertiary,
         )
     }
 }
@@ -538,12 +538,12 @@ private fun CertificateCard(runtime: MonitorRuntime, nowMs: Long) {
     val days = CertificateWatch.daysLeft(runtime.certExpiresAt, nowMs)
     val expired = nowMs >= runtime.certExpiresAt
     val tone = when {
-        expired -> PulseColors.Rose
-        days <= 14 -> PulseColors.Amber
-        else -> PulseColors.Mint
+        expired -> NightbellColors.Rose
+        days <= 14 -> NightbellColors.Amber
+        else -> NightbellColors.Mint
     }
-    GlassCard(accent = if (tone == PulseColors.Mint) Color.Transparent else tone) {
-        SectionHeader("TLS certificate", icon = PulseIcons.Shield, accent = tone)
+    GlassCard(accent = if (tone == NightbellColors.Mint) Color.Transparent else tone) {
+        SectionHeader("TLS certificate", icon = NightbellIcons.Shield, accent = tone)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(
@@ -559,11 +559,11 @@ private fun CertificateCard(runtime: MonitorRuntime, nowMs: Long) {
                 Text(
                     text = certDateFormat.format(Date(runtime.certExpiresAt)),
                     style = MaterialTheme.typography.bodySmall,
-                    color = PulseColors.TextTertiary,
+                    color = NightbellColors.TextTertiary,
                 )
             }
             if (runtime.certIssuer.isNotBlank()) {
-                MicroTag(runtime.certIssuer, color = PulseColors.TextSecondary)
+                MicroTag(runtime.certIssuer, color = NightbellColors.TextSecondary)
             }
         }
         if (expired) {
@@ -573,7 +573,7 @@ private fun CertificateCard(runtime: MonitorRuntime, nowMs: Long) {
                     "connection. A check that still passes is checking something " +
                     "that stopped being trustworthy.",
                 style = MaterialTheme.typography.bodySmall,
-                color = PulseColors.TextSecondary,
+                color = NightbellColors.TextSecondary,
             )
         }
     }
@@ -582,7 +582,7 @@ private fun CertificateCard(runtime: MonitorRuntime, nowMs: Long) {
 @Composable
 private fun ConfigCard(monitor: Monitor, accent: Color) {
     GlassCard {
-        SectionHeader("Configuration", icon = PulseIcons.Sliders, accent = accent)
+        SectionHeader("Configuration", icon = NightbellIcons.Sliders, accent = accent)
         ConfigRow("Type", monitor.kind.label)
         if (monitor.kind != MonitorKind.WEBSITE_ELEMENT) {
             ConfigRow("Method", monitor.method.name)
@@ -640,13 +640,13 @@ private fun ConfigRow(label: String, value: String) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
-            color = PulseColors.TextTertiary,
+            color = NightbellColors.TextTertiary,
             modifier = Modifier.width(112.dp),
         )
         Text(
             text = value,
             style = MaterialTheme.typography.bodySmall,
-            color = PulseColors.TextSecondary,
+            color = NightbellColors.TextSecondary,
             modifier = Modifier.weight(1f),
             maxLines = 3,
             overflow = TextOverflow.Ellipsis,
@@ -665,8 +665,8 @@ private fun EventRow(sample: Sample) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconBadge(
-            icon = if (sample.ok) PulseIcons.Check else PulseIcons.Warning,
-            accent = if (sample.ok) PulseColors.Mint else PulseColors.Rose,
+            icon = if (sample.ok) NightbellIcons.Check else NightbellIcons.Warning,
+            accent = if (sample.ok) NightbellColors.Mint else NightbellColors.Rose,
             size = 28.dp,
         )
         Spacer(Modifier.width(12.dp))
@@ -678,21 +678,21 @@ private fun EventRow(sample: Sample) {
                     sample.note.ifBlank { "Failed" }
                 },
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (sample.ok) PulseColors.TextSecondary else PulseColors.Rose,
+                color = if (sample.ok) NightbellColors.TextSecondary else NightbellColors.Rose,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = "${dateFormat.format(Date(sample.at))} · ${timeFormat.format(Date(sample.at))}",
                 style = MaterialTheme.typography.bodySmall,
-                color = PulseColors.TextTertiary,
+                color = NightbellColors.TextTertiary,
             )
         }
         Spacer(Modifier.width(10.dp))
         Text(
             text = formatLatency(sample.latencyMs),
             style = MaterialTheme.typography.labelLarge,
-            color = PulseColors.TextSecondary,
+            color = NightbellColors.TextSecondary,
         )
     }
 }

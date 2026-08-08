@@ -82,6 +82,6 @@ class LatencyReference(
     private companion object {
         const val TAG = "LatencyReference"
         const val TIMEOUT_SECONDS = 4L
-        const val USER_AGENT = "Pulse-Monitor/1.0 (+latency-reference)"
+        const val USER_AGENT = "Nightbell-Monitor/1.0 (+latency-reference)"
     }
 }

@@ -4,8 +4,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import me.river.pulse.PulseTestSupport.captureScreenshot
-import me.river.pulse.ui.theme.PulseTheme
+import me.river.pulse.NightbellTestSupport.captureScreenshot
+import me.river.pulse.ui.theme.NightbellTheme
 import me.river.pulse.ui.urgent.UrgentAlertScreen
 import me.river.pulse.ui.urgent.UrgentAlertUi
 import me.river.pulse.ui.urgent.UrgentAlertVariant
@@ -42,7 +42,7 @@ class UrgentPageDesignTest {
 
     private fun capture(variant: UrgentAlertVariant, name: String) {
         composeRule.setContent {
-            PulseTheme(motionIntensity = 0f) {
+            NightbellTheme(motionIntensity = 0f) {
                 UrgentAlertScreen(
                     variant = variant,
                     ui = sample,

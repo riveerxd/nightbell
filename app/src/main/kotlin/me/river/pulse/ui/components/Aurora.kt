@@ -13,7 +13,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import me.river.pulse.ui.theme.PulseColors
+import me.river.pulse.ui.theme.NightbellColors
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
@@ -38,8 +38,8 @@ private data class Blob(
 @Composable
 fun AuroraBackground(
     modifier: Modifier = Modifier,
-    tint: Color = PulseColors.Aqua,
-    secondary: Color = PulseColors.Violet,
+    tint: Color = NightbellColors.Aqua,
+    secondary: Color = NightbellColors.Violet,
     intensity: Float = 1f,
     content: @Composable BoxScope.() -> Unit,
 ) {
@@ -61,14 +61,14 @@ fun AuroraBackground(
     // not a composition, so it cannot see which scheme is in force, and the
     // remember below has to be keyed on the palette or a theme switch would leave
     // the old blobs on screen.
-    val indigo = PulseColors.Indigo
-    val aqua = PulseColors.Aqua
-    val base = PulseColors.Void
-    val mid = PulseColors.Ink
-    val grainTint = PulseColors.sheen(1f)
+    val indigo = NightbellColors.Indigo
+    val aqua = NightbellColors.Aqua
+    val base = NightbellColors.Void
+    val mid = NightbellColors.Ink
+    val grainTint = NightbellColors.sheen(1f)
     // The vignette darkens on dark and *lightens* on light. Painting black over
     // off-white at 0.72 would put a bruise around the edge of every screen.
-    val vignette = if (PulseColors.isDark) {
+    val vignette = if (NightbellColors.isDark) {
         Color.Black.copy(alpha = 0.72f)
     } else {
         base.copy(alpha = 0.85f)

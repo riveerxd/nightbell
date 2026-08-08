@@ -1,4 +1,4 @@
-# Pulse reference
+# Nightbell reference
 
 The long version. See the [README](../README.md) for the short one.
 
@@ -46,7 +46,7 @@ Every monitor either inherits the global alert policy or overrides it:
   **Acknowledge** on urgent alerts.
 
 Android freezes sound and vibration onto a notification channel at creation
-time, so a single channel could never honour per-monitor choices. Pulse
+time, so a single channel could never honour per-monitor choices. Nightbell
 materialises one channel per `(sound × vibration style × severity)` combination
 on demand and routes each alert to the matching one. Channels are grouped so the
 system settings screen stays readable.
@@ -55,7 +55,7 @@ system settings screen stays readable.
 
 A per-monitor switch for the things you cannot afford to sleep through.
 
-While an URGENT monitor is down, Pulse re-posts **one** notification on a
+While an URGENT monitor is down, Nightbell re-posts **one** notification on a
 dedicated, DND-bypassing alarm channel every *N* minutes (default 5) until you
 acknowledge it, from the notification action or from the monitor screen. It is
 `ongoing`, so it cannot be swiped away.
@@ -96,13 +96,13 @@ Three layers, and the app is explicit about what each one can promise:
 
 | Layer | Cadence it can honour | Notes |
 | --- | --- | --- |
-| Per-monitor `PeriodicWorkRequest` | the monitor's interval, **floored at 15 min** | Android's floor, not a Pulse setting |
+| Per-monitor `PeriodicWorkRequest` | the monitor's interval, **floored at 15 min** | Android's floor, not a Nightbell setting |
 | 15-minute repair sweep | anything overdue, at 15-min granularity | also re-arms missing periodic work |
 | Strict foreground service | exactly as configured, down to ~15 s | costs a permanent notification and battery |
 
 **Sub-15-minute intervals cannot be honoured in the background.**
 `PeriodicWorkRequest.MIN_PERIODIC_INTERVAL_MILLIS` is 15 minutes and WorkManager
-clamps anything shorter, silently. Pulse clamps it *visibly* instead: the
+clamps anything shorter, silently. Nightbell clamps it *visibly* instead: the
 scheduler coerces to the floor, the sweep still picks the monitor up as overdue
 on every wake, and the Settings → **Checker health** card says so in as many
 words. Strict mode is the only way to get the interval you asked for, and that is
@@ -116,14 +116,14 @@ for what the previous `REPLACE`-everywhere design did to real users.
 
 ### Checker health, separately from monitor health
 
-A check can fail to produce an answer for three very different reasons, and Pulse
+A check can fail to produce an answer for three very different reasons, and Nightbell
 now keeps them apart:
 
 | | What it means | What the user gets |
 | --- | --- | --- |
 | **Monitor failure** | the site is down, the selector is gone, the status is wrong | notification + vibration, per policy |
 | **System-limited** | Doze, battery saver, no connectivity, background restricted | shown in Settings; **never** a notification |
-| **Checker fault** | an exception escaped Pulse's own checker code | its own quiet channel, only once verified |
+| **Checker fault** | an exception escaped Nightbell's own checker code | its own quiet channel, only once verified |
 
 The middle row is the one that was missing, and its absence is why cancelled
 checks used to arrive as outages. A checker fault needs **three consecutive
@@ -133,7 +133,7 @@ instant any check produces a verdict, passing *or* failing.
 
 **Coroutine cancellation is not any of the three.** WorkManager replacing work, a
 foreground service stopping and a screen going away all cancel checks constantly;
-none of them is evidence about anything, and Pulse records and says nothing.
+none of them is evidence about anything, and Nightbell records and says nothing.
 
 ### Strict foreground monitoring
 
@@ -174,7 +174,7 @@ A worst-first list of monitors, configurable per instance:
   alike, and translucency cannot promise that.
 - **Density**: compact (dot · name · status) or detailed (adds host, latency and
   the failure message).
-- **Header pieces, independently**: the mark, the word "Pulse", the fleet
+- **Header pieces, independently**: the mark, the word "Nightbell", the fleet
   summary ("1 of 6 is down") and the settings cog each switch off on their own.
   They used to be one flag, which meant the only way to drop the summary was to
   lose the branding with it.
@@ -420,7 +420,7 @@ extent and the copies cannot drift apart.
 ## Moving between installs
 
 **Settings → Backup and transfer** writes every monitor, its sample history and
-your settings to a JSON file, through the Storage Access Framework, so Pulse
+your settings to a JSON file, through the Storage Access Framework, so Nightbell
 needs no storage permission, the destination is yours to pick, and nothing is
 uploaded anywhere.
 
@@ -460,10 +460,10 @@ alert state would suppress the first real outage on the new device, see the
 ```
 domain/    Models, Assertions, AlertDecider, UrgentAlerts, Summary,
            Validation                                     ← pure Kotlin, no Android
-data/      PulseStore (DataStore+JSON, forward migration), HttpChecker (OkHttp),
+data/      NightbellStore (DataStore+JSON, forward migration), HttpChecker (OkHttp),
            ElementChecker (offscreen WebView, N targets per load), CheckEngine,
-           AlertCenter, WorkManager scheduling, PulseMonitorService,
-           Pulse (service locator)
+           AlertCenter, WorkManager scheduling, NightbellMonitorService,
+           Nightbell (service locator)
 ui/        theme (colours, glass modifiers, motion, backdrop blur),
            icons (hand-authored), components, dashboard,
            setup (+ element picker), detail, settings
@@ -497,7 +497,7 @@ functions, which is why it can be exhaustively unit-tested without a device.
 - Confirmations are a **capsule sized to its text**, parked below the wordmark
   and carrying a genuine drop shadow. A full-width banner at the top edge covers
   the app's name and its "N systems operational" verdict, which is the one line
-  people open Pulse to read.
+  people open Nightbell to read.
 - Icons are hand-authored `ImageVector`s on a 24-unit grid with 1.7px round
   strokes, so the whole app shares one optical weight and the APK carries only
   the glyphs it uses.
@@ -584,7 +584,7 @@ keytool -genkeypair -v -keystore keystore/pulse-release.jks -alias pulse \
 | `NetworkBaselineTest` | 19 | the latency-reference maths and its four trust states |
 | `MultiElementTest` | 13 | target list, 1.0.0 migration, per-element validation, SLO/urgent validation |
 | `SummaryTest` | 10 | worst-first ranking shared by dashboard, widget and service |
-| `PulseE2ETest` | 8 | full UI journeys on-device |
+| `NightbellE2ETest` | 8 | full UI journeys on-device |
 | `ElementMonitorTest` | 10 | real WebView DOM: locate, fallbacks, picker capture |
 | `AlertsInstrumentedTest` | 11 | real notifications, channels, escalation, mute, actions |
 | `UrgentModeInstrumentedTest` | 8 | urgent end-to-end through the real engine + notification action |
@@ -606,7 +606,7 @@ sockets rather than a mock.
 `applicationId`, the signing key and the DataStore key (`snapshot_v1`) are
 unchanged, so 1.1.0 installs over 1.0.0 and keeps every monitor, its history and
 its settings. Every new field has a default and unknown keys are ignored, so the
-only real migration is multi-element monitors: `PulseStore.migrate` lifts 1.0.0's
+only real migration is multi-element monitors: `NightbellStore.migrate` lifts 1.0.0's
 single `element` into the new `elements` list, and keeps `element` pointing at
 the head of that list so a downgrade still finds a target.
 
@@ -619,11 +619,11 @@ intact and the element monitor re-resolving through the new code path.
 
 - **Sub-15-minute background intervals are impossible, not merely unreliable.**
   `PeriodicWorkRequest`'s minimum period is 15 minutes and there is no supported
-  way around it. Pulse clamps to the floor, lets the 15-minute repair sweep pick
+  way around it. Nightbell clamps to the floor, lets the 15-minute repair sweep pick
   up anything overdue, and says so in Settings → Checker health. Manual and
   foreground-service checks are exact; strict mode makes the background ones exact
   too, at the cost of a permanent notification and real battery.
-- **Doze and App Standby can delay even a 15-minute interval.** Exempting Pulse
+- **Doze and App Standby can delay even a 15-minute interval.** Exempting Nightbell
   from battery optimisation (offered in Settings → Checker health) helps and is
   not a guarantee. Only the foreground service is. Delay is reported in the UI and
   is never notified about, it is not an outage.

@@ -80,10 +80,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.river.pulse.domain.Health
 import me.river.pulse.domain.Sample
-import me.river.pulse.ui.icons.PulseIcons
-import me.river.pulse.ui.theme.LocalPulseMotion
-import me.river.pulse.ui.theme.PulseColors
-import me.river.pulse.ui.theme.PulseRadii
+import me.river.pulse.ui.icons.NightbellIcons
+import me.river.pulse.ui.theme.LocalNightbellMotion
+import me.river.pulse.ui.theme.NightbellColors
+import me.river.pulse.ui.theme.NightbellRadii
 import me.river.pulse.ui.theme.healthColor
 import kotlin.math.abs
 import kotlin.math.exp
@@ -102,7 +102,7 @@ fun AnimatedCounter(
     modifier: Modifier = Modifier,
     suffix: String = "",
     prefix: String = "",
-    color: Color = PulseColors.TextPrimary,
+    color: Color = NightbellColors.TextPrimary,
     style: TextStyle = MaterialTheme.typography.titleMedium,
 ) {
     AnimatedContent(
@@ -140,8 +140,8 @@ fun StatusOrb(
     checking: Boolean = false,
     size: Dp = 14.dp,
 ) {
-    val motion = LocalPulseMotion.current
-    val color = if (checking) PulseColors.Aqua else healthColor(health)
+    val motion = LocalNightbellMotion.current
+    val color = if (checking) NightbellColors.Aqua else healthColor(health)
     val ping by rememberLoopingFloat(
         initialValue = 0f,
         targetValue = 1f,
@@ -149,7 +149,7 @@ fun StatusOrb(
         label = "ping",
     )
     val alive = checking || health == Health.DOWN
-    val gloss = PulseColors.sheen(0.40f)
+    val gloss = NightbellColors.sheen(0.40f)
 
     Canvas(
         modifier
@@ -196,13 +196,13 @@ fun StatusPill(
     checking: Boolean = false,
     detail: String = "",
 ) {
-    val color = if (checking) PulseColors.Aqua else healthColor(health)
+    val color = if (checking) NightbellColors.Aqua else healthColor(health)
     val label = if (checking) "Checking" else health.label
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(PulseRadii.chip))
+            .clip(RoundedCornerShape(NightbellRadii.chip))
             .background(color.copy(alpha = 0.13f))
-            .border(1.dp, color.copy(alpha = 0.32f), RoundedCornerShape(PulseRadii.chip))
+            .border(1.dp, color.copy(alpha = 0.32f), RoundedCornerShape(NightbellRadii.chip))
             .padding(start = 8.dp, end = 12.dp, top = 5.dp, bottom = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -262,10 +262,10 @@ fun Sparkline(
     // Mint, not the brand blue: the line is a picture of something working, and it
     // should agree with the orb and the pill on the same card. Failed samples still
     // bleed to Rose inside the draw below.
-    accent: Color = PulseColors.Mint,
+    accent: Color = NightbellColors.Mint,
     animate: Boolean = true,
 ) {
-    val motion = LocalPulseMotion.current
+    val motion = LocalNightbellMotion.current
     val reveal = remember(samples.size) { Animatable(if (animate && motion.enabled) 0f else 1f) }
     LaunchedEffect(samples.size) {
         if (animate && motion.enabled) {
@@ -278,8 +278,8 @@ fun Sparkline(
     }
 
     val maxLatency = max(1L, samples.maxOf { it.latencyMs })
-    val fail = PulseColors.Rose
-    val headCore = PulseColors.TextPrimary
+    val fail = NightbellColors.Rose
+    val headCore = NightbellColors.TextPrimary
 
     Canvas(modifier.clearAndSetSemantics { contentDescription = chartSummary("Response time trend", samples) }) {
         val w = size.width
@@ -357,9 +357,9 @@ fun LatencyBars(
     samples: List<Sample>,
     modifier: Modifier = Modifier,
     /** Green for the same reason as [Sparkline]; a failed bar is drawn in Rose. */
-    accent: Color = PulseColors.Mint,
+    accent: Color = NightbellColors.Mint,
 ) {
-    val motion = LocalPulseMotion.current
+    val motion = LocalNightbellMotion.current
     val grow = remember(samples.size) { Animatable(if (motion.enabled) 0f else 1f) }
     LaunchedEffect(samples.size) {
         if (motion.enabled) grow.animateTo(1f, tween(620, easing = EaseOutCubic))
@@ -369,7 +369,7 @@ fun LatencyBars(
         return
     }
     val maxLatency = max(1L, samples.maxOf { it.latencyMs })
-    val fail = PulseColors.Rose
+    val fail = NightbellColors.Rose
     Canvas(modifier.clearAndSetSemantics { contentDescription = chartSummary("Response time history", samples) }) {
         val count = samples.size
         val gap = 3.dp.toPx()
@@ -396,12 +396,12 @@ fun LatencyBars(
 fun UptimeRing(
     percent: Float,
     modifier: Modifier = Modifier,
-    accent: Color = PulseColors.Mint,
+    accent: Color = NightbellColors.Mint,
     label: String = "uptime",
     /** No reading available — show a dash rather than a confident 0%. */
     unknown: Boolean = false,
 ) {
-    val motion = LocalPulseMotion.current
+    val motion = LocalNightbellMotion.current
     val animated by animateFloatAsState(
         targetValue = percent.coerceIn(0f, 100f),
         animationSpec = if (motion.enabled) {
@@ -414,7 +414,7 @@ fun UptimeRing(
     // One node, one sentence. Left as two Texts inside a Canvas, TalkBack read
     // "ninety-three percent" and then spelled U-P-T-I-M-E as a separate item.
     val spoken = if (unknown) label else "${animated.roundToInt()} percent, $label"
-    val track = PulseColors.sheen(0.07f)
+    val track = NightbellColors.sheen(0.07f)
     Box(
         modifier.clearAndSetSemantics { contentDescription = spoken },
         contentAlignment = Alignment.Center,
@@ -451,12 +451,12 @@ fun UptimeRing(
             Text(
                 text = if (unknown) "—" else "${animated.roundToInt()}%",
                 style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold),
-                color = if (unknown) PulseColors.TextTertiary else PulseColors.TextPrimary,
+                color = if (unknown) NightbellColors.TextTertiary else NightbellColors.TextPrimary,
             )
             Text(
                 text = label.uppercase(),
                 style = MaterialTheme.typography.labelSmall,
-                color = PulseColors.TextTertiary,
+                color = NightbellColors.TextTertiary,
                 maxLines = 1,
                 softWrap = false,
                 overflow = TextOverflow.Ellipsis,
@@ -470,10 +470,10 @@ fun UptimeRing(
 fun HistoryStrip(
     samples: List<Sample>,
     modifier: Modifier = Modifier,
-    accent: Color = PulseColors.Mint,
+    accent: Color = NightbellColors.Mint,
 ) {
-    val empty = PulseColors.sheen(0.05f)
-    val fail = PulseColors.Rose
+    val empty = NightbellColors.sheen(0.05f)
+    val fail = NightbellColors.Rose
     Canvas(modifier.clearAndSetSemantics { contentDescription = outcomeSummary(samples) }) {
         if (samples.isEmpty()) {
             drawRoundRect(
@@ -506,8 +506,8 @@ fun EmptyState(
     title: String,
     message: String,
     modifier: Modifier = Modifier,
-    icon: ImageVector = PulseIcons.Radar,
-    accent: Color = PulseColors.Aqua,
+    icon: ImageVector = NightbellIcons.Radar,
+    accent: Color = NightbellColors.Aqua,
     action: (@Composable () -> Unit)? = null,
 ) {
     val float by rememberLoopingFloat(
@@ -524,7 +524,7 @@ fun EmptyState(
         durationMillis = 14_000,
         label = "spin",
     )
-    val rings = List(3) { i -> PulseColors.sheen(0.09f - i * 0.02f) }
+    val rings = List(3) { i -> NightbellColors.sheen(0.09f - i * 0.02f) }
     Column(
         modifier = modifier.fillMaxWidth().padding(horizontal = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -582,13 +582,13 @@ fun EmptyState(
         Text(
             text = title,
             style = MaterialTheme.typography.headlineMedium,
-            color = PulseColors.TextPrimary,
+            color = NightbellColors.TextPrimary,
         )
         Spacer(Modifier.height(8.dp))
         Text(
             text = message,
             style = MaterialTheme.typography.bodyMedium,
-            color = PulseColors.TextSecondary,
+            color = NightbellColors.TextSecondary,
             modifier = Modifier.fillMaxWidth(),
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
@@ -630,7 +630,7 @@ fun PullToRefreshLayout(
     refreshing: Boolean,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
-    accent: Color = PulseColors.Aqua,
+    accent: Color = NightbellColors.Aqua,
     content: @Composable () -> Unit,
 ) {
     val density = LocalDensity.current
@@ -640,7 +640,7 @@ fun PullToRefreshLayout(
     val hold = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
-    val motion = LocalPulseMotion.current
+    val motion = LocalNightbellMotion.current
 
     // Raw finger travel. The rubber band is a pure function of it, so the
     // mapping stays reversible when the user drags back up mid-pull.
@@ -759,7 +759,7 @@ private fun RefreshIndicator(
     val holding = holdProgress > 0.01f
     // Everything below is driven by `pull`, so the puck is welded to the finger.
     val scale = 0.62f + pull * 0.38f + holdProgress * 0.06f
-    val ringColor = if (armed) accent else PulseColors.TextTertiary
+    val ringColor = if (armed) accent else NightbellColors.TextTertiary
 
     Column(
         modifier = modifier.graphicsLayer { alpha = (progress * 1.6f).coerceIn(0f, 1f) },
@@ -773,10 +773,10 @@ private fun RefreshIndicator(
                     scaleY = scale
                 }
                 .clip(CircleShape)
-                .background(PulseColors.ToastFill)
+                .background(NightbellColors.ToastFill)
                 .border(
                     1.dp,
-                    PulseColors.sheen(0.10f + holdProgress * 0.20f),
+                    NightbellColors.sheen(0.10f + holdProgress * 0.20f),
                     CircleShape,
                 ),
             contentAlignment = Alignment.Center,
@@ -821,9 +821,9 @@ private fun RefreshIndicator(
             }
             if (!refreshing) {
                 Icon(
-                    imageVector = PulseIcons.ArrowLeft,
+                    imageVector = NightbellIcons.ArrowLeft,
                     contentDescription = null,
-                    tint = if (armed) accent else PulseColors.TextTertiary,
+                    tint = if (armed) accent else NightbellColors.TextTertiary,
                     modifier = Modifier
                         .size(13.dp)
                         // Points down while pulling, rotates to up as it arms:
@@ -841,7 +841,7 @@ private fun RefreshIndicator(
                 else -> "Pull to re-check"
             },
             style = MaterialTheme.typography.labelMedium,
-            color = if (armed) accent else PulseColors.TextTertiary,
+            color = if (armed) accent else NightbellColors.TextTertiary,
             maxLines = 1,
         )
     }
@@ -916,14 +916,14 @@ fun MetricTile(
     label: String,
     value: String,
     modifier: Modifier = Modifier,
-    accent: Color = PulseColors.Aqua,
+    accent: Color = NightbellColors.Aqua,
     icon: ImageVector? = null,
 ) {
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(18.dp))
-            .background(PulseColors.sheen(0.05f))
-            .border(1.dp, PulseColors.sheen(0.07f), RoundedCornerShape(18.dp))
+            .background(NightbellColors.sheen(0.05f))
+            .border(1.dp, NightbellColors.sheen(0.07f), RoundedCornerShape(18.dp))
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -935,7 +935,7 @@ fun MetricTile(
             Text(
                 text = label.uppercase(),
                 style = MaterialTheme.typography.labelSmall,
-                color = PulseColors.TextTertiary,
+                color = NightbellColors.TextTertiary,
                 maxLines = 1,
                 softWrap = false,
                 overflow = TextOverflow.Ellipsis,
@@ -944,14 +944,14 @@ fun MetricTile(
         Text(
             text = value,
             style = MaterialTheme.typography.titleLarge.copy(fontSize = 19.sp),
-            color = PulseColors.TextPrimary,
+            color = NightbellColors.TextPrimary,
             maxLines = 1,
         )
     }
 }
 
 @Composable
-fun ProgressPips(total: Int, current: Int, modifier: Modifier = Modifier, accent: Color = PulseColors.Aqua) {
+fun ProgressPips(total: Int, current: Int, modifier: Modifier = Modifier, accent: Color = NightbellColors.Aqua) {
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         repeat(total) { index ->
             val active = index <= current
@@ -967,7 +967,7 @@ fun ProgressPips(total: Int, current: Int, modifier: Modifier = Modifier, accent
                     .clip(RoundedCornerShape(3.dp))
                     .background(
                         if (active) accent.copy(alpha = if (index == current) 1f else 0.5f)
-                        else PulseColors.sheen(0.12f),
+                        else NightbellColors.sheen(0.12f),
                     ),
             )
         }

@@ -23,7 +23,7 @@ android {
         // 1.1.0 adds strict foreground monitoring, URGENT mode, latency SLOs,
         // multi-element page monitors and the home-screen widget. applicationId
         // and the DataStore key are unchanged, so 1.0.0 installs update in place
-        // and keep their monitors — see PulseStore.migrate.
+        // and keep their monitors — see NightbellStore.migrate.
         // 1.1.2 fixes alert notifications that could outlive the outage they
         // described — reproduced on a real device, see HANDOFF. Includes a
         // one-time repair for stale notifications left by 1.1.0/1.1.1.
@@ -49,7 +49,7 @@ android {
         // scheduling is rebuilt on periodic work with UPDATE so nothing cancels a
         // check in flight in the first place, and checker faults now have their
         // own track and channel. Store schema untouched; the fabricated runtime
-        // state 1.5.0 persisted is scrubbed on read — see PulseStore.migrate.
+        // state 1.5.0 persisted is scrubbed on read — see NightbellStore.migrate.
         // 1.6.0 also makes a placed widget's settings reachable again — a cog in
         // the widget, `widgetFeatures="reconfigurable"`, and a list in Settings —
         // and adds custom background/text colours with a background-opacity
@@ -122,8 +122,8 @@ android {
         // `notifyStateChanged` — so acknowledge, mute and recovery are all felt at
         // once. Regression test asserts under two seconds and was confirmed to
         // fail against the old code.
-        versionCode = 20
-        versionName = "2.4.3"
+        versionCode = 21
+        versionName = "2.5.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

@@ -161,7 +161,7 @@ class HttpCheckerTest {
                             method = HttpMethod.POST,
                             body = """{"ping":true}""",
                             contentType = "application/json",
-                            headers = listOf(HeaderPair("X-Pulse-Test", "yes")),
+                            headers = listOf(HeaderPair("X-Nightbell-Test", "yes")),
                             assertion = BodyAssertion(AssertionMode.CONTAINS, value = "received:{\"ping\":true}"),
                         )
                     },
@@ -170,7 +170,7 @@ class HttpCheckerTest {
             assertTrue(result.message, result.ok)
             val request = server.received.last()
             assertEquals("POST", request.method)
-            assertEquals("yes", request.headers["x-pulse-test"])
+            assertEquals("yes", request.headers["x-nightbell-test"])
             assertTrue(request.headers["content-type"]!!.contains("application/json"))
             assertEquals("""{"ping":true}""", request.body)
         }

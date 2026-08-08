@@ -10,7 +10,7 @@ import androidx.compose.ui.unit.dp
 /**
  * How wide a single column of content is allowed to get.
  *
- * Pulse had no size-class handling at all: one `LazyColumn` with 18 dp of padding,
+ * Nightbell had no size-class handling at all: one `LazyColumn` with 18 dp of padding,
  * so a 10-inch tablet rendered monitor cards a thousand pixels wide and the detail
  * screen put its configuration labels a hand-span away from their values. A line of
  * body text stops being comfortable somewhere around 70 characters, and a card

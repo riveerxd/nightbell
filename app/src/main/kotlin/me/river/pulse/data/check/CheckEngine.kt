@@ -1,7 +1,7 @@
 package me.river.pulse.data.check
 
 import android.util.Log
-import me.river.pulse.data.PulseStore
+import me.river.pulse.data.NightbellStore
 import me.river.pulse.data.alerts.AlertCenter
 import me.river.pulse.domain.AlertDecider
 import me.river.pulse.domain.AlertPolicy
@@ -42,12 +42,12 @@ import kotlinx.coroutines.withContext
  *
  * They deliberately don't share cooldowns or notification ids, so silencing one
  * never silences another. The fourth is the newest and the most important
- * separation: up to 1.5.0 a fault *inside Pulse* was reported through the down
+ * separation: up to 1.5.0 a fault *inside Nightbell* was reported through the down
  * track as though the monitored site had gone down, and a cancelled check
  * counted as a fault. See [CheckerHealth] for the whole story.
  */
 class CheckEngine(
-    private val store: PulseStore,
+    private val store: NightbellStore,
     private val http: HttpChecker,
     private val element: ElementChecker,
     private val alerts: AlertCenter,
@@ -65,7 +65,7 @@ class CheckEngine(
 
     /**
      * Called after anything that could change what a widget or a foreground
-     * service shows. Wired up by [me.river.pulse.data.Pulse]; a plain
+     * service shows. Wired up by [me.river.pulse.data.Nightbell]; a plain
      * lambda keeps this class free of Android plumbing.
      */
     var onStateChanged: (() -> Unit)? = null
@@ -184,7 +184,7 @@ class CheckEngine(
         } catch (error: Throwable) {
             // A real escape from checker code. Both checkers classify their own
             // failures into FailureKind and do not throw, so anything arriving
-            // here is a bug in ours — which is a statement about Pulse, not about
+            // here is a bug in ours — which is a statement about Nightbell, not about
             // the monitored service. It goes to the checker-health track and
             // *nowhere near* this monitor's health: "our code broke" has never
             // been evidence that somebody's website is down.
@@ -523,7 +523,7 @@ class CheckEngine(
      * service's own notification, because `setColorized` — the only way to have
      * the platform paint the whole card in the down colour — is honoured for
      * nothing else; verified on a device. So this records that a page is owed and
-     * lets [me.river.pulse.data.work.PulseMonitorService] render it, falling back
+     * lets [me.river.pulse.data.work.NightbellMonitorService] render it, falling back
      * to an ordinary post when that service could not be started.
      *
      * @return the runtime mutation this outcome implies.
@@ -747,7 +747,7 @@ class CheckEngine(
 
     /**
      * Re-alerts every urgent outage whose repeat gap has elapsed, *without*
-     * running a network check. Driven by [me.river.pulse.data.work.PulseMonitorService]
+     * running a network check. Driven by [me.river.pulse.data.work.NightbellMonitorService]
      * so the nag keeps its cadence even when a monitor's own interval is hours.
      *
      * @return how many monitors were re-alerted
@@ -843,7 +843,7 @@ class CheckEngine(
      * down *or* has just recovered — recovery reuses the down id, and eating
      * someone's all-clear a minute after it arrives would be its own bug.
      */
-    private fun reconcileNotifications(snapshot: me.river.pulse.data.PulseSnapshot) {
+    private fun reconcileNotifications(snapshot: me.river.pulse.data.NightbellSnapshot) {
         val active = alerts.activeAlertIds()
         if (active.isEmpty()) return
         val legitimate = mutableSetOf<Int>()

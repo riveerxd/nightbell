@@ -1,5 +1,5 @@
 # =============================================================================
-# Pulse R8 configuration
+# Nightbell R8 configuration
 #
 # Release is minified AND resource-shrunk. Everything below exists because R8
 # cannot see the reference: reflection, JS-bridge dispatch by name, or state
@@ -63,10 +63,10 @@
 # AppWidgetProviderInfo the launcher persists outside our APK, and a stale
 # launcher entry pointing at a renamed class silently blanks the widget.
 -keep class me.river.pulse.MainActivity { *; }
--keep class me.river.pulse.PulseApplication { *; }
--keep class me.river.pulse.widget.PulseWidgetProvider { *; }
+-keep class me.river.pulse.NightbellApplication { *; }
+-keep class me.river.pulse.widget.NightbellWidgetProvider { *; }
 -keep class me.river.pulse.widget.WidgetConfigActivity { *; }
--keep class me.river.pulse.data.work.PulseMonitorService { *; }
+-keep class me.river.pulse.data.work.NightbellMonitorService { *; }
 -keep class me.river.pulse.data.work.BootReceiver { *; }
 -keep class me.river.pulse.data.alerts.AlertActionReceiver { *; }
 

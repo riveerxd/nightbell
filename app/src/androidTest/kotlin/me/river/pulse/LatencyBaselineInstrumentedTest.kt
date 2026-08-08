@@ -2,9 +2,9 @@ package me.river.pulse
 
 import android.app.NotificationManager
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import me.river.pulse.PulseTestSupport.appContext
-import me.river.pulse.PulseTestSupport.resetApp
-import me.river.pulse.data.Pulse
+import me.river.pulse.NightbellTestSupport.appContext
+import me.river.pulse.NightbellTestSupport.resetApp
+import me.river.pulse.data.Nightbell
 import me.river.pulse.domain.AlertPolicy
 import me.river.pulse.domain.GlobalSettings
 import me.river.pulse.domain.Health
@@ -33,7 +33,7 @@ import org.junit.runner.RunWith
 class LatencyBaselineInstrumentedTest {
 
     private lateinit var server: TinyHttpServer
-    private val graph get() = Pulse.install(appContext)
+    private val graph get() = Nightbell.install(appContext)
 
     private val notifications: NotificationManager
         get() = appContext.getSystemService(NotificationManager::class.java)

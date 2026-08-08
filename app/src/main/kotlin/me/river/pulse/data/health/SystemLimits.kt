@@ -8,7 +8,7 @@ import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
-import me.river.pulse.data.PulseSnapshot
+import me.river.pulse.data.NightbellSnapshot
 import me.river.pulse.domain.CheckerFacts
 import me.river.pulse.domain.CheckerLimit
 import me.river.pulse.domain.CheckerLimits
@@ -36,7 +36,7 @@ class SystemLimits(
     private val isOnline: () -> Boolean,
 ) {
 
-    fun facts(snapshot: PulseSnapshot, nowMs: Long = System.currentTimeMillis()): CheckerFacts {
+    fun facts(snapshot: NightbellSnapshot, nowMs: Long = System.currentTimeMillis()): CheckerFacts {
         val enabled = snapshot.monitors.filter { it.enabled }
         // One entry per monitor, each carrying its *own* interval. Aggregating this
         // into "the oldest age" and "the tightest interval" compared two different
@@ -66,11 +66,11 @@ class SystemLimits(
         )
     }
 
-    fun diagnose(snapshot: PulseSnapshot, nowMs: Long = System.currentTimeMillis()): CheckerLimit =
+    fun diagnose(snapshot: NightbellSnapshot, nowMs: Long = System.currentTimeMillis()): CheckerLimit =
         CheckerLimits.diagnose(facts(snapshot, nowMs))
 
     /**
-     * Whether Android has been told to stop deferring Pulse's work.
+     * Whether Android has been told to stop deferring Nightbell's work.
      *
      * Queried here; [batteryExemptionRequestIntent] asks.
      *

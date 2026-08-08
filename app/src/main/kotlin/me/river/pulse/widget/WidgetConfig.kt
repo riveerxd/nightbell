@@ -100,7 +100,7 @@ data class WidgetConfig(
     /**
      * The three header pieces, independently switchable.
      *
-     * They used to be one flag. [showTitle] hid the mark, the word "Pulse" and the
+     * They used to be one flag. [showTitle] hid the mark, the word "Nightbell" and the
      * "all 6 operational" line together, which meant the only way to drop the
      * headline was to lose the branding with it and the only way to keep the
      * branding was to accept a line of prose on a widget the size of a stamp.

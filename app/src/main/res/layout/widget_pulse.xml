@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Pulse home-screen widget.
+    Nightbell home-screen widget.
 
     The surface is two tintable ImageViews behind the content rather than a
     background drawable on the content itself. That is what makes an arbitrary

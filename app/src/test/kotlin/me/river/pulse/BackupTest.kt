@@ -1,9 +1,9 @@
 package me.river.pulse
 
-import me.river.pulse.data.PulseSnapshot
+import me.river.pulse.data.NightbellSnapshot
 import me.river.pulse.data.transfer.BackupCodec
 import me.river.pulse.data.transfer.BackupError
-import me.river.pulse.data.transfer.PulseBackup
+import me.river.pulse.data.transfer.NightbellBackup
 import me.river.pulse.data.transfer.toImportableSnapshot
 import me.river.pulse.domain.CheckerStreak
 import me.river.pulse.domain.GlobalSettings
@@ -36,7 +36,7 @@ class BackupTest {
         createdAt = 1_000L,
     )
 
-    private fun encoded(snapshot: PulseSnapshot) = BackupCodec.encode(
+    private fun encoded(snapshot: NightbellSnapshot) = BackupCodec.encode(
         snapshot = snapshot,
         applicationId = "me.river.pulse",
         versionName = "1.7.0",
@@ -48,7 +48,7 @@ class BackupTest {
 
     @Test
     fun `a store round-trips through the envelope`() {
-        val snapshot = PulseSnapshot(
+        val snapshot = NightbellSnapshot(
             monitors = listOf(monitor("a"), monitor("b")),
             runtimes = mapOf("a" to MonitorRuntime(health = Health.UP)),
             settings = GlobalSettings(defaultIntervalMinutes = 42),
@@ -56,7 +56,7 @@ class BackupTest {
 
         val backup = BackupCodec.decode(encoded(snapshot)).getOrThrow()
 
-        assertEquals(PulseBackup.FORMAT_VERSION, backup.format)
+        assertEquals(NightbellBackup.FORMAT_VERSION, backup.format)
         assertEquals("me.river.pulse", backup.app)
         assertEquals("1.7.0", backup.versionName)
         assertEquals(10, backup.versionCode)
@@ -68,7 +68,7 @@ class BackupTest {
 
     @Test
     fun `the recorded count matches what is in the file`() {
-        val snapshot = PulseSnapshot(monitors = listOf(monitor("a"), monitor("b"), monitor("c")))
+        val snapshot = NightbellSnapshot(monitors = listOf(monitor("a"), monitor("b"), monitor("c")))
         val backup = BackupCodec.decode(encoded(snapshot)).getOrThrow()
         assertEquals(backup.snapshot.monitors.size, backup.monitorCount)
     }
@@ -94,7 +94,7 @@ class BackupTest {
 
     @Test
     fun `a newer format is refused instead of best-efforted`() {
-        val raw = encoded(PulseSnapshot(monitors = listOf(monitor("a"))))
+        val raw = encoded(NightbellSnapshot(monitors = listOf(monitor("a"))))
             .replace("\"format\": 1", "\"format\": 2")
 
         val error = BackupCodec.decode(raw).exceptionOrNull()
@@ -105,13 +105,13 @@ class BackupTest {
 
     @Test
     fun `an empty fleet is not a valid backup`() {
-        val error = BackupCodec.decode(encoded(PulseSnapshot())).exceptionOrNull()
+        val error = BackupCodec.decode(encoded(NightbellSnapshot())).exceptionOrNull()
         assertEquals(BackupError.Empty, (error as BackupCodec.BackupFailure).error)
     }
 
     @Test
     fun `an unknown field from a future build is ignored, not fatal`() {
-        val raw = encoded(PulseSnapshot(monitors = listOf(monitor("a"))))
+        val raw = encoded(NightbellSnapshot(monitors = listOf(monitor("a"))))
             .replaceFirst("{", """{"somethingAddedLater": true,""")
 
         assertNotNull(BackupCodec.decode(raw).getOrNull())
@@ -122,8 +122,8 @@ class BackupTest {
     @Test
     fun `monitors settings mutes and history survive the import`() {
         val samples = listOf(Sample(at = 5L, ok = true, latencyMs = 120L))
-        val backup = PulseBackup(
-            snapshot = PulseSnapshot(
+        val backup = NightbellBackup(
+            snapshot = NightbellSnapshot(
                 monitors = listOf(monitor("a")),
                 runtimes = mapOf(
                     "a" to MonitorRuntime(mutedUntil = 9_999L, samples = samples),
@@ -142,8 +142,8 @@ class BackupTest {
 
     @Test
     fun `nothing is claimed about health until this install has checked`() {
-        val backup = PulseBackup(
-            snapshot = PulseSnapshot(
+        val backup = NightbellBackup(
+            snapshot = NightbellSnapshot(
                 monitors = listOf(monitor("a")),
                 runtimes = mapOf(
                     "a" to MonitorRuntime(
@@ -172,8 +172,8 @@ class BackupTest {
 
     @Test
     fun `a paused monitor imports paused rather than unknown`() {
-        val backup = PulseBackup(
-            snapshot = PulseSnapshot(
+        val backup = NightbellBackup(
+            snapshot = NightbellSnapshot(
                 monitors = listOf(monitor("a", enabled = false)),
                 runtimes = mapOf("a" to MonitorRuntime(health = Health.PAUSED)),
             ),
@@ -190,8 +190,8 @@ class BackupTest {
      */
     @Test
     fun `alert bookkeeping does not cross over`() {
-        val backup = PulseBackup(
-            snapshot = PulseSnapshot(
+        val backup = NightbellBackup(
+            snapshot = NightbellSnapshot(
                 monitors = listOf(monitor("a")),
                 runtimes = mapOf(
                     "a" to MonitorRuntime(
@@ -222,8 +222,8 @@ class BackupTest {
 
     @Test
     fun `evidence about the old install's checker and connection is dropped`() {
-        val backup = PulseBackup(
-            snapshot = PulseSnapshot(
+        val backup = NightbellBackup(
+            snapshot = NightbellSnapshot(
                 monitors = listOf(monitor("a")),
                 reference = listOf(ReferenceSample(at = 1L, rttMs = 30L)),
                 checkerStreak = CheckerStreak(consecutiveErrors = 3, firstErrorAt = 1L, lastErrorAt = 2L),
@@ -238,8 +238,8 @@ class BackupTest {
 
     @Test
     fun `a runtime with no monitor behind it is not carried`() {
-        val backup = PulseBackup(
-            snapshot = PulseSnapshot(
+        val backup = NightbellBackup(
+            snapshot = NightbellSnapshot(
                 monitors = listOf(monitor("a")),
                 runtimes = mapOf("a" to MonitorRuntime(), "ghost" to MonitorRuntime()),
             ),
@@ -253,8 +253,8 @@ class BackupTest {
 
     @Test
     fun `element baselines are re-established here rather than inherited`() {
-        val backup = PulseBackup(
-            snapshot = PulseSnapshot(
+        val backup = NightbellBackup(
+            snapshot = NightbellSnapshot(
                 monitors = listOf(monitor("a")),
                 runtimes = mapOf(
                     "a" to MonitorRuntime(
@@ -273,7 +273,7 @@ class BackupTest {
 
     @Test
     fun `export then import is stable across a second trip`() {
-        val snapshot = PulseSnapshot(
+        val snapshot = NightbellSnapshot(
             monitors = listOf(monitor("a"), monitor("b", enabled = false)),
             runtimes = mapOf(
                 "a" to MonitorRuntime(samples = listOf(Sample(at = 1L, ok = true, latencyMs = 10L))),

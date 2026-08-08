@@ -92,8 +92,8 @@ import me.river.pulse.ui.components.ChipSelector
 import me.river.pulse.ui.components.GlassField
 import me.river.pulse.ui.components.MicroTag
 import me.river.pulse.ui.components.PullToRefreshLayout
-import me.river.pulse.ui.components.PulseButton
-import me.river.pulse.ui.components.PulseMark
+import me.river.pulse.ui.components.NightbellButton
+import me.river.pulse.ui.components.NightbellMark
 import me.river.pulse.ui.components.SectionHeader
 import me.river.pulse.ui.components.SAMPLE_WINDOW
 import me.river.pulse.ui.components.Sparkline
@@ -104,10 +104,10 @@ import me.river.pulse.ui.components.StatusOrb
 import me.river.pulse.ui.components.StatusPill
 import me.river.pulse.ui.components.formatLatency
 import me.river.pulse.ui.components.formatRelative
-import me.river.pulse.ui.icons.PulseIcons
+import me.river.pulse.ui.icons.NightbellIcons
 import me.river.pulse.ui.rememberDashboardViewModel
 import me.river.pulse.ui.theme.LocalNowMs
-import me.river.pulse.ui.theme.PulseColors
+import me.river.pulse.ui.theme.NightbellColors
 import me.river.pulse.ui.theme.accentFor
 import me.river.pulse.ui.theme.healthColor
 import me.river.pulse.ui.theme.healthRim
@@ -135,9 +135,9 @@ private val MIN_CARD_WIDTH = 340.dp
 private const val TOOLS_THRESHOLD = 2
 
 fun kindIcon(kind: MonitorKind) = when (kind) {
-    MonitorKind.HTTP_STATUS -> PulseIcons.Server
-    MonitorKind.ADVANCED_REQUEST -> PulseIcons.Braces
-    MonitorKind.WEBSITE_ELEMENT -> PulseIcons.Pointer
+    MonitorKind.HTTP_STATUS -> NightbellIcons.Server
+    MonitorKind.ADVANCED_REQUEST -> NightbellIcons.Braces
+    MonitorKind.WEBSITE_ELEMENT -> NightbellIcons.Pointer
 }
 
 @Composable
@@ -297,12 +297,12 @@ fun DashboardScreen(
                             EmptyState(
                                 title = "Nothing here",
                                 message = MonitorQuery.emptyMessage(viewModel.spec, cards.size),
-                                icon = PulseIcons.Search,
+                                icon = NightbellIcons.Search,
                                 action = {
-                                    PulseButton(
+                                    NightbellButton(
                                         text = "Clear filters",
                                         onClick = viewModel::clearNarrowing,
-                                        icon = PulseIcons.Close,
+                                        icon = NightbellIcons.Close,
                                         tone = ButtonTone.Secondary,
                                     )
                                 },
@@ -393,7 +393,7 @@ fun DashboardScreen(
                                         "card to select several"
                                 },
                                 style = MaterialTheme.typography.bodySmall,
-                                color = PulseColors.TextTertiary,
+                                color = NightbellColors.TextTertiary,
                                 modifier = Modifier.fillMaxWidth(),
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                             )
@@ -458,7 +458,7 @@ private fun DashboardHeader(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        PulseWordmark()
+        NightbellWordmark()
         Spacer(Modifier.weight(1f))
         // Entry points, not the controls themselves.
         //
@@ -468,29 +468,29 @@ private fun DashboardHeader(
         // Hidden below two monitors, where there is nothing to search or arrange.
         if (showTools) {
             GlassIconButton(
-                icon = PulseIcons.Search,
+                icon = NightbellIcons.Search,
                 onClick = { onTogglePanel(DashboardPanel.SEARCH) },
                 contentDescription = "Search monitors",
                 size = 34.dp,
-                accent = PulseColors.TextSecondary,
+                accent = NightbellColors.TextSecondary,
                 active = panel == DashboardPanel.SEARCH,
             )
             GlassIconButton(
-                icon = PulseIcons.Funnel,
+                icon = NightbellIcons.Funnel,
                 onClick = { onTogglePanel(DashboardPanel.TUNE) },
                 contentDescription = "Filter and sort",
                 size = 34.dp,
-                accent = PulseColors.TextSecondary,
+                accent = NightbellColors.TextSecondary,
                 active = panel == DashboardPanel.TUNE,
                 badged = narrowing,
             )
         }
         GlassIconButton(
-            icon = PulseIcons.Sliders,
+            icon = NightbellIcons.Sliders,
             onClick = onOpenSettings,
             contentDescription = "Settings",
             size = 34.dp,
-            accent = PulseColors.TextSecondary,
+            accent = NightbellColors.TextSecondary,
         )
     }
 }
@@ -499,7 +499,7 @@ private fun DashboardHeader(
 enum class DashboardPanel { NONE, SEARCH, TUNE }
 
 @Composable
-private fun PulseWordmark() {
+private fun NightbellWordmark() {
     Row(verticalAlignment = Alignment.CenterVertically) {
         // 34dp to match the GlassIconButtons at the other end of this row — the mark and
         // the controls now sit on one optical line instead of the mark looking like an
@@ -508,17 +508,17 @@ private fun PulseWordmark() {
         // Static, where the old one had a dot sweeping along the trace. The fleet banner
         // directly underneath is already a live, moving thing, and a header with two
         // independent animations in it reads as restless rather than alive.
-        PulseMark(size = 34.dp)
+        NightbellMark(size = 34.dp)
         Spacer(Modifier.width(8.dp))
         // Small and tracked-out: the banner underneath is the loud thing now, and
         // two competing headlines at the top of one screen is one too many.
         Mono(
-            text = "PULSE",
-            color = PulseColors.TextSecondary,
+            text = "NIGHTBELL",
+            color = NightbellColors.TextSecondary,
             size = 11,
             weight = androidx.compose.ui.text.font.FontWeight.Bold,
             tracking = 3.0,
-            spoken = "Pulse",
+            spoken = "Nightbell",
         )
     }
 }
@@ -546,15 +546,15 @@ private fun FirstRunStarter(
             Text(
                 text = "Watch something",
                 style = MaterialTheme.typography.headlineMedium,
-                color = PulseColors.TextPrimary,
+                color = NightbellColors.TextPrimary,
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                text = "Pick a starting point and Pulse fills in the cadence, the " +
+                text = "Pick a starting point and Nightbell fills in the cadence, the " +
                     "expectations and the alerting. You only need a URL — everything " +
                     "else is still yours to change before it saves.",
                 style = MaterialTheme.typography.bodySmall,
-                color = PulseColors.TextTertiary,
+                color = NightbellColors.TextTertiary,
             )
         }
         Spacer(Modifier.height(12.dp))
@@ -567,12 +567,12 @@ private fun FirstRunStarter(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconBadge(
                         icon = when (template.id) {
-                            "website" -> PulseIcons.Globe
-                            "health-endpoint" -> PulseIcons.Shield
-                            "api-latency" -> PulseIcons.Gauge
-                            else -> PulseIcons.Pointer
+                            "website" -> NightbellIcons.Globe
+                            "health-endpoint" -> NightbellIcons.Shield
+                            "api-latency" -> NightbellIcons.Gauge
+                            else -> NightbellIcons.Pointer
                         },
-                        accent = PulseColors.Aqua,
+                        accent = NightbellColors.Aqua,
                         size = 40.dp,
                     )
                     Spacer(Modifier.width(13.dp))
@@ -580,19 +580,19 @@ private fun FirstRunStarter(
                         Text(
                             text = template.title,
                             style = MaterialTheme.typography.titleLarge,
-                            color = PulseColors.TextPrimary,
+                            color = NightbellColors.TextPrimary,
                         )
                         Text(
                             text = template.blurb,
                             style = MaterialTheme.typography.bodySmall,
-                            color = PulseColors.TextTertiary,
+                            color = NightbellColors.TextTertiary,
                         )
                     }
                     Spacer(Modifier.width(8.dp))
                     Icon(
-                        PulseIcons.ChevronDown,
+                        NightbellIcons.ChevronDown,
                         contentDescription = null,
-                        tint = PulseColors.TextTertiary,
+                        tint = NightbellColors.TextTertiary,
                         modifier = Modifier.size(16.dp).graphicsLayer { rotationZ = -90f },
                     )
                 }
@@ -605,10 +605,10 @@ private fun FirstRunStarter(
         // other. Leaving the right third clear keeps both legible and lets the FAB
         // stay where every other dashboard state has it.
         Row(Modifier.fillMaxWidth()) {
-            PulseButton(
+            NightbellButton(
                 text = "Start from scratch",
                 onClick = onBlank,
-                icon = PulseIcons.Plus,
+                icon = NightbellIcons.Plus,
                 tone = ButtonTone.Secondary,
                 modifier = Modifier.weight(0.68f),
             )
@@ -648,13 +648,13 @@ private fun SearchPanel(
                 onValueChange = onQuery,
                 label = "Search",
                 placeholder = "name, host or element",
-                leadingIcon = PulseIcons.Search,
+                leadingIcon = NightbellIcons.Search,
                 imeAction = ImeAction.Search,
                 modifier = Modifier.weight(1f).focusRequester(focus),
                 trailing = if (query.isNotBlank()) {
                     {
                         GlassIconButton(
-                            icon = PulseIcons.Close,
+                            icon = NightbellIcons.Close,
                             onClick = { onQuery("") },
                             contentDescription = "Clear search",
                             size = 30.dp,
@@ -675,7 +675,7 @@ private fun SearchPanel(
                 "$shownCount of $totalCount match"
             },
             style = MaterialTheme.typography.bodySmall,
-            color = PulseColors.TextTertiary,
+            color = NightbellColors.TextTertiary,
         )
     }
 }
@@ -690,7 +690,7 @@ private fun SearchPanel(
  */
 private fun panelClose(onClose: () -> Unit): @Composable () -> Unit = {
     GlassIconButton(
-        icon = PulseIcons.Close,
+        icon = NightbellIcons.Close,
         onClick = onClose,
         contentDescription = "Close panel",
         size = 32.dp,
@@ -710,8 +710,8 @@ private fun TunePanel(
     GlassCard {
         SectionHeader(
             "Show",
-            icon = PulseIcons.Eye,
-            accent = PulseColors.Aqua,
+            icon = NightbellIcons.Eye,
+            accent = NightbellColors.Aqua,
             trailing = panelClose(onClose),
         )
         // Icon *and* text, which is what this component was built for and what the
@@ -726,31 +726,31 @@ private fun TunePanel(
             label = { it.label },
             icon = { filter ->
                 when (filter) {
-                    MonitorQuery.Filter.ALL -> PulseIcons.Layers
-                    MonitorQuery.Filter.PROBLEMS -> PulseIcons.Warning
-                    MonitorQuery.Filter.UP -> PulseIcons.Check
-                    MonitorQuery.Filter.PAUSED -> PulseIcons.Pause
-                    MonitorQuery.Filter.UNACKNOWLEDGED -> PulseIcons.Zap
+                    MonitorQuery.Filter.ALL -> NightbellIcons.Layers
+                    MonitorQuery.Filter.PROBLEMS -> NightbellIcons.Warning
+                    MonitorQuery.Filter.UP -> NightbellIcons.Check
+                    MonitorQuery.Filter.PAUSED -> NightbellIcons.Pause
+                    MonitorQuery.Filter.UNACKNOWLEDGED -> NightbellIcons.Zap
                 }
             },
         )
         Spacer(Modifier.height(16.dp))
-        SectionHeader("Order", icon = PulseIcons.Sliders, accent = PulseColors.Violet)
+        SectionHeader("Order", icon = NightbellIcons.Sliders, accent = NightbellColors.Violet)
         ChipSelector(
             options = MonitorQuery.Sort.entries.toList(),
             selected = spec.sort,
             onSelect = onSort,
             label = { it.label },
-            accent = PulseColors.Violet,
+            accent = NightbellColors.Violet,
             icon = { sort ->
                 when (sort) {
-                    MonitorQuery.Sort.WORST_FIRST -> PulseIcons.Warning
+                    MonitorQuery.Sort.WORST_FIRST -> NightbellIcons.Warning
                     // The grip, literally: this is the mode where the grips appear.
-                    MonitorQuery.Sort.MANUAL -> PulseIcons.Grip
-                    MonitorQuery.Sort.NAME -> PulseIcons.SortLines
-                    MonitorQuery.Sort.SLOWEST -> PulseIcons.Gauge
-                    MonitorQuery.Sort.RECENT -> PulseIcons.Refresh
-                    MonitorQuery.Sort.STALEST -> PulseIcons.History
+                    MonitorQuery.Sort.MANUAL -> NightbellIcons.Grip
+                    MonitorQuery.Sort.NAME -> NightbellIcons.SortLines
+                    MonitorQuery.Sort.SLOWEST -> NightbellIcons.Gauge
+                    MonitorQuery.Sort.RECENT -> NightbellIcons.Refresh
+                    MonitorQuery.Sort.STALEST -> NightbellIcons.History
                 }
             },
         )
@@ -761,7 +761,7 @@ private fun TunePanel(
                     text = "Drag the grip on any card to arrange them. Nothing re-sorts " +
                         "them behind your back while this is on.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = PulseColors.TextTertiary,
+                    color = NightbellColors.TextTertiary,
                 )
             }
         }
@@ -777,11 +777,11 @@ private fun TunePanel(
                     "Showing $shownCount of $totalCount"
                 },
                 style = MaterialTheme.typography.bodySmall,
-                color = PulseColors.TextTertiary,
+                color = NightbellColors.TextTertiary,
                 modifier = Modifier.weight(1f),
             )
             if (!spec.hidesNothing) {
-                PulseButton(
+                NightbellButton(
                     text = "Show all",
                     onClick = onClear,
                     tone = ButtonTone.Secondary,
@@ -808,22 +808,22 @@ private fun NarrowingStrip(
     totalCount: Int,
     onClear: () -> Unit,
 ) {
-    GlassCard(accent = PulseColors.Amber, contentPadding = 12.dp) {
+    GlassCard(accent = NightbellColors.Amber, contentPadding = 12.dp) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Icon(
-                PulseIcons.Eye,
+                NightbellIcons.Eye,
                 contentDescription = null,
-                tint = PulseColors.Amber,
+                tint = NightbellColors.Amber,
                 modifier = Modifier.size(15.dp),
             )
             Column(Modifier.weight(1f)) {
                 Text(
                     text = "Showing $shownCount of $totalCount",
                     style = MaterialTheme.typography.titleMedium,
-                    color = PulseColors.TextPrimary,
+                    color = NightbellColors.TextPrimary,
                 )
                 Text(
                     text = buildList {
@@ -831,10 +831,10 @@ private fun NarrowingStrip(
                         if (spec.query.isNotBlank()) add("“${spec.query.trim()}”")
                     }.joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
-                    color = PulseColors.TextTertiary,
+                    color = NightbellColors.TextTertiary,
                 )
             }
-            PulseButton(text = "Show all", onClick = onClear, tone = ButtonTone.Secondary)
+            NightbellButton(text = "Show all", onClick = onClear, tone = ButtonTone.Secondary)
         }
     }
 }
@@ -869,22 +869,22 @@ private fun SelectionBar(
         exit = fadeOut() + slideOutVertically { it },
         modifier = modifier,
     ) {
-        GlassCard(accent = if (confirmDelete) PulseColors.Rose else PulseColors.Aqua) {
+        GlassCard(accent = if (confirmDelete) NightbellColors.Rose else NightbellColors.Aqua) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = if (count == 1) "1 selected" else "$count selected",
                     style = MaterialTheme.typography.titleMedium,
-                    color = PulseColors.TextPrimary,
+                    color = NightbellColors.TextPrimary,
                     modifier = Modifier.weight(1f),
                 )
-                PulseButton(
+                NightbellButton(
                     text = "Select all",
                     onClick = onSelectAll,
                     tone = ButtonTone.Secondary,
                 )
                 Spacer(Modifier.width(8.dp))
                 GlassIconButton(
-                    icon = PulseIcons.Close,
+                    icon = NightbellIcons.Close,
                     onClick = onDone,
                     contentDescription = "Leave selection mode",
                     size = 34.dp,
@@ -896,24 +896,24 @@ private fun SelectionBar(
                     text = "Delete ${if (count == 1) "this monitor" else "these $count monitors"}? " +
                         "Their history and scheduled checks go with them.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = PulseColors.TextSecondary,
+                    color = NightbellColors.TextSecondary,
                 )
                 Spacer(Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    PulseButton(
+                    NightbellButton(
                         text = "Keep them",
                         onClick = { confirmDelete = false },
                         tone = ButtonTone.Secondary,
                         modifier = Modifier.weight(1f),
                     )
-                    PulseButton(
+                    NightbellButton(
                         text = "Delete",
                         onClick = {
                             confirmDelete = false
                             onDelete()
                         },
                         tone = ButtonTone.Danger,
-                        icon = PulseIcons.Trash,
+                        icon = NightbellIcons.Trash,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -927,34 +927,34 @@ private fun SelectionBar(
                 // several monitors at once, and it should be the least ambiguous
                 // thing on the bar rather than the most.
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PulseButton(
+                    NightbellButton(
                         text = "Pause",
                         onClick = onPause,
-                        icon = PulseIcons.Pause,
+                        icon = NightbellIcons.Pause,
                         tone = ButtonTone.Secondary,
                         modifier = Modifier.weight(1f),
                     )
-                    PulseButton(
+                    NightbellButton(
                         text = "Resume",
                         onClick = onResume,
-                        icon = PulseIcons.Play,
+                        icon = NightbellIcons.Play,
                         tone = ButtonTone.Secondary,
                         modifier = Modifier.weight(1f),
                     )
                 }
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PulseButton(
+                    NightbellButton(
                         text = "Mute 1h",
                         onClick = onMute,
-                        icon = PulseIcons.BellOff,
+                        icon = NightbellIcons.BellOff,
                         tone = ButtonTone.Secondary,
                         modifier = Modifier.weight(1f),
                     )
-                    PulseButton(
+                    NightbellButton(
                         text = "Delete",
                         onClick = { confirmDelete = true },
-                        icon = PulseIcons.Trash,
+                        icon = NightbellIcons.Trash,
                         tone = ButtonTone.Danger,
                         modifier = Modifier.weight(1f),
                     )
@@ -998,9 +998,9 @@ private fun MonitorRowCard(
         // set" is the only question the rim needs to answer, and health is still
         // carried by the pill and the orb.
         accent = when {
-            dragging -> PulseColors.Aqua
-            selected -> PulseColors.Aqua
-            muted && healthRim(health) != Color.Transparent -> PulseColors.Amber
+            dragging -> NightbellColors.Aqua
+            selected -> NightbellColors.Aqua
+            muted && healthRim(health) != Color.Transparent -> NightbellColors.Amber
             else -> healthRim(health)
         },
         // Elevation and shadow both grow while held, so the card reads as picked up
@@ -1081,14 +1081,14 @@ private fun MonitorRowCard(
                 Text(
                     text = monitor.displayName,
                     style = MaterialTheme.typography.titleLarge,
-                    color = PulseColors.TextPrimary,
+                    color = NightbellColors.TextPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = monitor.prettyHost,
                     style = MaterialTheme.typography.bodySmall,
-                    color = PulseColors.TextTertiary,
+                    color = NightbellColors.TextTertiary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -1109,26 +1109,26 @@ private fun MonitorRowCard(
             if (muted) {
                 MicroTag(
                     text = "Muted",
-                    color = PulseColors.Amber,
-                    background = PulseColors.Amber.copy(alpha = 0.14f),
-                    icon = PulseIcons.BellOff,
+                    color = NightbellColors.Amber,
+                    background = NightbellColors.Amber.copy(alpha = 0.14f),
+                    icon = NightbellIcons.BellOff,
                 )
                 Spacer(Modifier.width(6.dp))
             }
             if (urgentPending) {
                 MicroTag(
                     text = "Urgent",
-                    color = PulseColors.Rose,
-                    background = PulseColors.Rose.copy(alpha = 0.16f),
-                    icon = PulseIcons.Zap,
+                    color = NightbellColors.Rose,
+                    background = NightbellColors.Rose.copy(alpha = 0.16f),
+                    icon = NightbellIcons.Zap,
                 )
                 Spacer(Modifier.width(6.dp))
             }
             if (runtime.lastLatencyMs > 0) {
                 MicroTag(
                     text = formatLatency(runtime.lastLatencyMs),
-                    color = if (health == Health.DEGRADED) PulseColors.Amber else PulseColors.TextSecondary,
-                    icon = PulseIcons.Gauge,
+                    color = if (health == Health.DEGRADED) NightbellColors.Amber else NightbellColors.TextSecondary,
+                    icon = NightbellIcons.Gauge,
                 )
                 Spacer(Modifier.width(6.dp))
             }
@@ -1138,23 +1138,23 @@ private fun MonitorRowCard(
             if (runtime.lastLatencySuspect) {
                 MicroTag(
                     text = "connection",
-                    color = PulseColors.Sky,
-                    background = PulseColors.Sky.copy(alpha = 0.14f),
-                    icon = PulseIcons.Wifi,
+                    color = NightbellColors.Sky,
+                    background = NightbellColors.Sky.copy(alpha = 0.14f),
+                    icon = NightbellIcons.Wifi,
                 )
                 Spacer(Modifier.width(6.dp))
             } else if (runtime.lastNetworkExcessMs > 0) {
                 MicroTag(
                     text = "−${formatLatency(runtime.lastNetworkExcessMs)}",
-                    color = PulseColors.Sky,
-                    icon = PulseIcons.Wifi,
+                    color = NightbellColors.Sky,
+                    icon = NightbellIcons.Wifi,
                 )
                 Spacer(Modifier.width(6.dp))
             }
             if (runtime.lastCode > 0) {
                 MicroTag(
                     text = runtime.lastCode.toString(),
-                    color = if (runtime.health == Health.UP) PulseColors.Mint else PulseColors.Amber,
+                    color = if (runtime.health == Health.UP) NightbellColors.Mint else NightbellColors.Amber,
                 )
                 Spacer(Modifier.width(6.dp))
             }
@@ -1171,18 +1171,18 @@ private fun MonitorRowCard(
                         CertificateWatch.daysLeft(runtime.certExpiresAt, now),
                     ),
                     color = if (certLevel == CertificateWatch.Level.EXPIRED) {
-                        PulseColors.Rose
+                        NightbellColors.Rose
                     } else {
-                        PulseColors.Amber
+                        NightbellColors.Amber
                     },
-                    icon = PulseIcons.Shield,
+                    icon = NightbellIcons.Shield,
                 )
             }
             Spacer(Modifier.weight(1f))
             Text(
                 text = formatRelative(runtime.lastCheckedAt, now),
                 style = MaterialTheme.typography.bodySmall,
-                color = PulseColors.TextTertiary,
+                color = NightbellColors.TextTertiary,
             )
         }
 
@@ -1217,7 +1217,7 @@ private fun MonitorRowCard(
             enter = fadeIn(),
             exit = fadeOut(),
         ) {
-            val tone = if (muted) PulseColors.Amber else PulseColors.Rose
+            val tone = if (muted) NightbellColors.Amber else NightbellColors.Rose
             Column {
                 Spacer(Modifier.height(11.dp))
                 Row(
@@ -1229,7 +1229,7 @@ private fun MonitorRowCard(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
-                        if (muted) PulseIcons.BellOff else PulseIcons.Warning,
+                        if (muted) NightbellIcons.BellOff else NightbellIcons.Warning,
                         contentDescription = null,
                         tint = tone,
                         modifier = Modifier.size(14.dp),
@@ -1242,7 +1242,7 @@ private fun MonitorRowCard(
                             runtime.lastMessage
                         },
                         style = MaterialTheme.typography.bodySmall,
-                        color = PulseColors.TextSecondary,
+                        color = NightbellColors.TextSecondary,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -1253,10 +1253,10 @@ private fun MonitorRowCard(
         AnimatedVisibility(visible = urgentPending, enter = fadeIn(), exit = fadeOut()) {
             Column {
                 Spacer(Modifier.height(11.dp))
-                PulseButton(
+                NightbellButton(
                     text = "Acknowledge urgent alert",
                     onClick = onAcknowledge,
-                    icon = PulseIcons.Check,
+                    icon = NightbellIcons.Check,
                     tone = ButtonTone.Danger,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -1273,28 +1273,28 @@ private fun MonitorRowCard(
             if (monitor.kind == MonitorKind.WEBSITE_ELEMENT && monitor.targets.size > 1) {
                 MicroTag(
                     text = "${monitor.targets.size} elements",
-                    color = PulseColors.TextTertiary,
-                    icon = PulseIcons.Target,
+                    color = NightbellColors.TextTertiary,
+                    icon = NightbellIcons.Target,
                 )
             }
             if (monitor.kind != MonitorKind.WEBSITE_ELEMENT) {
-                MicroTag(text = monitor.method.name, color = PulseColors.TextTertiary)
+                MicroTag(text = monitor.method.name, color = NightbellColors.TextTertiary)
             }
-            MicroTag(text = "${monitor.intervalMinutes}m", color = PulseColors.TextTertiary, icon = PulseIcons.Clock)
+            MicroTag(text = "${monitor.intervalMinutes}m", color = NightbellColors.TextTertiary, icon = NightbellIcons.Clock)
             Spacer(Modifier.weight(1f))
             // Per-card actions step aside during selection: a re-check button that
             // fires a real request is the last thing that should be one mis-tap
             // away while the finger is busy picking rows.
             if (!selecting) {
                 GlassIconButton(
-                    icon = if (monitor.enabled) PulseIcons.Pause else PulseIcons.Play,
+                    icon = if (monitor.enabled) NightbellIcons.Pause else NightbellIcons.Play,
                     onClick = { onToggle(!monitor.enabled) },
                     contentDescription = if (monitor.enabled) "Pause monitor" else "Resume monitor",
                     size = 34.dp,
-                    accent = PulseColors.TextSecondary,
+                    accent = NightbellColors.TextSecondary,
                 )
                 GlassIconButton(
-                    icon = PulseIcons.Refresh,
+                    icon = NightbellIcons.Refresh,
                     onClick = onCheck,
                     contentDescription = "Check now",
                     size = 34.dp,
@@ -1314,15 +1314,15 @@ private fun SelectionTick(selected: Boolean) {
         Modifier
             .size(22.dp)
             .clip(shape)
-            .background(if (selected) PulseColors.Aqua else PulseColors.sheen(0.07f))
-            .border(1.dp, if (selected) PulseColors.Aqua else PulseColors.sheen(0.16f), shape),
+            .background(if (selected) NightbellColors.Aqua else NightbellColors.sheen(0.07f))
+            .border(1.dp, if (selected) NightbellColors.Aqua else NightbellColors.sheen(0.16f), shape),
         contentAlignment = Alignment.Center,
     ) {
         if (selected) {
             Icon(
-                PulseIcons.Check,
+                NightbellIcons.Check,
                 contentDescription = null,
-                tint = PulseColors.Void,
+                tint = NightbellColors.Void,
                 modifier = Modifier.size(14.dp),
             )
         }
@@ -1369,7 +1369,7 @@ fun MorphingFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
         }
     }
 
-    val halo = PulseColors.Aqua.copy(alpha = 0.10f)
+    val halo = NightbellColors.Aqua.copy(alpha = 0.10f)
     Box(modifier.size(96.dp), contentAlignment = Alignment.Center) {
         // One faint pool of light so the button doesn't float on nothing. The
         // pulsing halo that used to live here read as decoration, not affordance.
@@ -1396,7 +1396,7 @@ fun MorphingFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
                 .clip(CircleShape)
                 .background(
                     Brush.linearGradient(
-                        listOf(PulseColors.Aqua, PulseColors.Indigo, PulseColors.Violet),
+                        listOf(NightbellColors.Aqua, NightbellColors.Indigo, NightbellColors.Violet),
                     ),
                 )
                 .clickable(
@@ -1407,9 +1407,9 @@ fun MorphingFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                imageVector = PulseIcons.Plus,
+                imageVector = NightbellIcons.Plus,
                 contentDescription = null,
-                tint = PulseColors.Void,
+                tint = NightbellColors.Void,
                 modifier = Modifier.size(27.dp),
             )
         }
@@ -1417,7 +1417,7 @@ fun MorphingFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun DashboardCountBadge(count: Int, accent: Color = PulseColors.Aqua) {
+fun DashboardCountBadge(count: Int, accent: Color = NightbellColors.Aqua) {
     Row(
         Modifier
             .clip(RoundedCornerShape(50))

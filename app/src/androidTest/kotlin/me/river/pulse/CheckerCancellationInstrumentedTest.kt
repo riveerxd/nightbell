@@ -1,10 +1,10 @@
 package me.river.pulse
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import me.river.pulse.PulseTestSupport.appContext
-import me.river.pulse.PulseTestSupport.awaitTrue
-import me.river.pulse.PulseTestSupport.resetApp
-import me.river.pulse.data.Pulse
+import me.river.pulse.NightbellTestSupport.appContext
+import me.river.pulse.NightbellTestSupport.awaitTrue
+import me.river.pulse.NightbellTestSupport.resetApp
+import me.river.pulse.data.Nightbell
 import me.river.pulse.data.alerts.AlertCenter
 import me.river.pulse.domain.AlertPolicy
 import me.river.pulse.domain.CheckerHealth
@@ -30,7 +30,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * The reported bug, driven end to end through the real [Pulse] graph on a device.
+ * The reported bug, driven end to end through the real [Nightbell] graph on a device.
  *
  * Reproduces the exact shape of the report: a check is cancelled while it is in
  * flight — as WorkManager's `REPLACE`, a stopping foreground service and a closing
@@ -45,7 +45,7 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class CheckerCancellationInstrumentedTest {
 
-    private val graph get() = Pulse.install(appContext)
+    private val graph get() = Nightbell.install(appContext)
 
     /** A URL that connects and then stalls, so the check is reliably mid-flight. */
     private lateinit var server: TinyHttpServer
@@ -169,7 +169,7 @@ class CheckerCancellationInstrumentedTest {
 
     @Test
     fun aRealOutageStillAlertsAfterTheFix() {
-        // The guard that matters most: none of this may have made Pulse quiet
+        // The guard that matters most: none of this may have made Nightbell quiet
         // about genuine failures.
         TinyHttpServer { TinyHttpServer.Response(code = 503, reason = "Service Unavailable") }.use { srv ->
             server = srv

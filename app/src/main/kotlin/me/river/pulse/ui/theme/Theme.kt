@@ -23,7 +23,7 @@ import me.river.pulse.domain.ThemeChoice
 /**
  * One palette, resolved per scheme.
  *
- * Pulse was dark-only, and not by a flag — [PulseTheme] took a `darkTheme`
+ * Nightbell was dark-only, and not by a flag — [NightbellTheme] took a `darkTheme`
  * parameter and suppressed it. The reason was real: the glass system is built on
  * depth, and depth here is drawn as *white at a low alpha over black*, which has
  * no meaning on a light surface. A light mode is therefore not an inversion, it is
@@ -37,7 +37,7 @@ import me.river.pulse.domain.ThemeChoice
  * still reads at all.
  */
 @Immutable
-class PulseColorScheme(
+class NightbellColorScheme(
     /** True when this scheme paints light-on-dark. */
     val isDark: Boolean,
 
@@ -133,7 +133,7 @@ class PulseColorScheme(
     val accentPairs: List<Pair<Color, Color>> get() = listOf(Aqua to Indigo)
 }
 
-val PulseDarkColors = PulseColorScheme(
+val NightbellDarkColors = NightbellColorScheme(
     isDark = true,
     Void = Color(0xFF000000),
     Ink = Color(0xFF090909),
@@ -172,7 +172,7 @@ val PulseDarkColors = PulseColorScheme(
  * in the opposite direction. That is why [Void] is not white here — a white card
  * on a white page has nothing to be raised out of.
  */
-val PulseLightColors = PulseColorScheme(
+val NightbellLightColors = NightbellColorScheme(
     isDark = false,
     Void = Color(0xFFF3F4F7),
     Ink = Color(0xFFFFFFFF),
@@ -201,34 +201,34 @@ val PulseLightColors = PulseColorScheme(
     shadowScale = 0.5f,
 )
 
-val LocalPulseColors = staticCompositionLocalOf { PulseDarkColors }
+val LocalNightbellColors = staticCompositionLocalOf { NightbellDarkColors }
 
 /**
  * The active palette.
  *
- * A composable property so every existing `PulseColors.Rose` call site keeps
+ * A composable property so every existing `NightbellColors.Rose` call site keeps
  * reading, and now reads the scheme in force rather than a compile-time constant.
  */
-val PulseColors: PulseColorScheme
+val NightbellColors: NightbellColorScheme
     @Composable
     @ReadOnlyComposable
-    get() = LocalPulseColors.current
+    get() = LocalNightbellColors.current
 
 @Composable
 @ReadOnlyComposable
 fun accentFor(index: Int): Pair<Color, Color> {
-    val pairs = PulseColors.accentPairs
+    val pairs = NightbellColors.accentPairs
     return pairs[((index % pairs.size) + pairs.size) % pairs.size]
 }
 
 @Composable
 @ReadOnlyComposable
 fun healthColor(health: Health): Color = when (health) {
-    Health.UP -> PulseColors.Mint
-    Health.DOWN -> PulseColors.Rose
-    Health.DEGRADED -> PulseColors.Amber
-    Health.PAUSED -> PulseColors.TextTertiary
-    Health.UNKNOWN -> PulseColors.Sky
+    Health.UP -> NightbellColors.Mint
+    Health.DOWN -> NightbellColors.Rose
+    Health.DEGRADED -> NightbellColors.Amber
+    Health.PAUSED -> NightbellColors.TextTertiary
+    Health.UNKNOWN -> NightbellColors.Sky
 }
 
 /**
@@ -241,13 +241,13 @@ fun healthColor(health: Health): Color = when (health) {
 @Composable
 @ReadOnlyComposable
 fun healthRim(health: Health): Color = when (health) {
-    Health.DOWN -> PulseColors.Rose
-    Health.DEGRADED -> PulseColors.Amber
+    Health.DOWN -> NightbellColors.Rose
+    Health.DEGRADED -> NightbellColors.Amber
     else -> Color.Transparent
 }
 
 @Immutable
-data class PulseMotion(
+data class NightbellMotion(
     /** 0f = reduced motion, 1f = full show-off mode. */
     val intensity: Float = 1f,
 ) {
@@ -256,9 +256,9 @@ data class PulseMotion(
         if (!enabled) 0 else (durationMs / intensity.coerceIn(0.35f, 1.5f)).toInt()
 }
 
-val LocalPulseMotion = staticCompositionLocalOf { PulseMotion() }
+val LocalNightbellMotion = staticCompositionLocalOf { NightbellMotion() }
 
-private fun materialScheme(colors: PulseColorScheme) = if (colors.isDark) {
+private fun materialScheme(colors: NightbellColorScheme) = if (colors.isDark) {
     darkColorScheme(
         primary = colors.Aqua,
         onPrimary = colors.Void,
@@ -307,7 +307,7 @@ private fun materialScheme(colors: PulseColorScheme) = if (colors.isDark) {
 
 private val Sans = FontFamily.SansSerif
 
-val PulseTypography = Typography(
+val NightbellTypography = Typography(
     displayLarge = TextStyle(
         fontFamily = Sans, fontWeight = FontWeight.Black, fontSize = 44.sp,
         lineHeight = 48.sp, letterSpacing = (-1.4).sp,
@@ -358,8 +358,8 @@ val PulseTypography = Typography(
     ),
 )
 
-/** Shared radii — everything in Pulse is generously rounded. */
-object PulseRadii {
+/** Shared radii — everything in Nightbell is generously rounded. */
+object NightbellRadii {
     val card = 26.dp
     val panel = 22.dp
     val field = 16.dp
@@ -368,7 +368,7 @@ object PulseRadii {
 }
 
 @Composable
-fun PulseTheme(
+fun NightbellTheme(
     motionIntensity: Float = 1f,
     theme: ThemeChoice = ThemeChoice.SYSTEM,
     content: @Composable () -> Unit,
@@ -378,14 +378,14 @@ fun PulseTheme(
         ThemeChoice.DARK -> true
         ThemeChoice.LIGHT -> false
     }
-    val colors = if (dark) PulseDarkColors else PulseLightColors
+    val colors = if (dark) NightbellDarkColors else NightbellLightColors
     CompositionLocalProvider(
-        LocalPulseMotion provides PulseMotion(motionIntensity),
-        LocalPulseColors provides colors,
+        LocalNightbellMotion provides NightbellMotion(motionIntensity),
+        LocalNightbellColors provides colors,
     ) {
         MaterialTheme(
             colorScheme = materialScheme(colors),
-            typography = PulseTypography,
+            typography = NightbellTypography,
             content = content,
         )
     }

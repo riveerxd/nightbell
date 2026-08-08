@@ -31,8 +31,8 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import me.river.pulse.ui.components.MinTouchTarget
-import me.river.pulse.ui.icons.PulseIcons
-import me.river.pulse.ui.theme.PulseColors
+import me.river.pulse.ui.icons.NightbellIcons
+import me.river.pulse.ui.theme.NightbellColors
 
 /**
  * Drag-to-reorder for the dashboard grid.
@@ -254,9 +254,9 @@ fun ReorderHandle(
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            imageVector = PulseIcons.Grip,
+            imageVector = NightbellIcons.Grip,
             contentDescription = null,
-            tint = PulseColors.TextTertiary,
+            tint = NightbellColors.TextTertiary,
             modifier = Modifier.size(18.dp),
         )
     }

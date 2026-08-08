@@ -11,10 +11,10 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import me.river.pulse.ui.theme.PulseColors
+import me.river.pulse.ui.theme.NightbellColors
 
 /**
- * The Pulse mark: the heartbeat trace on its own, in the brand blue.
+ * The Nightbell mark: the heartbeat trace on its own, in the brand blue.
  *
  * One definition, used by the dashboard header and the widget configuration preview, so
  * the drawn mark cannot drift from the vector copies in `res/drawable`. Those copies —
@@ -52,14 +52,14 @@ private const val FILL = 0.86f
 private const val STROKE_SCALE = 1.1f
 
 @Composable
-fun PulseMark(
+fun NightbellMark(
     size: Dp = 20.dp,
     modifier: Modifier = Modifier,
     // Aqua — the brand blue. Green in the app means "this thing is working" (it is the
     // colour of the charts and the status orbs), so a green mark read as one more status
     // indicator rather than as the app's identity. Aqua darkens for the light scheme, so
     // the mark stays legible there without a second set of values.
-    color: Color = PulseColors.Aqua,
+    color: Color = NightbellColors.Aqua,
 ) {
     Canvas(modifier.size(size)) {
         val minX = TRACE.minOf { it.first }

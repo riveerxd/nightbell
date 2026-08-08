@@ -4,13 +4,13 @@ import android.view.View
 import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import me.river.pulse.PulseTestSupport.appContext
+import me.river.pulse.NightbellTestSupport.appContext
 import me.river.pulse.domain.Health
 import me.river.pulse.domain.Monitor
 import me.river.pulse.domain.MonitorRuntime
 import me.river.pulse.domain.Summary
 import me.river.pulse.domain.UrgentAlerts
-import me.river.pulse.widget.PulseWidgetProvider
+import me.river.pulse.widget.NightbellWidgetProvider
 import me.river.pulse.widget.WidgetConfig
 import me.river.pulse.widget.WidgetConfigStore
 import me.river.pulse.widget.WidgetDensity
@@ -84,7 +84,7 @@ class WidgetInstrumentedTest {
         widthDp: Int = 0,
         heightDp: Int = 0,
     ): View {
-        val views = PulseWidgetProvider.build(
+        val views = NightbellWidgetProvider.build(
             appContext,
             config,
             fleet,
@@ -184,8 +184,8 @@ class WidgetInstrumentedTest {
     fun hidingTheTitleRemovesTheTitle() {
         val withTitle = texts(inflate(WidgetConfig(showTitle = true)))
         val without = texts(inflate(WidgetConfig(showTitle = false)))
-        assertTrue(withTitle.any { it == "Pulse" })
-        assertFalse(without.any { it == "Pulse" })
+        assertTrue(withTitle.any { it == "Nightbell" })
+        assertFalse(without.any { it == "Nightbell" })
     }
 
     // ---- reaching the settings again ---------------------------------------
@@ -285,7 +285,7 @@ class WidgetInstrumentedTest {
 
     @Test
     fun anEmptyFleetStillInflatesWithAPrompt() {
-        val views = PulseWidgetProvider.build(appContext, WidgetConfig(), Summary.Fleet())
+        val views = NightbellWidgetProvider.build(appContext, WidgetConfig(), Summary.Fleet())
         val root = views.apply(appContext, FrameLayout(appContext))
         assertTrue(texts(root).any { it.contains("No monitors yet") })
     }
@@ -296,7 +296,7 @@ class WidgetInstrumentedTest {
             listOf(monitor("a", "Alpha")),
             mapOf("a" to runtime(Health.UP)),
         )
-        val views = PulseWidgetProvider.build(appContext, WidgetConfig(onlyProblems = true), healthy)
+        val views = NightbellWidgetProvider.build(appContext, WidgetConfig(onlyProblems = true), healthy)
         val root = views.apply(appContext, FrameLayout(appContext))
         assertTrue(texts(root).any { it.contains("Everything is healthy") })
     }
@@ -362,7 +362,7 @@ class WidgetInstrumentedTest {
     @Test
     fun refreshIsSafeWithNoWidgetsPlaced() {
         // The common case: nobody has added the widget. Must not throw.
-        PulseWidgetProvider.refresh(appContext)
+        NightbellWidgetProvider.refresh(appContext)
     }
 
     // ---- the header, piece by piece -----------------------------------------
@@ -373,7 +373,7 @@ class WidgetInstrumentedTest {
         // to lose the branding with it.
         val onlyLogo = inflate(WidgetConfig(showTitle = false, showHeadline = false))
         assertEquals(View.VISIBLE, onlyLogo.findViewById<View>(R.id.widget_logo).visibility)
-        assertFalse("the name should be gone", texts(onlyLogo).any { it == "Pulse" })
+        assertFalse("the name should be gone", texts(onlyLogo).any { it == "Nightbell" })
         assertFalse("the summary should be gone", texts(onlyLogo).any { it == fleet.headline })
 
         val onlySummary = inflate(WidgetConfig(showLogo = false, showTitle = false))

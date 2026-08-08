@@ -27,9 +27,9 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
-import me.river.pulse.PulseTestSupport.captureScreenshot
-import me.river.pulse.data.Pulse
-import me.river.pulse.data.PulseSnapshot
+import me.river.pulse.NightbellTestSupport.captureScreenshot
+import me.river.pulse.data.Nightbell
+import me.river.pulse.data.NightbellSnapshot
 import me.river.pulse.domain.CertificateWatch
 import me.river.pulse.domain.GlobalSettings
 import me.river.pulse.domain.Health
@@ -130,8 +130,8 @@ class RevisionVerificationTest {
         }.toMap()
 
         runBlocking {
-            Pulse.install(PulseTestSupport.appContext).store.replaceAll(
-                PulseSnapshot(
+            Nightbell.install(NightbellTestSupport.appContext).store.replaceAll(
+                NightbellSnapshot(
                     monitors = monitors,
                     runtimes = runtimes,
                     settings = GlobalSettings(
@@ -174,7 +174,7 @@ class RevisionVerificationTest {
     fun theLightSchemeRendersEveryScreen() {
         seed(theme = ThemeChoice.LIGHT)
         launch()
-        composeRule.onNodeWithText("PULSE").assertIsDisplayed()
+        composeRule.onNodeWithText("NIGHTBELL").assertIsDisplayed()
         // If the scheme had failed to resolve, the dashboard would still render —
         // in dark. So assert on content and capture the colours for review.
         composeRule.onNodeWithText("Marketing site").assertIsDisplayed()
@@ -216,7 +216,7 @@ class RevisionVerificationTest {
 
         assertEquals(
             ThemeChoice.LIGHT,
-            runBlocking { Pulse.require().store.currentSnapshot().settings.theme },
+            runBlocking { Nightbell.require().store.currentSnapshot().settings.theme },
         )
     }
 
@@ -266,7 +266,7 @@ class RevisionVerificationTest {
         // the copy is supposed to say out loud rather than reading as an error.
         seed(monitorCount = 6)
         runBlocking {
-            val store = Pulse.install(PulseTestSupport.appContext).store
+            val store = Nightbell.install(NightbellTestSupport.appContext).store
             val snap = store.currentSnapshot()
             store.replaceAll(
                 snap.copy(
@@ -316,9 +316,9 @@ class RevisionVerificationTest {
 
         composeRule.onNodeWithText("Pause").performClick()
         composeRule.waitForIdle()
-        PulseTestSupport.awaitTrue(description = "both monitors paused") {
+        NightbellTestSupport.awaitTrue(description = "both monitors paused") {
             runBlocking {
-                val monitors = Pulse.require().store.currentSnapshot().monitors
+                val monitors = Nightbell.require().store.currentSnapshot().monitors
                 monitors.count { !it.enabled } == 3 // the two just paused + the seeded one
             }
         }
@@ -343,13 +343,13 @@ class RevisionVerificationTest {
 
         composeRule.onNodeWithText("Keep them").performClick()
         composeRule.waitForIdle()
-        assertEquals(6, runBlocking { Pulse.require().store.currentSnapshot().monitors.size })
+        assertEquals(6, runBlocking { Nightbell.require().store.currentSnapshot().monitors.size })
 
         composeRule.onNodeWithText("Delete").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithText("Delete").performClick()
-        PulseTestSupport.awaitTrue(description = "one monitor deleted") {
-            runBlocking { Pulse.require().store.currentSnapshot().monitors.size } == 5
+        NightbellTestSupport.awaitTrue(description = "one monitor deleted") {
+            runBlocking { Nightbell.require().store.currentSnapshot().monitors.size } == 5
         }
         composeRule.captureScreenshot("bulk-05-after-delete")
     }
@@ -404,7 +404,7 @@ class RevisionVerificationTest {
     fun aFullDayOfHistoryReportsTwentyFourHourUptime() {
         seed()
         runBlocking {
-            val store = Pulse.install(PulseTestSupport.appContext).store
+            val store = Nightbell.install(NightbellTestSupport.appContext).store
             val snap = store.currentSnapshot()
             val spread = (0 until 40).map { i ->
                 Sample(at = now - (40 - i) * 60 * 60_000L, ok = true, latencyMs = 150, code = 200)
@@ -458,8 +458,8 @@ class RevisionVerificationTest {
         composeRule.waitForIdle()
         composeRule.onNodeWithText("Discard").performClick()
         composeRule.waitForIdle()
-        composeRule.onNodeWithText("PULSE").assertIsDisplayed()
-        assertEquals(6, runBlocking { Pulse.require().store.currentSnapshot().monitors.size })
+        composeRule.onNodeWithText("NIGHTBELL").assertIsDisplayed()
+        assertEquals(6, runBlocking { Nightbell.require().store.currentSnapshot().monitors.size })
     }
 
     @Test
@@ -471,7 +471,7 @@ class RevisionVerificationTest {
         composeRule.waitForIdle()
         scenario!!.onActivity { it.onBackPressedDispatcher.onBackPressed() }
         composeRule.waitForIdle()
-        composeRule.onNodeWithText("PULSE").assertIsDisplayed()
+        composeRule.onNodeWithText("NIGHTBELL").assertIsDisplayed()
         assertEquals(
             0,
             composeRule.onAllNodesWithText("Discard this monitor?").fetchSemanticsNodes().size,
@@ -502,8 +502,8 @@ class RevisionVerificationTest {
     @Test
     fun aTemplateFillsInTheExpectationsItPromises() {
         runBlocking {
-            Pulse.install(PulseTestSupport.appContext).store.replaceAll(
-                PulseSnapshot(settings = GlobalSettings(motionIntensity = 0f, hasSeenPagerSetup = true)),
+            Nightbell.install(NightbellTestSupport.appContext).store.replaceAll(
+                NightbellSnapshot(settings = GlobalSettings(motionIntensity = 0f, hasSeenPagerSetup = true)),
             )
         }
         launch()
@@ -563,7 +563,7 @@ class RevisionVerificationTest {
 
     /** Ids in stored order — the order "My order" shows and dragging rewrites. */
     private fun storedOrder(): List<String> =
-        runBlocking { Pulse.require().store.currentSnapshot().monitors.map { it.id } }
+        runBlocking { Nightbell.require().store.currentSnapshot().monitors.map { it.id } }
 
     /**
      * Scroll until a monitor's grip is genuinely on screen, and hand it back.
@@ -694,8 +694,8 @@ class RevisionVerificationTest {
         composeRule.onAllNodesWithContentDescription("Check now")[0].assertIsDisplayed()
         composeRule.onAllNodesWithContentDescription("Pause monitor")[0].assertIsDisplayed()
         // And it must sit inside the screen, not merely exist somewhere to the right.
-        val screenWidth = PulseTestSupport.appContext.resources.displayMetrics.widthPixels /
-            PulseTestSupport.appContext.resources.displayMetrics.density
+        val screenWidth = NightbellTestSupport.appContext.resources.displayMetrics.widthPixels /
+            NightbellTestSupport.appContext.resources.displayMetrics.density
         val right = composeRule.onAllNodesWithContentDescription("Check now")[0]
             .getUnclippedBoundsInRoot().right.value
         assertTrue("re-check button runs off the screen at ${right}dp", right <= screenWidth)
@@ -716,7 +716,7 @@ class RevisionVerificationTest {
         // Drag the first card's grip past its neighbour.
         handle.dragDown(700f)
 
-        PulseTestSupport.awaitTrue(description = "store order changed") {
+        NightbellTestSupport.awaitTrue(description = "store order changed") {
             storedOrder() != before
         }
         val after = storedOrder()
@@ -736,7 +736,7 @@ class RevisionVerificationTest {
         launch()
         switchToMyOrder()
         handleFor("Checkout API", scrollToIndex = firstCardIndex).dragDown(700f)
-        PulseTestSupport.awaitTrue(description = "order committed") {
+        NightbellTestSupport.awaitTrue(description = "order committed") {
             storedOrder() != listOf("m0", "m1", "m2", "m3", "m4", "m5")
         }
         val committed = storedOrder()
@@ -748,7 +748,7 @@ class RevisionVerificationTest {
         // And the sort choice persisted with it, so the arrangement is still shown.
         assertEquals(
             me.river.pulse.domain.MonitorQuery.Sort.MANUAL,
-            runBlocking { Pulse.require().store.currentSnapshot().settings.dashboardSort },
+            runBlocking { Nightbell.require().store.currentSnapshot().settings.dashboardSort },
         )
         composeRule.captureScreenshot("reorder-05-after-restart")
     }
@@ -769,7 +769,7 @@ class RevisionVerificationTest {
 
         val before = storedOrder()
         composeRule.runOnUiThread { actions.first { it.label == "Move up" }.action() }
-        PulseTestSupport.awaitTrue(description = "moved up") { storedOrder() != before }
+        NightbellTestSupport.awaitTrue(description = "moved up") { storedOrder() != before }
         val after = storedOrder()
         assertEquals(before.sorted(), after.sorted())
         assertEquals("m1", after.first())

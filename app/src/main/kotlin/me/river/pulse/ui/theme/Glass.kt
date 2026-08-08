@@ -44,7 +44,7 @@ fun Modifier.softShadow(
 ): Modifier {
     // Same geometry in both schemes, less of it on light: a cast shadow is nearly
     // free over black and very loud over off-white.
-    val scaled = strength * PulseColors.shadowScale
+    val scaled = strength * NightbellColors.shadowScale
     return softShadowRaw(corner, color, radius, scaled)
 }
 
@@ -100,12 +100,12 @@ fun Modifier.softShadowRaw(
  */
 @Composable
 fun Modifier.glass(
-    shape: Shape = RoundedCornerShape(PulseRadii.card),
-    corner: Dp = PulseRadii.card,
-    fill: Color = PulseColors.GlassFill,
-    fillEnd: Color = PulseColors.Ink,
-    strokeTop: Color = PulseColors.GlassStroke,
-    strokeBottom: Color = PulseColors.sheen(0.05f),
+    shape: Shape = RoundedCornerShape(NightbellRadii.card),
+    corner: Dp = NightbellRadii.card,
+    fill: Color = NightbellColors.GlassFill,
+    fillEnd: Color = NightbellColors.Ink,
+    strokeTop: Color = NightbellColors.GlassStroke,
+    strokeBottom: Color = NightbellColors.sheen(0.05f),
     elevation: Dp = 12.dp,
     accent: Color = Color.Transparent,
     specular: Boolean = true,
@@ -113,8 +113,8 @@ fun Modifier.glass(
     val tinted = accent != Color.Transparent
     // Read here, not inside drawWithCache: a draw scope has no composition to ask
     // which scheme is in force.
-    val specularNear = PulseColors.sheen(0.028f)
-    val specularFar = PulseColors.sheen(0.008f)
+    val specularNear = NightbellColors.sheen(0.028f)
+    val specularFar = NightbellColors.sheen(0.008f)
     return this
         .softShadow(corner = corner, radius = elevation)
         .clip(shape)
@@ -155,27 +155,27 @@ fun Modifier.glass(
 /** A brighter variant for interactive surfaces (fields, chips, buttons). */
 @Composable
 fun Modifier.glassInteractive(
-    shape: Shape = RoundedCornerShape(PulseRadii.field),
-    corner: Dp = PulseRadii.field,
+    shape: Shape = RoundedCornerShape(NightbellRadii.field),
+    corner: Dp = NightbellRadii.field,
     focused: Boolean = false,
-    accent: Color = PulseColors.Aqua,
+    accent: Color = NightbellColors.Aqua,
     error: Boolean = false,
 ): Modifier {
     val strokeTop = when {
-        error -> PulseColors.Rose.copy(alpha = 0.75f)
+        error -> NightbellColors.Rose.copy(alpha = 0.75f)
         focused -> accent.copy(alpha = 0.85f)
-        else -> PulseColors.GlassStroke
+        else -> NightbellColors.GlassStroke
     }
     val strokeBottom = when {
-        error -> PulseColors.Rose.copy(alpha = 0.35f)
+        error -> NightbellColors.Rose.copy(alpha = 0.35f)
         focused -> accent.copy(alpha = 0.30f)
-        else -> PulseColors.sheen(0.06f)
+        else -> NightbellColors.sheen(0.06f)
     }
     return glass(
         shape = shape,
         corner = corner,
-        fill = if (focused) PulseColors.GlassFillStrong else PulseColors.GlassFill,
-        fillEnd = PulseColors.Ink,
+        fill = if (focused) NightbellColors.GlassFillStrong else NightbellColors.GlassFill,
+        fillEnd = NightbellColors.Ink,
         // The stroke above already carries the error/focus tint, so no rim
         // accent — otherwise a focused field would be outlined twice.
         strokeTop = strokeTop,

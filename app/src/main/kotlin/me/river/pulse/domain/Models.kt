@@ -644,7 +644,7 @@ data class CheckResult(
 /**
  * Which colour scheme to paint in.
  *
- * Pulse shipped dark-only, which was a defensible design decision right up until
+ * Nightbell shipped dark-only, which was a defensible design decision right up until
  * it became an unstated one — the theme function took a `darkTheme` flag and
  * ignored it. Following the system is the default because a monitoring app is
  * something you open at 3am and also at noon outdoors, and the OS already knows

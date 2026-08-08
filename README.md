@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/screens/hero-b.png" width="900" alt="Pulse — the dashboard worst-first, an urgent alert, and a monitor detail" />
+<img src="docs/screens/hero-b.png" width="900" alt="Nightbell — the dashboard worst-first, an urgent alert, and a monitor detail" />
 
 ### Uptime monitoring that lives on your phone and actually wakes you up.
 
@@ -47,7 +47,7 @@ subscription to text me, or sent a notification that looked exactly like a
 marketing email and got swiped away with one. I wanted the thing that tells me
 production is down to be impossible to confuse with anything else.
 
-So urgent alerts in Pulse arrive as a red card that behaves like an incoming
+So urgent alerts in Nightbell arrive as a red card that behaves like an incoming
 call, with a looping alarm that keeps going until you acknowledge it, and it
 wakes the screen if the phone is locked.
 
@@ -90,7 +90,7 @@ specific about.
 
 > [!WARNING]
 > Android will happily let an app *think* it is alerting you while delivering
-> nothing. Pulse needs four grants, and there is a screen on first launch that
+> nothing. Nightbell needs four grants, and there is a screen on first launch that
 > walks you through them.
 
 <div align="center">
@@ -127,7 +127,7 @@ how it sounds, the haptic pattern, how hard it escalates, and when to stay quiet
 ## The home-screen widget
 
 Worst monitor first, tap a row to open it, tap the cog to reconfigure it. Every
-piece of the header switches off independently — the mark, the word Pulse, the
+piece of the header switches off independently — the mark, the word Nightbell, the
 "1 of 6 is down" summary, the cog — because "make it clean" means different
 things to different people, and one flag for all four meant losing the summary to
 keep the branding.
@@ -152,7 +152,7 @@ clipping both. `Columns: Auto` in the widget settings, or pin it to 1–3.
 
 One `CheckEngine` runs a check, folds the result into persisted state, and
 decides whether to interrupt you. Four alert tracks come off that — deliberately
-separate, so a bug in Pulse never gets reported as your website being down.
+separate, so a bug in Nightbell never gets reported as your website being down.
 
 ```mermaid
 flowchart LR

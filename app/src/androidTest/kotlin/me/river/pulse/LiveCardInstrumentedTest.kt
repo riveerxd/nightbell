@@ -5,9 +5,9 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import me.river.pulse.PulseTestSupport.appContext
-import me.river.pulse.data.Pulse
-import me.river.pulse.data.PulseSnapshot
+import me.river.pulse.NightbellTestSupport.appContext
+import me.river.pulse.data.Nightbell
+import me.river.pulse.data.NightbellSnapshot
 import me.river.pulse.data.alerts.AlertCenter
 import me.river.pulse.data.alerts.LiveCard
 import me.river.pulse.domain.GlobalSettings
@@ -83,13 +83,13 @@ class LiveCardInstrumentedTest {
         )
     }
 
-    private fun seed(strict: Boolean = true): PulseSnapshot {
+    private fun seed(strict: Boolean = true): NightbellSnapshot {
         val monitors = listOf(
             monitor("api", "api.pulse"),
             monitor("checkout", "checkout"),
             monitor("cdn", "cdn edge", interval = 15),
         )
-        val snapshot = PulseSnapshot(
+        val snapshot = NightbellSnapshot(
             monitors = monitors,
             runtimes = mapOf(
                 // One clean, one that fell over 40 minutes ago and is still down,
@@ -104,12 +104,12 @@ class LiveCardInstrumentedTest {
                 strictForegroundMonitoring = strict,
             ),
         )
-        val graph = Pulse.install(appContext)
+        val graph = Nightbell.install(appContext)
         runBlocking { graph.store.replaceAll(snapshot) }
         return snapshot
     }
 
-    private fun timelineOf(snapshot: PulseSnapshot) = LiveTimeline.of(
+    private fun timelineOf(snapshot: NightbellSnapshot) = LiveTimeline.of(
         monitors = snapshot.monitors,
         runtimes = snapshot.runtimes,
         nowMs = now,

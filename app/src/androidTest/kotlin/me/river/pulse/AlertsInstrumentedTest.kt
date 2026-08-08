@@ -4,8 +4,8 @@ import android.Manifest
 import android.app.NotificationManager
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
-import me.river.pulse.PulseTestSupport.awaitTrue
-import me.river.pulse.data.Pulse
+import me.river.pulse.NightbellTestSupport.awaitTrue
+import me.river.pulse.data.Nightbell
 import me.river.pulse.data.alerts.AlertActionReceiver
 import me.river.pulse.data.alerts.AlertCenter
 import me.river.pulse.domain.AlertPolicy
@@ -37,9 +37,9 @@ class AlertsInstrumentedTest {
     val permissions: GrantPermissionRule = GrantPermissionRule.grant(Manifest.permission.POST_NOTIFICATIONS)
 
     private lateinit var server: TinyHttpServer
-    private val graph get() = Pulse.install(PulseTestSupport.appContext)
+    private val graph get() = Nightbell.install(NightbellTestSupport.appContext)
     private val notificationManager: NotificationManager
-        get() = PulseTestSupport.appContext.getSystemService(NotificationManager::class.java)
+        get() = NightbellTestSupport.appContext.getSystemService(NotificationManager::class.java)
 
     @Before
     fun setUp() {
@@ -60,7 +60,7 @@ class AlertsInstrumentedTest {
     }
 
     private fun seed(policy: AlertPolicy, path: String, masterEnabled: Boolean = true): Monitor {
-        PulseTestSupport.resetApp(
+        NightbellTestSupport.resetApp(
             GlobalSettings(
                 motionIntensity = 0f,
                 masterAlertsEnabled = masterEnabled,
@@ -232,7 +232,7 @@ class AlertsInstrumentedTest {
 
     @Test
     fun previewFiresAHapticAndANotification() {
-        PulseTestSupport.resetApp()
+        NightbellTestSupport.resetApp()
         graph.alerts.previewPolicy(AlertPolicy(vibrate = true, vibrationStyle = VibrationStyle.DOUBLE_PULSE))
         awaitTrue(description = "preview notification") {
             activeTitles().any { it.contains("Preview monitor") }
@@ -247,7 +247,7 @@ class AlertsInstrumentedTest {
 
         // "Mute 1h" — dismisses the alert and stops further ones.
         AlertActionReceiver().onReceive(
-            PulseTestSupport.appContext,
+            NightbellTestSupport.appContext,
             android.content.Intent(AlertActionReceiver.ACTION_MUTE_1H)
                 .putExtra(AlertActionReceiver.EXTRA_MONITOR_ID, monitor.id),
         )
@@ -263,7 +263,7 @@ class AlertsInstrumentedTest {
             graph.store.currentSnapshot().runtimes.getValue("alert-test").samples.size
         }
         AlertActionReceiver().onReceive(
-            PulseTestSupport.appContext,
+            NightbellTestSupport.appContext,
             android.content.Intent(AlertActionReceiver.ACTION_RECHECK)
                 .putExtra(AlertActionReceiver.EXTRA_MONITOR_ID, monitor.id),
         )

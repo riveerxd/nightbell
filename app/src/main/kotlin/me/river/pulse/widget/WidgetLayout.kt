@@ -4,7 +4,7 @@ package me.river.pulse.widget
  * How many columns of monitors a widget of a given size should draw, and how many rows
  * go in each.
  *
- * Separate from [PulseWidgetProvider] and free of Android types on purpose. The whole
+ * Separate from [NightbellWidgetProvider] and free of Android types on purpose. The whole
  * point of this file is arithmetic that decides whether a monitor is visible at all, and
  * arithmetic that can only be exercised by resizing a widget by hand on a home screen is
  * arithmetic that never gets exercised.

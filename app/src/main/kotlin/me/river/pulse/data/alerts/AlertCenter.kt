@@ -202,7 +202,7 @@ class AlertCenter(private val context: Context) {
      * Returned rather than posted, because *where* it is posted decides how it
      * looks. `setColorized(true)` is honoured only for a foreground-service
      * notification, so the fully red card exists only when
-     * [me.river.pulse.data.work.PulseMonitorService] posts this as its own
+     * [me.river.pulse.data.work.NightbellMonitorService] posts this as its own
      * foreground notification. Verified on a device: the identical builder sent
      * through `NotificationManager.notify` renders as a white card with a red
      * block inside it.
@@ -501,11 +501,11 @@ class AlertCenter(private val context: Context) {
     // ---- checker health ----------------------------------------------------
 
     /**
-     * "Pulse's own checker is broken" — a different claim from "your site is
+     * "Nightbell's own checker is broken" — a different claim from "your site is
      * down", and now a different notification.
      *
      * Up to 1.5.0 this was posted through [notifyDown] with the monitor's name
-     * and the words "Checker crashed", so a fault in Pulse (or, far more often,
+     * and the words "Checker crashed", so a fault in Nightbell (or, far more often,
      * a perfectly ordinary coroutine cancellation) read as an outage on the
      * user's website and escalated into the URGENT nag loop. See
      * [me.river.pulse.domain.CheckerHealth].
@@ -533,12 +533,12 @@ class AlertCenter(private val context: Context) {
         val quiet = silent || repeat
         val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_stat_alert)
-            .setContentTitle("Pulse can't complete its checks")
-            .setContentText("${state.consecutiveErrors} checks in a row failed inside Pulse itself")
+            .setContentTitle("Nightbell can't complete its checks")
+            .setContentText("${state.consecutiveErrors} checks in a row failed inside Nightbell itself")
             .setStyle(
                 NotificationCompat.BigTextStyle().bigText(
                     buildString {
-                        append("This is a fault in Pulse, not in the sites you are watching — ")
+                        append("This is a fault in Nightbell, not in the sites you are watching — ")
                         append("their status is unchanged and no outage is implied.")
                         append("\n\nLast error: ")
                         append(state.lastSignature.ifBlank { "unknown" })
@@ -588,7 +588,7 @@ class AlertCenter(private val context: Context) {
             if (vibrate) NotificationManager.IMPORTANCE_DEFAULT else NotificationManager.IMPORTANCE_LOW,
         ).apply {
             group = GROUP_HEALTH
-            description = "Raised only when Pulse's own checking code repeatedly fails. " +
+            description = "Raised only when Nightbell's own checking code repeatedly fails. " +
                 "Never raised for delayed background work, lost connectivity or battery saver."
             enableVibration(vibrate)
             if (vibrate) vibrationPattern = style.pattern
@@ -611,7 +611,7 @@ class AlertCenter(private val context: Context) {
     }
 
     /**
-     * Ids of Pulse's own alert notifications that are currently on screen.
+     * Ids of Nightbell's own alert notifications that are currently on screen.
      *
      * The source of truth for "what is the user actually looking at". Reasoning
      * from persisted monitor state alone cannot see a notification belonging to
@@ -789,7 +789,7 @@ class AlertCenter(private val context: Context) {
                     "Strict monitoring",
                     NotificationManager.IMPORTANCE_LOW,
                 ).apply {
-                    description = "Shown while Pulse keeps a strict check cadence in the background."
+                    description = "Shown while Nightbell keeps a strict check cadence in the background."
                     setShowBadge(false)
                     enableVibration(false)
                     setSound(null, null)
@@ -816,7 +816,7 @@ class AlertCenter(private val context: Context) {
     ): Notification {
         val builder = NotificationCompat.Builder(context, ensureServiceChannel())
             // The brand mark rather than a status glyph: this is the only notification
-            // that reports on Pulse itself instead of on a monitor, so it is the only
+            // that reports on Nightbell itself instead of on a monitor, so it is the only
             // one where "which app is this" is the useful thing to show. A refresh
             // arrow here read as a monitor being re-checked, which it never was.
             .setSmallIcon(R.drawable.ic_stat_brand)
@@ -839,7 +839,7 @@ class AlertCenter(private val context: Context) {
         // Built through LiveCard when there is a line, because whether the card has
         // to be colourised to earn its chip is a question only the device can
         // answer — see [LiveCard.earnPromotion]. No action buttons: the notice reports
-        // on Pulse itself and strict mode is turned off in Settings, so a button here
+        // on Nightbell itself and strict mode is turned off in Settings, so a button here
         // was one more thing on a permanent notification rather than a useful control.
         return if (live && timeline != null) {
             LiveCard.earnPromotion(context, builder, timeline)

@@ -44,14 +44,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import me.river.pulse.data.Pulse
+import me.river.pulse.data.Nightbell
 import me.river.pulse.domain.PagerReadiness
 import me.river.pulse.domain.PagerReadiness.Requirement
 import me.river.pulse.ui.components.ButtonTone
 import me.river.pulse.ui.components.GlassCard
-import me.river.pulse.ui.components.PulseButton
-import me.river.pulse.ui.icons.PulseIcons
-import me.river.pulse.ui.theme.PulseColors
+import me.river.pulse.ui.components.NightbellButton
+import me.river.pulse.ui.icons.NightbellIcons
+import me.river.pulse.ui.theme.NightbellColors
 
 /**
  * The one screen that stands between a fresh install and a pager that works.
@@ -76,7 +76,7 @@ const val TAG_DISMISS: String = "pager-setup-dismiss"
 @Composable
 fun PagerSetupScreen(onDone: () -> Unit) {
     val context = LocalContext.current
-    val graph = Pulse.require()
+    val graph = Nightbell.require()
     var state by remember { mutableStateOf(readState(context)) }
 
     // Re-read on resume. Three of the four grants are made in another app, so
@@ -135,14 +135,14 @@ fun PagerSetupScreen(onDone: () -> Unit) {
         Text(
             "Before we start",
             style = MaterialTheme.typography.labelSmall,
-            color = PulseColors.Rose,
+            color = NightbellColors.Rose,
             letterSpacing = 2.4.sp,
         )
         Spacer(Modifier.height(10.dp))
         Text(
-            "Let Pulse wake you when something breaks",
+            "Let Nightbell wake you when something breaks",
             style = MaterialTheme.typography.displayMedium,
-            color = PulseColors.TextPrimary,
+            color = NightbellColors.TextPrimary,
         )
         Spacer(Modifier.height(12.dp))
         Text(
@@ -150,14 +150,14 @@ fun PagerSetupScreen(onDone: () -> Unit) {
                 "can switch them on for you. Tapping a row jumps straight to the " +
                 "toggle, and this list updates itself when you come back.",
             style = MaterialTheme.typography.bodyMedium,
-            color = PulseColors.TextTertiary,
+            color = NightbellColors.TextTertiary,
         )
 
         Spacer(Modifier.height(22.dp))
         Text(
             "${state.grantedCount} of ${state.total} ready",
             style = MaterialTheme.typography.titleMedium,
-            color = if (state.allGranted) PulseColors.Mint else PulseColors.TextSecondary,
+            color = if (state.allGranted) NightbellColors.Mint else NightbellColors.TextSecondary,
         )
         Spacer(Modifier.height(12.dp))
 
@@ -172,12 +172,12 @@ fun PagerSetupScreen(onDone: () -> Unit) {
 
         if (!state.audible) {
             Spacer(Modifier.height(4.dp))
-            GlassCard(accent = PulseColors.Amber) {
+            GlassCard(accent = NightbellColors.Amber) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        PulseIcons.VolumeOff,
+                        NightbellIcons.VolumeOff,
                         contentDescription = null,
-                        tint = PulseColors.Amber,
+                        tint = NightbellColors.Amber,
                         modifier = Modifier.size(20.dp),
                     )
                     Spacer(Modifier.width(12.dp))
@@ -185,13 +185,13 @@ fun PagerSetupScreen(onDone: () -> Unit) {
                         Text(
                             "Your ring volume is at zero",
                             style = MaterialTheme.typography.titleMedium,
-                            color = PulseColors.TextPrimary,
+                            color = NightbellColors.TextPrimary,
                         )
                         Text(
                             "Pages will still vibrate, but they will not make a sound. " +
                                 "This is not a permission — nothing but the volume keys fixes it.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = PulseColors.TextTertiary,
+                            color = NightbellColors.TextTertiary,
                         )
                     }
                 }
@@ -202,15 +202,15 @@ fun PagerSetupScreen(onDone: () -> Unit) {
 
         val next = state.next
         if (next != null) {
-            PulseButton(
+            NightbellButton(
                 text = actionLabel(next),
                 onClick = { grant(next) },
                 modifier = Modifier.fillMaxWidth(),
-                accent = PulseColors.Rose,
-                accentEnd = PulseColors.Coral,
+                accent = NightbellColors.Rose,
+                accentEnd = NightbellColors.Coral,
             )
             Spacer(Modifier.height(10.dp))
-            PulseButton(
+            NightbellButton(
                 text = if (state.canPageAtAll) "Continue anyway" else "Skip for now",
                 onClick = onDone,
                 // Tagged because the label depends on what is already granted, so
@@ -219,12 +219,12 @@ fun PagerSetupScreen(onDone: () -> Unit) {
                 tone = ButtonTone.Ghost,
             )
         } else {
-            PulseButton(
-                text = "All set — open Pulse",
+            NightbellButton(
+                text = "All set — open Nightbell",
                 onClick = onDone,
                 modifier = Modifier.fillMaxWidth().testTag(TAG_DISMISS),
-                accent = PulseColors.Mint,
-                accentEnd = PulseColors.Mint,
+                accent = NightbellColors.Mint,
+                accentEnd = NightbellColors.Mint,
             )
         }
 
@@ -232,7 +232,7 @@ fun PagerSetupScreen(onDone: () -> Unit) {
         Text(
             "You can change any of this later in Settings.",
             style = MaterialTheme.typography.bodySmall,
-            color = PulseColors.TextTertiary,
+            color = NightbellColors.TextTertiary,
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center,
         )
@@ -242,7 +242,7 @@ fun PagerSetupScreen(onDone: () -> Unit) {
 @Composable
 private fun RequirementRow(requirement: Requirement, granted: Boolean, onClick: () -> Unit) {
     GlassCard(
-        accent = if (granted) Color.Transparent else PulseColors.Rose,
+        accent = if (granted) Color.Transparent else NightbellColors.Rose,
         onClick = if (granted) null else onClick,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -253,9 +253,9 @@ private fun RequirementRow(requirement: Requirement, granted: Boolean, onClick: 
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    if (granted) PulseIcons.Check else PulseIcons.Warning,
+                    if (granted) NightbellIcons.Check else NightbellIcons.Warning,
                     contentDescription = null,
-                    tint = if (granted) PulseColors.Mint else PulseColors.Rose,
+                    tint = if (granted) NightbellColors.Mint else NightbellColors.Rose,
                     modifier = Modifier.size(22.dp),
                 )
             }
@@ -264,12 +264,12 @@ private fun RequirementRow(requirement: Requirement, granted: Boolean, onClick: 
                 Text(
                     label(requirement),
                     style = MaterialTheme.typography.titleMedium,
-                    color = PulseColors.TextPrimary,
+                    color = NightbellColors.TextPrimary,
                 )
                 Text(
                     if (granted) grantedBlurb(requirement) else blurb(requirement),
                     style = MaterialTheme.typography.bodySmall,
-                    color = PulseColors.TextTertiary,
+                    color = NightbellColors.TextTertiary,
                 )
             }
             if (!granted) {
@@ -277,7 +277,7 @@ private fun RequirementRow(requirement: Requirement, granted: Boolean, onClick: 
                 Text(
                     if (requirement.leavesTheApp) "Settings" else "Allow",
                     style = MaterialTheme.typography.labelLarge,
-                    color = PulseColors.Rose,
+                    color = NightbellColors.Rose,
                 )
             }
         }
@@ -308,7 +308,7 @@ private fun actionLabel(requirement: Requirement): String = when (requirement) {
 
 private fun blurb(requirement: Requirement): String = when (requirement) {
     Requirement.NOTIFICATIONS ->
-        "Required. Without it Pulse cannot tell you anything at all."
+        "Required. Without it Nightbell cannot tell you anything at all."
     Requirement.BATTERY_EXEMPTION ->
         "Lets checks keep their schedule, and lets an urgent page keep repeating " +
             "while your phone is in your pocket."
@@ -328,7 +328,7 @@ private fun grantedBlurb(requirement: Requirement): String = when (requirement) 
 }
 
 private fun readState(context: Context): PagerReadiness.State {
-    val graph = Pulse.install(context)
+    val graph = Nightbell.install(context)
     val settings = graph.store.snapshot.value.settings
     return PagerReadiness.State(
         notifications = graph.alerts.hasNotificationPermission(),

@@ -35,7 +35,7 @@ class ElementMonitorTest {
 
     private val page = """
         <!doctype html>
-        <html><head><title>Pulse Fixture Shop</title></head>
+        <html><head><title>Nightbell Fixture Shop</title></head>
         <body>
           <header class="site-header"><h1>Fixture Shop</h1></header>
           <main>
@@ -77,7 +77,7 @@ class ElementMonitorTest {
     @After
     fun tearDown() = server.close()
 
-    private fun checker() = ElementChecker(PulseTestSupport.appContext)
+    private fun checker() = ElementChecker(NightbellTestSupport.appContext)
 
     private fun elementMonitor(path: String, target: ElementTarget) = Monitor(
         id = "element-test",
@@ -254,7 +254,7 @@ class ElementMonitorTest {
         var webView: WebView? = null
 
         instrumentation.runOnMainSync {
-            val view = WebView(PulseTestSupport.appContext)
+            val view = WebView(NightbellTestSupport.appContext)
             webView = view
             view.settings.javaScriptEnabled = true
             view.settings.domStorageEnabled = true

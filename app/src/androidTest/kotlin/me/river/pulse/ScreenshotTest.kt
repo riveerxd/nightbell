@@ -16,9 +16,9 @@ import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
-import me.river.pulse.PulseTestSupport.captureScreenshot
-import me.river.pulse.data.Pulse
-import me.river.pulse.data.PulseSnapshot
+import me.river.pulse.NightbellTestSupport.captureScreenshot
+import me.river.pulse.data.Nightbell
+import me.river.pulse.data.NightbellSnapshot
 import me.river.pulse.domain.AlertPolicy
 import me.river.pulse.domain.AssertionMode
 import me.river.pulse.domain.BodyAssertion
@@ -195,8 +195,8 @@ class ScreenshotTest {
         )
 
         runBlocking {
-            Pulse.install(PulseTestSupport.appContext).store.replaceAll(
-                PulseSnapshot(
+            Nightbell.install(NightbellTestSupport.appContext).store.replaceAll(
+                NightbellSnapshot(
                     monitors = monitors,
                     runtimes = runtimes,
                     settings = GlobalSettings(
@@ -290,7 +290,7 @@ class ScreenshotTest {
         server = TinyHttpServer {
             TinyHttpServer.Response(code = 503, reason = "Service Unavailable", body = "maintenance")
         }
-        PulseTestSupport.resetApp(
+        NightbellTestSupport.resetApp(
             GlobalSettings(
                 motionIntensity = 0f,
                 defaultAlert = AlertPolicy(
@@ -300,7 +300,7 @@ class ScreenshotTest {
                 ),
             ),
         )
-        val graph = Pulse.install(PulseTestSupport.appContext)
+        val graph = Nightbell.install(NightbellTestSupport.appContext)
         runBlocking {
             graph.store.upsert(
                 Monitor(
@@ -312,8 +312,8 @@ class ScreenshotTest {
             )
             graph.engine.run("screenshot-down")
         }
-        PulseTestSupport.awaitTrue(description = "down alert posted") {
-            PulseTestSupport.appContext
+        NightbellTestSupport.awaitTrue(description = "down alert posted") {
+            NightbellTestSupport.appContext
                 .getSystemService(android.app.NotificationManager::class.java)
                 .activeNotifications.isNotEmpty()
         }
@@ -359,8 +359,8 @@ class ScreenshotTest {
             }
         }
 
-        PulseTestSupport.resetApp()
-        val graph = Pulse.install(PulseTestSupport.appContext)
+        NightbellTestSupport.resetApp()
+        val graph = Nightbell.install(NightbellTestSupport.appContext)
         val now = System.currentTimeMillis()
         runBlocking {
             graph.store.upsert(
@@ -438,7 +438,7 @@ class ScreenshotTest {
             )
         }
 
-        PulseTestSupport.resetApp()
+        NightbellTestSupport.resetApp()
         scenario = ActivityScenario.launch(MainActivity::class.java)
         composeRule.waitForIdle()
 

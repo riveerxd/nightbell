@@ -5,13 +5,13 @@ import android.graphics.Canvas
 import android.view.View
 import android.widget.FrameLayout
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import me.river.pulse.PulseTestSupport.appContext
-import me.river.pulse.PulseTestSupport.screenshotDir
+import me.river.pulse.NightbellTestSupport.appContext
+import me.river.pulse.NightbellTestSupport.screenshotDir
 import me.river.pulse.domain.Health
 import me.river.pulse.domain.Monitor
 import me.river.pulse.domain.MonitorRuntime
 import me.river.pulse.domain.Summary
-import me.river.pulse.widget.PulseWidgetProvider
+import me.river.pulse.widget.NightbellWidgetProvider
 import me.river.pulse.widget.WidgetConfig
 import java.io.File
 import org.junit.Assert.assertTrue
@@ -73,7 +73,7 @@ class WidgetSizeScreenshotTest {
         val widthPx = (widthDp * density).toInt()
         val heightPx = (heightDp * density).toInt()
 
-        val views = PulseWidgetProvider.build(appContext, config, fleet, 7, widthDp, heightDp)
+        val views = NightbellWidgetProvider.build(appContext, config, fleet, 7, widthDp, heightDp)
         val root = views.apply(appContext, FrameLayout(appContext))
         root.measure(
             View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY),

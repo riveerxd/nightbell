@@ -79,7 +79,7 @@ data class CheckerStreak(
  *  - **[CheckerHealth] — the checker itself is broken.** An exception escaped
  *    checker code, repeatedly, right now. Both checkers classify their own
  *    failures into [FailureKind] and do not throw, so anything reaching the
- *    engine really is a bug in Pulse. That is worth saying out loud — once
+ *    engine really is a bug in Nightbell. That is worth saying out loud — once
  *    verified.
  *
  * ### What "verified and current" means here
@@ -156,7 +156,7 @@ object CheckerHealth {
                 Kind.SUSPECT ->
                     "$consecutiveErrors internal error(s) since the last completed check"
                 Kind.CRASHED ->
-                    "$consecutiveErrors checks in a row failed inside Pulse itself"
+                    "$consecutiveErrors checks in a row failed inside Nightbell itself"
             }
 
         companion object {
@@ -226,7 +226,7 @@ object CheckerHealth {
      * right now — attached to a `DOWN` health and an `alerting` flag that no
      * check ever justified. Left alone they keep the fake outage on the card,
      * keep the down notification alive through the reconciliation sweep, and get
-     * re-hydrated verbatim into urgent re-nags. `PulseStore.migrate` scrubs them
+     * re-hydrated verbatim into urgent re-nags. `NightbellStore.migrate` scrubs them
      * on read; this is the needle it looks for.
      */
     const val LEGACY_CRASH_MESSAGE = "Checker crashed"
@@ -283,7 +283,7 @@ object CheckerHealth {
         // The claim was raised and has just been withdrawn for age
         // (`stillRaised` went false). That is the one transition where `raised`
         // goes true → false, so it has to emit CLEAR: without it the state says
-        // "no claim" while the notification saying "Pulse can't complete its
+        // "no claim" while the notification saying "Nightbell can't complete its
         // checks" is still on screen, and nothing left in the process would ever
         // take it down — `expireIfStale` only runs from the strict-mode service
         // loop, and `recordVerdict` skips the cancel because `raised` is already
@@ -458,22 +458,22 @@ enum class CheckerLimit {
         get() = when (this) {
             NONE -> "Every enabled monitor has been checked within its interval."
             BACKGROUND_CHECKS_OFF ->
-                "Pulse only checks while you have it open. Turn background checks " +
+                "Nightbell only checks while you have it open. Turn background checks " +
                     "back on above."
             NO_ENABLED_MONITORS -> "Nothing to check. Enable a monitor to start."
             OFFLINE ->
-                "Losing signal is not an outage, so Pulse stops checking instead " +
+                "Losing signal is not an outage, so Nightbell stops checking instead " +
                     "of reporting one. Checks resume by themselves."
             METERED_BLOCKED ->
                 "Turn off “Wi-Fi only” to keep checking on mobile data."
             BACKGROUND_RESTRICTED ->
-                "Android will not run Pulse in the background at all. Allow " +
+                "Android will not run Nightbell in the background at all. Allow " +
                     "background activity in the app's battery settings."
             BATTERY_SAVER ->
                 "Deferrable work is batched hard in battery saver. Strict mode " +
                     "still keeps its cadence; ordinary background checks will not."
             DELAYED_BY_ANDROID ->
-                "Doze is batching Pulse's work. Exempting Pulse from battery " +
+                "Doze is batching Nightbell's work. Exempting Nightbell from battery " +
                     "optimisation helps; strict mode is the only guarantee."
         }
 }
@@ -531,10 +531,10 @@ object CheckerLimits {
 
     fun diagnose(facts: CheckerFacts): CheckerLimit {
         // `&& !strictMode`, because the two settings are independent: the strict
-        // toggle is not gated on background checks, and `PulseMonitorService`
+        // toggle is not gated on background checks, and `NightbellMonitorService`
         // never consults `backgroundChecksEnabled`. With background checks off and
         // strict mode on, every monitor is being checked on its exact interval —
-        // and this card used to announce "Pulse only checks while you have it
+        // and this card used to announce "Nightbell only checks while you have it
         // open", which is the opposite of what was happening.
         if (!facts.backgroundChecksEnabled && !facts.strictMode) {
             return CheckerLimit.BACKGROUND_CHECKS_OFF

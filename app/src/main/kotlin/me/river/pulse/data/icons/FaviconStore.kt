@@ -413,7 +413,7 @@ class FaviconStore(
         const val ICO_ENTRY = 16
         val POSITIVE_TTL_MS = TimeUnit.DAYS.toMillis(30)
         val NEGATIVE_TTL_MS = TimeUnit.DAYS.toMillis(3)
-        const val USER_AGENT = "Pulse-Monitor/1.0 (+favicon)"
+        const val USER_AGENT = "Nightbell-Monitor/1.0 (+favicon)"
 
         val LINK_TAG = Regex("""<link\s+([^>]*)>""", RegexOption.IGNORE_CASE)
         val ATTR_REL = Regex("""rel\s*=\s*(["'])(.*?)\1""", RegexOption.IGNORE_CASE)

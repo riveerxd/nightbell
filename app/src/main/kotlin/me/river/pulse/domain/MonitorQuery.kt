@@ -63,7 +63,7 @@ object MonitorQuery {
         @kotlinx.serialization.SerialName("slowest")
         SLOWEST,
 
-        /** Most recently checked first — "what has Pulse actually looked at". */
+        /** Most recently checked first — "what has Nightbell actually looked at". */
         @kotlinx.serialization.SerialName("recent")
         RECENT,
 
@@ -205,7 +205,7 @@ object MonitorQuery {
 
     /** What to say when a filter or search has hidden everything. */
     fun emptyMessage(spec: Spec, total: Int): String = when {
-        total == 0 -> "Add your first monitor and Pulse will keep an eye on it."
+        total == 0 -> "Add your first monitor and Nightbell will keep an eye on it."
         spec.query.isNotBlank() -> "Nothing matches “${spec.query.trim()}”."
         spec.filter == Filter.PROBLEMS -> "Nothing is broken. That is the answer you wanted."
         spec.filter == Filter.PAUSED -> "Nothing is paused."

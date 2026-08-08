@@ -11,7 +11,7 @@ import kotlin.coroutines.cancellation.CancellationException
  * that turns a normal lifecycle event into an error, and an error into a story
  * the app tells the user.
  *
- * Pulse shipped exactly that bug: a cancelled check became a failed check called
+ * Nightbell shipped exactly that bug: a cancelled check became a failed check called
  * "Checker crashed", which vibrated the phone about a crash that never happened.
  * See [CheckerHealth] for the full account.
  *

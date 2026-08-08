@@ -8,9 +8,9 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import kotlinx.coroutines.launch
-import me.river.pulse.data.Pulse
+import me.river.pulse.data.Nightbell
 import me.river.pulse.domain.ThemeChoice
-import me.river.pulse.ui.theme.PulseTheme
+import me.river.pulse.ui.theme.NightbellTheme
 import me.river.pulse.ui.urgent.UrgentAlertScreen
 import me.river.pulse.ui.urgent.UrgentAlertUi
 import me.river.pulse.ui.urgent.UrgentAlertVariant
@@ -58,12 +58,12 @@ class UrgentAlertActivity : ComponentActivity() {
             // is a full-bleed red emergency surface that appears over a lock
             // screen at 3am; it has one appearance so it is recognised instantly,
             // and a light variant of it would be a different thing entirely.
-            PulseTheme(motionIntensity = 1f, theme = ThemeChoice.DARK) {
+            NightbellTheme(motionIntensity = 1f, theme = ThemeChoice.DARK) {
                 UrgentAlertScreen(
                     variant = UrgentAlertVariant.BRIEF,
                     ui = ui,
                     onAcknowledge = {
-                        val graph = Pulse.install(applicationContext)
+                        val graph = Nightbell.install(applicationContext)
                         graph.appScope.launch { graph.engine.acknowledgeUrgent(monitorId) }
                         finish()
                     },
@@ -81,7 +81,7 @@ class UrgentAlertActivity : ComponentActivity() {
                         finish()
                     },
                     onRecheck = {
-                        val graph = Pulse.install(applicationContext)
+                        val graph = Nightbell.install(applicationContext)
                         graph.appScope.launch { graph.engine.run(monitorId) }
                         finish()
                     },

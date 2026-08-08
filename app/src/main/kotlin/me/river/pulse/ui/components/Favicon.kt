@@ -10,7 +10,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import me.river.pulse.data.Pulse
+import me.river.pulse.data.Nightbell
 
 /**
  * The site icon for [pageUrl], or null until (or unless) one is available.
@@ -25,7 +25,7 @@ import me.river.pulse.data.Pulse
 @Composable
 fun rememberFavicon(pageUrl: String, enabled: Boolean = true): ImageBitmap? {
     val context = LocalContext.current
-    val store = Pulse.from(context).favicons
+    val store = Nightbell.from(context).favicons
     // Re-asks after a purge. Without this the store can refetch a changed icon
     // and the badge on screen would still be showing the one it resolved once,
     // for as long as the screen stays composed.

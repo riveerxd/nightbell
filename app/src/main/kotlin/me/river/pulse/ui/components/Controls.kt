@@ -69,9 +69,9 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import me.river.pulse.domain.Validation
-import me.river.pulse.ui.icons.PulseIcons
-import me.river.pulse.ui.theme.PulseColors
-import me.river.pulse.ui.theme.PulseRadii
+import me.river.pulse.ui.icons.NightbellIcons
+import me.river.pulse.ui.theme.NightbellColors
+import me.river.pulse.ui.theme.NightbellRadii
 import me.river.pulse.ui.theme.glassInteractive
 import me.river.pulse.ui.theme.rememberLoopingFloat
 
@@ -88,7 +88,7 @@ fun GlassField(
     helper: String = "",
     leadingIcon: ImageVector? = null,
     trailing: @Composable (() -> Unit)? = null,
-    accent: Color = PulseColors.Aqua,
+    accent: Color = NightbellColors.Aqua,
     singleLine: Boolean = true,
     minLines: Int = 1,
     keyboardType: KeyboardType = KeyboardType.Text,
@@ -102,14 +102,14 @@ fun GlassField(
         Text(
             text = label.uppercase(),
             style = MaterialTheme.typography.labelSmall,
-            color = if (isError) PulseColors.Rose else PulseColors.TextTertiary,
+            color = if (isError) NightbellColors.Rose else NightbellColors.TextTertiary,
             modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
         )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .glassInteractive(
-                    shape = RoundedCornerShape(PulseRadii.field),
+                    shape = RoundedCornerShape(NightbellRadii.field),
                     focused = focused,
                     accent = accent,
                     error = isError,
@@ -121,7 +121,7 @@ fun GlassField(
                 Icon(
                     imageVector = leadingIcon,
                     contentDescription = null,
-                    tint = if (focused) accent else PulseColors.TextTertiary,
+                    tint = if (focused) accent else NightbellColors.TextTertiary,
                     modifier = Modifier.size(17.dp).padding(end = 0.dp),
                 )
                 Spacer(Modifier.width(11.dp))
@@ -131,7 +131,7 @@ fun GlassField(
                     Text(
                         text = placeholder,
                         style = MaterialTheme.typography.bodyLarge,
-                        color = PulseColors.TextTertiary.copy(alpha = 0.65f),
+                        color = NightbellColors.TextTertiary.copy(alpha = 0.65f),
                     )
                 }
                 BasicTextField(
@@ -141,7 +141,7 @@ fun GlassField(
                     singleLine = singleLine,
                     minLines = minLines,
                     textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        color = PulseColors.TextPrimary,
+                        color = NightbellColors.TextPrimary,
                         fontWeight = FontWeight.Medium,
                     ),
                     cursorBrush = SolidColor(accent),
@@ -175,15 +175,15 @@ fun FieldNote(note: Validation.Note?, helper: String = "") {
     ) {
         val severity = note?.severity
         val color = when (severity) {
-            Validation.Severity.ERROR -> PulseColors.Rose
-            Validation.Severity.WARNING -> PulseColors.Amber
-            Validation.Severity.HINT -> PulseColors.TextTertiary
-            null -> PulseColors.TextTertiary
+            Validation.Severity.ERROR -> NightbellColors.Rose
+            Validation.Severity.WARNING -> NightbellColors.Amber
+            Validation.Severity.HINT -> NightbellColors.TextTertiary
+            null -> NightbellColors.TextTertiary
         }
         val icon = when (severity) {
-            Validation.Severity.ERROR -> PulseIcons.Warning
-            Validation.Severity.WARNING -> PulseIcons.Warning
-            else -> PulseIcons.Info
+            Validation.Severity.ERROR -> NightbellIcons.Warning
+            Validation.Severity.WARNING -> NightbellIcons.Warning
+            else -> NightbellIcons.Info
         }
         Row(
             modifier = Modifier.padding(start = 4.dp, top = 6.dp),
@@ -205,7 +205,7 @@ fun FieldNote(note: Validation.Note?, helper: String = "") {
 enum class ButtonTone { Primary, Secondary, Ghost, Danger }
 
 @Composable
-fun PulseButton(
+fun NightbellButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -213,8 +213,8 @@ fun PulseButton(
     tone: ButtonTone = ButtonTone.Primary,
     enabled: Boolean = true,
     loading: Boolean = false,
-    accent: Color = PulseColors.Aqua,
-    accentEnd: Color = PulseColors.Indigo,
+    accent: Color = NightbellColors.Aqua,
+    accentEnd: Color = NightbellColors.Indigo,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
@@ -223,7 +223,7 @@ fun PulseButton(
         animationSpec = spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMedium),
         label = "buttonScale",
     )
-    val shape = RoundedCornerShape(PulseRadii.chip)
+    val shape = RoundedCornerShape(NightbellRadii.chip)
     val alpha = if (enabled && !loading) 1f else 0.45f
 
     val background: Modifier = when (tone) {
@@ -232,20 +232,20 @@ fun PulseButton(
         )
 
         ButtonTone.Secondary -> Modifier
-            .background(PulseColors.sheen(0.08f * alpha))
-            .border(BorderStroke(1.dp, PulseColors.sheen(0.16f)), shape)
+            .background(NightbellColors.sheen(0.08f * alpha))
+            .border(BorderStroke(1.dp, NightbellColors.sheen(0.16f)), shape)
 
         ButtonTone.Ghost -> Modifier
 
         ButtonTone.Danger -> Modifier
-            .background(PulseColors.Rose.copy(alpha = 0.16f * alpha))
-            .border(BorderStroke(1.dp, PulseColors.Rose.copy(alpha = 0.45f)), shape)
+            .background(NightbellColors.Rose.copy(alpha = 0.16f * alpha))
+            .border(BorderStroke(1.dp, NightbellColors.Rose.copy(alpha = 0.45f)), shape)
     }
 
     val contentColor = when (tone) {
-        ButtonTone.Primary -> PulseColors.Void
-        ButtonTone.Danger -> PulseColors.Rose
-        else -> PulseColors.TextPrimary
+        ButtonTone.Primary -> NightbellColors.Void
+        ButtonTone.Danger -> NightbellColors.Rose
+        else -> NightbellColors.TextPrimary
     }.copy(alpha = alpha)
 
     Row(
@@ -287,7 +287,7 @@ fun SpinnerDot(color: Color, size: androidx.compose.ui.unit.Dp = 15.dp) {
         label = "spin",
     )
     Icon(
-        imageVector = PulseIcons.Refresh,
+        imageVector = NightbellIcons.Refresh,
         contentDescription = null,
         tint = color,
         modifier = Modifier.size(size).rotate(angle),
@@ -312,7 +312,7 @@ fun GlassIconButton(
     onClick: () -> Unit,
     contentDescription: String,
     modifier: Modifier = Modifier,
-    accent: Color = PulseColors.TextSecondary,
+    accent: Color = NightbellColors.TextSecondary,
     size: androidx.compose.ui.unit.Dp = 42.dp,
     enabled: Boolean = true,
     /** Marks the control as holding non-default state, e.g. an active filter. */
@@ -349,13 +349,13 @@ fun GlassIconButton(
                     if (active) {
                         accent.copy(alpha = 0.20f)
                     } else {
-                        PulseColors.sheen(if (enabled) 0.07f else 0.03f)
+                        NightbellColors.sheen(if (enabled) 0.07f else 0.03f)
                     },
                 )
                 .border(
                     BorderStroke(
                         1.dp,
-                        if (active) accent.copy(alpha = 0.55f) else PulseColors.sheen(0.10f),
+                        if (active) accent.copy(alpha = 0.55f) else NightbellColors.sheen(0.10f),
                     ),
                     shape,
                 ),
@@ -381,8 +381,8 @@ fun GlassIconButton(
                     .offset(x = size / 2 - 2.dp, y = -(size / 2) + 2.dp)
                     .size(9.dp)
                     .clip(RoundedCornerShape(50))
-                    .background(PulseColors.Amber)
-                    .border(2.dp, PulseColors.Void, RoundedCornerShape(50)),
+                    .background(NightbellColors.Amber)
+                    .border(2.dp, NightbellColors.Void, RoundedCornerShape(50)),
             )
         }
     }
@@ -398,18 +398,18 @@ fun <T> SegmentedSelector(
     onSelect: (T) -> Unit,
     label: (T) -> String,
     modifier: Modifier = Modifier,
-    accent: Color = PulseColors.Aqua,
+    accent: Color = NightbellColors.Aqua,
 ) {
     if (options.isEmpty()) return
     val index = options.indexOf(selected).coerceAtLeast(0)
-    val shape = RoundedCornerShape(PulseRadii.chip)
+    val shape = RoundedCornerShape(NightbellRadii.chip)
 
     BoxWithConstraints(
         modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(PulseColors.sheen(0.055f))
-            .border(BorderStroke(1.dp, PulseColors.sheen(0.09f)), shape)
+            .background(NightbellColors.sheen(0.055f))
+            .border(BorderStroke(1.dp, NightbellColors.sheen(0.09f)), shape)
             .padding(4.dp),
     ) {
         val itemWidth = maxWidth / options.size
@@ -455,7 +455,7 @@ fun <T> SegmentedSelector(
                     Text(
                         text = label(option),
                         style = MaterialTheme.typography.labelLarge,
-                        color = if (isSelected) PulseColors.TextPrimary else PulseColors.TextTertiary,
+                        color = if (isSelected) NightbellColors.TextPrimary else NightbellColors.TextTertiary,
                         maxLines = 1,
                     )
                 }
@@ -481,7 +481,7 @@ fun <T> ChipSelector(
     onSelect: (T) -> Unit,
     label: (T) -> String,
     modifier: Modifier = Modifier,
-    accent: Color = PulseColors.Aqua,
+    accent: Color = NightbellColors.Aqua,
     icon: ((T) -> ImageVector?)? = null,
 ) {
     FlowRow(
@@ -493,7 +493,7 @@ fun <T> ChipSelector(
     ) {
         options.forEach { option ->
             val isSelected = option == selected
-            val chipShape = RoundedCornerShape(PulseRadii.chip)
+            val chipShape = RoundedCornerShape(NightbellRadii.chip)
             val scale by animateFloatAsState(
                 targetValue = if (isSelected) 1f else 0.98f,
                 animationSpec = spring(dampingRatio = 0.6f),
@@ -522,14 +522,14 @@ fun <T> ChipSelector(
                             )
                         } else {
                             Brush.linearGradient(
-                                listOf(PulseColors.sheen(0.06f), PulseColors.sheen(0.04f)),
+                                listOf(NightbellColors.sheen(0.06f), NightbellColors.sheen(0.04f)),
                             )
                         },
                     )
                     .border(
                         BorderStroke(
                             1.dp,
-                            if (isSelected) accent.copy(alpha = 0.55f) else PulseColors.sheen(0.10f),
+                            if (isSelected) accent.copy(alpha = 0.55f) else NightbellColors.sheen(0.10f),
                         ),
                         chipShape,
                     )
@@ -546,14 +546,14 @@ fun <T> ChipSelector(
                     Icon(
                         it,
                         contentDescription = null,
-                        tint = if (isSelected) accent else PulseColors.TextTertiary,
+                        tint = if (isSelected) accent else NightbellColors.TextTertiary,
                         modifier = Modifier.size(13.dp),
                     )
                 }
                 Text(
                     text = label(option),
                     style = MaterialTheme.typography.labelLarge,
-                    color = if (isSelected) PulseColors.TextPrimary else PulseColors.TextSecondary,
+                    color = if (isSelected) NightbellColors.TextPrimary else NightbellColors.TextSecondary,
                 )
             }
         }
@@ -570,7 +570,7 @@ fun ToggleRow(
     modifier: Modifier = Modifier,
     subtitle: String = "",
     icon: ImageVector? = null,
-    accent: Color = PulseColors.Aqua,
+    accent: Color = NightbellColors.Aqua,
     enabled: Boolean = true,
 ) {
     Row(
@@ -582,20 +582,20 @@ fun ToggleRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icon != null) {
-            IconBadge(icon = icon, accent = if (checked) accent else PulseColors.TextTertiary, size = 34.dp)
+            IconBadge(icon = icon, accent = if (checked) accent else NightbellColors.TextTertiary, size = 34.dp)
             Spacer(Modifier.width(13.dp))
         }
         Column(Modifier.weight(1f)) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
-                color = if (enabled) PulseColors.TextPrimary else PulseColors.TextTertiary,
+                color = if (enabled) NightbellColors.TextPrimary else NightbellColors.TextTertiary,
             )
             if (subtitle.isNotBlank()) {
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = PulseColors.TextTertiary,
+                    color = NightbellColors.TextTertiary,
                 )
             }
         }
@@ -605,12 +605,12 @@ fun ToggleRow(
             onCheckedChange = onCheckedChange,
             enabled = enabled,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = PulseColors.Void,
+                checkedThumbColor = NightbellColors.Void,
                 checkedTrackColor = accent,
                 checkedBorderColor = accent,
-                uncheckedThumbColor = PulseColors.TextTertiary,
-                uncheckedTrackColor = PulseColors.sheen(0.06f),
-                uncheckedBorderColor = PulseColors.sheen(0.16f),
+                uncheckedThumbColor = NightbellColors.TextTertiary,
+                uncheckedTrackColor = NightbellColors.sheen(0.06f),
+                uncheckedBorderColor = NightbellColors.sheen(0.16f),
             ),
         )
     }
@@ -626,7 +626,7 @@ fun StepperRow(
     step: Int = 1,
     suffix: String = "",
     icon: ImageVector? = null,
-    accent: Color = PulseColors.Aqua,
+    accent: Color = NightbellColors.Aqua,
     note: Validation.Note? = null,
 ) {
     Column(modifier.fillMaxWidth()) {
@@ -638,7 +638,7 @@ fun StepperRow(
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
-                color = PulseColors.TextPrimary,
+                color = NightbellColors.TextPrimary,
                 modifier = Modifier.weight(1f),
             )
             StepperButton("−", "Decrease $title") {
@@ -651,7 +651,7 @@ fun StepperRow(
                 AnimatedCounter(
                     value = value,
                     suffix = suffix,
-                    color = PulseColors.TextPrimary,
+                    color = NightbellColors.TextPrimary,
                     style = MaterialTheme.typography.titleMedium,
                 )
             }
@@ -676,7 +676,7 @@ private fun StepperButton(glyph: String, description: String, onClick: () -> Uni
             .size(MinTouchTarget)
             .clickable(
                 interactionSource = interaction,
-                indication = ripple(bounded = false, color = PulseColors.Aqua),
+                indication = ripple(bounded = false, color = NightbellColors.Aqua),
                 onClick = onClick,
             )
             .semantics { contentDescription = description },
@@ -687,11 +687,11 @@ private fun StepperButton(glyph: String, description: String, onClick: () -> Uni
                 .graphicsLayer { scaleX = scale; scaleY = scale }
                 .size(34.dp)
                 .clip(shape)
-                .background(PulseColors.sheen(0.07f))
-                .border(BorderStroke(1.dp, PulseColors.sheen(0.10f)), shape),
+                .background(NightbellColors.sheen(0.07f))
+                .border(BorderStroke(1.dp, NightbellColors.sheen(0.10f)), shape),
             contentAlignment = Alignment.Center,
         ) {
-            Text(glyph, style = MaterialTheme.typography.titleLarge, color = PulseColors.TextSecondary)
+            Text(glyph, style = MaterialTheme.typography.titleLarge, color = NightbellColors.TextSecondary)
         }
     }
 }

@@ -48,7 +48,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.river.pulse.BuildConfig
-import me.river.pulse.data.Pulse
+import me.river.pulse.data.Nightbell
 import me.river.pulse.domain.CheckerHealth
 import me.river.pulse.domain.CheckerLimit
 import me.river.pulse.domain.ThemeChoice
@@ -57,7 +57,7 @@ import me.river.pulse.ui.components.ButtonTone
 import me.river.pulse.ui.components.GlassCard
 import me.river.pulse.ui.components.GlassIconButton
 import me.river.pulse.ui.components.IconBadge
-import me.river.pulse.ui.components.PulseButton
+import me.river.pulse.ui.components.NightbellButton
 import me.river.pulse.ui.components.GlassField
 import me.river.pulse.ui.components.GlassDivider
 import androidx.compose.ui.text.input.KeyboardType
@@ -67,12 +67,12 @@ import me.river.pulse.ui.components.StaggeredEntrance
 import me.river.pulse.ui.components.rememberEntranceLog
 import me.river.pulse.ui.components.StepperRow
 import me.river.pulse.ui.components.ToggleRow
-import me.river.pulse.ui.icons.PulseIcons
+import me.river.pulse.ui.icons.NightbellIcons
 import me.river.pulse.ui.rememberSettingsViewModel
 import me.river.pulse.ui.theme.Backdrop
-import me.river.pulse.ui.theme.PulseColors
+import me.river.pulse.ui.theme.NightbellColors
 import me.river.pulse.ui.theme.readableContentPadding
-import me.river.pulse.widget.PulseWidgetProvider
+import me.river.pulse.widget.NightbellWidgetProvider
 import me.river.pulse.widget.WidgetConfigActivity
 import androidx.compose.ui.platform.testTag
 import java.text.SimpleDateFormat
@@ -95,7 +95,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
     val placedWidgetIds = remember {
         runCatching {
             val manager = AppWidgetManager.getInstance(context)
-            manager.getAppWidgetIds(ComponentName(context, PulseWidgetProvider::class.java))
+            manager.getAppWidgetIds(ComponentName(context, NightbellWidgetProvider::class.java))
                 .toList()
         }.getOrDefault(emptyList())
     }
@@ -131,7 +131,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         }
     }
     var notificationsAllowed by remember {
-        mutableStateOf(Pulse.install(context).alerts.hasNotificationPermission())
+        mutableStateOf(Nightbell.install(context).alerts.hasNotificationPermission())
     }
     val entrance = rememberEntranceLog()
 
@@ -157,17 +157,17 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         item(key = "header") {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 GlassIconButton(
-                    icon = PulseIcons.ArrowLeft,
+                    icon = NightbellIcons.ArrowLeft,
                     onClick = onBack,
                     contentDescription = "Back",
-                    accent = PulseColors.TextSecondary,
+                    accent = NightbellColors.TextSecondary,
                     size = 38.dp,
                 )
                 Spacer(Modifier.width(14.dp))
                 Text(
                     text = "Settings",
                     style = MaterialTheme.typography.displayMedium,
-                    color = PulseColors.TextPrimary,
+                    color = NightbellColors.TextPrimary,
                 )
             }
         }
@@ -178,26 +178,26 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                 enter = fadeIn() + expandVertically(),
                 exit = fadeOut() + shrinkVertically(),
             ) {
-                GlassCard(accent = PulseColors.Amber) {
+                GlassCard(accent = NightbellColors.Amber) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconBadge(PulseIcons.BellOff, PulseColors.Amber, size = 40.dp)
+                        IconBadge(NightbellIcons.BellOff, NightbellColors.Amber, size = 40.dp)
                         Spacer(Modifier.width(13.dp))
                         Column(Modifier.weight(1f)) {
                             Text(
                                 "Notifications are blocked",
                                 style = MaterialTheme.typography.titleMedium,
-                                color = PulseColors.TextPrimary,
+                                color = NightbellColors.TextPrimary,
                             )
                             Text(
-                                "Pulse can still check monitors, but it can't tell you when " +
+                                "Nightbell can still check monitors, but it can't tell you when " +
                                     "something breaks.",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = PulseColors.TextTertiary,
+                                color = NightbellColors.TextTertiary,
                             )
                         }
                     }
                     Spacer(Modifier.height(13.dp))
-                    PulseButton(
+                    NightbellButton(
                         text = "Open notification settings",
                         onClick = {
                             val intent = Intent(AndroidSettings.ACTION_APP_NOTIFICATION_SETTINGS)
@@ -205,7 +205,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             runCatching { context.startActivity(intent) }
                         },
-                        icon = PulseIcons.Bell,
+                        icon = NightbellIcons.Bell,
                         tone = ButtonTone.Secondary,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -215,7 +215,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
 
         item(key = "master") {
             StaggeredEntrance(index = 0, key = "master", log = entrance) {
-                GlassCard(accent = if (settings.masterAlertsEnabled) Color.Transparent else PulseColors.Rose) {
+                GlassCard(accent = if (settings.masterAlertsEnabled) Color.Transparent else NightbellColors.Rose) {
                     ToggleRow(
                         title = "All alerts",
                         subtitle = if (settings.masterAlertsEnabled) {
@@ -227,8 +227,8 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                         onCheckedChange = { value ->
                             viewModel.update { it.copy(masterAlertsEnabled = value) }
                         },
-                        icon = if (settings.masterAlertsEnabled) PulseIcons.Bell else PulseIcons.BellOff,
-                        accent = PulseColors.Aqua,
+                        icon = if (settings.masterAlertsEnabled) NightbellIcons.Bell else NightbellIcons.BellOff,
+                        accent = NightbellColors.Aqua,
                     )
                 }
             }
@@ -237,11 +237,11 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         item(key = "defaults") {
             StaggeredEntrance(index = 1, key = "defaults", log = entrance) {
                 GlassCard {
-                    SectionHeader("Default alert policy", icon = PulseIcons.Shield, accent = PulseColors.Aqua)
+                    SectionHeader("Default alert policy", icon = NightbellIcons.Shield, accent = NightbellColors.Aqua)
                     Text(
                         text = "Applies to every monitor set to “use my global alert settings”.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = PulseColors.TextTertiary,
+                        color = NightbellColors.TextTertiary,
                     )
                     Spacer(Modifier.height(10.dp))
                     AlertPolicyEditor(
@@ -249,7 +249,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                         onChange = { policy -> viewModel.updateDefaultAlert { policy } },
                         onPreviewVibration = viewModel::previewVibration,
                         onSendTestAlert = {
-                            notificationsAllowed = Pulse.install(context).alerts.hasNotificationPermission()
+                            notificationsAllowed = Nightbell.install(context).alerts.hasNotificationPermission()
                             viewModel.sendTestAlert()
                         },
                         showMasterToggle = false,
@@ -261,22 +261,22 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         item(key = "scheduling") {
             StaggeredEntrance(index = 2, key = "scheduling", log = entrance) {
                 GlassCard {
-                    SectionHeader("Background checks", icon = PulseIcons.Radar, accent = PulseColors.Violet)
+                    SectionHeader("Background checks", icon = NightbellIcons.Radar, accent = NightbellColors.Violet)
                     ToggleRow(
                         title = "Run checks in the background",
                         subtitle = "Uses WorkManager; Android batches work to save battery",
                         checked = settings.backgroundChecksEnabled,
                         onCheckedChange = { v -> viewModel.update { it.copy(backgroundChecksEnabled = v) } },
-                        icon = PulseIcons.Power,
-                        accent = PulseColors.Violet,
+                        icon = NightbellIcons.Power,
+                        accent = NightbellColors.Violet,
                     )
                     ToggleRow(
                         title = "Wi-Fi only",
                         subtitle = "Skip checks on metered mobile data",
                         checked = settings.onlyOnUnmeteredNetwork,
                         onCheckedChange = { v -> viewModel.update { it.copy(onlyOnUnmeteredNetwork = v) } },
-                        icon = PulseIcons.Wifi,
-                        accent = PulseColors.Violet,
+                        icon = NightbellIcons.Wifi,
+                        accent = NightbellColors.Violet,
                     )
                     Spacer(Modifier.height(6.dp))
                     StepperRow(
@@ -285,8 +285,8 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                         onValueChange = { v -> viewModel.update { it.copy(defaultIntervalMinutes = v) } },
                         range = 1..1440,
                         suffix = "m",
-                        icon = PulseIcons.Clock,
-                        accent = PulseColors.Violet,
+                        icon = NightbellIcons.Clock,
+                        accent = NightbellColors.Violet,
                     )
                     StepperRow(
                         title = "Default timeout",
@@ -294,8 +294,8 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                         onValueChange = { v -> viewModel.update { it.copy(defaultTimeoutSeconds = v) } },
                         range = 1..120,
                         suffix = "s",
-                        icon = PulseIcons.Gauge,
-                        accent = PulseColors.Violet,
+                        icon = NightbellIcons.Gauge,
+                        accent = NightbellColors.Violet,
                     )
                     StepperRow(
                         title = "History kept",
@@ -303,8 +303,8 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                         onValueChange = { v -> viewModel.update { it.copy(historyDepth = v) } },
                         range = 10..300,
                         step = 10,
-                        icon = PulseIcons.History,
-                        accent = PulseColors.Violet,
+                        icon = NightbellIcons.History,
+                        accent = NightbellColors.Violet,
                     )
                 }
             }
@@ -326,14 +326,14 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
 
         item(key = "strict") {
             StaggeredEntrance(index = 4, key = "strict", log = entrance) {
-                GlassCard(accent = if (settings.strictForegroundMonitoring) PulseColors.Amber else Color.Transparent) {
-                    SectionHeader("Strict cadence", icon = PulseIcons.Zap, accent = PulseColors.Amber)
+                GlassCard(accent = if (settings.strictForegroundMonitoring) NightbellColors.Amber else Color.Transparent) {
+                    SectionHeader("Strict cadence", icon = NightbellIcons.Zap, accent = NightbellColors.Amber)
                     Text(
                         text = "WorkManager is battery-friendly but Doze can defer a check for " +
                             "a long time, and its periodic minimum is 15 minutes. Strict mode " +
                             "runs a foreground service that keeps your intervals exactly.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = PulseColors.TextTertiary,
+                        color = NightbellColors.TextTertiary,
                     )
                     Spacer(Modifier.height(8.dp))
                     ToggleRow(
@@ -347,8 +347,8 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                         onCheckedChange = { v ->
                             viewModel.update { it.copy(strictForegroundMonitoring = v) }
                         },
-                        icon = PulseIcons.Power,
-                        accent = PulseColors.Amber,
+                        icon = NightbellIcons.Power,
+                        accent = NightbellColors.Amber,
                     )
                     AnimatedVisibility(
                         visible = settings.strictForegroundMonitoring,
@@ -358,7 +358,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                         Column {
                             Spacer(Modifier.height(6.dp))
                             WarningPanel(
-                                "This costs real battery. Pulse wakes up as often as your " +
+                                "This costs real battery. Nightbell wakes up as often as your " +
                                     "tightest interval needs and holds a persistent " +
                                     "notification Android will not let you dismiss.\n\n" +
                                     "Background checks stay armed underneath as a repair " +
@@ -371,7 +371,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                         text = "An unacknowledged URGENT outage starts the same service on its " +
                             "own, whatever this is set to, and stops it once you confirm.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = PulseColors.TextTertiary,
+                        color = NightbellColors.TextTertiary,
                     )
                 }
             }
@@ -380,12 +380,12 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         item(key = "latency") {
             StaggeredEntrance(index = 5, key = "latency", log = entrance) {
                 GlassCard {
-                    SectionHeader("Latency budget", icon = PulseIcons.Gauge, accent = PulseColors.Amber)
+                    SectionHeader("Latency budget", icon = NightbellIcons.Gauge, accent = NightbellColors.Amber)
                     Text(
                         text = "The default for monitors that don't set their own. A successful " +
                             "check slower than this is DEGRADED — up, but not well.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = PulseColors.TextTertiary,
+                        color = NightbellColors.TextTertiary,
                     )
                     Spacer(Modifier.height(8.dp))
                     ToggleRow(
@@ -399,8 +399,8 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                         onCheckedChange = { on ->
                             viewModel.update { it.copy(defaultLatencySloMs = if (on) 2_500 else 0) }
                         },
-                        icon = PulseIcons.Activity,
-                        accent = PulseColors.Amber,
+                        icon = NightbellIcons.Activity,
+                        accent = NightbellColors.Amber,
                     )
                     AnimatedVisibility(
                         visible = settings.defaultLatencySloMs > 0,
@@ -414,8 +414,8 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                             range = 100..60_000,
                             step = 100,
                             suffix = "ms",
-                            icon = PulseIcons.Gauge,
-                            accent = PulseColors.Amber,
+                            icon = NightbellIcons.Gauge,
+                            accent = NightbellColors.Amber,
                         )
                     }
 
@@ -429,11 +429,11 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                             Text(
                                 text = "A latency measured from this phone is your connection " +
                                     "plus the server. On bad wifi that makes everything look " +
-                                    "slow at once. Pulse can time a known-good endpoint " +
+                                    "slow at once. Nightbell can time a known-good endpoint " +
                                     "alongside the checks and subtract whatever your " +
                                     "connection is adding.",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = PulseColors.TextTertiary,
+                                color = NightbellColors.TextTertiary,
                             )
                             Spacer(Modifier.height(8.dp))
                             ToggleRow(
@@ -447,8 +447,8 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                                 onCheckedChange = { on ->
                                     viewModel.update { it.copy(latencyBaselineEnabled = on) }
                                 },
-                                icon = PulseIcons.Wifi,
-                                accent = PulseColors.Aqua,
+                                icon = NightbellIcons.Wifi,
+                                accent = NightbellColors.Aqua,
                             )
                             AnimatedVisibility(
                                 visible = settings.latencyBaselineEnabled,
@@ -466,8 +466,8 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                                         placeholder = "https://www.gstatic.com/generate_204",
                                         helper = "Wants to be always up and cheap to answer. If your " +
                                             "network blocks it, latency is judged raw — nothing breaks.",
-                                        leadingIcon = PulseIcons.Globe,
-                                        accent = PulseColors.Aqua,
+                                        leadingIcon = NightbellIcons.Globe,
+                                        accent = NightbellColors.Aqua,
                                         keyboardType = KeyboardType.Uri,
                                     )
                                 }
@@ -500,15 +500,15 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                 GlassCard {
                     SectionHeader(
                         "TLS certificates",
-                        icon = PulseIcons.Shield,
-                        accent = PulseColors.Mint,
+                        icon = NightbellIcons.Shield,
+                        accent = NightbellColors.Mint,
                     )
                     Text(
                         text = "Every HTTPS check already completes a handshake, and the " +
                             "handshake carries the certificate's expiry date. Reading it costs " +
                             "nothing and catches the one outage you can see coming.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = PulseColors.TextTertiary,
+                        color = NightbellColors.TextTertiary,
                     )
                     Spacer(Modifier.height(10.dp))
                     ToggleRow(
@@ -520,8 +520,8 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                         },
                         checked = settings.certAlertsEnabled,
                         onCheckedChange = { v -> viewModel.update { it.copy(certAlertsEnabled = v) } },
-                        icon = PulseIcons.Shield,
-                        accent = PulseColors.Mint,
+                        icon = NightbellIcons.Shield,
+                        accent = NightbellColors.Mint,
                     )
                     if (settings.certAlertsEnabled) {
                         Spacer(Modifier.height(6.dp))
@@ -531,8 +531,8 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                             onValueChange = { v -> viewModel.update { it.copy(certWarnDays = v) } },
                             range = 1..90,
                             suffix = "d",
-                            icon = PulseIcons.Clock,
-                            accent = PulseColors.Amber,
+                            icon = NightbellIcons.Clock,
+                            accent = NightbellColors.Amber,
                         )
                         StepperRow(
                             title = "Urgent below",
@@ -540,8 +540,8 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                             onValueChange = { v -> viewModel.update { it.copy(certCriticalDays = v) } },
                             range = 0..30,
                             suffix = "d",
-                            icon = PulseIcons.Zap,
-                            accent = PulseColors.Rose,
+                            icon = NightbellIcons.Zap,
+                            accent = NightbellColors.Rose,
                         )
                         Spacer(Modifier.height(6.dp))
                         Text(
@@ -549,7 +549,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                                 "a day. A renewal clears the notice on the next check. " +
                                 "Plain-HTTP monitors have no certificate and are skipped.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = PulseColors.TextTertiary,
+                            color = NightbellColors.TextTertiary,
                         )
                     }
                 }
@@ -559,20 +559,20 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         item(key = "favicons") {
             StaggeredEntrance(index = 8, key = "favicons", log = entrance) {
                 GlassCard {
-                    SectionHeader("Site icons", icon = PulseIcons.Globe, accent = PulseColors.Sky)
+                    SectionHeader("Site icons", icon = NightbellIcons.Globe, accent = NightbellColors.Sky)
                     Text(
                         text = "Website-element monitors are badged with the site's own favicon, " +
                             "cached for a month so the dashboard isn't hitting somebody else's " +
                             "server every time you scroll. If a site has changed its mark, this " +
                             "fetches them all again now.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = PulseColors.TextTertiary,
+                        color = NightbellColors.TextTertiary,
                     )
                     Spacer(Modifier.height(10.dp))
-                    PulseButton(
+                    NightbellButton(
                         text = if (viewModel.refetchingFavicons) "Refetching…" else "Refetch site icons",
                         onClick = viewModel::refetchFavicons,
-                        icon = PulseIcons.Refresh,
+                        icon = NightbellIcons.Refresh,
                         tone = ButtonTone.Secondary,
                         loading = viewModel.refetchingFavicons,
                         modifier = Modifier.fillMaxWidth().testTag("refetch-favicons"),
@@ -582,7 +582,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                         text = "An icon that can't be fetched keeps the one it had — you won't " +
                             "end up with blank badges because a site was briefly down.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = PulseColors.TextTertiary,
+                        color = NightbellColors.TextTertiary,
                     )
                 }
             }
@@ -591,19 +591,19 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         item(key = "backup") {
             StaggeredEntrance(index = 9, key = "backup", log = entrance) {
                 GlassCard {
-                    SectionHeader("Backup and transfer", icon = PulseIcons.Export, accent = PulseColors.Violet)
+                    SectionHeader("Backup and transfer", icon = NightbellIcons.Export, accent = NightbellColors.Violet)
                     Text(
                         text = "Writes every monitor, its history and your settings to a JSON " +
                             "file, wherever you choose to put it. Nothing is uploaded — the file " +
                             "goes where you send it and nowhere else.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = PulseColors.TextTertiary,
+                        color = NightbellColors.TextTertiary,
                     )
                     Spacer(Modifier.height(10.dp))
-                    PulseButton(
+                    NightbellButton(
                         text = "Export to a file",
                         onClick = { exportBackup.launch(backupFileName()) },
-                        icon = PulseIcons.Export,
+                        icon = NightbellIcons.Export,
                         tone = ButtonTone.Secondary,
                         enabled = !viewModel.transferring,
                         modifier = Modifier.fillMaxWidth().testTag("export-backup"),
@@ -614,10 +614,10 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                         enter = fadeIn() + expandVertically(),
                         exit = fadeOut() + shrinkVertically(),
                     ) {
-                        PulseButton(
+                        NightbellButton(
                             text = "Import from a file",
                             onClick = { confirmImport = true },
-                            icon = PulseIcons.Import,
+                            icon = NightbellIcons.Import,
                             tone = ButtonTone.Secondary,
                             enabled = !viewModel.transferring,
                             modifier = Modifier.fillMaxWidth().testTag("import-backup"),
@@ -632,7 +632,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                             Text(
                                 text = "Import replaces everything",
                                 style = MaterialTheme.typography.titleMedium,
-                                color = PulseColors.TextPrimary,
+                                color = NightbellColors.TextPrimary,
                             )
                             Spacer(Modifier.height(6.dp))
                             Text(
@@ -640,17 +640,17 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                                     "the file's take their place. Export first if you want to " +
                                     "keep them. This can't be undone.",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = PulseColors.TextTertiary,
+                                color = NightbellColors.TextTertiary,
                             )
                             Spacer(Modifier.height(12.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                PulseButton(
+                                NightbellButton(
                                     text = "Cancel",
                                     onClick = { confirmImport = false },
                                     tone = ButtonTone.Secondary,
                                     modifier = Modifier.weight(1f),
                                 )
-                                PulseButton(
+                                NightbellButton(
                                     text = "Choose file",
                                     // Anything, rather than application/json: mime
                                     // detection for .json is inconsistent across
@@ -659,7 +659,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                                     // too much. The codec validates what comes back.
                                     onClick = { importBackup.launch(arrayOf("*/*")) },
                                     tone = ButtonTone.Danger,
-                                    icon = PulseIcons.Import,
+                                    icon = NightbellIcons.Import,
                                     modifier = Modifier.weight(1f).testTag("confirm-import"),
                                 )
                             }
@@ -669,7 +669,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                     Text(
                         text = "Moving to another phone",
                         style = MaterialTheme.typography.labelMedium,
-                        color = PulseColors.TextSecondary,
+                        color = NightbellColors.TextSecondary,
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
@@ -677,7 +677,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                             "each app's data to itself, so a file you carry across is the only " +
                             "route — and it has to be written before the old install goes away.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = PulseColors.TextTertiary,
+                        color = NightbellColors.TextTertiary,
                     )
                 }
             }
@@ -692,14 +692,14 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         item(key = "appearance") {
             StaggeredEntrance(index = 11, key = "appearance", log = entrance) {
                 GlassCard {
-                    SectionHeader("Appearance", icon = PulseIcons.Eye, accent = PulseColors.Aqua)
+                    SectionHeader("Appearance", icon = NightbellIcons.Eye, accent = NightbellColors.Aqua)
                     Text(
-                        text = "Pulse is built dark-first — the glass reads on depth, and depth " +
+                        text = "Nightbell is built dark-first — the glass reads on depth, and depth " +
                             "is easiest to draw on black. The light scheme is a designed " +
                             "counterpart rather than an inversion: same layout, re-picked " +
                             "colours, and the status hues darkened until they stay legible.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = PulseColors.TextTertiary,
+                        color = NightbellColors.TextTertiary,
                     )
                     Spacer(Modifier.height(12.dp))
                     SegmentedSelector(
@@ -716,16 +716,16 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         item(key = "motion") {
             StaggeredEntrance(index = 12, key = "motion", log = entrance) {
                 GlassCard {
-                    SectionHeader("Motion", icon = PulseIcons.Sparkle, accent = PulseColors.Mint)
+                    SectionHeader("Motion", icon = NightbellIcons.Sparkle, accent = NightbellColors.Mint)
                     Text(
                         text = when {
                             settings.motionIntensity < 0.06f -> "Animations off — everything snaps into place."
                             settings.motionIntensity < 0.7f -> "Subtle motion."
-                            settings.motionIntensity < 1.2f -> "Full Pulse: aurora, sonar rings, the lot."
+                            settings.motionIntensity < 1.2f -> "Full Nightbell: aurora, sonar rings, the lot."
                             else -> "Extra lively."
                         },
                         style = MaterialTheme.typography.bodySmall,
-                        color = PulseColors.TextTertiary,
+                        color = NightbellColors.TextTertiary,
                     )
                     Spacer(Modifier.height(6.dp))
                     Slider(
@@ -733,9 +733,9 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                         onValueChange = { v -> viewModel.update { it.copy(motionIntensity = v) } },
                         valueRange = 0f..1.4f,
                         colors = SliderDefaults.colors(
-                            thumbColor = PulseColors.Mint,
-                            activeTrackColor = PulseColors.Mint,
-                            inactiveTrackColor = PulseColors.GlassFill,
+                            thumbColor = NightbellColors.Mint,
+                            activeTrackColor = NightbellColors.Mint,
+                            inactiveTrackColor = NightbellColors.GlassFill,
                         ),
                     )
                     Spacer(Modifier.height(10.dp))
@@ -751,8 +751,8 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                         },
                         checked = settings.realBlurEnabled && Backdrop.isSupported,
                         onCheckedChange = { v -> viewModel.update { it.copy(realBlurEnabled = v) } },
-                        icon = PulseIcons.Layers,
-                        accent = PulseColors.Mint,
+                        icon = NightbellIcons.Layers,
+                        accent = NightbellColors.Mint,
                         enabled = Backdrop.isSupported,
                     )
                 }
@@ -762,17 +762,17 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         item(key = "about") {
             StaggeredEntrance(index = 13, key = "about", log = entrance) {
                 GlassCard {
-                    SectionHeader("About", icon = PulseIcons.Info, accent = PulseColors.Sky)
+                    SectionHeader("About", icon = NightbellIcons.Info, accent = NightbellColors.Sky)
                     AboutRow("Version", "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
                     AboutRow("Android", "API ${Build.VERSION.SDK_INT} · ${Build.MODEL}")
                     AboutRow("Storage", "Local only — nothing leaves the device")
                     Spacer(Modifier.height(10.dp))
                     Text(
-                        text = "Pulse checks HTTP endpoints, asserts on response bodies, and " +
+                        text = "Nightbell checks HTTP endpoints, asserts on response bodies, and " +
                             "watches individual elements on real rendered pages. Background " +
                             "cadence is best-effort: Android may delay work in Doze.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = PulseColors.TextTertiary,
+                        color = NightbellColors.TextTertiary,
                     )
                 }
             }
@@ -788,7 +788,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
  * so Doze deferring work, a stopped service and a cancelled coroutine all had to
  * be reported as an outage, which is how a healthy fleet ended up buzzing
  * "Checker crashed" six times at once. Delay and restriction are visible here and
- * are never a notification; only a verified, repeated fault inside Pulse's own
+ * are never a notification; only a verified, repeated fault inside Nightbell's own
  * code is.
  */
 @Composable
@@ -801,38 +801,38 @@ private fun CheckerHealthCard(
 ) {
     val crashed = health.kind == CheckerHealth.Kind.CRASHED
     val accent = when {
-        crashed -> PulseColors.Rose
-        limit.isLimited -> PulseColors.Amber
+        crashed -> NightbellColors.Rose
+        limit.isLimited -> NightbellColors.Amber
         else -> Color.Transparent
     }
     GlassCard(accent = accent) {
         SectionHeader(
             "Checker health",
-            icon = PulseIcons.Activity,
-            accent = if (accent == Color.Transparent) PulseColors.Mint else accent,
+            icon = NightbellIcons.Activity,
+            accent = if (accent == Color.Transparent) NightbellColors.Mint else accent,
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconBadge(
                 when {
-                    crashed -> PulseIcons.Warning
-                    limit == CheckerLimit.OFFLINE -> PulseIcons.WifiOff
-                    limit.isLimited -> PulseIcons.Clock
-                    else -> PulseIcons.Check
+                    crashed -> NightbellIcons.Warning
+                    limit == CheckerLimit.OFFLINE -> NightbellIcons.WifiOff
+                    limit.isLimited -> NightbellIcons.Clock
+                    else -> NightbellIcons.Check
                 },
-                if (accent == Color.Transparent) PulseColors.Mint else accent,
+                if (accent == Color.Transparent) NightbellColors.Mint else accent,
                 size = 40.dp,
             )
             Spacer(Modifier.width(13.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = if (crashed) "Pulse can't complete its checks" else limit.headline,
+                    text = if (crashed) "Nightbell can't complete its checks" else limit.headline,
                     style = MaterialTheme.typography.titleMedium,
-                    color = PulseColors.TextPrimary,
+                    color = NightbellColors.TextPrimary,
                 )
                 Text(
                     text = if (crashed) health.summary else limit.hint,
                     style = MaterialTheme.typography.bodySmall,
-                    color = PulseColors.TextTertiary,
+                    color = NightbellColors.TextTertiary,
                 )
             }
         }
@@ -841,7 +841,7 @@ private fun CheckerHealthCard(
             Spacer(Modifier.height(10.dp))
             WarningPanel(
                 "Last internal error: ${health.lastSignature}. This is a fault in " +
-                    "Pulse, not in the sites you are watching — their status is " +
+                    "Nightbell, not in the sites you are watching — their status is " +
                     "unchanged. It clears as soon as one check completes.",
             )
         }
@@ -851,27 +851,27 @@ private fun CheckerHealthCard(
         Text(
             text = "What Android allows",
             style = MaterialTheme.typography.labelMedium,
-            color = PulseColors.TextSecondary,
+            color = NightbellColors.TextSecondary,
         )
         Spacer(Modifier.height(6.dp))
         Text(
             text = "Background checks run through WorkManager, whose shortest " +
-                "possible repeat is 15 minutes — a platform floor, not a Pulse " +
+                "possible repeat is 15 minutes — a platform floor, not a Nightbell " +
                 "setting. A tighter interval than that is honoured at 15-minute " +
                 "granularity in the background, and exactly only while strict " +
                 "mode's foreground service is running. Doze can defer any of it " +
-                "further. None of that is an outage and Pulse will never notify " +
+                "further. None of that is an outage and Nightbell will never notify " +
                 "you about it.",
             style = MaterialTheme.typography.bodySmall,
-            color = PulseColors.TextTertiary,
+            color = NightbellColors.TextTertiary,
         )
 
         if (batteryOptimised && !strict) {
             Spacer(Modifier.height(12.dp))
-            PulseButton(
-                text = "Exempt Pulse from battery optimisation",
+            NightbellButton(
+                text = "Exempt Nightbell from battery optimisation",
                 onClick = onOpenBatterySettings,
-                icon = PulseIcons.Power,
+                icon = NightbellIcons.Power,
                 tone = ButtonTone.Secondary,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -880,7 +880,7 @@ private fun CheckerHealthCard(
                 text = "Optional, and it helps — but it is not a guarantee. Only the " +
                     "foreground service is.",
                 style = MaterialTheme.typography.bodySmall,
-                color = PulseColors.TextTertiary,
+                color = NightbellColors.TextTertiary,
             )
         }
     }
@@ -897,13 +897,13 @@ private fun CheckerHealthCard(
 @Composable
 private fun WidgetsCard(ids: List<Int>, onConfigure: (Int) -> Unit) {
     GlassCard {
-        SectionHeader("Home-screen widgets", icon = PulseIcons.Layers, accent = PulseColors.Sky)
+        SectionHeader("Home-screen widgets", icon = NightbellIcons.Layers, accent = NightbellColors.Sky)
         if (ids.isEmpty()) {
             Text(
                 text = "None placed yet. Long-press your home screen, choose Widgets, " +
-                    "and look for Pulse.",
+                    "and look for Nightbell.",
                 style = MaterialTheme.typography.bodySmall,
-                color = PulseColors.TextTertiary,
+                color = NightbellColors.TextTertiary,
             )
             return@GlassCard
         }
@@ -911,15 +911,15 @@ private fun WidgetsCard(ids: List<Int>, onConfigure: (Int) -> Unit) {
             text = "Colours, transparency, density and which monitors appear are set per " +
                 "widget. You can also tap the cog on the widget itself.",
             style = MaterialTheme.typography.bodySmall,
-            color = PulseColors.TextTertiary,
+            color = NightbellColors.TextTertiary,
         )
         Spacer(Modifier.height(10.dp))
         ids.forEachIndexed { index, id ->
             if (index > 0) Spacer(Modifier.height(8.dp))
-            PulseButton(
+            NightbellButton(
                 text = if (ids.size == 1) "Configure widget" else "Configure widget ${index + 1}",
                 onClick = { onConfigure(id) },
-                icon = PulseIcons.Sliders,
+                icon = NightbellIcons.Sliders,
                 tone = ButtonTone.Secondary,
                 modifier = Modifier.fillMaxWidth().testTag("configure-widget-$id"),
             )
@@ -941,21 +941,21 @@ private fun WarningPanel(text: String) {
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(PulseColors.Amber.copy(alpha = 0.10f))
+            .background(NightbellColors.Amber.copy(alpha = 0.10f))
             .padding(13.dp),
         verticalAlignment = Alignment.Top,
     ) {
         Icon(
-            PulseIcons.Warning,
+            NightbellIcons.Warning,
             contentDescription = null,
-            tint = PulseColors.Amber,
+            tint = NightbellColors.Amber,
             modifier = Modifier.size(15.dp),
         )
         Spacer(Modifier.width(10.dp))
         Text(
             text = text,
             style = MaterialTheme.typography.bodySmall,
-            color = PulseColors.TextSecondary,
+            color = NightbellColors.TextSecondary,
         )
     }
 }
@@ -966,13 +966,13 @@ private fun AboutRow(label: String, value: String) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
-            color = PulseColors.TextTertiary,
+            color = NightbellColors.TextTertiary,
             modifier = Modifier.width(96.dp),
         )
         Text(
             text = value,
             style = MaterialTheme.typography.bodySmall,
-            color = PulseColors.TextSecondary,
+            color = NightbellColors.TextSecondary,
         )
     }
 }

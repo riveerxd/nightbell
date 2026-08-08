@@ -125,9 +125,9 @@ class BackdropScope internal constructor(internal val state: BackdropState?) {
     @Composable
     fun Modifier.backdropBlur(
         shape: Shape,
-        scrim: Color = PulseColors.GlassFill,
-        fallback: Color = PulseColors.ToastFill,
-        border: Color = PulseColors.GlassStrokeSoft,
+        scrim: Color = NightbellColors.GlassFill,
+        fallback: Color = NightbellColors.ToastFill,
+        border: Color = NightbellColors.GlassStrokeSoft,
     ): Modifier {
         val active = state
             ?: return clip(shape).background(fallback).border(1.dp, border, shape)
@@ -296,7 +296,7 @@ private class BackdropSinkNode(
 @Composable
 fun Modifier.sheetSurface(
     scope: BackdropScope,
-    corner: Dp = PulseRadii.sheet,
+    corner: Dp = NightbellRadii.sheet,
 ): Modifier = with(scope) {
     val shape = RoundedCornerShape(topStart = corner, topEnd = corner)
     backdropBlur(
@@ -304,8 +304,8 @@ fun Modifier.sheetSurface(
         // Deliberately heavy. A sheet holding a form has to win against the
         // content behind it, and a mostly-opaque pane over a real blur still
         // reads unmistakably as glass.
-        scrim = PulseColors.SheetScrim,
-        fallback = PulseColors.ToastFill,
-        border = PulseColors.GlassStrokeSoft,
+        scrim = NightbellColors.SheetScrim,
+        fallback = NightbellColors.ToastFill,
+        border = NightbellColors.GlassStrokeSoft,
     )
 }

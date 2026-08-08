@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Pulse">
-  <rect width="512" height="512" rx="112" fill="#0B0E13"/>
-  <g transform="rotate(-90 256 256)" fill="none" stroke-width="40" stroke-linecap="round">
-    <circle cx="256" cy="256" r="150" stroke="#2FD98A" stroke-dasharray="650 293"/>
-    <circle cx="256" cy="256" r="150" stroke="#FF4D57" stroke-dasharray="170 773" stroke-dashoffset="-700"/>
-  </g>
-</svg>

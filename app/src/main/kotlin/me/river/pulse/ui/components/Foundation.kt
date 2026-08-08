@@ -56,9 +56,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import me.river.pulse.ui.theme.LocalPulseMotion
-import me.river.pulse.ui.theme.PulseColors
-import me.river.pulse.ui.theme.PulseRadii
+import me.river.pulse.ui.theme.LocalNightbellMotion
+import me.river.pulse.ui.theme.NightbellColors
+import me.river.pulse.ui.theme.NightbellRadii
 import me.river.pulse.ui.theme.glass
 import kotlinx.coroutines.delay
 import me.river.pulse.ui.theme.rememberLoopingFloat
@@ -67,8 +67,8 @@ import me.river.pulse.ui.theme.rememberLoopingFloat
 @Composable
 fun GlassCard(
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(PulseRadii.card),
-    corner: Dp = PulseRadii.card,
+    shape: Shape = RoundedCornerShape(NightbellRadii.card),
+    corner: Dp = NightbellRadii.card,
     accent: Color = Color.Transparent,
     elevation: Dp = 12.dp,
     contentPadding: Dp = 18.dp,
@@ -78,7 +78,7 @@ fun GlassCard(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val motion = LocalPulseMotion.current
+    val motion = LocalNightbellMotion.current
     val scale by animateFloatAsState(
         targetValue = if (pressed && motion.enabled) 0.975f else 1f,
         animationSpec = spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow),
@@ -96,7 +96,7 @@ fun GlassCard(
                 if (onClick != null) {
                     Modifier.combinedClickable(
                         interactionSource = interaction,
-                        indication = ripple(color = if (accent == Color.Transparent) PulseColors.Aqua else accent),
+                        indication = ripple(color = if (accent == Color.Transparent) NightbellColors.Aqua else accent),
                         onLongClick = onLongClick,
                         onClick = onClick,
                     )
@@ -115,7 +115,7 @@ fun SectionHeader(
     title: String,
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
-    accent: Color = PulseColors.Aqua,
+    accent: Color = NightbellColors.Aqua,
     trailing: @Composable (() -> Unit)? = null,
 ) {
     Row(
@@ -134,7 +134,7 @@ fun SectionHeader(
         Text(
             text = title.uppercase(),
             style = MaterialTheme.typography.labelSmall,
-            color = PulseColors.TextSecondary,
+            color = NightbellColors.TextSecondary,
             // Screen readers spell out ALL-CAPS strings; announce the real title.
             modifier = Modifier.semantics { contentDescription = title },
         )
@@ -166,7 +166,7 @@ fun GlassDivider(modifier: Modifier = Modifier, alpha: Float = 0.10f) {
                 Brush.horizontalGradient(
                     listOf(
                         Color.Transparent,
-                        PulseColors.sheen(alpha),
+                        NightbellColors.sheen(alpha),
                         Color.Transparent,
                     ),
                 ),
@@ -212,7 +212,7 @@ fun StaggeredEntrance(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    val motion = LocalPulseMotion.current
+    val motion = LocalNightbellMotion.current
     // Read while composing, before the effect below records it: the first pass
     // animates, every later one — including after recycling — does not.
     val animate = remember(key) { motion.enabled && !log.hasPlayed(key) }
@@ -260,8 +260,8 @@ fun ShimmerBlock(
     Box(
         modifier
             .clip(shape)
-            .background(PulseColors.sheen(0.06f))
-            .let { base -> base.shimmerSweep(PulseColors.sheen(0.14f), progress) }
+            .background(NightbellColors.sheen(0.06f))
+            .let { base -> base.shimmerSweep(NightbellColors.sheen(0.14f), progress) }
     )
 }
 
@@ -290,8 +290,8 @@ private fun Modifier.shimmerSweep(tint: Color, progress: Float): Modifier =
 fun MicroTag(
     text: String,
     modifier: Modifier = Modifier,
-    color: Color = PulseColors.TextSecondary,
-    background: Color = PulseColors.sheen(0.07f),
+    color: Color = NightbellColors.TextSecondary,
+    background: Color = NightbellColors.sheen(0.07f),
     icon: ImageVector? = null,
 ) {
     // Metadata only, deliberately not interactive.
@@ -299,10 +299,10 @@ fun MicroTag(
     // It is 22 dp tall and 11.5 sp — the right weight for a latency reading beside a
     // status pill, and completely wrong for a control. Using it as a button is how
     // "My order" and "Clear" ended up as things you could barely see, let alone hit.
-    // Anything tappable uses PulseButton or ChipSelector.
+    // Anything tappable uses NightbellButton or ChipSelector.
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(PulseRadii.chip))
+            .clip(RoundedCornerShape(NightbellRadii.chip))
             .background(background)
             .padding(horizontal = 9.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -373,7 +373,7 @@ fun IconBadge(
 @Composable
 fun ProvideMutedContent(content: @Composable () -> Unit) {
     androidx.compose.runtime.CompositionLocalProvider(
-        LocalContentColor provides PulseColors.TextSecondary,
+        LocalContentColor provides NightbellColors.TextSecondary,
         content = content,
     )
 }

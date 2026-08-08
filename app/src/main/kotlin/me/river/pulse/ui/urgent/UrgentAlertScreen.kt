@@ -39,8 +39,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import me.river.pulse.ui.icons.PulseIcons
-import me.river.pulse.ui.theme.PulseColors
+import me.river.pulse.ui.icons.NightbellIcons
+import me.river.pulse.ui.theme.NightbellColors
 
 /**
  * Everything a full-screen page needs to say, with no Android types in it.
@@ -112,7 +112,7 @@ private fun Klaxon(
     Box(
         modifier
             .fillMaxSize()
-            .background(PulseColors.Rose),
+            .background(NightbellColors.Rose),
     ) {
         // Sweeping siren wash, brightest at the top where the notification
         // shade would have come from.
@@ -135,7 +135,7 @@ private fun Klaxon(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    PulseIcons.Warning,
+                    NightbellIcons.Warning,
                     contentDescription = null,
                     tint = Color.Black,
                     modifier = Modifier.size(20.dp),
@@ -220,7 +220,7 @@ private fun Klaxon(
             )
             Spacer(Modifier.height(10.dp))
             FlatButton(
-                label = "Open Pulse",
+                label = "Open Nightbell",
                 fill = Color.Transparent,
                 content = Color.Black,
                 border = Color(0x59000000),
@@ -259,7 +259,7 @@ private fun CallStyle(
                 Brush.verticalGradient(
                     0f to Color(0xFF2A0308),
                     0.45f to Color(0xFF12080A),
-                    1f to PulseColors.Void,
+                    1f to NightbellColors.Void,
                 ),
             ),
     ) {
@@ -270,22 +270,22 @@ private fun CallStyle(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                "PULSE · URGENT",
+                "NIGHTBELL · URGENT",
                 style = MaterialTheme.typography.labelSmall,
-                color = PulseColors.Rose,
+                color = NightbellColors.Rose,
                 letterSpacing = 2.4.sp,
             )
             Spacer(Modifier.height(4.dp))
             Text(
                 "Service not responding",
                 style = MaterialTheme.typography.bodyMedium,
-                color = PulseColors.TextTertiary,
+                color = NightbellColors.TextTertiary,
             )
 
             Spacer(Modifier.weight(0.9f))
 
             // Avatar with the same expanding halo a call screen uses.
-            val haloTone = PulseColors.Rose
+            val haloTone = NightbellColors.Rose
             Box(contentAlignment = Alignment.Center) {
                 Canvas(Modifier.size(210.dp)) {
                     val base = size.minDimension / 2f * 0.46f
@@ -303,13 +303,13 @@ private fun CallStyle(
                         .size(104.dp)
                         .clip(CircleShape)
                         .background(Color(0xFF1A0509))
-                        .border(2.dp, PulseColors.Rose, CircleShape),
+                        .border(2.dp, NightbellColors.Rose, CircleShape),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        PulseIcons.Server,
+                        NightbellIcons.Server,
                         contentDescription = null,
-                        tint = PulseColors.Rose,
+                        tint = NightbellColors.Rose,
                         modifier = Modifier.size(44.dp),
                     )
                 }
@@ -320,7 +320,7 @@ private fun CallStyle(
                 ui.monitorName,
                 style = MaterialTheme.typography.headlineLarge,
                 fontSize = 30.sp,
-                color = PulseColors.TextPrimary,
+                color = NightbellColors.TextPrimary,
                 textAlign = TextAlign.Center,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -329,14 +329,14 @@ private fun CallStyle(
             Text(
                 "${ui.headline} · ${ui.failedChecks} failed checks",
                 style = MaterialTheme.typography.bodyLarge,
-                color = PulseColors.TextSecondary,
+                color = NightbellColors.TextSecondary,
                 textAlign = TextAlign.Center,
             )
             Spacer(Modifier.height(4.dp))
             Text(
                 "down for ${downFor(ui.downForMs)}",
                 style = MaterialTheme.typography.bodyMedium,
-                color = PulseColors.TextTertiary,
+                color = NightbellColors.TextTertiary,
             )
 
             Spacer(Modifier.weight(1.1f))
@@ -347,14 +347,14 @@ private fun CallStyle(
             ) {
                 CallAction(
                     label = "Acknowledge",
-                    fill = PulseColors.Rose,
-                    icon = PulseIcons.Check,
+                    fill = NightbellColors.Rose,
+                    icon = NightbellIcons.Check,
                     onClick = onAcknowledge,
                 )
                 CallAction(
                     label = "Open",
                     fill = Color(0xFF1F1F1F),
-                    icon = PulseIcons.ArrowRight,
+                    icon = NightbellIcons.ArrowRight,
                     onClick = onOpen,
                 )
             }
@@ -362,7 +362,7 @@ private fun CallStyle(
             Text(
                 repeatFooter(ui),
                 style = MaterialTheme.typography.bodySmall,
-                color = PulseColors.TextTertiary,
+                color = NightbellColors.TextTertiary,
                 textAlign = TextAlign.Center,
             )
         }
@@ -396,7 +396,7 @@ private fun CallAction(
         Text(
             label,
             style = MaterialTheme.typography.labelLarge,
-            color = PulseColors.TextSecondary,
+            color = NightbellColors.TextSecondary,
         )
     }
 }
@@ -416,7 +416,7 @@ private fun Incident(
     Row(
         modifier
             .fillMaxSize()
-            .background(PulseColors.Void),
+            .background(NightbellColors.Void),
     ) {
         Box(
             Modifier
@@ -424,7 +424,7 @@ private fun Incident(
                 .fillMaxHeight()
                 .background(
                     Brush.verticalGradient(
-                        listOf(PulseColors.Rose, PulseColors.Rose.copy(alpha = 0.25f)),
+                        listOf(NightbellColors.Rose, NightbellColors.Rose.copy(alpha = 0.25f)),
                     ),
                 ),
         )
@@ -438,7 +438,7 @@ private fun Incident(
                     "INCIDENT · OPEN",
                     style = MaterialTheme.typography.labelSmall,
                     fontFamily = FontFamily.Monospace,
-                    color = PulseColors.Rose,
+                    color = NightbellColors.Rose,
                     letterSpacing = 2.sp,
                 )
                 Spacer(Modifier.weight(1f))
@@ -446,7 +446,7 @@ private fun Incident(
                     if (ui.reminderNumber > 0) "PAGE #${ui.reminderNumber + 1}" else "FIRST PAGE",
                     style = MaterialTheme.typography.labelSmall,
                     fontFamily = FontFamily.Monospace,
-                    color = PulseColors.TextTertiary,
+                    color = NightbellColors.TextTertiary,
                     letterSpacing = 1.6.sp,
                 )
             }
@@ -456,7 +456,7 @@ private fun Incident(
                 style = MaterialTheme.typography.displayMedium,
                 fontSize = 32.sp,
                 lineHeight = 36.sp,
-                color = PulseColors.TextPrimary,
+                color = NightbellColors.TextPrimary,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -465,7 +465,7 @@ private fun Incident(
                 ui.headline.uppercase(),
                 style = MaterialTheme.typography.titleMedium,
                 fontFamily = FontFamily.Monospace,
-                color = PulseColors.Rose,
+                color = NightbellColors.Rose,
             )
 
             Spacer(Modifier.height(28.dp))
@@ -489,7 +489,7 @@ private fun Incident(
                         ui.detail,
                         style = MaterialTheme.typography.bodySmall,
                         fontFamily = FontFamily.Monospace,
-                        color = PulseColors.TextSecondary,
+                        color = NightbellColors.TextSecondary,
                         maxLines = 4,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -500,7 +500,7 @@ private fun Incident(
 
             FlatButton(
                 label = "Acknowledge",
-                fill = PulseColors.Rose,
+                fill = NightbellColors.Rose,
                 content = Color.White,
                 onClick = onAcknowledge,
             )
@@ -508,8 +508,8 @@ private fun Incident(
             FlatButton(
                 label = "Re-check now",
                 fill = Color.Transparent,
-                content = PulseColors.TextPrimary,
-                border = PulseColors.GlassStroke,
+                content = NightbellColors.TextPrimary,
+                border = NightbellColors.GlassStroke,
                 onClick = onRecheck,
             )
         }
@@ -527,7 +527,7 @@ private fun FactRow(label: String, value: String) {
                 label,
                 style = MaterialTheme.typography.labelSmall,
                 fontFamily = FontFamily.Monospace,
-                color = PulseColors.TextTertiary,
+                color = NightbellColors.TextTertiary,
                 letterSpacing = 1.2.sp,
                 modifier = Modifier.width(126.dp),
             )
@@ -535,7 +535,7 @@ private fun FactRow(label: String, value: String) {
                 value,
                 style = MaterialTheme.typography.bodyMedium,
                 fontFamily = FontFamily.Monospace,
-                color = PulseColors.TextPrimary,
+                color = NightbellColors.TextPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
@@ -566,7 +566,7 @@ private fun Beacon(
     Box(
         modifier
             .fillMaxSize()
-            .background(PulseColors.Void),
+            .background(NightbellColors.Void),
     ) {
         Column(
             Modifier
@@ -577,7 +577,7 @@ private fun Beacon(
             Spacer(Modifier.weight(0.8f))
             // The halo is laid out rather than drawn behind the whole screen, so
             // it can never end up underneath the text on a short display.
-            val beacon = PulseColors.Rose
+            val beacon = NightbellColors.Rose
             Canvas(Modifier.size(230.dp)) {
                 val centre = androidx.compose.ui.geometry.Offset(size.width / 2f, size.height / 2f)
                 val max = size.minDimension / 2f
@@ -603,7 +603,7 @@ private fun Beacon(
             Text(
                 "SERVICE DOWN",
                 style = MaterialTheme.typography.labelSmall,
-                color = PulseColors.Rose,
+                color = NightbellColors.Rose,
                 letterSpacing = 4.sp,
             )
             Spacer(Modifier.height(14.dp))
@@ -612,7 +612,7 @@ private fun Beacon(
                 style = MaterialTheme.typography.displayMedium,
                 fontSize = 34.sp,
                 lineHeight = 38.sp,
-                color = PulseColors.TextPrimary,
+                color = NightbellColors.TextPrimary,
                 textAlign = TextAlign.Center,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -621,21 +621,21 @@ private fun Beacon(
             Text(
                 "${ui.headline} · down for ${downFor(ui.downForMs)}",
                 style = MaterialTheme.typography.bodyLarge,
-                color = PulseColors.TextSecondary,
+                color = NightbellColors.TextSecondary,
                 textAlign = TextAlign.Center,
             )
             Spacer(Modifier.weight(1f))
             FlatButton(
                 label = "Acknowledge",
-                fill = PulseColors.Rose,
+                fill = NightbellColors.Rose,
                 content = Color.White,
                 onClick = onAcknowledge,
             )
             Spacer(Modifier.height(18.dp))
             Text(
-                "Open Pulse",
+                "Open Nightbell",
                 style = MaterialTheme.typography.labelLarge,
-                color = PulseColors.TextSecondary,
+                color = NightbellColors.TextSecondary,
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
                     .clickable(onClick = onOpen)
@@ -645,7 +645,7 @@ private fun Beacon(
             Text(
                 repeatFooter(ui),
                 style = MaterialTheme.typography.bodySmall,
-                color = PulseColors.TextTertiary,
+                color = NightbellColors.TextTertiary,
                 textAlign = TextAlign.Center,
             )
         }
@@ -667,18 +667,18 @@ private fun Brief(
     Column(
         modifier
             .fillMaxSize()
-            .background(PulseColors.Void),
+            .background(NightbellColors.Void),
     ) {
         Column(
             Modifier
                 .fillMaxWidth()
                 .weight(0.46f)
-                .background(PulseColors.Rose)
+                .background(NightbellColors.Rose)
                 .padding(horizontal = 26.dp, vertical = 30.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    PulseIcons.Warning,
+                    NightbellIcons.Warning,
                     contentDescription = null,
                     tint = Color.Black,
                     modifier = Modifier.size(18.dp),
@@ -754,7 +754,7 @@ private fun Brief(
                 ui.url,
                 style = MaterialTheme.typography.bodyMedium,
                 fontFamily = FontFamily.Monospace,
-                color = PulseColors.TextTertiary,
+                color = NightbellColors.TextTertiary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -763,7 +763,7 @@ private fun Brief(
 
             FlatButton(
                 label = "Acknowledge",
-                fill = PulseColors.Rose,
+                fill = NightbellColors.Rose,
                 content = Color.White,
                 onClick = onAcknowledge,
             )
@@ -771,15 +771,15 @@ private fun Brief(
             FlatButton(
                 label = "Re-check now",
                 fill = Color.Transparent,
-                content = PulseColors.TextPrimary,
-                border = PulseColors.GlassStroke,
+                content = NightbellColors.TextPrimary,
+                border = NightbellColors.GlassStroke,
                 onClick = onRecheck,
             )
             Spacer(Modifier.height(12.dp))
             Text(
                 repeatFooter(ui),
                 style = MaterialTheme.typography.bodySmall,
-                color = PulseColors.TextTertiary,
+                color = NightbellColors.TextTertiary,
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center,
             )
@@ -798,14 +798,14 @@ private fun Metric(label: String, value: String, modifier: Modifier = Modifier) 
         Text(
             label,
             style = MaterialTheme.typography.labelSmall,
-            color = PulseColors.TextTertiary,
+            color = NightbellColors.TextTertiary,
             letterSpacing = 1.4.sp,
         )
         Spacer(Modifier.height(5.dp))
         Text(
             value,
             style = MaterialTheme.typography.titleLarge,
-            color = PulseColors.TextPrimary,
+            color = NightbellColors.TextPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -817,7 +817,7 @@ private fun Metric(label: String, value: String, modifier: Modifier = Modifier) 
 /**
  * A deliberately plain 56dp action bar.
  *
- * The page is the one screen in Pulse that does *not* use the glass idiom: a
+ * The page is the one screen in Nightbell that does *not* use the glass idiom: a
  * translucent control over a full-bleed emergency colour is harder to hit and
  * harder to read, and this is a surface someone taps half-awake.
  */
