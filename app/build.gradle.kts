@@ -13,17 +13,17 @@ val keystoreProps = Properties().apply {
 }
 
 android {
-    namespace = "me.river.pulse"
+    namespace = "me.river.nightbell"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "me.river.pulse"
+        applicationId = "me.river.nightbell"
         minSdk = 26
         targetSdk = 36
         // 1.1.0 adds strict foreground monitoring, URGENT mode, latency SLOs,
         // multi-element page monitors and the home-screen widget. applicationId
         // and the DataStore key are unchanged, so 1.0.0 installs update in place
-        // and keep their monitors — see PulseStore.migrate.
+        // and keep their monitors — see NightbellStore.migrate.
         // 1.1.2 fixes alert notifications that could outlive the outage they
         // described — reproduced on a real device, see HANDOFF. Includes a
         // one-time repair for stale notifications left by 1.1.0/1.1.1.
@@ -49,7 +49,7 @@ android {
         // scheduling is rebuilt on periodic work with UPDATE so nothing cancels a
         // check in flight in the first place, and checker faults now have their
         // own track and channel. Store schema untouched; the fabricated runtime
-        // state 1.5.0 persisted is scrubbed on read — see PulseStore.migrate.
+        // state 1.5.0 persisted is scrubbed on read — see NightbellStore.migrate.
         // 1.6.0 also makes a placed widget's settings reachable again — a cog in
         // the widget, `widgetFeatures="reconfigurable"`, and a list in Settings —
         // and adds custom background/text colours with a background-opacity
@@ -122,8 +122,29 @@ android {
         // `notifyStateChanged` — so acknowledge, mute and recovery are all felt at
         // once. Regression test asserts under two seconds and was confirmed to
         // fail against the old code.
-        versionCode = 20
-        versionName = "2.4.3"
+        // 3.0.0 renames the app to Nightbell and moves applicationId to
+        // me.river.nightbell. Second in the list that does NOT update an earlier
+        // install, for exactly the reason 2.0.0 did not: a different applicationId
+        // is a different app. A 2.x install stays where it is, side by side, and
+        // the only route across is export/import driven by hand. Placed widgets do
+        // not survive, because a launcher stores the provider as a fully-qualified
+        // ComponentName.
+        //
+        // Pulse was not a defensible name. Pulse Pager and Pulse UpTime both ship
+        // uptime monitoring under the same word, with two more alongside them, so
+        // the brand term was unwinnable before a line of it was written.
+        //
+        // Because the package moves anyway, the persisted identifiers moved with
+        // it: the DataStore names, the notification channel ids, the WorkManager
+        // unique names and the backup filename prefix are all `nightbell.*` now.
+        // Those were frozen through the 2.5.0 rename precisely because they would
+        // have orphaned a live install's channels and monitors. A new package has
+        // no live install to orphan, so keeping `pulse.*` inside an app called
+        // Nightbell would have been carrying the cost of a migration nobody gets.
+        // Backups written by 2.x still import: the reader validates the JSON
+        // envelope's `format`, never the filename.
+        versionCode = 22
+        versionName = "3.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

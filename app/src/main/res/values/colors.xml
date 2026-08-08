@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="pulse_void">#FF06070E</color>
-    <color name="pulse_ink">#FF0B0D18</color>
+    <color name="nightbell_void">#FF06070E</color>
+    <color name="nightbell_ink">#FF0B0D18</color>
 
     <!--
         The live-update line's tones, resolved per system theme rather than

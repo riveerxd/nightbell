@@ -1,59 +1,118 @@
 #!/usr/bin/env python3
-"""Generate the app's Android vector drawables from the Pulse mark geometry.
+"""Generate the app's Android vector drawables from the Nightbell mark geometry.
 
-    python3 docs/brand/android_assets.py
+    python3 docs/brand/android_assets.py     # needs shapely
 
-The mark is the heartbeat trace on its own. The ring that direction 30 drew around it was
-dropped in 2.4.3, so every copy is now the one path. It still exists in five places — the
-launcher icon, an adaptive foreground, a themed silhouette, the widget header and the
-notification small icon — and each needs a different stroke weight on a different canvas
-in a different colour. They are derived from the numbers in `pulse-30-ringpulse-icon.svg`
-rather than scaled by hand: the first hand-scaled set shipped a Compose mark and a legacy
-icon whose trace vertices were plain wrong, and anything with this much repeated arithmetic
-should be computed.
+The mark is the heartbeat trace knocked out of a bell, and it exists in five
+places: the launcher icon, an adaptive foreground, a themed silhouette, the
+widget header and the notification small icon. Each needs a different canvas, a
+different colour and a different amount of detail, so they are computed here from
+one set of numbers rather than scaled by hand. An earlier hand-scaled set shipped
+a Compose mark and a legacy icon whose trace vertices were plain wrong.
+
+## Why the cutout is a path and not a mask
+
+`nightbell-mark-icon.svg` knocks the trace out with an SVG `<mask>`. Android
+vector drawables have no mask, and faking the hole by stroking the trace in the
+plate colour would make it opaque: the themed-icon and status-bar layers are
+tinted from the alpha channel, so a painted-on hole would simply vanish and the
+bell would go solid.
+
+So the hole is a real subpath. Shapely buffers the trace polyline into the
+outline of its own stroke, that outline is emitted as a second subpath inside the
+bell, and `android:fillType="evenOdd"` turns the enclosed region into a hole.
+Shapely is a build-time dependency of this script only; nothing ships with it.
+
+## Why the small canvases have no cutout
+
+At 18dp the slot is under two pixels and reads as a smudge rather than a
+heartbeat, so the widget header and the status-bar icon use the solid bell. They
+are the two places the mark is a flat silhouette anyway. Losing the trace there
+costs nothing, and keeping it would cost legibility at the only size those two
+are ever drawn.
 
 Run it after changing any geometry below, then rebuild.
 """
 
 import os
 
+from shapely.geometry import LineString
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 RES = os.path.normpath(os.path.join(HERE, "..", "..", "app", "src", "main", "res"))
 
-# The mark is the brand blue now that the trace is the whole mark. It used to be red — the
-# one element that meant failure — but with the ring gone the trace *is* the identity, and
-# a logo drawn as a single red line reads as permanently broken. Red still means failure
-# everywhere the data lives (charts, the history strip, the status orbs); it is just no
-# longer the logo. White is for the two places the mark is a flat silhouette: the status-bar
-# icon (masked and tinted by the system) and the themed-icon monochrome layer.
+# The mark is the brand blue. White is for the two places it is a flat silhouette:
+# the status-bar icon and the themed-icon monochrome layer, both masked and tinted
+# by the system, where colour is the system's choice and not ours.
 BLUE, WHITE = "#2F6BFF", "#FFFFFFFF"
 
-# The source drawing, in its own 512-unit space.
-MID = 256.0
-TRACE_STROKE = 26.0
+# The bell, in its own 512-unit space, as absolute segments so it can be
+# transformed without parsing anything.
+BELL = [
+    ("M", [(256, 146)]),
+    ("C", [(198, 146), (162, 208), (158, 296)]),
+    ("L", [(134, 324)]),
+    ("L", [(134, 344)]),
+    ("L", [(378, 344)]),
+    ("L", [(378, 324)]),
+    ("L", [(354, 296)]),
+    ("C", [(350, 208), (314, 146), (256, 146)]),
+    ("Z", []),
+]
+CROWN = (256.0, 124.0, 19.0)
+CLAPPER = (256.0, 384.0, 24.0)
 
-# The trace: a flat line, a short beat up, the tall spike down, back to the line.
-TRACE = [(107, 256), (168, 256), (200, 172), (252, 344), (284, 256), (405, 256)]
+# The trace: the same six points the Pulse mark drew, scaled to 0.42 and centred
+# inside the bell. Placed rather than redrawn, so the old identity is literally
+# the same drawing.
+TRACE_SRC = [(76, 256), (168, 256), (200, 172), (252, 344), (284, 256), (436, 256)]
+TRACE_SCALE = 0.42
+TRACE_STROKE = 45.0 * TRACE_SCALE
+TRACE_DX, TRACE_DY = 148.48, 149.64
+TRACE = [(TRACE_DX + x * TRACE_SCALE, TRACE_DY + y * TRACE_SCALE) for x, y in TRACE_SRC]
+
+# Ink bounds of bell plus crown plus clapper, in the same 512 space.
+SRC_X0, SRC_X1 = 134.0, 378.0
+SRC_Y0, SRC_Y1 = CROWN[1] - CROWN[2], CLAPPER[1] + CLAPPER[2]
 
 
-def trace_geometry(canvas, fill):
-    """Fit the trace's stroked bounding box to `fill` of the canvas and centre it. Width
-    dominates, so the mark fills side to side and sits vertically centred."""
-    xs = [x for x, _ in TRACE]
-    ys = [y for _, y in TRACE]
-    # A half stroke-width of cap/join spills past every extreme vertex.
-    bw = (max(xs) - min(xs)) + TRACE_STROKE
-    bh = (max(ys) - min(ys)) + TRACE_STROKE
-    scale = (canvas * fill) / max(bw, bh)
-    cx, cy = (min(xs) + max(xs)) / 2.0, (min(ys) + max(ys)) / 2.0
-    c = canvas / 2.0
-    return dict(
-        trace_stroke=TRACE_STROKE * scale,
-        trace=" ".join(
-            ("M" if i == 0 else "L") + f"{c + (x - cx) * scale:.2f},{c + (y - cy) * scale:.2f}"
-            for i, (x, y) in enumerate(TRACE)
-        ),
+def fitter(canvas, fill):
+    """Scale the mark to `fill` of `canvas` and centre it. Height dominates."""
+    s = (canvas * fill) / max(SRC_X1 - SRC_X0, SRC_Y1 - SRC_Y0)
+    cx, cy = (SRC_X0 + SRC_X1) / 2.0, (SRC_Y0 + SRC_Y1) / 2.0
+    half = canvas / 2.0
+    return lambda x, y: (half + (x - cx) * s, half + (y - cy) * s), s
+
+
+def bell_path(pt):
+    out = []
+    for cmd, coords in BELL:
+        if cmd == "Z":
+            out.append("Z")
+            continue
+        out.append(cmd + " ".join(f"{a:.2f},{b:.2f}" for a, b in (pt(x, y) for x, y in coords)))
+    return "".join(out)
+
+
+def circle_path(pt, s, circle):
+    cx, cy, r = circle
+    x, y = pt(cx, cy)
+    rr = r * s
+    return (
+        f"M{x - rr:.2f},{y:.2f}"
+        f"A{rr:.2f},{rr:.2f} 0 1,0 {x + rr:.2f},{y:.2f}"
+        f"A{rr:.2f},{rr:.2f} 0 1,0 {x - rr:.2f},{y:.2f}Z"
     )
+
+
+def trace_hole(pt, s):
+    """The trace's own stroke outline, as a closed subpath."""
+    poly = LineString(TRACE).buffer(
+        TRACE_STROKE / 2.0, cap_style="round", join_style="round", resolution=16
+    )
+    ring = poly.exterior
+    pts = [pt(x, y) for x, y in ring.coords]
+    return "M" + "L".join(f"{x:.2f},{y:.2f}" for x, y in pts) + "Z"
 
 
 def vector(canvas, body, tint=False, header=""):
@@ -71,60 +130,55 @@ def vector(canvas, body, tint=False, header=""):
     )
 
 
-def stroke(path, colour, width, cap=None):
-    cap_attr = f'\n        android:strokeLineCap="{cap}"' if cap else ""
+def fill_path(path, colour, even_odd):
+    fill_type = '\n        android:fillType="evenOdd"' if even_odd else ""
     return (
         "    <path\n"
         f'        android:pathData="{path}"\n'
-        '        android:fillColor="#00000000"\n'
-        f'        android:strokeColor="{colour}"\n'
-        f'        android:strokeWidth="{width:.2f}"{cap_attr}\n'
-        '        android:strokeLineJoin="round" />\n'
+        f'        android:fillColor="{colour}"{fill_type} />\n'
     )
 
 
 ASSETS = {
-    # The launcher icon. Legacy rather than adaptive, because AdaptiveIconDrawable.draw()
-    # fills its layer bitmap with Color.BLACK before compositing and so can never be
-    # transparent. No mask to survive, so the trace fills the canvas.
+    # Legacy rather than adaptive, because AdaptiveIconDrawable.draw() fills its
+    # layer bitmap with Color.BLACK before compositing and so can never be
+    # transparent. No mask to survive, so the mark fills the canvas.
     "drawable/ic_launcher_mark.xml": dict(
-        canvas=108, fill=0.92, colour=BLUE,
+        canvas=108, fill=0.92, colour=BLUE, cutout=True,
         note="Launcher icon. Legacy (not adaptive) so the background is genuinely\n"
              "    transparent — see docs/brand/android_assets.py for why adaptive cannot be.",
     ),
-    # Kept for whenever a plate is wanted again: inset to the 33-unit radius that every
-    # adaptive mask is guaranteed to keep, at the cost of looking smaller.
     "drawable/ic_launcher_foreground.xml": dict(
-        canvas=108, fill=0.60, colour=BLUE, trace_scale=1.15,
+        canvas=108, fill=0.62, colour=BLUE, cutout=True,
         note="Adaptive-icon foreground, inset inside the guaranteed mask circle.\n"
              "    Unused while the launcher icon is the transparent legacy one.",
     ),
     "drawable/ic_launcher_monochrome.xml": dict(
-        canvas=108, fill=0.60, colour=WHITE, trace_scale=1.15,
-        note="Themed-icon silhouette. Only the adaptive format carries this, so it is\n"
-             "    unused while the launcher icon is legacy.",
+        canvas=108, fill=0.62, colour=WHITE, cutout=True,
+        note="Themed-icon silhouette. The trace is a real hole in the alpha channel,\n"
+             "    so it survives the system tinting this layer flat.",
     ),
     "drawable/ic_widget_mark.xml": dict(
-        canvas=24, fill=0.86, colour=BLUE, trace_scale=1.1,
-        note="Widget header mark, drawn at 18dp. The brand blue rather than tinted to\n"
-             "    the palette: at that size the blue heartbeat is what identifies it.",
+        canvas=24, fill=0.90, colour=BLUE, cutout=False,
+        note="Widget header mark, drawn at 18dp. Solid: at that size the cutout is\n"
+             "    under two pixels and reads as a smudge.",
     ),
     "drawable/ic_stat_brand.xml": dict(
-        canvas=24, fill=0.86, colour=WHITE, tint=True, trace_scale=1.1,
-        note="Notification small icon, for the one notification about Pulse itself\n"
-             "    rather than about a monitor. The heartbeat alone, and white because the\n"
-             "    status-bar mask tints it flat — colour is the system's to choose, not ours.",
+        canvas=24, fill=0.90, colour=WHITE, tint=True, cutout=False,
+        note="Notification small icon, for the one notification about Nightbell itself\n"
+             "    rather than about a monitor. Solid, and white because the status-bar\n"
+             "    mask tints it flat — colour is the system's to choose, not ours.",
     ),
 }
 
 
 def main():
     for path, spec in ASSETS.items():
-        g = trace_geometry(spec["canvas"], spec["fill"])
-        body = stroke(
-            g["trace"], spec["colour"],
-            g["trace_stroke"] * spec.get("trace_scale", 1.0), cap="round",
-        )
+        pt, s = fitter(spec["canvas"], spec["fill"])
+        subpaths = [bell_path(pt), circle_path(pt, s, CROWN), circle_path(pt, s, CLAPPER)]
+        if spec["cutout"]:
+            subpaths.append(trace_hole(pt, s))
+        body = fill_path("".join(subpaths), spec["colour"], spec["cutout"])
         header = (
             "<!--\n"
             "    Generated by docs/brand/android_assets.py — edit that, not this.\n\n"
@@ -132,7 +186,9 @@ def main():
             "-->\n"
         )
         out = os.path.join(RES, path)
-        open(out, "w").write(vector(spec["canvas"], body, tint=spec.get("tint", False), header=header))
+        open(out, "w").write(
+            vector(spec["canvas"], body, tint=spec.get("tint", False), header=header)
+        )
         print(f"wrote {path}")
 
 

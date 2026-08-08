@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Nightbell">
+  <rect width="512" height="512" rx="112" fill="#0B0E13"/>
+  <g transform="translate(16 11)">
+    <path d="M186 316A76 76 0 0 1 326 316" fill="none" stroke="#2FD98A" stroke-width="14" opacity="0.38"/>
+    <g fill="none" stroke-linecap="round">
+      <path d="M171 310L134 295" stroke="#2FD98A" stroke-width="24" opacity="0.82"/>
+      <path d="M185 286L146 255" stroke="#2FD98A" stroke-width="24" opacity="0.82"/>
+      <path d="M205 268L172 220" stroke="#2FD98A" stroke-width="24" opacity="0.82"/>
+      <path d="M229 256L210 192" stroke="#2FD98A" stroke-width="24" opacity="0.82"/>
+      <path d="M256 252L256 176" stroke="#2FD98A" stroke-width="24" opacity="0.82"/>
+      <path d="M283 256L308 175" stroke="#2FD98A" stroke-width="24" opacity="0.82"/>
+      <path d="M307 268L360 190" stroke="#2FD98A" stroke-width="24" opacity="0.82"/>
+      <path d="M327 286L419 212" stroke="#FF4D57" stroke-width="24"/>
+      <path d="M341 310L445 268" stroke="#2FD98A" stroke-width="24" opacity="0.82"/>
+    </g>
+  </g>
+</svg>

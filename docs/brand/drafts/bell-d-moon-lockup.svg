@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 726 190" width="726" height="190" role="img" aria-label="Nightbell">
+  <rect width="726" height="190" fill="#0B0E13"/>
+  <g transform="translate(-2.8 -17.2) scale(0.4356)"><circle cx="256" cy="124" r="19" fill="#2F6BFF"/>
+  <path d="M256 146C198 146 162 208 158 296L134 324V344H378V324L354 296C350 208 314 146 256 146Z" fill="#2F6BFF"/>
+  <circle cx="250" cy="242" r="56" fill="#0B0E13"/>
+  <circle cx="288" cy="226" r="56" fill="#2F6BFF"/>
+  <circle cx="256" cy="384" r="24" fill="#2F6BFF"/></g>
+  <text x="222" y="126" font-family="DejaVu Sans, Arial, sans-serif" font-weight="bold" font-size="110" letter-spacing="-2" fill="#F2F5F8">Nightbell</text>
+</svg>

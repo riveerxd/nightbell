@@ -10,7 +10,7 @@
 #
 # The urgent shot is the real heads-up over a de-cluttered home: a dark branded
 # wallpaper set via WallpaperManager, the stock Google apps uninstalled, so the
-# background is Pulse's own surface rather than the emulator's launcher.
+# background is Nightbell's own surface rather than the emulator's launcher.
 #
 # Framing is docs/mockup.sh (hand-drawn, no downloaded device art). The backdrop
 # is a blue-glow radial so the phones sit on a designed surface, not white.

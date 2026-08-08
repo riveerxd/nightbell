@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 320" width="880" height="320" role="img" aria-label="Pulse">
-  <rect width="880" height="320" fill="#0B0E13"/>
-  <g transform="translate(-24.9 -30.9) scale(0.7456)"><g transform="rotate(-90 256 256)" fill="none" stroke-width="38">
-    <circle cx="256" cy="256" r="150" stroke="#2FD98A" stroke-dasharray="127.08 30"/>
-    <circle cx="256" cy="256" r="150" stroke="#FF4D57" stroke-dasharray="127.08 815.40" stroke-dashoffset="-157.08"/>
-  </g></g>
-  <text x="364" y="192" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="88" font-weight="500" letter-spacing="12" fill="#F2F5F8">PULSE</text>
-</svg>

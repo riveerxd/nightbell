@@ -1,4 +1,4 @@
-# Pulse baseline profile — cold launch → dashboard.
+# Nightbell baseline profile — cold launch → dashboard.
 #
 # AGP merges every .txt in this directory into assets/dexopt/baseline.prof.
 # ART then AOT-compiles the listed methods at install time instead of
@@ -23,128 +23,128 @@
 # below are correct.
 
 # ---- process start ----------------------------------------------------------
-HSPLme/river/pulse/PulseApplication;->onCreate()V
-HSPLme/river/pulse/PulseApplication;-><init>()V
-HSPLme/river/pulse/MainActivity;->onCreate(Landroid/os/Bundle;)V
-HSPLme/river/pulse/MainActivity;-><init>()V
-HSPLme/river/pulse/MainActivity;->monitorIdFrom(Landroid/content/Intent;)Ljava/lang/String;
-Lme/river/pulse/MainActivity;
-Lme/river/pulse/MainActivity$Companion;
-Lme/river/pulse/PulseApplication;
+HSPLme/river/nightbell/NightbellApplication;->onCreate()V
+HSPLme/river/nightbell/NightbellApplication;-><init>()V
+HSPLme/river/nightbell/MainActivity;->onCreate(Landroid/os/Bundle;)V
+HSPLme/river/nightbell/MainActivity;-><init>()V
+HSPLme/river/nightbell/MainActivity;->monitorIdFrom(Landroid/content/Intent;)Ljava/lang/String;
+Lme/river/nightbell/MainActivity;
+Lme/river/nightbell/MainActivity$Companion;
+Lme/river/nightbell/NightbellApplication;
 
 # ---- service locator + store (blocks first frame) ---------------------------
-HSPLme/river/pulse/data/Pulse;->install(Landroid/content/Context;)Lme/river/pulse/data/Pulse$Graph;
-HSPLme/river/pulse/data/Pulse;->require()Lme/river/pulse/data/Pulse$Graph;
-HSPLme/river/pulse/data/Pulse$Graph;-><init>(Landroid/content/Context;)V
-HSPLme/river/pulse/data/PulseStore;-><init>(Landroid/content/Context;Lkotlinx/coroutines/CoroutineScope;)V
-HSPLme/river/pulse/data/PulseStore;->decode(Ljava/lang/String;)Lme/river/pulse/data/PulseSnapshot;
-HSPLme/river/pulse/data/PulseStore;->migrate(Lme/river/pulse/data/PulseSnapshot;)Lme/river/pulse/data/PulseSnapshot;
-Lme/river/pulse/data/Pulse;
-Lme/river/pulse/data/Pulse$Graph;
-Lme/river/pulse/data/PulseStore;
-Lme/river/pulse/data/PulseSnapshot;
-Lme/river/pulse/data/PulseSnapshot$Companion;
-Lme/river/pulse/data/PulseSnapshot$$serializer;
+HSPLme/river/nightbell/data/Nightbell;->install(Landroid/content/Context;)Lme/river/nightbell/data/Nightbell$Graph;
+HSPLme/river/nightbell/data/Nightbell;->require()Lme/river/nightbell/data/Nightbell$Graph;
+HSPLme/river/nightbell/data/Nightbell$Graph;-><init>(Landroid/content/Context;)V
+HSPLme/river/nightbell/data/NightbellStore;-><init>(Landroid/content/Context;Lkotlinx/coroutines/CoroutineScope;)V
+HSPLme/river/nightbell/data/NightbellStore;->decode(Ljava/lang/String;)Lme/river/nightbell/data/NightbellSnapshot;
+HSPLme/river/nightbell/data/NightbellStore;->migrate(Lme/river/nightbell/data/NightbellSnapshot;)Lme/river/nightbell/data/NightbellSnapshot;
+Lme/river/nightbell/data/Nightbell;
+Lme/river/nightbell/data/Nightbell$Graph;
+Lme/river/nightbell/data/NightbellStore;
+Lme/river/nightbell/data/NightbellSnapshot;
+Lme/river/nightbell/data/NightbellSnapshot$Companion;
+Lme/river/nightbell/data/NightbellSnapshot$$serializer;
 
 # ---- domain models decoded on every store read ------------------------------
-Lme/river/pulse/domain/Monitor;
-Lme/river/pulse/domain/Monitor$$serializer;
-Lme/river/pulse/domain/Monitor$Companion;
-Lme/river/pulse/domain/MonitorRuntime;
-Lme/river/pulse/domain/MonitorRuntime$$serializer;
-Lme/river/pulse/domain/MonitorRuntime$Companion;
-Lme/river/pulse/domain/MonitorCard;
-Lme/river/pulse/domain/GlobalSettings;
-Lme/river/pulse/domain/GlobalSettings$$serializer;
-Lme/river/pulse/domain/GlobalSettings$Companion;
-Lme/river/pulse/domain/AlertPolicy;
-Lme/river/pulse/domain/AlertPolicy$$serializer;
-Lme/river/pulse/domain/AlertPolicy$Companion;
-Lme/river/pulse/domain/Sample;
-Lme/river/pulse/domain/Sample$$serializer;
-Lme/river/pulse/domain/ElementTarget;
-Lme/river/pulse/domain/ElementTarget$$serializer;
-Lme/river/pulse/domain/StatusExpectation;
-Lme/river/pulse/domain/BodyAssertion;
-Lme/river/pulse/domain/Health;
-Lme/river/pulse/domain/MonitorKind;
-Lme/river/pulse/domain/HttpMethod;
-Lme/river/pulse/domain/Summary;
-Lme/river/pulse/domain/Summary$Fleet;
-Lme/river/pulse/domain/Summary$Entry;
-Lme/river/pulse/domain/UrgentAlerts;
-Lme/river/pulse/domain/UrgentAlerts$State;
-HSPLme/river/pulse/domain/Monitor;->getMigrated()Lme/river/pulse/domain/Monitor;
-HSPLme/river/pulse/domain/Monitor;->getTargets()Ljava/util/List;
-HSPLme/river/pulse/domain/Monitor;->getDisplayName()Ljava/lang/String;
-HSPLme/river/pulse/domain/Monitor;->getPrettyHost()Ljava/lang/String;
-HSPLme/river/pulse/domain/Summary;->of(Ljava/util/List;Ljava/util/Map;)Lme/river/pulse/domain/Summary$Fleet;
+Lme/river/nightbell/domain/Monitor;
+Lme/river/nightbell/domain/Monitor$$serializer;
+Lme/river/nightbell/domain/Monitor$Companion;
+Lme/river/nightbell/domain/MonitorRuntime;
+Lme/river/nightbell/domain/MonitorRuntime$$serializer;
+Lme/river/nightbell/domain/MonitorRuntime$Companion;
+Lme/river/nightbell/domain/MonitorCard;
+Lme/river/nightbell/domain/GlobalSettings;
+Lme/river/nightbell/domain/GlobalSettings$$serializer;
+Lme/river/nightbell/domain/GlobalSettings$Companion;
+Lme/river/nightbell/domain/AlertPolicy;
+Lme/river/nightbell/domain/AlertPolicy$$serializer;
+Lme/river/nightbell/domain/AlertPolicy$Companion;
+Lme/river/nightbell/domain/Sample;
+Lme/river/nightbell/domain/Sample$$serializer;
+Lme/river/nightbell/domain/ElementTarget;
+Lme/river/nightbell/domain/ElementTarget$$serializer;
+Lme/river/nightbell/domain/StatusExpectation;
+Lme/river/nightbell/domain/BodyAssertion;
+Lme/river/nightbell/domain/Health;
+Lme/river/nightbell/domain/MonitorKind;
+Lme/river/nightbell/domain/HttpMethod;
+Lme/river/nightbell/domain/Summary;
+Lme/river/nightbell/domain/Summary$Fleet;
+Lme/river/nightbell/domain/Summary$Entry;
+Lme/river/nightbell/domain/UrgentAlerts;
+Lme/river/nightbell/domain/UrgentAlerts$State;
+HSPLme/river/nightbell/domain/Monitor;->getMigrated()Lme/river/nightbell/domain/Monitor;
+HSPLme/river/nightbell/domain/Monitor;->getTargets()Ljava/util/List;
+HSPLme/river/nightbell/domain/Monitor;->getDisplayName()Ljava/lang/String;
+HSPLme/river/nightbell/domain/Monitor;->getPrettyHost()Ljava/lang/String;
+HSPLme/river/nightbell/domain/Summary;->of(Ljava/util/List;Ljava/util/Map;)Lme/river/nightbell/domain/Summary$Fleet;
 
 # ---- theme + first composition ----------------------------------------------
-HSPLme/river/pulse/ui/theme/ThemeKt;->PulseTheme(FZLkotlin/jvm/functions/Function2;Landroidx/compose/runtime/Composer;II)V
-HSPLme/river/pulse/ui/theme/PulseColors;-><clinit>()V
-HSPLme/river/pulse/ui/theme/PulseRadii;-><clinit>()V
-HSPLme/river/pulse/ui/theme/ThemeKt;->healthColor(Lme/river/pulse/domain/Health;)J
-HSPLme/river/pulse/ui/theme/ThemeKt;->healthRim(Lme/river/pulse/domain/Health;)J
-HSPLme/river/pulse/ui/theme/GlassKt;->glass$default(Landroidx/compose/ui/Modifier;Landroidx/compose/ui/graphics/Shape;FJJJJFJZILjava/lang/Object;)Landroidx/compose/ui/Modifier;
-HSPLme/river/pulse/ui/theme/GlassKt;->softShadow$default(Landroidx/compose/ui/Modifier;FJFFILjava/lang/Object;)Landroidx/compose/ui/Modifier;
-Lme/river/pulse/ui/theme/PulseColors;
-Lme/river/pulse/ui/theme/PulseRadii;
-Lme/river/pulse/ui/theme/PulseMotion;
-Lme/river/pulse/ui/theme/ThemeKt;
-Lme/river/pulse/ui/theme/GlassKt;
-Lme/river/pulse/ui/theme/MotionKt;
-Lme/river/pulse/ui/theme/BackdropKt;
+HSPLme/river/nightbell/ui/theme/ThemeKt;->NightbellTheme(FZLkotlin/jvm/functions/Function2;Landroidx/compose/runtime/Composer;II)V
+HSPLme/river/nightbell/ui/theme/NightbellColors;-><clinit>()V
+HSPLme/river/nightbell/ui/theme/NightbellRadii;-><clinit>()V
+HSPLme/river/nightbell/ui/theme/ThemeKt;->healthColor(Lme/river/nightbell/domain/Health;)J
+HSPLme/river/nightbell/ui/theme/ThemeKt;->healthRim(Lme/river/nightbell/domain/Health;)J
+HSPLme/river/nightbell/ui/theme/GlassKt;->glass$default(Landroidx/compose/ui/Modifier;Landroidx/compose/ui/graphics/Shape;FJJJJFJZILjava/lang/Object;)Landroidx/compose/ui/Modifier;
+HSPLme/river/nightbell/ui/theme/GlassKt;->softShadow$default(Landroidx/compose/ui/Modifier;FJFFILjava/lang/Object;)Landroidx/compose/ui/Modifier;
+Lme/river/nightbell/ui/theme/NightbellColors;
+Lme/river/nightbell/ui/theme/NightbellRadii;
+Lme/river/nightbell/ui/theme/NightbellMotion;
+Lme/river/nightbell/ui/theme/ThemeKt;
+Lme/river/nightbell/ui/theme/GlassKt;
+Lme/river/nightbell/ui/theme/MotionKt;
+Lme/river/nightbell/ui/theme/BackdropKt;
 
 # ---- navigation shell --------------------------------------------------------
-HSPLme/river/pulse/ui/PulseAppKt;->PulseApp(Ljava/lang/String;Landroidx/compose/runtime/Composer;II)V
-Lme/river/pulse/ui/PulseAppKt;
-Lme/river/pulse/ui/Routes;
+HSPLme/river/nightbell/ui/NightbellAppKt;->NightbellApp(Ljava/lang/String;Landroidx/compose/runtime/Composer;II)V
+Lme/river/nightbell/ui/NightbellAppKt;
+Lme/river/nightbell/ui/Routes;
 
 # ---- dashboard: the first screen anyone sees --------------------------------
-HSPLme/river/pulse/ui/dashboard/DashboardScreenKt;->DashboardScreen(Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;Landroidx/compose/runtime/Composer;I)V
-HSPLme/river/pulse/ui/dashboard/DashboardScreenKt;->kindIcon(Lme/river/pulse/domain/MonitorKind;)Landroidx/compose/ui/graphics/vector/ImageVector;
-Lme/river/pulse/ui/dashboard/DashboardScreenKt;
-Lme/river/pulse/ui/DashboardViewModel;
-Lme/river/pulse/ui/PulseViewModelsKt;
+HSPLme/river/nightbell/ui/dashboard/DashboardScreenKt;->DashboardScreen(Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;Landroidx/compose/runtime/Composer;I)V
+HSPLme/river/nightbell/ui/dashboard/DashboardScreenKt;->kindIcon(Lme/river/nightbell/domain/MonitorKind;)Landroidx/compose/ui/graphics/vector/ImageVector;
+Lme/river/nightbell/ui/dashboard/DashboardScreenKt;
+Lme/river/nightbell/ui/DashboardViewModel;
+Lme/river/nightbell/ui/NightbellViewModelsKt;
 
 # ---- shared components drawn on the first frame ------------------------------
-Lme/river/pulse/ui/components/FoundationKt;
-Lme/river/pulse/ui/components/StatusKt;
-Lme/river/pulse/ui/components/ControlsKt;
-Lme/river/pulse/ui/components/AuroraKt;
-Lme/river/pulse/ui/components/EntranceLog;
-Lme/river/pulse/ui/icons/PulseIcons;
-HSPLme/river/pulse/ui/icons/PulseIcons;-><clinit>()V
-HSPLme/river/pulse/ui/components/StatusKt;->formatLatency(J)Ljava/lang/String;
-HSPLme/river/pulse/ui/components/StatusKt;->formatRelative(JJ)Ljava/lang/String;
+Lme/river/nightbell/ui/components/FoundationKt;
+Lme/river/nightbell/ui/components/StatusKt;
+Lme/river/nightbell/ui/components/ControlsKt;
+Lme/river/nightbell/ui/components/AuroraKt;
+Lme/river/nightbell/ui/components/EntranceLog;
+Lme/river/nightbell/ui/icons/NightbellIcons;
+HSPLme/river/nightbell/ui/icons/NightbellIcons;-><clinit>()V
+HSPLme/river/nightbell/ui/components/StatusKt;->formatLatency(J)Ljava/lang/String;
+HSPLme/river/nightbell/ui/components/StatusKt;->formatRelative(JJ)Ljava/lang/String;
 
 # ---- detail (post-startup: one tap away) ------------------------------------
-Lme/river/pulse/ui/detail/DetailScreenKt;
-Lme/river/pulse/ui/DetailViewModel;
+Lme/river/nightbell/ui/detail/DetailScreenKt;
+Lme/river/nightbell/ui/DetailViewModel;
 
 # ---- setup flow (post-startup) ----------------------------------------------
-Lme/river/pulse/ui/setup/SetupScreenKt;
-Lme/river/pulse/ui/SetupViewModel;
-Lme/river/pulse/domain/Validation;
-Lme/river/pulse/domain/Validation$Report;
-Lme/river/pulse/domain/Validation$Note;
-HSPLme/river/pulse/domain/Validation;->report(Lme/river/pulse/domain/Monitor;)Lme/river/pulse/domain/Validation$Report;
-HSPLme/river/pulse/domain/Validation;->urlNote(Ljava/lang/String;)Lme/river/pulse/domain/Validation$Note;
+Lme/river/nightbell/ui/setup/SetupScreenKt;
+Lme/river/nightbell/ui/SetupViewModel;
+Lme/river/nightbell/domain/Validation;
+Lme/river/nightbell/domain/Validation$Report;
+Lme/river/nightbell/domain/Validation$Note;
+HSPLme/river/nightbell/domain/Validation;->report(Lme/river/nightbell/domain/Monitor;)Lme/river/nightbell/domain/Validation$Report;
+HSPLme/river/nightbell/domain/Validation;->urlNote(Ljava/lang/String;)Lme/river/nightbell/domain/Validation$Note;
 
 # ---- check pipeline (runs immediately after the first frame) -----------------
-Lme/river/pulse/data/check/CheckEngine;
-Lme/river/pulse/data/check/HttpChecker;
-Lme/river/pulse/domain/AlertDecider;
-Lme/river/pulse/domain/AlertDecider$Decision;
-Lme/river/pulse/domain/Assertions;
-Lme/river/pulse/data/alerts/AlertCenter;
-Lme/river/pulse/data/work/MonitorScheduler;
-HSPLme/river/pulse/domain/AlertDecider;->advance(Lme/river/pulse/domain/MonitorRuntime;Lme/river/pulse/domain/CheckResult;IJ)Lme/river/pulse/domain/MonitorRuntime;
-HSPLme/river/pulse/domain/AlertDecider;->isDegraded(ZJJ)Z
+Lme/river/nightbell/data/check/CheckEngine;
+Lme/river/nightbell/data/check/HttpChecker;
+Lme/river/nightbell/domain/AlertDecider;
+Lme/river/nightbell/domain/AlertDecider$Decision;
+Lme/river/nightbell/domain/Assertions;
+Lme/river/nightbell/data/alerts/AlertCenter;
+Lme/river/nightbell/data/work/MonitorScheduler;
+HSPLme/river/nightbell/domain/AlertDecider;->advance(Lme/river/nightbell/domain/MonitorRuntime;Lme/river/nightbell/domain/CheckResult;IJ)Lme/river/nightbell/domain/MonitorRuntime;
+HSPLme/river/nightbell/domain/AlertDecider;->isDegraded(ZJJ)Z
 
 # ---- widget (rendered by the launcher process, but our classes load here) ----
-Lme/river/pulse/widget/PulseWidgetProvider;
-Lme/river/pulse/widget/PulseWidgetProvider$Companion;
-Lme/river/pulse/widget/WidgetConfig;
-Lme/river/pulse/widget/WidgetConfigStore;
+Lme/river/nightbell/widget/NightbellWidgetProvider;
+Lme/river/nightbell/widget/NightbellWidgetProvider$Companion;
+Lme/river/nightbell/widget/WidgetConfig;
+Lme/river/nightbell/widget/WidgetConfigStore;

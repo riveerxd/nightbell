@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Nightbell">
+  <rect width="512" height="512" rx="112" fill="#FF4D57"/>
+  <rect x="136" y="88" width="240" height="336" rx="36" fill="#0B0E13"/>
+  <path d="M168 256H206L226 206L256 306L276 256H344" fill="none" stroke="#F2F5F8" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="216" y="128" width="80" height="12" rx="6" fill="#F2F5F8" opacity="0.35"/>
+</svg>

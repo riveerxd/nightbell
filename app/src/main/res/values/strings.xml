@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Pulse</string>
+    <string name="app_name">Nightbell</string>
     <string name="notif_channel_group_alerts">Monitor alerts</string>
-    <string name="widget_name">Pulse status</string>
+    <string name="widget_name">Nightbell status</string>
     <string name="widget_description">Monitor health at a glance, worst first.</string>
     <string name="widget_settings">Widget settings</string>
 

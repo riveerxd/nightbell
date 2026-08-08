@@ -1,5 +1,5 @@
 # =============================================================================
-# Pulse R8 configuration
+# Nightbell R8 configuration
 #
 # Release is minified AND resource-shrunk. Everything below exists because R8
 # cannot see the reference: reflection, JS-bridge dispatch by name, or state
@@ -32,17 +32,17 @@
     kotlinx.serialization.KSerializer serializer(...);
 }
 # Every serialisable model in the app, plus its generated serializer.
--keep,includedescriptorclasses class me.river.pulse.**$$serializer { *; }
--keepclassmembers class me.river.pulse.** {
+-keep,includedescriptorclasses class me.river.nightbell.**$$serializer { *; }
+-keepclassmembers class me.river.nightbell.** {
     *** Companion;
     kotlinx.serialization.KSerializer serializer(...);
 }
--keep @kotlinx.serialization.Serializable class me.river.pulse.** {
+-keep @kotlinx.serialization.Serializable class me.river.nightbell.** {
     <fields>;
     <init>(...);
 }
 # Enum constants are matched by name when decoding @SerialName values.
--keepclassmembers enum me.river.pulse.** {
+-keepclassmembers enum me.river.nightbell.** {
     public static **[] values();
     public static ** valueOf(java.lang.String);
 }
@@ -54,21 +54,21 @@
 -keep class * extends androidx.work.ListenableWorker {
     public <init>(android.content.Context, androidx.work.WorkerParameters);
 }
--keep class me.river.pulse.data.work.MonitorWorker { *; }
--keep class me.river.pulse.data.work.SweepWorker { *; }
+-keep class me.river.nightbell.data.work.MonitorWorker { *; }
+-keep class me.river.nightbell.data.work.SweepWorker { *; }
 
 # --- Manifest-declared components -------------------------------------------
 # AGP generates keep rules from the merged manifest, so most of this is belt and
 # braces — but the widget provider is *also* referenced by an
 # AppWidgetProviderInfo the launcher persists outside our APK, and a stale
 # launcher entry pointing at a renamed class silently blanks the widget.
--keep class me.river.pulse.MainActivity { *; }
--keep class me.river.pulse.PulseApplication { *; }
--keep class me.river.pulse.widget.PulseWidgetProvider { *; }
--keep class me.river.pulse.widget.WidgetConfigActivity { *; }
--keep class me.river.pulse.data.work.PulseMonitorService { *; }
--keep class me.river.pulse.data.work.BootReceiver { *; }
--keep class me.river.pulse.data.alerts.AlertActionReceiver { *; }
+-keep class me.river.nightbell.MainActivity { *; }
+-keep class me.river.nightbell.NightbellApplication { *; }
+-keep class me.river.nightbell.widget.NightbellWidgetProvider { *; }
+-keep class me.river.nightbell.widget.WidgetConfigActivity { *; }
+-keep class me.river.nightbell.data.work.NightbellMonitorService { *; }
+-keep class me.river.nightbell.data.work.BootReceiver { *; }
+-keep class me.river.nightbell.data.alerts.AlertActionReceiver { *; }
 
 # --- OkHttp / Okio -----------------------------------------------------------
 # Optional platform integrations OkHttp probes for at runtime.

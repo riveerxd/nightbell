@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1130 320" width="1130" height="320" role="img" aria-label="Nightbell">
+  <rect width="1130" height="320" fill="#0B0E13"/>
+  <g transform="translate(-62.0 -3.7) scale(0.6495)"><g>
+    <rect x="157" y="58" width="58" height="58" fill="#F2F5F8"/>
+    <rect x="223" y="58" width="58" height="58" fill="#F2F5F8"/>
+    <rect x="289" y="58" width="58" height="58" fill="#F2F5F8"/>
+    <rect x="157" y="124" width="58" height="58" fill="#F2F5F8"/>
+    <rect x="289" y="124" width="58" height="58" fill="#F2F5F8"/>
+    <rect x="157" y="190" width="58" height="58" fill="#F2F5F8"/>
+    <rect x="223" y="190" width="58" height="58" fill="#F2F5F8"/>
+    <rect x="289" y="190" width="58" height="58" fill="#F2F5F8"/>
+    <rect x="157" y="256" width="58" height="58" fill="#F2F5F8"/>
+    <rect x="157" y="322" width="58" height="58" fill="#F2F5F8"/>
+    <rect x="157" y="388" width="58" height="58" fill="#F2F5F8"/>
+    <rect x="223" y="124" width="58" height="58" fill="#FF4D57"/>
+  </g></g>
+  <text x="235" y="192" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="90" font-weight="700" letter-spacing="8" fill="#F2F5F8">NIGHTBELL</text>
+</svg>
