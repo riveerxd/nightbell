@@ -143,8 +143,17 @@ android {
         // Nightbell would have been carrying the cost of a migration nobody gets.
         // Backups written by 2.x still import: the reader validates the JSON
         // envelope's `format`, never the filename.
-        versionCode = 22
-        versionName = "3.0.0"
+        // 3.0.1 is signed with a new key. The certificate subject read
+        // CN=Pulse Monitor, and a DN cannot be edited without issuing a new
+        // certificate, so the only way to make it say Nightbell was a new key.
+        // Android refuses an update signed by a different key than the installed
+        // build, so a 3.0.0 install cannot update to this: it has to be
+        // uninstalled and reinstalled. That cost was paid deliberately and now,
+        // an hour after 3.0.0 went out to nobody, rather than later at any scale.
+        // The old key is archived at keystore/pulse-legacy.jks; it still verifies
+        // every release up to and including 3.0.0.
+        versionCode = 23
+        versionName = "3.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

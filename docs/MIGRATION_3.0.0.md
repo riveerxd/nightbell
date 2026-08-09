@@ -65,12 +65,25 @@ the confusion forever to protect a migration nobody receives. So they moved:
 | `R.color.pulse_ink`, `R.layout.widget_pulse` | `nightbell_ink`, `widget_nightbell` |
 | `keystore/pulse-release.jks` | `keystore/nightbell-release.jks` |
 
-## What deliberately did not change
+## 3.0.1 changed the signing key
 
-- **The signing key, and its alias `pulse`.** The alias names a key inside the
-  keystore; changing it means a different key, and the file was only ever renamed
-  on disk. The certificate subject still reads `CN=Pulse Monitor` for the same
-  reason: a DN cannot be edited without issuing a new certificate.
+3.0.0 still shipped a certificate whose subject read `CN=Pulse Monitor`, because a
+subject cannot be edited without issuing a new certificate. 3.0.1 issues one:
+
+```
+CN=Nightbell, OU=river, O=river, L=Prague, C=CZ
+SHA-256  20:d8:ab:da:a8:41:6a:9a:75:1e:3e:a1:44:ef:15:23:d7:dd:ba:ae:ee:9e:c6:be:01:d6:3a:65:57:4a:70:de
+```
+
+Android refuses an update signed by a different key than the installed build, so
+**a 3.0.0 install cannot update to 3.0.1.** Uninstall 3.0.0 first, exporting your
+monitors beforehand if you had already imported them. This was done an hour after
+3.0.0 shipped, deliberately, because the cost only grows.
+
+The old key is archived at `keystore/pulse-legacy.jks` and still verifies every
+release up to and including 3.0.0. It is never used again.
+
+## What deliberately did not change
 - **`VibrationStyle.DOUBLE_PULSE`** and its `"Double pulse"` label. That is a
   haptic pattern, two pulses, and has nothing to do with the old name. It is also
   a serialised enum name.

@@ -568,9 +568,9 @@ Release signing reads `keystore/keystore.properties`; when it is absent the
 release build is simply unsigned. Regenerate with:
 
 ```bash
-keytool -genkeypair -v -keystore keystore/nightbell-release.jks -alias pulse \
+keytool -genkeypair -v -keystore keystore/nightbell-release.jks -alias nightbell \
   -keyalg RSA -keysize 4096 -validity 10000 \
-  -storepass <pw> -keypass <pw> -dname "CN=Pulse Monitor, O=Bohemian Karst, C=CZ"
+  -storepass <pw> -keypass <pw> -dname "CN=Nightbell, OU=river, O=river, L=Prague, C=CZ"
 ```
 
 ## Testing
