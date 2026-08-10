@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Wraps a raw 1080x2340 screenshot in a phone frame for the README.
+# Wraps a raw phone screenshot in a phone frame for the README.
 #
 # The frame is drawn here rather than pasted from a downloaded device mockup, so
 # there is nothing in this repo whose licence I cannot account for.
@@ -12,8 +12,14 @@ SRC=${1:?usage: mockup.sh <in.png> <out.png> [scale]}
 OUT=${2:?usage: mockup.sh <in.png> <out.png> [scale]}
 SCALE=${3:-0.42}
 
-W=1080
-H=2340
+# Read the panel size off the capture rather than hardcoding it. This used to be
+# a fixed 1080x2340 fed to a `-resize WxH!`, which silently rescales anything
+# else to fit: an API 36 Pixel 6 emulator captures 1080x2400, so every frame
+# built from one came out squashed 2.5% vertically. Nothing looked broken, which
+# is exactly why it was worth removing. Existing 1080x2340 captures are
+# unaffected, since for those this reads back the same numbers.
+W=$(magick identify -format '%w' "$SRC")
+H=$(magick identify -format '%h' "$SRC")
 RADIUS=76      # screen corner radius
 BEZEL=26       # black surround
 RIM=4          # metal edge highlight

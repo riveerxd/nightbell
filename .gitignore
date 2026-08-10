@@ -4,7 +4,7 @@ app/build/
 .gradle/
 local.properties
 
-# Signing material — regenerate with the command in HANDOFF.md
+# Signing material. Regenerate with the command in HANDOFF.md.
 keystore/*.jks
 keystore/keystore.properties
 
@@ -17,3 +17,46 @@ keystore/keystore.properties
 # are kept because a release stack trace is unreadable without the mapping.
 artifacts/*-debug.apk
 .impeccable/
+
+# Working briefs. These are instructions written to a tool, not documentation of
+# the project, and the repository is public. Kept locally, never committed.
+NIGHTBELL_*.md
+
+# The launch checklist annotates each task with which of them needs a human and
+# which does not, in terms of the tool that was doing the other half. That is the
+# same category as the briefs above, so it stays local until it is rewritten as
+# plain project documentation. The content is worth keeping; the framing is not.
+docs/GROWTH.md
+
+# Unlaunched go-to-market material: the Show HN draft, the Reddit posts, the SEO
+# content plan. Nothing in here is embarrassing, it is simply worth more unposted
+# than it is sitting in a public repository before any of it has run.
+docs/growth-prep/
+
+# The video project, not the video.
+#
+# promo-video/ is a Remotion cut that renders one 40 second file. It is 52 MB
+# before node_modules and 50 MB of that is audio/build: three 11 MB intermediate
+# WAVs and a trim directory that exist only between a render and a mix. Its own
+# .gitignore covers build/ at its root, which does not match audio/build/, so
+# excluding the project here is what actually keeps that out of history. Git
+# history is permanent and a 50 MB mistake cannot be taken back out of a clone.
+#
+# What ships is the result, committed under docs/video and copied into the site
+# by `website/npm run assets`:
+#
+#   docs/video/nightbell-promo.mp4          40 s, the film in the hero
+#   docs/video/nightbell-alert-firing.mp4   11 s, the payoff cut
+#
+# Rebuilding the film needs the project restored from a local copy. Rebuilding
+# the site does not, which is the only reproducibility that matters here.
+promo-video/
+
+# Superseded by nightbell-promo.mp4 before the rename. 7.9 MB, referenced by
+# nothing, and no reason to put it in history now.
+docs/video/pulse-promo-extended.mp4
+
+# Bytecode for the two generators in docs/brand. Regenerated on every run and
+# stamped with the interpreter version, so it is noise that conflicts.
+__pycache__/
+*.pyc
