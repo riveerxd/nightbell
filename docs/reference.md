@@ -374,9 +374,47 @@ The cutout is a real hole rather than a dark line painted over the bell, which
 matters in the two places the system tints the icon flat from its alpha channel: the
 themed launcher icon and the status-bar glyph. A painted-on hole would vanish there
 and leave a solid bell. `docs/brand/android_assets.py` computes the hole as a
-subpath and fills with `evenOdd`, because a vector drawable has no `<mask>`. At 18dp
-the slot is under two pixels, so the widget header and the notification icon use the
-solid bell on purpose.
+subpath and fills with `evenOdd`, because a vector drawable has no `<mask>`.
+
+All six drawables carry the trace. 3.0.0 and 3.0.1 shipped the widget header and
+the status-bar glyph solid, on the claim that the slot was "under two pixels" at
+that size. That was the dp figure read as pixels: the widget header is drawn at
+18dp and its slot is 1.01dp, which is 2px at xhdpi, 3px at xxhdpi and 4px at
+xxxhdpi. The two 24dp canvases widen it by a third anyway, because the hole has to
+survive a 1x density, and a slot that closes up is worse than one slightly heavier
+than the master.
+
+## The cold-start animation
+
+`ui/NightbellSplash.kt`. The bell arrives, rings, and the word wipes in beside it,
+over 2.8 s, on cold start only.
+
+It is one `Animatable` from 0 to 1 with each beat reading its own window out of it,
+so the beats cannot drift apart and re-timing the sequence is editing a table
+rather than chasing delays through nested coroutines. The mark it draws is
+`NightbellMark`, the same composable the dashboard header uses, so the splash
+cannot drift from the icon it is introducing.
+
+Three things it has to get right and one it deliberately does not do:
+
+- **The platform draws its own splash first.** From Android 12 every cold start
+  gets one whether the app asks or not, and the default puts the launcher icon on
+  a white circle. `values-v31/themes.xml` sets the splash ground to the void and
+  the icon to the mark with no plate, so the system's screen is the first frame of
+  ours instead of a competing one.
+- **The bell starts where the platform left it.** The system centres the icon; this
+  row centres bell *and* word, so handing over would slide the bell left by half
+  the word. The row starts shifted right by half the measured word block and drifts
+  into place as the word arrives.
+- **The last 0.7 s is the finished lockup sitting still.** That hold is the point,
+  not padding: an opening that dissolves the instant it resolves reads as a glitch.
+- **It does not animate the cut.** An earlier version carved the trace into the
+  bell here. It looked good alone and was wrong in sequence, because the system
+  splash already shows the finished icon, so the bell arrived whole, lost its
+  heartbeat and grew it back.
+
+The whole thing is skipped when `rememberSystemAnimationsEnabled()` is false. A
+splash is decoration, and that setting is asking us not to play decoration.
 
 It ships as a **legacy** icon rather than an adaptive one. That is deliberate, and the reason is worth writing down because it cost two
 rounds of chasing the wrong thing.

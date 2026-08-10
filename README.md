@@ -10,7 +10,7 @@
   <img src="https://img.shields.io/badge/Jetpack%20Compose-4285F4?style=flat-square&logo=jetpackcompose&logoColor=white" alt="Jetpack Compose" />
   <img src="https://img.shields.io/badge/minSdk-26-3a3f4b?style=flat-square" alt="minSdk 26" />
   <img src="https://img.shields.io/badge/targetSdk-36-3a3f4b?style=flat-square" alt="targetSdk 36" />
-  <img src="https://img.shields.io/badge/release-3.0.1-2F6BFF?style=flat-square" alt="Release 3.0.1" />
+  <img src="https://img.shields.io/badge/release-3.0.2-2F6BFF?style=flat-square" alt="Release 3.0.2" />
   <img src="https://img.shields.io/badge/tests-359%20JVM%20+%20173%20on--device-2FD98A?style=flat-square" alt="Tests" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/licence-Apache%202.0-3a3f4b?style=flat-square" alt="Apache 2.0" /></a>
 </p>
@@ -192,7 +192,7 @@ Grab the APK from [Releases](../../releases), or from `artifacts/` in this repo,
 and sideload it.
 
 ```bash
-adb install -r artifacts/Nightbell-3.0.1-release.apk
+adb install -r artifacts/Nightbell-3.0.2-release.apk
 ```
 
 > [!IMPORTANT]

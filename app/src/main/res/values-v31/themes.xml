@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Splash window attributes, API 31 and up.
+
+    From Android 12 the system draws a splash for every cold start whether an app
+    asks for one or not, and the default draws the launcher icon on a white
+    circle. Against this app's void that read as a flash of white, followed by a
+    second, different-looking splash once Compose took over: two openings, one
+    jump between them.
+
+    These three lines make the system's screen the first frame of ours rather than
+    a competing one. The ground is the same void the Compose splash paints, the
+    icon is the same mark it animates, and the icon plate is turned off so the
+    bell sits on the void exactly as it does a moment later. The handoff is then a
+    bell that starts moving rather than a screen that changes.
+
+    Kept in values-v31 rather than guarded inline: these attributes do not exist
+    below 31, and the platform below 31 falls back to `windowBackground`, which is
+    already the same colour.
+-->
+<resources>
+    <style name="Theme.Nightbell" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@color/nightbell_void</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+
+        <item name="android:windowSplashScreenBackground">@color/nightbell_void</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splash_mark</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
+    </style>
+</resources>

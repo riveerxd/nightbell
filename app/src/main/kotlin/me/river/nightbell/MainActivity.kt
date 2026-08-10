@@ -11,10 +11,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import me.river.nightbell.data.Nightbell
 import me.river.nightbell.ui.NightbellApp
+import me.river.nightbell.ui.NightbellSplash
 
 class MainActivity : ComponentActivity() {
 
@@ -35,7 +37,16 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val monitorId = pendingMonitorId
+            // The app composes underneath from the first frame and keeps loading
+            // while the splash plays, so this covers work that was happening
+            // anyway. `rememberSaveable` and not `remember`: a rotation is a
+            // recreation, and replaying the animation every time the device turns
+            // is the kind of thing that makes a splash hated.
+            var splashDone by rememberSaveable { mutableStateOf(false) }
             NightbellApp(initialMonitorId = monitorId)
+            if (!splashDone) {
+                NightbellSplash(onFinished = { splashDone = true })
+            }
         }
     }
 

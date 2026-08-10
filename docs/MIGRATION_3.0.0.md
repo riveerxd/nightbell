@@ -84,6 +84,10 @@ The old key is archived at `keystore/pulse-legacy.jks` and still verifies every
 release up to and including 3.0.0. It is never used again.
 
 ## What deliberately did not change
+
+- **The archived key's alias, `pulse`.** An alias names a key inside a keystore, so
+  changing it would mean a different key again. `keystore/pulse-legacy.jks` keeps
+  both the old key and the old alias so it can still verify what it signed.
 - **`VibrationStyle.DOUBLE_PULSE`** and its `"Double pulse"` label. That is a
   haptic pattern, two pulses, and has nothing to do with the old name. It is also
   a serialised enum name.

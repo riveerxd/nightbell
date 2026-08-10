@@ -40,16 +40,17 @@ in their own header comments:
 - `website/scripts/sync-assets.mjs`, which reads `nightbell-mark-icon.svg` off disk
 - `promo-video/src/components/BrandMark.tsx`, which animates the cut being carved
 
-## `verify-3.0.0.png`
+## `verify-mark.png`
 
-Every surface that ships the mark, rendered side by side: the five Android
+Every surface that ships the mark, rendered side by side: the six Android
 drawables, the brand master, the favicon, the PWA icon, the README lockup, the
-in-app header off a real device capture, and a frame of the promo. It exists
-because "the icon was updated" is a claim, and eleven pictures in one file is a
-check. Regenerate it if you change the mark.
+in-app header off a real device capture, and a frame of the promo.
 
-The widget and status-bar tiles are the solid bell on purpose. See
-`android_assets.py` for why.
+It exists because "the icon was updated" is a claim and twelve pictures in one
+file is a check, and it earned its keep immediately: 3.0.0 and 3.0.1 shipped with
+the widget header and the status-bar glyph as solid bells while every other
+surface carried the cutout, and the sheet is where that disagreement is obvious
+at a glance. Regenerate it whenever the mark changes.
 
 ## `archive/pulse-directions/`
 

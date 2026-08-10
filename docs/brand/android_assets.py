@@ -23,13 +23,19 @@ outline of its own stroke, that outline is emitted as a second subpath inside th
 bell, and `android:fillType="evenOdd"` turns the enclosed region into a hole.
 Shapely is a build-time dependency of this script only; nothing ships with it.
 
-## Why the small canvases have no cutout
+## The small canvases get a wider slot, not a missing one
 
-At 18dp the slot is under two pixels and reads as a smudge rather than a
-heartbeat, so the widget header and the status-bar icon use the solid bell. They
-are the two places the mark is a flat silhouette anyway. Losing the trace there
-costs nothing, and keeping it would cost legibility at the only size those two
-are ever drawn.
+These two shipped solid for one release on the claim that "at 18dp the slot is
+under two pixels". That was the dp figure read as pixels. The widget header is
+drawn at 18dp, and a 1.01dp slot is 2px at xhdpi, 3px at xxhdpi and 4px at
+xxxhdpi, which is a legible line on every density this app targets. The mark
+looked wrong precisely because it disagreed with the launcher icon sitting next
+to it.
+
+So all five carry the trace. The two 24dp canvases widen it by `trace_boost`,
+because the hole has to survive a 1x density and the antialiasing of a very small
+render, and a slot that closes up is worse than one slightly heavier than the
+master. The launcher canvases use the master proportions unchanged.
 
 Run it after changing any geometry below, then rebuild.
 """
@@ -105,10 +111,10 @@ def circle_path(pt, s, circle):
     )
 
 
-def trace_hole(pt, s):
+def trace_hole(pt, s, boost=1.0):
     """The trace's own stroke outline, as a closed subpath."""
     poly = LineString(TRACE).buffer(
-        TRACE_STROKE / 2.0, cap_style="round", join_style="round", resolution=16
+        TRACE_STROKE * boost / 2.0, cap_style="round", join_style="round", resolution=16
     )
     ring = poly.exterior
     pts = [pt(x, y) for x, y in ring.coords]
@@ -158,16 +164,27 @@ ASSETS = {
         note="Themed-icon silhouette. The trace is a real hole in the alpha channel,\n"
              "    so it survives the system tinting this layer flat.",
     ),
+    # The system splash icon, API 31+. Its canvas is 288dp and the platform draws
+    # the drawable into it whole, so `fill` here is not "how much of an icon
+    # tile" but "how big the bell is on the screen": 0.32 of 288 lands it at
+    # about 92dp, which is the size NightbellSplash starts its own bell at. The
+    # two screens then line up and the handoff stops being a jump.
+    "drawable/ic_splash_mark.xml": dict(
+        canvas=288, fill=0.32, colour=BLUE, cutout=True,
+        note="System splash icon (values-v31). Sized to match the first frame of\n"
+             "    NightbellSplash so the platform screen and ours are one opening.",
+    ),
     "drawable/ic_widget_mark.xml": dict(
-        canvas=24, fill=0.90, colour=BLUE, cutout=False,
-        note="Widget header mark, drawn at 18dp. Solid: at that size the cutout is\n"
-             "    under two pixels and reads as a smudge.",
+        canvas=24, fill=0.90, colour=BLUE, cutout=True, trace_boost=1.35,
+        note="Widget header mark, drawn at 18dp. The trace is widened by a third so\n"
+             "    the slot stays open at 1x; it is 2 to 4 px on every density above that.",
     ),
     "drawable/ic_stat_brand.xml": dict(
-        canvas=24, fill=0.90, colour=WHITE, tint=True, cutout=False,
+        canvas=24, fill=0.90, colour=WHITE, tint=True, cutout=True, trace_boost=1.35,
         note="Notification small icon, for the one notification about Nightbell itself\n"
-             "    rather than about a monitor. Solid, and white because the status-bar\n"
-             "    mask tints it flat — colour is the system's to choose, not ours.",
+             "    rather than about a monitor. White because the status-bar mask tints it\n"
+             "    flat — colour is the system's to choose, not ours — which is exactly why\n"
+             "    the trace has to be a real hole in the alpha rather than a painted line.",
     ),
 }
 
@@ -177,7 +194,7 @@ def main():
         pt, s = fitter(spec["canvas"], spec["fill"])
         subpaths = [bell_path(pt), circle_path(pt, s, CROWN), circle_path(pt, s, CLAPPER)]
         if spec["cutout"]:
-            subpaths.append(trace_hole(pt, s))
+            subpaths.append(trace_hole(pt, s, spec.get("trace_boost", 1.0)))
         body = fill_path("".join(subpaths), spec["colour"], spec["cutout"])
         header = (
             "<!--\n"

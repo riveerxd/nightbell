@@ -8,7 +8,9 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.PathFillType
+import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -70,6 +72,15 @@ fun NightbellMark(
     // indicator rather than as the app's identity. Aqua darkens for the light scheme, so
     // the mark stays legible there without a second set of values.
     color: Color = NightbellColors.Aqua,
+    /**
+     * 0 to 1, how much of the trace has been cut out of the bell, left to right.
+     * 1 is the resting state and every caller except the splash uses it.
+     *
+     * The partial cut is a dash on the stroke rather than a shortened point list,
+     * so the carve travels along the real geometry, spike included, instead of
+     * stopping at whichever vertex happened to come next.
+     */
+    draw: Float = 1f,
 ) {
     Canvas(
         modifier
@@ -98,23 +109,32 @@ fun NightbellMark(
         }
         drawPath(path = bell, color = color)
 
-        val trace = Path().apply {
-            TRACE.forEachIndexed { index, (x, y) ->
-                val tx = px(TRACE_DX + x * TRACE_SCALE)
-                val ty = py(TRACE_DY + y * TRACE_SCALE)
-                if (index == 0) moveTo(tx, ty) else lineTo(tx, ty)
+        val cut = draw.coerceIn(0f, 1f)
+        if (cut > 0f) {
+            val trace = Path().apply {
+                TRACE.forEachIndexed { index, (x, y) ->
+                    val tx = px(TRACE_DX + x * TRACE_SCALE)
+                    val ty = py(TRACE_DY + y * TRACE_SCALE)
+                    if (index == 0) moveTo(tx, ty) else lineTo(tx, ty)
+                }
             }
+            val length = PathMeasure().apply { setPath(trace, false) }.length
+            drawPath(
+                path = trace,
+                color = Color.Black,
+                style = Stroke(
+                    width = TRACE_STROKE * scale,
+                    cap = StrokeCap.Round,
+                    join = StrokeJoin.Round,
+                    pathEffect = if (cut < 1f) {
+                        PathEffect.dashPathEffect(floatArrayOf(length * cut, length))
+                    } else {
+                        null
+                    },
+                ),
+                blendMode = BlendMode.Clear,
+            )
         }
-        drawPath(
-            path = trace,
-            color = Color.Black,
-            style = Stroke(
-                width = TRACE_STROKE * scale,
-                cap = StrokeCap.Round,
-                join = StrokeJoin.Round,
-            ),
-            blendMode = BlendMode.Clear,
-        )
     }
 }
 

@@ -152,8 +152,18 @@ android {
         // an hour after 3.0.0 went out to nobody, rather than later at any scale.
         // The old key is archived at keystore/pulse-legacy.jks; it still verifies
         // every release up to and including 3.0.0.
-        versionCode = 23
-        versionName = "3.0.1"
+        // 3.0.2 fixes the icon and adds the cold-start animation. The widget
+        // header and the status-bar glyph had shipped as solid bells since 3.0.0,
+        // on a claim that the cutout was "under two pixels" at that size. That was
+        // the dp figure read as pixels: the slot is 2px at xhdpi and 3px at
+        // xxhdpi, which is a legible line, and the two solid tiles simply
+        // disagreed with the launcher icon beside them. All six drawables carry
+        // the trace now, with the 24dp canvases widening it by a third so the hole
+        // survives 1x and the antialiasing of a very small render.
+        //
+        // Same signing key as 3.0.1, so this updates in place.
+        versionCode = 24
+        versionName = "3.0.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
