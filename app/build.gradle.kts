@@ -184,8 +184,24 @@ android {
         // the app silently falls back to being signed with their key.
         //
         // Same signing key again, so 3.0.2 updates in place.
-        versionCode = 25
-        versionName = "3.0.3"
+        // 3.0.4 drops the Play dependency-metadata blob out of the APK signing
+        // block. See dependenciesInfo below for what it was and why it had to go.
+        //
+        // It is a separate release rather than a rebuild of 3.0.3 because that blob
+        // lives or dies by a build setting, and the setting is source. F-Droid
+        // builds the tag, so a tag without dependenciesInfo produces an APK with
+        // the blob no matter what is attached to the release, and the comparison
+        // fails. Moving the v3.0.3 tag instead would have broken the other half of
+        // this: the APK records the revision it was built at, and that revision has
+        // to be the tag's own commit.
+        //
+        // Which is the general shape of releasing this app now. Three things have
+        // to line up or F-Droid quietly falls back to signing with their key:
+        // the JDK matches their buildserver, the version bump is committed before
+        // the APK is built, and the APK carries no signing block beyond the
+        // signature itself.
+        versionCode = 26
+        versionName = "3.0.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -243,6 +259,22 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    // AGP puts a "Dependency metadata" blob in the APK signing block by default,
+    // 6,486 bytes of it here, so that Play can report on the libraries a build
+    // pulled in. It is a Play feature and this app is not on Play.
+    //
+    // It also fails F-Droid's APK scan outright: `found extra signing block
+    // 'Dependency metadata'`, raised as CRITICAL, because a signing block that no
+    // tool outside Google can read is a blob nobody reviewing the app can account
+    // for. The scan runs on the published APK, so turning this off is not optional
+    // for a release that is meant to be distributed there.
+    //
+    // The same argument covers the bundle, which this project does not build.
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
     }
 
     sourceSets {

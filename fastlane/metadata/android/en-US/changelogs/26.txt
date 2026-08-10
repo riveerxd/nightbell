@@ -1,0 +1,9 @@
+3.0.4
+
+No code changes. Like 3.0.3, this exists to get the app into F-Droid signed with the developer's own key rather than theirs.
+
+Android Gradle Plugin adds a "Dependency metadata" blob to the APK signing block by default, 6,486 bytes of it here, so that Google Play can report on the libraries a build pulled in. This app is not on Play, and F-Droid's APK scan rejects it outright: a signing block no tool outside Google can read is a blob nobody reviewing the app can account for. It is off now.
+
+It is a separate release rather than a rebuild of 3.0.3 because the setting is source, and F-Droid builds from the tag.
+
+Same signing key, so 3.0.3 updates in place. If you are already on 3.0.3 there is nothing here for you.
