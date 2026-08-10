@@ -162,8 +162,30 @@ android {
         // survives 1x and the antialiasing of a very small render.
         //
         // Same signing key as 3.0.1, so this updates in place.
-        versionCode = 24
-        versionName = "3.0.2"
+        // 3.0.3 changes no code at all. It exists so F-Droid can reproduce the
+        // build and therefore publish the APK under this key rather than theirs.
+        //
+        // F-Droid's verification builds from source in their container and then
+        // compares the result, byte for byte, with the APK attached to the GitHub
+        // release. Against 3.0.2 that comparison failed on two files:
+        // assets/dexopt/baseline.prof and classes.dex. One cause, not two. Their
+        // container runs openjdk 21.0.12+8 and 3.0.2 was built here on 21.0.11+10,
+        // and a different JDK gives R8 a different dex; the baseline profile is
+        // compiled from app/src/main/baselineProfiles/*.txt into dex method
+        // indices, so once the dex moves the profile moves with it.
+        //
+        // So this release is 3.0.2's tree built on 21.0.12+8. There is nothing to
+        // read in the diff between the two tags except this comment and the
+        // version, which is the point: if the dex still differs after matching the
+        // JDK, the remaining cause is somewhere other than the JDK.
+        //
+        // Keep this in mind when cutting future releases. The published APK has to
+        // come from a JDK matching F-Droid's buildserver or verification breaks and
+        // the app silently falls back to being signed with their key.
+        //
+        // Same signing key again, so 3.0.2 updates in place.
+        versionCode = 25
+        versionName = "3.0.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

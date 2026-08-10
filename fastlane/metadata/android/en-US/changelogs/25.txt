@@ -1,0 +1,7 @@
+3.0.3
+
+No code changes. This release exists so F-Droid can reproduce the build and publish it signed with the developer's own key instead of theirs.
+
+F-Droid builds from source and compares the result byte for byte against the APK attached to the GitHub release. Against 3.0.2 that comparison failed on classes.dex and assets/dexopt/baseline.prof, because their buildserver runs openjdk 21.0.12 and 3.0.2 was built on 21.0.11. A different JDK gives R8 a different dex, and the baseline profile is compiled into dex method indices, so it moves with it.
+
+3.0.3 is the same tree built on the matching JDK. If you are already on 3.0.2 there is nothing here for you, and it updates in place.
