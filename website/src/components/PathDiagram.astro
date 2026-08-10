@@ -1,0 +1,232 @@
+---
+/**
+ * Where a check actually goes.
+ *
+ * Two tracks out of the phone: the one that exists, and the one every hosted
+ * monitor needs and this one does not have. Drawn rather than described because
+ * the whole privacy claim is a shape, and a shape is faster to check than a
+ * paragraph.
+ *
+ * ## The check travels
+ *
+ * The request rides the blue path out to the service and the response rides back,
+ * on a four second loop, using `offset-path` with the same path string the visible
+ * line is drawn from. One source of truth for the geometry, so the packet cannot
+ * drift off the wire it is supposed to be on.
+ *
+ * `offset-path` was chosen over SMIL `animateMotion` for one reason:
+ * `prefers-reduced-motion` turns a CSS animation off and cannot touch a SMIL one.
+ * With motion off the two packets are simply not drawn, and the diagram is the
+ * same diagram it was before they existed.
+ *
+ * The SVG carries its own title and description, and the same facts are in the
+ * prose beside it, so nothing here is only available to people who can see it.
+ */
+
+/** The wire, once. The line is stroked from it and the packets ride it. */
+const WIRE = 'M231 106 C 400 106, 470 56, 649 56';
+---
+
+<div class="diagram" tabindex="0" role="region" aria-label="Diagram: the path a Nightbell check takes" data-reveal>
+  <svg viewBox="0 0 880 268" role="img" aria-labelledby="path-title path-desc">
+    <title id="path-title">The path a Nightbell check takes</title>
+    <desc id="path-desc">
+      Your phone sends the check straight to your own service and gets the response back.
+      A second path, from your phone to a monitoring company, is drawn crossed out: there
+      is no such connection, because there is no account and no server in between.
+    </desc>
+
+    <!-- The phone -->
+    <g>
+      <rect x="1" y="66" width="230" height="100" rx="14" fill="#141414" stroke="#1E2530"></rect>
+      <path
+        d="M25.5,96.9 L34,96.9 L38.5,85.2 L45.7,109.1 L50.2,96.9 L67,96.9"
+        stroke="#2F6BFF"
+        stroke-width="3.6"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        fill="none"></path>
+      <text class="t-node" x="25" y="130">Your phone</text>
+      <text class="t-sub" x="25" y="150">OkHttp, or an offscreen WebView</text>
+    </g>
+
+    <!-- The service being watched -->
+    <g>
+      <rect x="649" y="10" width="230" height="92" rx="14" fill="#141414" stroke="#2FD98A" stroke-opacity="0.45"></rect>
+      <text class="t-node" x="673" y="50">Your service</text>
+      <text class="t-sub" x="673" y="70">api.example.com</text>
+      <circle class="t-live" cx="855" cy="34" r="4" fill="#2FD98A"></circle>
+    </g>
+
+    <!-- The third party that is not there -->
+    <g>
+      <rect x="649" y="166" width="230" height="92" rx="14" fill="none" stroke="#1E2530" stroke-dasharray="5 5"></rect>
+      <text class="t-node t-off" x="673" y="200">A monitoring company</text>
+      {/* Two lines, because one runs off the right edge of the viewBox and gets
+          clipped by the scroller rather than wrapping. SVG text does not wrap. */}
+      <text class="t-sub" x="673" y="220">no account, no server,</text>
+      <text class="t-sub" x="673" y="238">no relay in between</text>
+    </g>
+
+    <!-- The path that exists -->
+    <path class="t-wire" d={WIRE} pathLength="1" fill="none" stroke="#2F6BFF" stroke-width="1.5"></path>
+    <path d="M641 51 L 651 56 L 641 61 Z" fill="#2F6BFF"></path>
+    <text class="t-edge" x="360" y="72">the check, and the response</text>
+
+    <!-- The request going out, and the response coming back. Both ride the wire
+         above. Not drawn at all under reduced motion. -->
+    <g class="t-packets" aria-hidden="true">
+      <circle class="t-packet t-packet-out" r="3.4" fill="#6AA8FF"></circle>
+      <circle class="t-packet t-packet-back" r="3.4" fill="#2FD98A"></circle>
+    </g>
+
+    <!-- The path that does not -->
+    <path
+      d="M231 128 C 400 128, 470 212, 649 212"
+      fill="none"
+      stroke="#8A8A8A"
+      stroke-opacity="0.45"
+      stroke-width="1.5"
+      stroke-dasharray="5 5"></path>
+    <g stroke="#FF4D57" stroke-width="2" stroke-linecap="round">
+      <path d="M431 160 L 451 180"></path>
+      <path d="M451 160 L 431 180"></path>
+    </g>
+    <text class="t-edge t-off" x="360" y="212">tokens, URLs, uptime history</text>
+
+    <!-- Where the state lives -->
+    <text class="t-foot" x="1" y="200">State stays here:</text>
+    <text class="t-foot t-foot-2" x="1" y="222">one JSON document in DataStore,</text>
+    <text class="t-foot t-foot-2" x="1" y="240">exported only when you export it.</text>
+  </svg>
+</div>
+
+<style define:vars={{ wire: `path('${WIRE}')` }}>
+  .t-node {
+    font-family: 'Inter Variable', system-ui, sans-serif;
+    font-size: 17px;
+    font-weight: 650;
+    letter-spacing: -0.015em;
+    fill: #ffffff;
+  }
+
+  .t-sub,
+  .t-edge,
+  .t-foot {
+    font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    fill: #8a8a8a;
+  }
+
+  .t-edge {
+    fill: #d6d6d6;
+  }
+
+  .t-off {
+    fill: #5f5f5f;
+  }
+
+  .t-foot {
+    fill: #d6d6d6;
+    text-transform: none;
+    letter-spacing: 0.02em;
+    font-size: 12px;
+  }
+
+  .t-foot-2 {
+    fill: #8a8a8a;
+  }
+
+  /*
+    The wire draws itself once, left to right, when the diagram arrives.
+
+    Written the way every reveal on this page is written: the finished state is
+    the plain rule, and the unfinished one is only reachable once script has put
+    `data-revealing` on the document. Nothing here is hidden from a reader whose
+    JavaScript never arrived.
+  */
+  .t-wire {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 0;
+    transition: stroke-dashoffset 900ms cubic-bezier(0.32, 0, 0.24, 1);
+  }
+
+  :global(html[data-revealing]) .diagram:not(.is-in) .t-wire {
+    stroke-dashoffset: 1;
+  }
+
+  /*
+    The two packets. `offset-path` puts them on the wire; `offset-distance` moves
+    them along it. The out leg leaves at 0 s and the response leaves at 1.9 s, so
+    the wire is never carrying both in the same direction at once.
+  */
+  .t-packet {
+    offset-path: var(--wire);
+    offset-rotate: 0deg;
+    animation: packet 3.8s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+  }
+
+  :global(html[data-revealing]) .diagram:not(.is-in) .t-packet {
+    animation-play-state: paused;
+    opacity: 0;
+  }
+
+  .t-packet-back {
+    animation-delay: 1.9s;
+    animation-direction: reverse;
+  }
+
+  @keyframes packet {
+    0% {
+      offset-distance: 0%;
+      opacity: 0;
+    }
+    8%,
+    72% {
+      opacity: 1;
+    }
+    80%,
+    100% {
+      offset-distance: 100%;
+      opacity: 0;
+    }
+  }
+
+  /* The service answering. One slow breath, not a blinking light. */
+  .t-live {
+    animation: live 3.8s ease-in-out infinite;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+
+  @keyframes live {
+    0%,
+    44%,
+    100% {
+      opacity: 0.55;
+      transform: scale(1);
+    }
+    58% {
+      opacity: 1;
+      transform: scale(1.5);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .t-packets {
+      display: none;
+    }
+
+    .t-wire {
+      stroke-dashoffset: 0 !important;
+      transition: none;
+    }
+
+    .t-live {
+      animation: none;
+      opacity: 1;
+    }
+  }
+</style>

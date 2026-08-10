@@ -1,0 +1,55 @@
+---
+/**
+ * The Nightbell mark: the heartbeat trace knocked out of a bell.
+ *
+ * The geometry is the same drawing as docs/brand/nightbell-mark-icon.svg and
+ * res/drawable/ic_launcher_mark.xml, which docs/brand/android_assets.py generates
+ * from it. Written out here rather than fetched so the mark is in the HTML on
+ * first paint, and so the numbers stay checkable against the drawable by eye.
+ *
+ * The trace is the six points the Pulse mark drew, scaled and centred inside the
+ * bell rather than redrawn. Blue, because green in this product means "the thing
+ * being measured is working" and a green mark reads as one more status light.
+ *
+ * The cutout is a real mask, so the hole shows whatever is behind it. That is
+ * what lets one mark sit on the dark page and on a light printed sheet. Each
+ * instance needs its own mask id, because two elements sharing one id would make
+ * the second silently reuse the first one's mask.
+ */
+interface Props {
+  size?: number;
+  class?: string;
+}
+const { size = 22, class: className } = Astro.props;
+const id = `nb-mark-${crypto.randomUUID().slice(0, 8)}`;
+---
+
+<svg
+  width={size}
+  height={size}
+  viewBox="0 0 512 512"
+  fill="none"
+  aria-hidden="true"
+  focusable="false"
+  class={className}
+>
+  <defs>
+    <mask id={id} maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512">
+      <path
+        d="M256 146C198 146 162 208 158 296L134 324V344H378V324L354 296C350 208 314 146 256 146Z"
+        fill="#fff"></path>
+      <circle cx="256" cy="124" r="19" fill="#fff"></circle>
+      <circle cx="256" cy="384" r="24" fill="#fff"></circle>
+      <g transform="translate(148.48 149.64) scale(0.42)">
+        <path
+          d="M76 256H168L200 172L252 344L284 256H436"
+          fill="none"
+          stroke="#000"
+          stroke-width="45"
+          stroke-linecap="round"
+          stroke-linejoin="round"></path>
+      </g>
+    </mask>
+  </defs>
+  <rect width="512" height="512" fill="#2F6BFF" mask={`url(#${id})`}></rect>
+</svg>

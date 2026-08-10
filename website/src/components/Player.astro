@@ -1,0 +1,302 @@
+---
+/**
+ * The video player.
+ *
+ * Every glyph in the control bar is the app's own. Play, Pause, Volume and
+ * VolumeOff are the exact path data from
+ * `app/src/main/kotlin/me/river/nightbell/ui/icons/NightbellIcons.kt`, on the same
+ * 24-unit grid with the same 1.7 px round strokes, so the buttons under the film
+ * are drawn in the same hand as the buttons inside it. Only the fullscreen
+ * glyph is new, because the app has no use for one, and it is drawn to that
+ * spec rather than borrowed from an icon set.
+ *
+ * The scrubber is the shape `ProgressStyle` draws in the live notification and
+ * `domain/LiveTimeline.kt` computes for it: a thin track, a filled run, a marker
+ * at each milestone and a tracker riding along. Here the milestones are the six
+ * scene boundaries of the cut, parsed out of `promo-video/src/NightbellPromo.tsx` by
+ * `scripts/sync-assets.mjs`, so the chapter list cannot drift from the edit.
+ *
+ * ## It degrades to the browser's own player
+ *
+ * The `<video>` ships with `controls` and the custom bar ships `hidden`. The
+ * enhancement script swaps them: it removes `controls`, unhides the bar, and
+ * takes over. With no JavaScript, or if the script fails, what is left is a
+ * working native player rather than a poster with no way to press it.
+ *
+ * ## Captions are drawn by this page, not by the browser
+ *
+ * The track is set to `hidden` rather than `showing`, which still fires
+ * `cuechange` but stops the browser painting its own white-on-black box over a
+ * carefully graded frame. Cue text goes into an element this stylesheet owns, so
+ * captions are set in Inter like everything else.
+ *
+ * They start off. The track carries no `default`, the CC button ships
+ * unpressed, and `player.ts` starts with them wanted off, so the three agree
+ * before, during and after enhancement. The cut is legible with the sound off,
+ * which is the case a permanent caption band would be talking over.
+ */
+interface Chapter {
+  at: number;
+  label: string;
+  title: string;
+}
+
+interface Props {
+  id: string;
+  src: string;
+  poster: string;
+  /** Measured at sync time, so the readout says 0:40 before a byte is fetched. */
+  seconds: number;
+  bytes: number;
+  /** What the clip shows, for anyone who cannot see it. */
+  label: string;
+  captions?: string;
+  chapters?: Chapter[];
+  loop?: boolean;
+  /** No audio stream in the file, so no mute button is drawn. */
+  silent?: boolean;
+  /**
+   * Start playing when it scrolls into view. Ignored at reduced motion.
+   *
+   * Only the payoff clip has it. See player.ts for why the promo does not.
+   */
+  autoplayInView?: boolean;
+  /** The right-hand half of the caption strip. */
+  note: string;
+}
+
+const {
+  id,
+  src,
+  poster,
+  seconds,
+  bytes,
+  label,
+  captions,
+  chapters = [],
+  loop = false,
+  silent = false,
+  autoplayInView = false,
+  note,
+} = Astro.props;
+
+const mb = Math.round(bytes / 1024 / 1024);
+const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
+
+/* Icon geometry, verbatim from NightbellIcons.kt. */
+const ICONS = {
+  play: { d: 'M7.4 5.2 L18.6 12 L7.4 18.8 Z', fill: true, w: 0 },
+  pause: { d: 'M9.2 5.4 L9.2 18.6 M14.8 5.4 L14.8 18.6', fill: false, w: 2.2 },
+  volume: {
+    d: 'M4 9.4 L7.6 9.4 L12 5.4 L12 18.6 L7.6 14.6 L4 14.6 Z M15.4 9.2 A4.2 4.2 0 0 1 15.4 14.8 M18 6.4 A7.8 7.8 0 0 1 18 17.6',
+    fill: false,
+    w: 1.7,
+  },
+  volumeOff: {
+    d: 'M4 9.4 L7.6 9.4 L12 5.4 L12 18.6 L7.6 14.6 L4 14.6 Z M15.8 10 L20.8 15 M20.8 10 L15.8 15',
+    fill: false,
+    w: 1.7,
+  },
+  /* New, drawn to the same spec: 24-unit grid, 1.9 px, round caps and joins. */
+  full: {
+    d: 'M9.4 4.2 L4.2 4.2 L4.2 9.4 M14.6 4.2 L19.8 4.2 L19.8 9.4 M19.8 14.6 L19.8 19.8 L14.6 19.8 M9.4 19.8 L4.2 19.8 L4.2 14.6',
+    fill: false,
+    w: 1.9,
+  },
+} as const;
+---
+
+<figure
+  class="player"
+  data-player
+  data-duration={seconds}
+  data-autoplay={autoplayInView ? 'view' : null}
+>
+  <div class="player-shell" data-shell>
+    <div class="player-stage">
+      <video
+        id={id}
+        controls
+        preload="none"
+        playsinline
+        loop={loop || undefined}
+        muted={silent || autoplayInView || undefined}
+        poster={poster}
+        width="1920"
+        height="1080"
+        aria-label={label}
+        data-video
+      >
+        <source src={src} type="video/mp4" />
+        {
+          captions && <track kind="captions" src={captions} srclang="en" label="English" />
+        }
+        Your browser will not play this video.
+        <a href={src}>Download it instead (MP4, {mb} MB)</a>.
+      </video>
+
+      {/* Drawn over the poster until the first press, then removed. It is a real
+          button so it is in the tab order and announces itself. */}
+      <button class="player-cover" type="button" data-cover hidden>
+        <span class="player-cover-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="26" height="26" focusable="false">
+            <path d={ICONS.play.d} fill="currentColor"></path>
+          </svg>
+        </span>
+        <span class="player-cover-text label">Play</span>
+        <span class="sr-only">{label}</span>
+      </button>
+
+      {/* Cue text lands here rather than in the browser's own overlay. */}
+      <p class="player-captions" data-captions aria-live="off" hidden></p>
+    </div>
+
+    <div class="player-bar" hidden data-bar>
+      <div class="player-scrub">
+        <input
+          type="range"
+          class="scrub"
+          min="0"
+          max="10000"
+          value="0"
+          step="1"
+          aria-label="Seek"
+          data-scrub
+        />
+        {
+          chapters.length > 1 && (
+            <span class="scrub-marks" aria-hidden="true">
+              {chapters.slice(1).map((c) => (
+                <i style={`left:${(c.at / seconds) * 100}%`}></i>
+              ))}
+            </span>
+          )
+        }
+      </div>
+
+      <div class="player-row">
+        <button class="player-btn" type="button" aria-label="Play" data-toggle>
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" data-icon-play>
+            <path d={ICONS.play.d} fill="currentColor"></path>
+          </svg>
+          <svg
+            viewBox="0 0 24 24"
+            width="18"
+            height="18"
+            aria-hidden="true"
+            focusable="false"
+            data-icon-pause
+            data-off
+          >
+            <path
+              d={ICONS.pause.d}
+              fill="none"
+              stroke="currentColor"
+              stroke-width={ICONS.pause.w}
+              stroke-linecap="round"
+              stroke-linejoin="round"></path>
+          </svg>
+        </button>
+
+        <p class="player-time mono">
+          <span data-elapsed>0:00</span><span class="dim"> / {clock(seconds)}</span>
+        </p>
+
+        <p class="player-now label" data-now aria-live="off">
+          {chapters.length ? chapters[0].label : ''}
+        </p>
+
+        <div class="player-right">
+          {
+            captions && (
+              <button
+                class="player-btn player-text"
+                type="button"
+                aria-pressed="false"
+                title="Captions"
+                data-cc
+              >
+                CC
+              </button>
+            )
+          }
+          {
+            !silent && (
+              <button class="player-btn" type="button" aria-label="Mute" data-mute>
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" data-icon-vol>
+                  <path
+                    d={ICONS.volume.d}
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width={ICONS.volume.w}
+                    stroke-linecap="round"
+                    stroke-linejoin="round"></path>
+                </svg>
+                <svg
+                  viewBox="0 0 24 24"
+                  width="18"
+                  height="18"
+                  aria-hidden="true"
+                  focusable="false"
+                  data-icon-muted
+                  data-off
+                >
+                  <path
+                    d={ICONS.volumeOff.d}
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width={ICONS.volumeOff.w}
+                    stroke-linecap="round"
+                    stroke-linejoin="round"></path>
+                </svg>
+              </button>
+            )
+          }
+          <button class="player-btn" type="button" aria-label="Fullscreen" data-full>
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+              <path
+                d={ICONS.full.d}
+                fill="none"
+                stroke="currentColor"
+                stroke-width={ICONS.full.w}
+                stroke-linecap="round"
+                stroke-linejoin="round"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {
+        chapters.length > 1 && (
+          <nav class="player-chapters" aria-label="Chapters">
+            {chapters.map((c, i) => (
+              <button
+                type="button"
+                class="chapter"
+                data-seek={c.at}
+                data-index={i}
+                aria-current={i === 0 ? 'true' : 'false'}
+                title={`${c.title}, at ${clock(c.at)}`}
+              >
+                {c.label}
+              </button>
+            ))}
+          </nav>
+        )
+      }
+    </div>
+  </div>
+
+  {/*
+    One human sentence, not a spec line.
+
+    This was "40 seconds &middot; captions &middot; 6 MB" over "Jump to Alert for the part
+    nothing else does": three machine facts nobody asked for, then a line of ad
+    copy telling you which bit of the video to like. The duration is already on
+    the scrubber's own clock, the CC button is already on the bar, and the size of
+    a video you are not downloading is not a fact about anything.
+  */}
+  <figcaption>
+    <span class="player-note">{note}</span>
+  </figcaption>
+</figure>

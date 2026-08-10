@@ -1,0 +1,53 @@
+---
+/**
+ * One numbered entry on the instrument.
+ *
+ * `state` paints this section's stretch of the spine, the number in the rail, the
+ * eyebrow, and the state the masthead readout reports while this section is the
+ * one you are in. The page runs blue, blue, grey, blue, mint, blue, rose, amber,
+ * blue, grey, which is the arc the whole composition is for: a quiet readout that
+ * turns decisively red exactly once, at the section about the thing that only
+ * happens when a service has actually failed.
+ *
+ * The number in the rail is set large on purpose. It is the loudest piece of
+ * typography on the page after the headline, it is the only element that tells
+ * you how far through a long document you are without a scrollbar, and no
+ * template ships one.
+ */
+interface Props {
+  id: string;
+  no: string;
+  rail: string;
+  state?: 'brand' | 'up' | 'degraded' | 'down' | 'quiet';
+  class?: string;
+}
+
+const { id, no, rail, state = 'brand', class: className } = Astro.props;
+
+const spine = {
+  brand: 'var(--aqua)',
+  up: 'var(--mint)',
+  degraded: 'var(--amber)',
+  down: 'var(--rose)',
+  quiet: 'var(--text3)',
+}[state];
+---
+
+<section
+  id={id}
+  class={['section', className].filter(Boolean).join(' ')}
+  style={`--spine:${spine}`}
+  data-section
+  data-name={rail}
+  data-no={no}
+>
+  <div class="wrap">
+    <div class="rail" aria-hidden="true">
+      <span class="rail-no mono">{no}</span>
+      <span class="rail-name">{rail}</span>
+    </div>
+    <div class="section-body">
+      <slot />
+    </div>
+  </div>
+</section>

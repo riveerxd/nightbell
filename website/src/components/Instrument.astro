@@ -1,0 +1,188 @@
+---
+/**
+ * The hero's centrepiece: one monitor, sixty checks, and the moment it pages you.
+ *
+ * This is the app's monitor detail screen reduced to the part that matters.
+ * Latency is the height, health is the colour, newest check on the right, which
+ * is how `ResponseTimeChart` draws it in the app and how the promo video draws
+ * it in the proof scene.
+ *
+ * ## The series is computed, not random
+ *
+ * Same reason `promo-video/src/data.ts` seeds its latency series from a fixed
+ * formula: the markup has to be byte identical between builds or every deploy
+ * reads as a content change. It is an illustration of the shape a failure makes
+ * and the label above it says so out loud. The host is under `example.com`,
+ * which RFC 2606 reserves for exactly this.
+ *
+ * ## What moves, and what is true with nothing moving
+ *
+ * The document ships the end of the story: every bar at its real height and
+ * colour, the verdict on Down, the urgent page already arrived. Script adds
+ * `data-armed`, which is the only thing that hides any of it, and then replays
+ * the sixty checks in order so the verdict flip and the page arriving read as
+ * caused by the bars rather than as two things on their own timers.
+ *
+ * So: no JavaScript, or reduced motion, and the panel is a finished readout with
+ * the whole argument legible. That is not a fallback, it is the same picture
+ * without the replay.
+ */
+import Glyph from './Glyph.astro';
+
+const COUNT = 60;
+/** Checks 53 to 55 answered slower than the 2.5 s latency budget. */
+const DEGRADED_FROM = 52;
+/** From 56 the connection was refused, so there is no round trip to draw. */
+const DOWN_FROM = 55;
+
+const bars = Array.from({ length: COUNT }, (_, i) => {
+  if (i >= DOWN_FROM) {
+    // A refused connection has no latency. The app draws these full height in
+    // rose so a failure is never a short bar you have to hunt for.
+    return { h: 100, state: 'down' as const, ms: null };
+  }
+  if (i >= DEGRADED_FROM) {
+    // Climbing past the budget: 2.9 s, 3.4 s, 4.1 s.
+    const ms = [2900, 3400, 4100][i - DEGRADED_FROM];
+    return { h: 62 + (i - DEGRADED_FROM) * 12, state: 'degraded' as const, ms };
+  }
+  // A calm morning: about 130 ms, breathing a little.
+  const ms = Math.round(126 + 38 * Math.sin(i / 2.7) + 14 * Math.sin(i / 1.3));
+  return { h: Math.round(20 + (ms - 88) / 5.4), state: 'up' as const, ms };
+});
+
+const healthy = bars.filter((b) => b.ms !== null && b.state === 'up');
+const average = Math.round(healthy.reduce((total, b) => total + (b.ms ?? 0), 0) / healthy.length);
+const failed = bars.filter((b) => b.state === 'down').length;
+---
+
+<figure class="instrument" data-instrument data-verdict="down" style={`--count:${COUNT}`}>
+  {/*
+    The one piece of phone furniture drawn here, and it is carrying the argument
+    rather than dressing it: twelve minutes past three in the morning, Do Not
+    Disturb on, and this thing woke you anyway. That is the sentence the headline
+    makes and the FAQ answers, said by a status bar in four glyphs.
+
+    Fixed, like every other number in this panel. Nothing here reads a clock.
+  */}
+  <p class="ins-status mono" aria-hidden="true">
+    <span>3:12</span>
+    <span class="ins-status-icons">
+      <Glyph name="moon" size={12} />
+      <Glyph name="activity" size={12} />
+    </span>
+  </p>
+
+  <!-- A div and not a figcaption, though it reads like one.
+
+       `figure` allows a figcaption only as its first or last child, and this sits
+       in the middle: the status bar is above it and the urgent page and chart are
+       below. The W3C validator rejected the whole subtree for it.
+
+       Moving it is not the fix, because it is not a caption of the illustration.
+       It is the monitor header inside the illustration, the same row the app's own
+       detail screen draws, so it belongs to the picture rather than describing it.
+       Styled by .ins-head either way. -->
+    <div class="ins-head">
+    {/* The name and the verdict share a line and the host gets the width under
+        both of them, which is the order the app's own detail screen puts them in
+        and one line shorter than stacking all three. */}
+    <p class="ins-name">Checkout API</p>
+    <p class="ins-host mono">https://api.example.com/health</p>
+
+    {/* Three chips in one grid cell, so the panel never changes width as the
+        verdict changes and the layout cannot jitter on the flip. */}
+    <p class="verdict" aria-hidden="true">
+      <span data-for="up"><i class="dot"></i>Operational</span>
+      <span data-for="degraded"><i class="dot"></i>Degraded</span>
+      <span data-for="down"><i class="dot"></i>Down</span>
+    </p>
+  </div>
+
+  {/*
+    The urgent page arriving.
+
+    Drawn in HTML rather than pasted as a screenshot because it has to arrive on
+    cue, and every word, button and colour in it is the one in
+    docs/screens/urgent-b.png, which is a photograph of this exact notification
+    on a real phone. The real one is further down the page.
+
+    It sits under the monitor's own header and above its chart, which is where a
+    heads-up notification lands on Android, and it is the reason the panel is on
+    a phone at all. It used to be the last thing in the panel, below the chart
+    and the readout, so the one frame that makes the argument was also the
+    lowest thing in it.
+
+    The two states share one grid cell, so the panel is exactly as tall before
+    the page arrives as it is after. The empty state is not padding: it is the
+    monitor sitting armed, which is what an urgent monitor does for the whole
+    time nothing is wrong, and the alert replaces it in place.
+  */}
+  <div class="page-slot">
+    <p class="page-idle label" aria-hidden="true">
+      <span class="page-idle-mark"><Glyph name="bell" size={14} /></span>
+      Urgent alerting armed
+    </p>
+
+    <div class="page-card" data-page>
+      <span class="page-mark" aria-hidden="true"><Glyph name="warning" size={16} /></span>
+      <div class="page-body">
+        <p class="page-title">Checkout API is down</p>
+        <p class="page-sub">Connection refused &middot; down for 22m</p>
+        <p class="page-acts" aria-hidden="true">
+          <span class="pill pill-ack"><Glyph name="check" size={13} />Ack</span>
+          <span class="pill pill-recheck"><Glyph name="refresh" size={13} />Re-check</span>
+          <span class="pill pill-mute"><Glyph name="bellOff" size={13} /><span class="sr-only">Mute for an hour</span></span>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="ins-chart">
+    <div
+      class="bars"
+      role="img"
+      aria-label="Sixty response times, oldest on the left. Fifty two checks answer in about 130 milliseconds, three answer slowly enough to count as degraded, and the last five are refused connections with no response at all."
+    >
+      {
+        bars.map((b, i) => (
+          <i data-state={b.state} data-ms={b.ms ?? ''} data-at={i} style={`height:${b.h}%`}></i>
+        ))
+      }
+      {/* The write head. Rides the right edge of whatever has been replayed, and
+          sits off the end of the chart when nothing is replaying. */}
+      <span class="head" aria-hidden="true"></span>
+    </div>
+
+    <p class="ins-budget label" aria-hidden="true">2.5 s budget</p>
+  </div>
+
+  <dl class="ins-readout">
+    <div>
+      <dt>Last</dt>
+      <dd class="mono" data-last>No response</dd>
+    </div>
+    <div>
+      <dt>Average</dt>
+      <dd class="mono">{average} ms</dd>
+    </div>
+    <div>
+      <dt>Checks</dt>
+      <dd class="mono" data-checks>{COUNT}</dd>
+    </div>
+    <div>
+      <dt>Failed</dt>
+      <dd class="mono" data-failed>{failed}</dd>
+    </div>
+  </dl>
+
+  {/*
+    Two facts, not three. The third was "56 → 60 connection refused", which is
+    the five rose bars at the right hand end of the chart described in words, at
+    nine pixels, under the chart that is already showing it.
+  */}
+  <p class="ins-foot label">
+    <span>Example readout, replayed</span>
+    <span>60 checks &middot; 5 min cadence</span>
+  </p>
+</figure>

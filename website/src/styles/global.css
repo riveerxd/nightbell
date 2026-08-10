@@ -1,0 +1,4569 @@
+/*
+  Nightbell, the whole stylesheet.
+
+  One file, no framework, no utility classes. It is inlined into the document at
+  build time (`inlineStylesheets: 'always'` in astro.config.mjs), so the page
+  paints without a second round trip; that only stays true if this file stays
+  small, which is the main reason there is nothing here that is not used.
+
+  The palette is the app's dark scheme, value for value, out of
+  app/src/main/kotlin/me/river/nightbell/ui/theme/Theme.kt (NightbellDarkColors) by way
+  of promo-video/src/theme.ts. The rule those two files state and this one keeps:
+  blue is the app, green is the thing it measures. Chrome, rules, the mark and
+  focus rings are Aqua; mint, amber and rose only ever mean up, degraded and
+  down, and never appear as decoration.
+*/
+
+/*
+  Two variable faces, latin only, copied out of the promo video's dependencies
+  by scripts/sync-assets.mjs. 88 KB for the pair, both preloaded in the head, so
+  `swap` never actually gets to swap anything.
+*/
+@font-face {
+  font-family: 'Inter Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('/fonts/inter-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 800;
+  src: url('/fonts/jetbrains-mono-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root {
+  /* Grounds */
+  --void: #000000;
+  --ink: #090909;
+  --slate: #141414;
+  --plate: #0b0e13;
+  --line: #1e2530;
+  /* One step up from the section rule. The only thing that uses it is the trace
+     between sections, which has to read as a drawn line rather than as a border. */
+  --line-lit: #2b3546;
+
+  /* Brand. One blue family. */
+  --aqua: #2f6bff;
+  --indigo: #1647c7;
+
+  /* Health. These carry meaning. */
+  --mint: #2fd98a;
+  --amber: #ffb020;
+  --rose: #ff4d57;
+  --sky: #6aa8ff;
+
+  /* Type */
+  --text: #ffffff;
+  --text2: #d6d6d6;
+  --text3: #8a8a8a;
+  --bone: #f2f5f8;
+
+  /* The state of the current section. Sections override it; the rule down the
+     left gutter, the eyebrow and the section number all read from here, so a
+     section changes colour in one place. */
+  --spine: var(--aqua);
+
+  --measure: 68ch;
+  --page: 1180px;
+  --gutter: clamp(1.25rem, 4vw, 2.5rem);
+  --rail: 0px;
+
+  --r-sm: 8px;
+  --r-md: 14px;
+  --r-phone: 34px;
+
+  color-scheme: dark;
+}
+
+@media (min-width: 60rem) {
+  :root {
+    /* The instrument rail. Wide enough for "04" and a tracked mono label
+       stacked under it, and it only exists where there is room for it. */
+    --rail: 5.5rem;
+  }
+}
+
+/* ------------------------------------------------------------------ reset */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+}
+
+/*
+  The ground colour lives here and not on `body`.
+
+  With no background of its own, `body` lets this one propagate to the canvas,
+  which is the only paint step that happens before negative z-index children.
+  Put it back on `body` and `.field` disappears behind it. See Field.astro.
+*/
+html {
+  background: var(--void);
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+  /* Anchors land below the sticky header rather than under it. */
+  scroll-padding-top: 5rem;
+}
+
+body {
+  color: var(--text2);
+  font-family: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: clamp(1rem, 0.96rem + 0.2vw, 1.0625rem);
+  line-height: 1.62;
+  font-synthesis-weight: none;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+img,
+video,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+/*
+  `[hidden]` outranks any `display` this file sets.
+
+  The UA stylesheet's `[hidden] { display: none }` is a single attribute selector,
+  so `svg { display: block }` above beats it and `.player-cover { display: flex }`
+  beats it twice over. That is how the player first shipped drawing its play and
+  pause glyphs on top of each other with the poster overlay still on the picture.
+  Scripted `hidden` is load-bearing here, so it gets the important.
+*/
+[hidden] {
+  display: none !important;
+}
+
+img,
+video {
+  height: auto;
+}
+
+a {
+  color: var(--sky);
+  text-underline-offset: 0.22em;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, var(--sky) 45%, transparent);
+  transition: color 0.15s ease, text-decoration-color 0.15s ease;
+}
+
+a:hover {
+  color: var(--text);
+  text-decoration-color: currentColor;
+}
+
+/* Box shadow rather than outline, so the ring follows a border radius instead
+   of drawing a rectangle around a pill. */
+:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--void),
+    0 0 0 4px var(--aqua);
+  border-radius: var(--r-sm);
+}
+
+::selection {
+  background: color-mix(in srgb, var(--aqua) 45%, transparent);
+  color: var(--text);
+}
+
+/* ------------------------------------------------------------ typography */
+
+h1,
+h2,
+h3,
+h4 {
+  color: var(--text);
+  font-weight: 700;
+  line-height: 1.06;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+h1 {
+  font-size: clamp(2.15rem, 1.15rem + 2.8vw, 3.25rem);
+  font-weight: 800;
+  letter-spacing: -0.038em;
+  line-height: 0.98;
+}
+
+h2 {
+  font-size: clamp(1.7rem, 1.15rem + 1.9vw, 2.5rem);
+  letter-spacing: -0.03em;
+}
+
+h3 {
+  font-size: clamp(1.1rem, 1rem + 0.5vw, 1.3rem);
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+}
+
+p,
+li {
+  max-width: var(--measure);
+  text-wrap: pretty;
+}
+
+strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.lede {
+  font-size: clamp(1.1rem, 1rem + 0.7vw, 1.375rem);
+  line-height: 1.48;
+  color: var(--text2);
+  max-width: 44ch;
+}
+
+/* The mono voice: every label, count, unit, host and status word on the page.
+   Uppercase and tracked, the way the app sets its section headers and the promo
+   video sets its scene slugs. */
+.mono {
+  font-family: 'JetBrains Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'ss02';
+}
+
+.label {
+  font-family: 'JetBrains Mono Variable', ui-monospace, Menlo, monospace;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.19em;
+  text-transform: uppercase;
+  color: var(--text3);
+  line-height: 1.4;
+}
+
+.eyebrow {
+  color: var(--spine);
+}
+
+/*
+  The hero's eyebrow is lifted off the spine colour.
+
+  `--spine` is `--aqua`, which measures 4.67 against this background: past AA for
+  body copy and not honest at eleven pixels, uppercase, tracked at 0.19em, which
+  is the least legible shape small type comes in. Mixed toward the text colour it
+  is still unmistakably the section's blue and it clears 8, and the extra pixel of
+  size is the rest of the apology.
+*/
+.hero .eyebrow {
+  font-size: 0.75rem;
+  color: color-mix(in srgb, var(--spine) 42%, var(--text));
+}
+
+.dim {
+  color: var(--text3);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip {
+  position: absolute;
+  left: var(--gutter);
+  top: 0;
+  z-index: 100;
+  transform: translateY(-150%);
+  background: var(--bone);
+  color: var(--plate);
+  padding: 0.6rem 1rem;
+  border-radius: 0 0 var(--r-sm) var(--r-sm);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.skip:focus-visible {
+  transform: translateY(0);
+  color: var(--plate);
+}
+
+/* ---------------------------------------------------------------- layout */
+
+.wrap {
+  width: 100%;
+  max-width: var(--page);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+/*
+  A section is a numbered entry on an instrument, not a card. The hairline down
+  its left edge is the spine: it runs the height of the page, and each section
+  paints its own stretch of it in the state that section is about: blue while
+  the page is explaining, mint where the data is healthy, amber at the platform
+  limits, rose where the service has actually failed.
+*/
+.section {
+  position: relative;
+  padding-block: clamp(3rem, 6vw, 5rem) clamp(3.5rem, 7vw, 6rem);
+}
+
+.section > .wrap {
+  display: grid;
+  /* minmax(0, 1fr), not 1fr: a grid track's automatic minimum is its content,
+     so a single wide child (the comparison table, the path diagram) would push
+     the track past the viewport and take the whole column with it. Both of
+     those scroll inside their own box, and this is what lets them. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+}
+
+.section-body {
+  min-width: 0;
+}
+
+@media (min-width: 60rem) {
+  .section > .wrap {
+    grid-template-columns: var(--rail) minmax(0, 1fr);
+    gap: 0 2.5rem;
+  }
+
+  .section-body {
+    border-left: 1px solid color-mix(in srgb, var(--spine) 55%, var(--line));
+    padding-left: 2.5rem;
+    margin-left: -2.5rem;
+  }
+}
+
+.rail {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+@media (min-width: 60rem) {
+  .rail {
+    display: block;
+    position: sticky;
+    top: 6rem;
+    margin-bottom: 0;
+    align-self: start;
+  }
+}
+
+.rail-no {
+  font-family: 'JetBrains Mono Variable', ui-monospace, Menlo, monospace;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--spine);
+  letter-spacing: 0.06em;
+}
+
+.rail-name {
+  font-family: 'JetBrains Mono Variable', ui-monospace, Menlo, monospace;
+  font-size: 0.625rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-top: 0.5rem;
+  line-height: 1.5;
+}
+
+.section-head {
+  max-width: 46ch;
+}
+
+.section-head h2 {
+  margin-top: 0.35rem;
+}
+
+.section-head .lede {
+  margin-top: 1.1rem;
+}
+
+.stack > * + * {
+  margin-top: 1.1rem;
+}
+
+.prose {
+  max-width: var(--measure);
+}
+
+.prose > * + * {
+  margin-top: 1.1rem;
+}
+
+.prose h3 {
+  margin-top: 2.4rem;
+}
+
+/* ---------------------------------------------------------------- header */
+
+.masthead {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: color-mix(in srgb, var(--void) 93%, transparent);
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  border-bottom: 1px solid var(--line);
+}
+
+.masthead .wrap {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  height: 3.5rem;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-size: 1.0625rem;
+}
+
+.masthead nav {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: clamp(0.9rem, 2vw, 1.6rem);
+}
+
+.masthead nav a {
+  color: var(--text3);
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.masthead nav a:hover {
+  color: var(--text);
+}
+
+/* The bar is one line tall and stays that way. Links drop out from the middle
+   of the list as the viewport narrows, in the order they are least likely to be
+   what somebody came for, and Install and GitHub survive to the smallest phone. */
+.masthead nav .only-mid,
+.masthead nav .only-wide {
+  display: none;
+}
+
+@media (min-width: 44rem) {
+  .masthead nav .only-mid {
+    display: inline;
+  }
+}
+
+@media (min-width: 62rem) {
+  .masthead nav .only-wide {
+    display: inline;
+  }
+}
+
+/*
+  The masthead readout.
+
+  A document this long with no sidebar needs to say where you are, and the honest
+  way to say it on an instrument is a position and a scale rather than a
+  highlighted nav item. `motion.ts` writes the section number, its name and its
+  state colour here, and paints the rule along the bottom edge to how far through
+  the page you have scrolled.
+
+  It runs at reduced motion too. A progress readout is information, not
+  decoration, and taking it away from somebody who asked for less movement would
+  be removing the one thing on the page that orients them.
+*/
+.here {
+  display: none;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding-left: 1rem;
+  margin-left: 0.15rem;
+  border-left: 1px solid var(--line);
+  transition: opacity 200ms ease;
+}
+
+/*
+  Nothing to report at the top.
+
+  This reads "03 · URGENT ALERTS" once you are somewhere, which is the only
+  navigation aid on a document this long. At the top it read "00 · TOP", so the
+  first instrument a stranger met was a counter at zero naming the place they had
+  not left yet. It keeps its space in the bar, so nothing shifts when the first
+  section arrives and fills it.
+*/
+.masthead[data-here='top'] .here {
+  opacity: 0;
+}
+
+@media (min-width: 52rem) {
+  .here {
+    display: flex;
+  }
+}
+
+.here-no {
+  font-family: 'JetBrains Mono Variable', ui-monospace, Menlo, monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--spine);
+  letter-spacing: 0.06em;
+  /* Two digits, tabular, so the bar does not twitch as the number changes. */
+  min-width: 2ch;
+}
+
+.here-name {
+  font-size: 0.6875rem;
+  color: var(--text3);
+  white-space: nowrap;
+}
+
+.progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.progress::after {
+  content: '';
+  display: block;
+  height: 100%;
+  background: var(--spine);
+  transform: scaleX(var(--through, 0));
+  transform-origin: left;
+  transition: background-color 0.4s ease;
+}
+
+/* -------------------------------------------------------------- controls */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  padding: 0.8rem 1.35rem;
+  border-radius: 100px;
+  border: 1px solid transparent;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    transform 0.12s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+/*
+  The primary action is bone, not blue.
+
+  Two reasons, and neither is taste: white on #2F6BFF measures 4.49:1, which is
+  a hair under AA for body-sized text, and the app reserves blue for chrome. A
+  bone pill on a black ground is the strongest thing on the screen and leaves
+  the blue doing its actual job.
+*/
+.btn-primary {
+  background: var(--bone);
+  color: var(--plate);
+}
+
+.btn-primary:hover {
+  background: #ffffff;
+  color: var(--plate);
+  transform: translateY(-1px);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--text) 22%, transparent);
+}
+
+.btn-ghost:hover {
+  color: var(--text);
+  border-color: var(--aqua);
+  background: color-mix(in srgb, var(--aqua) 10%, transparent);
+}
+
+.btn:active {
+  transform: scale(0.985);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+/* ------------------------------------------------------------------ hero */
+
+.hero {
+  position: relative;
+  padding-block: clamp(2.75rem, 6vw, 5rem) clamp(2rem, 4vw, 3rem);
+  border-top: none;
+  overflow: hidden;
+}
+
+/* The hero is the one section with no number in the rail: it is the thing the
+   rail is numbering. So it opts out of the two-column rail grid entirely. */
+.hero > .wrap {
+  display: block;
+}
+
+/*
+  The only background effect on the page: a faint square grid, the same one the
+  promo video draws behind the payoff. It is a graticule, not a glow: an
+  instrument background rather than a gradient blob, and it fades out before it
+  reaches any text.
+*/
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.028) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.028) 1px, transparent 1px);
+  background-size: 68px 68px;
+  mask-image: radial-gradient(120% 90% at 72% 18%, #000 0%, transparent 72%);
+  -webkit-mask-image: radial-gradient(120% 90% at 72% 18%, #000 0%, transparent 72%);
+  pointer-events: none;
+}
+
+/* On a phone the same 68 px squares fall directly behind the headline instead of
+   off to one side of it, so the graticule drops back to where it reads as paper
+   rather than as a pattern over type. */
+@media (max-width: 48rem) {
+  .hero::before {
+    opacity: 0.4;
+  }
+}
+
+.hero > * {
+  position: relative;
+}
+
+.hero-grid {
+  display: grid;
+  gap: clamp(2.5rem, 5vw, 3.5rem);
+  align-items: start;
+}
+
+/*
+  The columns are not equal, because what is in them is not equal.
+
+  They were `1.02fr 1fr`, which gave a demonstration the same width as the only
+  headline on the page: 45 characters at 52 px in a 527 px column, wrapping to
+  five lines with two of them stubs, and "wakes you up" landing on line four
+  where nobody is still reading. The phone does not need half the page. The
+  headline needs enough width to break twice.
+*/
+@media (min-width: 62rem) {
+  .hero-grid {
+    grid-template-columns: minmax(0, 1.32fr) minmax(0, 0.68fr);
+    gap: clamp(2.5rem, 4vw, 3.5rem);
+  }
+}
+
+/* The measure the headline and the lede are set to. Wide enough for two lines of
+   h1 and two of lede, and narrower than the column, so the rag is the type's
+   rather than the grid's. */
+.hero-copy h1 {
+  max-width: 22ch;
+}
+
+.hero-copy .lede {
+  max-width: 40ch;
+}
+
+.apk-size {
+  font-size: 0.75rem;
+  opacity: 0.62;
+}
+
+.hero h1 {
+  margin-top: 1.1rem;
+}
+
+.hero .lede {
+  margin-top: 1.4rem;
+}
+
+.hero .actions {
+  margin-top: 2rem;
+}
+
+/*
+  A row of two, and it was a two by two of four.
+
+  The old block was the right answer to the wrong question. Four facts of four
+  different lengths flowing into three ragged lines does read as an accident, so
+  they were pinned into a `max-content` two by two, which then had its own
+  problem: the grid could not shrink, it was the widest thing in the hero column,
+  and so the headline, the rules and the buttons all took their width from the
+  string "sideload, no play listing". Two of the four items wrapped anyway, which
+  is the ragged shape the block existed to avoid, drawn inside a spec plate.
+
+  The fix was upstream. Two of those four facts were already stated elsewhere in
+  the hero: "Apache 2.0" is in the eyebrow, and "no account" is on the second
+  rule. What is left is two short facts about installing the thing, which is one
+  line at any width this page has, and a row that cannot rag needs no grid.
+*/
+.hero-facts {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 1.6rem;
+  font-size: 0.75rem;
+}
+
+.hero-facts span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+/* ------------------------------------------------------------ video card */
+
+.player {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: var(--ink);
+}
+
+.player video {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: var(--void);
+}
+
+.player figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.75rem;
+}
+
+/*
+  One sentence, set as a sentence.
+
+  It was two `.label` spans, so a caption under a video was tracked uppercase mono
+  reading "40 SECONDS · CAPTIONS · 6 MB" next to "JUMP TO ALERT FOR THE PART
+  NOTHING ELSE DOES". Mono caps is this page's voice for units, counts and status
+  words. A sentence written by a person is not a unit.
+*/
+.player-note {
+  color: var(--text3);
+  font-size: 0.875rem;
+}
+
+/* ---------------------------------------------------------- the player bar */
+
+/*
+  The control bar is drawn in the same hairlines as the rest of the page, and its
+  glyphs are the app's own (NightbellIcons.kt). Blue is the only colour in it: a
+  player is chrome, and mint, amber and rose are spoken for.
+
+  Everything below only applies once the enhancement script has run. Before that
+  the bar is `hidden` and the video is showing the browser's own controls, which
+  is what a reader with no JavaScript keeps.
+*/
+.player-shell {
+  background: var(--void);
+}
+
+.player-stage {
+  position: relative;
+  container-type: inline-size;
+}
+
+.player-stage video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: var(--void);
+}
+
+.player[data-enhanced] .player-stage video {
+  cursor: pointer;
+}
+
+/* The press before the first press. It sits on the poster, is a real button, and
+   is removed the moment the video starts. */
+.player-cover {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.9rem;
+  border: 0;
+  background: radial-gradient(60% 60% at 50% 50%, rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.12));
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.player-cover-mark {
+  display: grid;
+  place-items: center;
+  width: 74px;
+  height: 74px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--text) 40%, transparent);
+  background: color-mix(in srgb, var(--void) 55%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  /* Optical centring: a right-pointing triangle in a circle reads left-heavy
+     when its bounding box is centred. */
+  padding-left: 5px;
+  transition: transform 0.16s ease, border-color 0.16s ease, background-color 0.16s ease;
+}
+
+.player-cover:hover .player-cover-mark {
+  transform: scale(1.05);
+  border-color: var(--aqua);
+  background: color-mix(in srgb, var(--aqua) 22%, rgba(0, 0, 0, 0.55));
+}
+
+.player-cover:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--aqua);
+  border-radius: 0;
+}
+
+.player-cover-text {
+  color: var(--text2);
+}
+
+/* Captions, painted by this page instead of by the browser, so they are set in
+   Inter and sit where this composition wants them. */
+.player-captions {
+  position: absolute;
+  left: 50%;
+  bottom: 6%;
+  transform: translateX(-50%);
+  /*
+    `width: max-content` is load-bearing, not a flourish.
+
+    An absolutely positioned box with `left: 50%` and no `right` gets a
+    containing block running from the halfway mark to the right edge, so its
+    shrink-to-fit width is capped at half the picture and `max-width` never gets
+    a say. Cues wrapped four lines deep inside a box a third the width they were
+    written for. `max-content` sizes the box to its longest line instead, which
+    with `pre-line` is the line break the VTT file actually asked for, and
+    `max-width` then caps it for the long cues.
+  */
+  width: max-content;
+  max-width: min(86%, 42ch);
+  margin: 0;
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--void) 78%, transparent);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  color: var(--text);
+  /* Container units, not viewport units. The cue is sized against the picture it
+     sits on, so it reads the same in a half-width embed as it does filling a
+     monitor, and fullscreen needs no special case. */
+  font-size: clamp(0.75rem, 3.1cqw, 1.75rem);
+  line-height: 1.35;
+  text-align: center;
+  text-wrap: balance;
+  white-space: pre-line;
+  pointer-events: none;
+}
+
+.player-bar {
+  border-top: 1px solid var(--line);
+  padding: 0.75rem 0.85rem 0.6rem;
+  display: grid;
+  gap: 0.55rem;
+}
+
+/*
+  The scrubber, as the app draws a timeline: a hairline track, the played run in
+  blue, what has been fetched in a dim grey behind it, a marker at every
+  milestone, and a tracker riding along. `ProgressStyle` in the live notification
+  is the same picture; see domain/LiveTimeline.kt.
+*/
+.player-scrub {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 22px;
+}
+
+/*
+  Nothing to scrub yet, so nothing is drawn.
+
+  Before the first press the timeline is a full-width empty track with six
+  chapter marks on it, which reads as a broken readout rather than as a control:
+  it is reporting a position in a file that has not been fetched. `data-started`
+  arrives on the first `play` and never leaves, and hover or keyboard focus
+  brings it back early for anyone reaching for it deliberately. It keeps its
+  height either way, so the bar does not resize under the pointer.
+*/
+.player[data-enhanced]:not([data-started]) .player-scrub {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+
+.player[data-enhanced]:not([data-started]):hover .player-scrub,
+.player[data-enhanced]:not([data-started]):focus-within .player-scrub {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.scrub {
+  --p: 0;
+  --b: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 22px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* The track is drawn on the pseudo-element so the hit area can stay 22 px tall
+   while the line itself stays a hairline. */
+.scrub::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background:
+    linear-gradient(
+      to right,
+      var(--aqua) 0 calc(var(--p) * 100%),
+      color-mix(in srgb, var(--text) 26%, transparent) calc(var(--p) * 100%) calc(var(--b) * 100%),
+      var(--line) calc(var(--b) * 100%)
+    );
+}
+
+.scrub::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background:
+    linear-gradient(
+      to right,
+      var(--aqua) 0 calc(var(--p) * 100%),
+      color-mix(in srgb, var(--text) 26%, transparent) calc(var(--p) * 100%) calc(var(--b) * 100%),
+      var(--line) calc(var(--b) * 100%)
+    );
+}
+
+/* The tracker. A short bar rather than a dot, which is what the app's timeline
+   rides along its line, and it is easier to land on with a finger. */
+.scrub::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 5px;
+  height: 16px;
+  margin-top: -6px;
+  border: 0;
+  border-radius: 2px;
+  background: var(--text);
+  box-shadow: 0 0 0 1px var(--void);
+  transition: transform 0.12s ease, background-color 0.12s ease;
+}
+
+.scrub::-moz-range-thumb {
+  width: 5px;
+  height: 16px;
+  border: 0;
+  border-radius: 2px;
+  background: var(--text);
+  box-shadow: 0 0 0 1px var(--void);
+}
+
+.scrub:hover::-webkit-slider-thumb,
+.scrub:focus-visible::-webkit-slider-thumb {
+  transform: scaleY(1.2);
+  background: var(--aqua);
+}
+
+.scrub:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.scrub:focus-visible::-webkit-slider-thumb {
+  box-shadow:
+    0 0 0 1px var(--void),
+    0 0 0 3px var(--aqua);
+}
+
+.scrub:focus-visible::-moz-range-thumb {
+  box-shadow:
+    0 0 0 1px var(--void),
+    0 0 0 3px var(--aqua);
+}
+
+/* Scene boundaries, from the cut. Not interactive: the chapter buttons below are
+   the control, and a two-pixel target would be a worse one. */
+.scrub-marks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.scrub-marks i {
+  position: absolute;
+  top: 50%;
+  width: 1px;
+  height: 10px;
+  margin-top: -5px;
+  background: color-mix(in srgb, var(--text) 55%, transparent);
+}
+
+.player-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.player-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 100px;
+  background: transparent;
+  color: var(--text2);
+  font: inherit;
+  cursor: pointer;
+  transition: color 0.14s ease, background-color 0.14s ease, border-color 0.14s ease;
+}
+
+.player-btn:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 9%, transparent);
+}
+
+.player-btn[aria-pressed='true'] {
+  color: var(--aqua);
+  border-color: color-mix(in srgb, var(--aqua) 45%, transparent);
+}
+
+.player-text {
+  width: auto;
+  min-width: 34px;
+  padding-inline: 0.55rem;
+  font-family: 'JetBrains Mono Variable', ui-monospace, Menlo, monospace;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+}
+
+.player-time {
+  margin: 0;
+  flex: none;
+  font-size: 0.75rem;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The scene the playhead is in. Sits between the clock and the controls, and is
+   the one label on the page that changes while you watch. */
+.player-now {
+  margin: 0;
+  margin-left: 0.35rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--aqua);
+}
+
+.player-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  flex: none;
+}
+
+.player-chapters {
+  display: flex;
+  gap: 0.2rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  /* Six chapters do not fit a phone, so the row scrolls and its right edge fades
+     to say so. Unconditional on purpose: where the chapters do fit, the fade
+     lands on empty ground and nobody sees it. */
+  mask-image: linear-gradient(to right, #000 calc(100% - 26px), transparent);
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 26px), transparent);
+  border-top: 1px solid var(--line);
+  padding-top: 0.5rem;
+  margin-top: 0.1rem;
+}
+
+.player-chapters::-webkit-scrollbar {
+  display: none;
+}
+
+.chapter {
+  flex: none;
+  /* 26 px, because the type in 0.3rem of padding measured 23 and WCAG 2.2 asks
+     for 24. Set as a floor rather than as more padding so the chips keep their
+     proportions, and so the floor holds if the type ever shrinks again. */
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0.3rem 0.55rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text3);
+  font-family: 'JetBrains Mono Variable', ui-monospace, Menlo, monospace;
+  /* 11 px, not 10. Same floor the readout panel is held to: seven chips of
+     tracked uppercase mono is exactly the kind of row that gets set a pixel too
+     small because it is "only" navigation. */
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.14s ease, background-color 0.14s ease;
+}
+
+.chapter:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.chapter[aria-current='true'] {
+  color: var(--void);
+  background: var(--aqua);
+}
+
+/* Fullscreen: the picture takes the room and the bar stays with it, because a
+   custom bar that vanishes in fullscreen leaves no way out but Escape. */
+.player-shell:fullscreen {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: var(--void);
+}
+
+.player-shell:fullscreen .player-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+}
+
+.player-shell:fullscreen video {
+  max-height: 100%;
+  aspect-ratio: auto;
+  object-fit: contain;
+}
+
+.player-shell:fullscreen .player-bar {
+  padding-inline: clamp(1rem, 4vw, 3rem);
+}
+
+@media (max-width: 30rem) {
+  .player-now {
+    display: none;
+  }
+
+  .player-btn {
+    width: 38px;
+    height: 38px;
+  }
+}
+
+/* ----------------------------------------------------------- the reveal */
+
+/*
+  Written the way every animation on this page is written: the finished state is
+  the plain rule, and the unfinished one is only reachable once `motion.ts` has
+  put `data-revealing` on the document. A reader whose script never arrived, or
+  who asked for less motion, gets the finished page rather than a blank one.
+*/
+[data-reveal] {
+  transition:
+    opacity 620ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    transform 620ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+html[data-revealing] [data-reveal]:not(.is-in) {
+  opacity: 0;
+  transform: translateY(14px);
+}
+
+/* ------------------------------------------------------------- the trace */
+
+/*
+  The line between sections. Not a border: a stretch of the same trace the app's
+  mark is made of, at page width, carrying the state the page is moving into.
+  Read top to bottom the page is one continuous strip chart that stays calm,
+  spikes exactly once where the service fails, and decays back down.
+*/
+.trace {
+  position: relative;
+  height: clamp(44px, 6vw, 72px);
+  overflow: hidden;
+}
+
+.trace-spike {
+  height: clamp(64px, 9vw, 116px);
+}
+
+.trace svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* One path, `pathLength="1"`, so it can be dashed to exactly one unit and drawn
+   in on arrival without measuring anything in script. */
+.trace path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 1100ms cubic-bezier(0.32, 0, 0.24, 1);
+}
+
+html[data-revealing] .trace:not(.is-in) path {
+  stroke-dashoffset: 1;
+}
+
+/* The trace draws itself; it does not also need to slide up. */
+html[data-revealing] .trace:not(.is-in) {
+  opacity: 1;
+  transform: none;
+}
+
+/* --------------------------------------------------------- the instrument */
+
+/*
+  The hero's centrepiece: one monitor, sixty checks, and the moment it pages you.
+
+  The document ships the end of the story, so with no script and at reduced
+  motion this is a finished readout with the whole argument legible: fifty two
+  green bars, three amber, five rose, the verdict on Down and the page arrived.
+  `data-armed` is the only thing that hides any of it, and only script sets it.
+*/
+.instrument {
+  position: relative;
+  display: grid;
+  gap: 1.15rem;
+  margin: 0;
+  padding: clamp(1rem, 2.5vw, 1.35rem);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background:
+    radial-gradient(120% 130% at 84% 0%, color-mix(in srgb, var(--aqua) 7%, transparent), transparent 62%),
+    var(--plate);
+  container-type: inline-size;
+}
+
+/*
+  Name and verdict on one line, host on the width of both.
+
+  It was a flex row with the name and host boxed together on the left and the
+  pill on the right, which at phone width left the host about 230 px for a 30
+  character URL and let `word-break: break-all` snap "health" across two lines.
+  Giving the host its own row is one line shorter than stacking all three and it
+  is the order the app's detail screen uses.
+*/
+.ins-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.2rem 1rem;
+}
+
+.ins-name {
+  grid-column: 1;
+  color: var(--text);
+  font-weight: 650;
+  font-size: 1rem;
+  letter-spacing: -0.015em;
+}
+
+.ins-host {
+  grid-column: 1 / -1;
+  font-size: 0.75rem;
+  color: var(--text3);
+  word-break: break-all;
+}
+
+.instrument .verdict {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+/*
+  One chip visible, sized to the word it is showing.
+
+  All three used to sit in one grid cell so the panel could not change width on
+  the flip, which meant DOWN was drawn in a pill cut for OPERATIONAL and sat in
+  a third of empty space. The chip is a status pill, so it has to look like the
+  status pill in the app, which is as wide as its word. The two inactive chips
+  are taken out of flow instead, anchored to the same right edge they fade out
+  against, so nothing but this pill moves when the verdict changes.
+*/
+.instrument .verdict {
+  position: relative;
+  display: inline-flex;
+  justify-content: flex-end;
+  flex: none;
+  font-family: 'JetBrains Mono Variable', ui-monospace, Menlo, monospace;
+  font-size: 0.6875rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.instrument .verdict > span {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  padding: 0.28rem 0.6rem;
+  border-radius: 100px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+  opacity: 0;
+  /* Leaving is instant. Two pills of different widths cross-fading through each
+     other is two words on top of each other for a fifth of a second, which is
+     what the old equal-width stack was hiding. */
+  transition: none;
+}
+
+.instrument .verdict .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.instrument .verdict [data-for='up'] {
+  color: var(--mint);
+}
+
+.instrument .verdict [data-for='degraded'] {
+  color: var(--amber);
+}
+
+.instrument .verdict [data-for='down'] {
+  color: var(--rose);
+}
+
+/* The live one comes back into flow, so the container is exactly its width, and
+   it is the only one that eases: arriving fades in, leaving cuts. */
+.instrument[data-verdict='up'] .verdict [data-for='up'],
+.instrument[data-verdict='degraded'] .verdict [data-for='degraded'],
+.instrument[data-verdict='down'] .verdict [data-for='down'] {
+  position: relative;
+  opacity: 1;
+  transition: opacity 0.2s ease;
+}
+
+.ins-chart {
+  position: relative;
+}
+
+.bars {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: clamp(96px, 16vw, 132px);
+}
+
+/* Latency is the height and health is the colour, which is how ResponseTimeChart
+   draws it in the app. A refused connection is drawn full height in rose rather
+   than as a zero, so a failure is never a short bar you have to hunt for. */
+.bars i {
+  flex: 1 1 0;
+  min-width: 2px;
+  border-radius: 1px;
+  background: var(--mint);
+  transform-origin: bottom;
+}
+
+.bars i[data-state='degraded'] {
+  background: var(--amber);
+}
+
+.bars i[data-state='down'] {
+  background: var(--rose);
+}
+
+/* The latency budget, above which a successful answer counts as degraded. It is
+   the line the three amber checks crossed. */
+.bars::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 58%;
+  border-top: 1px dashed color-mix(in srgb, var(--amber) 42%, transparent);
+}
+
+/* Left, not right. The newest check is on the right, which is where a failure
+   always is, so a label parked over there gets buried under the wall of red the
+   moment the replay reaches it. */
+.ins-budget {
+  position: absolute;
+  left: 0;
+  bottom: calc(58% + 6px);
+  font-size: 0.6875rem;
+  color: color-mix(in srgb, var(--amber) 72%, var(--text3));
+}
+
+/* The write head. Rides the right edge of whatever has been replayed, and is not
+   drawn at all when nothing is replaying. */
+.bars .head {
+  position: absolute;
+  top: -8px;
+  bottom: -4px;
+  width: 1px;
+  background: var(--aqua);
+  left: calc(var(--n, 0) / var(--count) * 100%);
+  opacity: 0;
+}
+
+.instrument[data-armed] .bars .head {
+  opacity: 1;
+  box-shadow: 0 0 14px 1px color-mix(in srgb, var(--aqua) 55%, transparent);
+  transition: left 68ms linear;
+}
+
+/* Armed is the only state in which a check can be missing from the chart. */
+.instrument[data-armed] .bars i {
+  transform: scaleY(0);
+  opacity: 0;
+  transition:
+    transform 280ms cubic-bezier(0.2, 0.85, 0.3, 1),
+    opacity 140ms linear;
+}
+
+.instrument[data-armed] .bars i[data-on] {
+  transform: scaleY(1);
+  opacity: 1;
+}
+
+.ins-readout {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--line);
+}
+
+.ins-readout div {
+  min-width: 0;
+}
+
+.ins-readout dt {
+  font-family: 'JetBrains Mono Variable', ui-monospace, Menlo, monospace;
+  font-size: 0.6875rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+
+.ins-readout dd {
+  margin: 0;
+  margin-top: 0.2rem;
+  font-size: 0.8125rem;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/*
+  The urgent page arriving. Drawn in HTML rather than pasted in as a screenshot
+  because it has to land on cue, and every word, button and colour in it is the
+  one in the photograph of the real notification further down the page.
+*/
+/* Both states in one cell, so the panel is exactly as tall armed as it is paged
+   and nothing below the chart can jump when the alert lands. */
+.page-slot {
+  display: grid;
+}
+
+.page-slot > * {
+  grid-area: 1 / 1;
+}
+
+.page-idle {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px dashed var(--line);
+  border-radius: 14px;
+  color: var(--text3);
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+.page-idle-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  color: var(--text3);
+}
+
+.instrument[data-armed]:not([data-paged]) .page-idle {
+  opacity: 1;
+}
+
+.page-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 0.7rem 0.8rem;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--rose) 72%, #000000);
+  color: var(--text);
+}
+
+.instrument[data-armed] .page-card {
+  opacity: 0;
+  transform: translateY(12px) scale(0.985);
+  transition:
+    opacity 200ms ease,
+    transform 380ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+.instrument[data-armed][data-paged] .page-card {
+  opacity: 1;
+  transform: none;
+}
+
+.page-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  margin-top: 0.1rem;
+  border-radius: 50%;
+  background: color-mix(in srgb, #ffffff 88%, var(--rose));
+  color: color-mix(in srgb, var(--rose) 68%, #000000);
+}
+
+.page-body {
+  min-width: 0;
+}
+
+.page-title {
+  font-weight: 650;
+  font-size: 0.9375rem;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.page-sub {
+  margin-top: 0.1rem;
+  font-size: 0.8125rem;
+  color: color-mix(in srgb, #ffffff 82%, var(--rose));
+}
+
+.page-acts,
+.note-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+
+/* The three buttons on the real notification, in the app's own glyphs. */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 100px;
+  font-family: 'JetBrains Mono Variable', ui-monospace, Menlo, monospace;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+}
+
+.pill-ack {
+  background: color-mix(in srgb, var(--mint) 52%, #04140c);
+  color: var(--text);
+}
+
+.pill-recheck {
+  background: var(--aqua);
+  color: var(--text);
+}
+
+.pill-mute {
+  background: var(--bone);
+  color: var(--plate);
+  padding-inline: 0.4rem;
+}
+
+.ins-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  font-size: 0.6875rem;
+}
+
+/*
+  Nothing in this panel is set below 11 px any more.
+
+  The budget label, the readout terms and the footnote were all 0.5625rem, which
+  is nine pixels, and the verdict pill was ten. Uppercase, tracked a fifth of an
+  em, in --text3 on --plate: legible in a screenshot at 2x and not legible on a
+  laptop at arm's length. A page that spends its copy on being precise cannot ask
+  to be squinted at, so 0.6875rem is the floor here and the tracking is what pays
+  for it.
+*/
+
+/* Under about 26 rem of panel the four-up readout is four cramped columns. */
+@container (max-width: 26rem) {
+  .ins-readout {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* A URL is one string with no spaces in it. `break-all` snapped "health" in
+     half the moment the host row got tight; `anywhere` only breaks when there is
+     genuinely nowhere else to go. */
+  .ins-host {
+    word-break: normal;
+    overflow-wrap: anywhere;
+  }
+
+  /*
+    The three notification buttons keep one row.
+
+    On a 1024 px window the phone is 280 px, which left the pill row about 200 px
+    for 193 px of pills, and mute wrapped onto a line of its own under the other
+    two. A stray third button below a pair reads as a layout that gave up rather
+    than as the real notification, which has all three side by side. Bought back
+    out of padding and the gaps, not out of the type: 11 px is the floor in this
+    panel and these are the smallest words in it.
+  */
+  .page-acts {
+    gap: 0.3rem;
+  }
+
+  .pill {
+    padding-inline: 0.45rem;
+    gap: 0.22rem;
+  }
+}
+
+/* ---------------------------------------------------------------- the film */
+
+/*
+  The promo, at page width. It is the single best asset this project has and the
+  only forty seconds that shows the app moving, so it gets a band of its own
+  rather than a slot in a two-column hero beside a wall of body copy.
+*/
+.film {
+  margin-top: clamp(3rem, 6vw, 4.5rem);
+  padding-top: clamp(1.5rem, 3vw, 2.25rem);
+  border-top: 1px solid var(--line);
+}
+
+
+/* ---------------------------------------------------------------- the shade */
+
+/*
+  The last ten centimetres, drawn. Two notifications on one phone: the ordinary
+  one, and the one Nightbell posts. The difference between them is a difference about
+  behaviour rather than about looks, so it is shown as behaviour. The first card
+  takes a swipe and is gone; the second takes the same swipe and comes back.
+*/
+.shade {
+  display: grid;
+  gap: 1.75rem;
+  margin-top: 2.5rem;
+}
+
+@media (min-width: 46rem) {
+  .shade {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 2rem;
+  }
+}
+
+.shade-col {
+  display: grid;
+  align-content: start;
+  gap: 0.85rem;
+  margin: 0;
+}
+
+.shade-kind {
+  color: var(--text3);
+}
+
+.shade-kind-hot {
+  color: var(--rose);
+}
+
+.shade-stage {
+  position: relative;
+  display: grid;
+  align-items: center;
+  min-height: 9.5rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--ink);
+  overflow: hidden;
+}
+
+/* The word under the card, which is the whole point of each column. It is only
+   ever uncovered by the card leaving. */
+.shade-verdict {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0.7rem;
+  text-align: center;
+  font-family: 'JetBrains Mono Variable', ui-monospace, Menlo, monospace;
+  font-size: 0.625rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text3);
+  opacity: 0;
+}
+
+.shade-verdict-hot {
+  color: var(--rose);
+}
+
+.note {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 14px;
+}
+
+.note-plain {
+  background: var(--slate);
+  border: 1px solid var(--line);
+}
+
+.note-urgent {
+  background: color-mix(in srgb, var(--rose) 72%, #000000);
+}
+
+.note-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  margin-top: 0.1rem;
+  border-radius: 50%;
+}
+
+.note-plain .note-icon {
+  background: var(--line);
+  color: var(--text3);
+}
+
+.note-urgent .note-icon {
+  background: color-mix(in srgb, #ffffff 88%, var(--rose));
+  color: color-mix(in srgb, var(--rose) 68%, #000000);
+}
+
+.note-app {
+  font-size: 0.5625rem;
+}
+
+.note-urgent .note-app {
+  color: color-mix(in srgb, #ffffff 74%, var(--rose));
+}
+
+.note-title {
+  margin-top: 0.15rem;
+  font-weight: 650;
+  font-size: 0.9375rem;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.note-sub {
+  margin-top: 0.1rem;
+  font-size: 0.8125rem;
+  color: var(--text3);
+}
+
+.note-urgent .note-sub {
+  color: color-mix(in srgb, #ffffff 82%, var(--rose));
+}
+
+/*
+  It loops, and it decelerates.
+
+  It used to run three passes and stop, on the theory that a loop would compete
+  with the paragraph beside it. The paragraph is now two lines, so there is
+  nothing to compete with, and a demonstration that has quietly finished by the
+  time you scroll to it is a still picture of two notifications: the entire claim
+  in this section is a difference in behaviour, and a stopped animation shows none
+  of it. It runs until you leave.
+
+  The easing is an ease-out rather than the symmetric in-out it had. A swipe and a
+  card being posted are both things that start at their fastest and settle, which
+  is what a phone's own animator does to them; in-out gives a notification a slow
+  wind-up it has never had.
+
+  Both cards still run off the reveal class the section already gets, so with no
+  script, or at reduced motion, each sits in its resting state under a caption
+  that says in words what the movement says.
+*/
+.shade.is-in .note-plain {
+  animation: note-away 5.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+.shade.is-in .note-urgent {
+  animation: note-stays 5.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+.shade.is-in .note-plain ~ .shade-verdict {
+  animation: verdict-hold 5.4s ease-out infinite;
+}
+
+.shade.is-in .note-urgent ~ .shade-verdict {
+  animation: verdict-blink 5.4s ease-out infinite;
+}
+
+/*
+  Both cycles are written to loop cleanly, which is a different job from playing
+  once and stopping.
+
+  The ordinary card cannot simply return: sliding back in from the right is the
+  claim the other column is making. So it fades in where it stands, which is the
+  true version of what happens next, the next ordinary alert arriving to be swiped
+  in its turn, and the transform is reset while opacity is nought so the reset
+  itself is never on screen.
+
+  The Nightbell card already looped seamlessly, because coming back is the whole point
+  of it. Both are re-timed to the same beats so the two columns swipe together.
+*/
+@keyframes note-away {
+  0% {
+    transform: none;
+    opacity: 0;
+  }
+  10%,
+  30% {
+    transform: none;
+    opacity: 1;
+  }
+  56%,
+  92% {
+    transform: translateX(118%);
+    opacity: 0;
+  }
+  /* Snapped back under cover of opacity 0, so the loop has no visible seam. */
+  100% {
+    transform: none;
+    opacity: 0;
+  }
+}
+
+@keyframes note-stays {
+  0%,
+  30% {
+    transform: translate(0, 0);
+    opacity: 1;
+  }
+  50% {
+    transform: translateX(118%);
+    opacity: 0;
+  }
+  60% {
+    transform: translateY(-150%);
+    opacity: 0;
+  }
+  80%,
+  100% {
+    transform: translate(0, 0);
+    opacity: 1;
+  }
+}
+
+/* "Gone" is uncovered by the card leaving and holds while the space is empty. */
+@keyframes verdict-hold {
+  0%,
+  52% {
+    opacity: 0;
+  }
+  62%,
+  88% {
+    opacity: 1;
+  }
+  96%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* "Re-posted" is only true in the beat between leaving and landing again. */
+@keyframes verdict-blink {
+  0%,
+  54% {
+    opacity: 0;
+  }
+  64%,
+  74% {
+    opacity: 1;
+  }
+  84%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* -------------------------------------------------------------- the wizard */
+
+/*
+  The four setup steps, on the phone they happen on.
+
+  Shipped, this is four figures under four headings, in order, all four screens
+  visible: a complete account of the flow and the thing a crawler reads. The tab
+  strip ships `hidden`, exactly as the player's control bar does, and script
+  unhides it and collapses the panels to one. There is never a row of buttons
+  that does nothing.
+*/
+.wizard {
+  margin-top: 2.5rem;
+  border-top: 1px solid var(--line);
+}
+
+.w-tabs {
+  display: flex;
+  gap: 0.15rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--line);
+}
+
+/* Four steps do not fit a phone, so the strip scrolls and its right edge fades
+   to say so. Unconditional on purpose: where the four do fit, the fade lands on
+   empty ground and nobody sees it. Same call the player's chapter row makes. */
+@media (max-width: 46rem) {
+  .w-tabs {
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  }
+}
+
+.w-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.w-tab {
+  position: relative;
+  flex: 1 1 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: max-content;
+  padding: 0.85rem 0.9rem;
+  border: 0;
+  background: transparent;
+  color: var(--text3);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.w-tab:hover {
+  color: var(--text2);
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+.w-tab[aria-selected='true'] {
+  color: var(--text);
+}
+
+.w-tab-no {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--text3);
+  letter-spacing: 0.06em;
+}
+
+.w-tab[aria-selected='true'] .w-tab-no {
+  color: var(--spine);
+}
+
+.w-tab-name {
+  font-size: 0.8125rem;
+  font-weight: 550;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+/*
+  Four runners, read like the bars over a story.
+
+  This was a one pixel hairline that appeared under the selected step and filled
+  over the four seconds it had left. Correct, and invisible: a single hairline that
+  only exists under the step you are already looking at tells you nothing about
+  where you are in a set of four. Every step now carries its own track, spent
+  steps stay filled, the current one fills, and the ones ahead are empty, which is
+  the grammar everybody already knows from a phone.
+
+  Track on the tab, fill on the runner, so the two cannot come apart.
+*/
+.w-tab::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 3px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--text) 16%, transparent);
+}
+
+.w-tab-run {
+  position: absolute;
+  z-index: 1;
+  left: 0;
+  bottom: -1px;
+  width: 100%;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--spine);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+/* Spent. Dimmer than the live one, because "done" and "happening" are not the
+   same state and a row of four identical full bars says neither. */
+.w-tab[data-done] .w-tab-run {
+  transform: scaleX(1);
+  background: color-mix(in srgb, var(--spine) 45%, transparent);
+}
+
+/* Selected but not counting down, which is what a step you clicked yourself is. */
+.w-tab[aria-selected='true'] .w-tab-run {
+  transform: scaleX(1);
+}
+
+.wizard[data-auto] .w-tab[aria-selected='true'] .w-tab-run {
+  animation: w-run 3800ms linear;
+}
+
+@keyframes w-run {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* The selected step is also lit behind the type, so the row reads at a glance
+   without having to compare four bar lengths. */
+.w-tab[aria-selected='true'] {
+  background: color-mix(in srgb, var(--spine) 9%, transparent);
+}
+
+.w-panel {
+  display: grid;
+  gap: 1.5rem;
+  padding-block: 2rem;
+  border-bottom: 1px solid var(--line);
+}
+
+/* Once script is driving it there is one panel at a time, so the rule between
+   panels has nothing left to separate. */
+.wizard[data-on] .w-panel {
+  border-bottom: 0;
+}
+
+/*
+  The steps move sideways, and you can see them move.
+
+  Advancing used to be one panel going `hidden` and the next one un-hiding in the
+  same frame, which cannot be transitioned and reads as the page redrawing rather
+  than as a step. All four panels now share one cell and are placed by
+  `data-pos`, so the one you are leaving exits the way you came and the one
+  arriving comes in from the side it was waiting on.
+
+  `overflow-x: clip` rather than `hidden`, because `hidden` would make this a
+  scroll container and, worse, would cut off the drawn phone's bezel rings. The
+  clip margin is the room those rings need.
+*/
+.wizard[data-slider] .w-panels {
+  display: grid;
+  overflow-x: clip;
+  overflow-clip-margin: 14px;
+}
+
+.wizard[data-slider] .w-panel {
+  grid-area: 1 / 1;
+  transition:
+    opacity 320ms ease-out,
+    transform 620ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.wizard[data-slider] .w-panel[data-pos='now'] {
+  opacity: 1;
+  transform: none;
+}
+
+.wizard[data-slider] .w-panel[data-pos='ahead'] {
+  opacity: 0;
+  transform: translateX(7%);
+}
+
+.wizard[data-slider] .w-panel[data-pos='behind'] {
+  opacity: 0;
+  transform: translateX(-7%);
+}
+
+/*
+  The phone travels further than the copy it belongs to.
+
+  Same distance for both is a slide of one flat plate. A little parallax between
+  the words and the device is what makes it read as two things moving at their own
+  weights, and it is the one place on this page where a lag is deliberate.
+*/
+.wizard[data-slider] .w-panel .w-shot,
+.wizard[data-slider] .w-panel .w-copy {
+  transition: transform 620ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.wizard[data-slider] .w-panel .w-shot {
+  transition-delay: 55ms;
+}
+
+.wizard[data-slider] .w-panel[data-pos='ahead'] .w-shot {
+  transform: translateX(9%);
+}
+
+.wizard[data-slider] .w-panel[data-pos='behind'] .w-shot {
+  transform: translateX(-9%);
+}
+
+/* The step count arrives a beat after the panel it labels, so a new slide
+   announces itself in words as well as in position. */
+.wizard[data-slider] .w-panel .w-no {
+  transition:
+    opacity 300ms ease-out 90ms,
+    transform 480ms cubic-bezier(0.16, 1, 0.3, 1) 90ms;
+}
+
+.wizard[data-slider] .w-panel:not([data-pos='now']) .w-no {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+/* Nothing above moves at all if less motion was asked for: the panel simply
+   swaps, which is what `hidden` used to do everywhere. */
+@media (prefers-reduced-motion: reduce) {
+  .wizard[data-slider] .w-panel,
+  .wizard[data-slider] .w-panel .w-shot,
+  .wizard[data-slider] .w-panel .w-copy,
+  .wizard[data-slider] .w-panel .w-no {
+    transition: none;
+    transform: none;
+  }
+}
+
+/*
+  Both columns start at the top of the panel.
+
+  Centred, a four line explanation floated in the middle of a 500 px phone with
+  about 190 px of nothing above it and the same below, on every one of the four
+  steps. The step label is the first thing in the panel and it should be the first
+  thing in the panel.
+*/
+/*
+  Both columns start at the top of the panel.
+
+  Centred, a four line explanation floated in the middle of a 500 px phone with
+  about 190 px of nothing above it and the same below, on all four steps. The step
+  label is the first thing in the panel and it should be the first thing in the
+  panel.
+
+  The room left under the copy is deliberately left there. Distributing the block
+  the way the payoff's beats are distributed was tried and is wrong here: three
+  beats spread down a column read as three moments with intervals between them,
+  whereas one explanation with its field names shoved to the bottom of a 500 px
+  column reads as a chip row that came loose. Text at the top with a tall device
+  anchoring the other column is a shape that does not need filling.
+*/
+@media (min-width: 46rem) {
+  .w-panel {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 220px);
+    gap: clamp(2rem, 4vw, 3rem);
+    align-items: start;
+  }
+}
+
+.w-copy {
+  align-self: start;
+}
+
+.w-copy h3 {
+  margin-top: 0.5rem;
+}
+
+.w-copy > p:nth-of-type(2) {
+  margin-top: 0.7rem;
+  color: var(--text2);
+  font-size: 0.9375rem;
+}
+
+.w-no {
+  color: var(--spine);
+}
+
+/* The field names off the screen beside it. Same chips as the spec sheet in 04,
+   because they are the same kind of fact: what the app actually calls a thing. */
+.w-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 1.1rem;
+  max-width: none;
+}
+
+.w-keys code {
+  font-family: 'JetBrains Mono Variable', ui-monospace, Menlo, monospace;
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+  color: var(--text3);
+  background: var(--slate);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.24rem 0.5rem;
+  white-space: nowrap;
+}
+
+/* Same drawn device as everywhere else, at the size this column can afford. */
+.w-shot {
+  --r-screen: 11px;
+  max-width: 220px;
+}
+
+/* ---------------------------------------------------------- the escalation */
+
+/*
+  The three beats of an outage, on the screens they happen on.
+
+  Shipped, this is an ordered list and three real screenshots, all on the page at
+  once. `motion.ts` adds `data-on`, which is what makes the wrapper tall, pins the
+  stage inside it and shows one beat at a time as the reader scrolls through. The
+  scroll itself is never touched: no wheel handler, no hijack, no easing of
+  somebody else's input. The stage only reads where the page got to.
+*/
+.esc {
+  position: relative;
+  margin-top: 2.5rem;
+}
+
+.esc-beats {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 1.5rem;
+}
+
+.esc-beat {
+  max-width: 52ch;
+}
+
+.esc-tag {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  color: var(--rose);
+}
+
+.esc-no {
+  font-weight: 700;
+}
+
+.esc-body {
+  margin-top: 0.55rem;
+  color: var(--text2);
+  font-size: 0.9375rem;
+}
+
+.esc-screens {
+  display: flex;
+  gap: 1rem;
+  margin-top: 2rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-snap-type: x mandatory;
+  padding-bottom: 0.25rem;
+}
+
+.esc-screens::-webkit-scrollbar {
+  display: none;
+}
+
+/* The payoff is the one section where the phone is standing in something, so it
+   is the one place `--device-cast` is not black. */
+.esc-screen {
+  --r-screen: 15px;
+  --device-cast: color-mix(in srgb, var(--rose) 26%, transparent);
+  flex: 0 0 min(62vw, 240px);
+  scroll-snap-align: center;
+}
+
+@media (min-width: 46rem) {
+  .esc-screens {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow: visible;
+  }
+
+  .esc-screen {
+    flex: none;
+  }
+}
+
+/*
+  Pinned. Only ever reached on a wide screen with motion allowed; `motion.ts`
+  refuses to set `data-on` otherwise, and what is left in every other case is the
+  list above, which is why the list is the shipped state rather than the fallback.
+*/
+/* Three beats, so three windows of scroll to move through them, less the one the
+   stage itself occupies. It was 280vh against a stage that filled the viewport;
+   the stage is shorter now, so the same reading pace needs less room. */
+.esc[data-on] {
+  height: 240vh;
+}
+
+/*
+  The stage is shorter than the window, and its content starts at the top of it.
+
+  It was `min-height: calc(100vh - 6rem)` with `align-items: center`, on the
+  argument that a pinned stage which stops short of the bottom of the window reads
+  as a section that happens to stick. What that actually produced, for the whole
+  time the section head is still on screen, is 290 px of nothing between the lede
+  and the first beat, and as much again under the last one: the three beats were
+  centred in a full viewport while the heading they belong to sat right at the top
+  of it.
+
+  A stage the height of its own contents, aligned to start, puts beat 01 directly
+  under the lede where it belongs. It is still pinned, and it is still the tallest
+  thing on the screen while it is.
+*/
+.esc[data-on] .esc-stage {
+  position: sticky;
+  top: 5.5rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 320px);
+  align-items: stretch;
+  gap: clamp(2rem, 4vw, 3.5rem);
+  min-height: 0;
+  padding-bottom: 1rem;
+}
+
+/*
+  All three beats stay on the stage and the active one lights.
+
+  The first cut showed one beat at a time in a single stacked cell, which put a
+  three line paragraph alone in the middle of a pinned screen and read as an
+  empty page rather than as a sequence. Keeping all three visible says what the
+  section is claiming, which is that an outage has an order to it, and the lit
+  rule down the left says which part of that order you are in.
+
+  They are spread down the column rather than stacked at the top of it. A phone
+  cropped to its screen is about twice as tall as three short paragraphs, so
+  packing the beats tight left 370 px of nothing under beat 03 next to a phone
+  that carried on for another 370. Distributed, the two columns end on the same
+  line, beat 01 is still the first thing under the lede, and the space between the
+  beats is doing the job the void was not: it is the interval between one thing
+  happening and the next.
+*/
+.esc[data-on] .esc-beats {
+  display: grid;
+  gap: 1.5rem;
+  align-content: space-between;
+}
+
+/* The phone keeps its own height inside a stretched column rather than being
+   pulled to the full height of the stage. */
+.esc[data-on] .esc-screens {
+  align-content: start;
+}
+
+.esc[data-on] .esc-beat {
+  padding-left: 1.25rem;
+  border-left: 1px solid var(--line);
+  opacity: 0.3;
+  transition:
+    opacity 420ms ease,
+    border-color 420ms ease;
+}
+
+.esc[data-on] .esc-beat[data-on='true'] {
+  opacity: 1;
+  border-left-color: var(--rose);
+}
+
+/* One column, not the three the static layout uses, and centred so a short
+   viewport narrows the phone rather than cropping it. */
+.esc[data-on] .esc-screens {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  margin-top: 0;
+  overflow: visible;
+}
+
+.esc[data-on] .esc-screen {
+  grid-area: 1 / 1;
+  flex: none;
+  /*
+     Cropped to the screen, these are 505 by 1084, so the width a viewport can
+     afford is 0.466 of the height it has left. The 13 rem is the masthead, the
+     stage's own room and the eighteen pixels the drawn phone body needs outside
+     the picture. A rem more than before, because the stage now sits a rem lower
+     and pays a rem of bottom padding.
+  */
+  max-width: none;
+  /* The 18 px is the same ring room `.device` subtracts, restated because this
+     rule sets `width` outright and would otherwise put it back. */
+  width: min(100% - 18px, calc((100vh - 13rem) * 0.466));
+  opacity: 0;
+  transform: scale(0.97);
+  transition:
+    opacity 420ms ease,
+    transform 420ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.esc[data-on] .esc-screen[data-on='true'] {
+  opacity: 1;
+  transform: none;
+}
+
+/* ----------------------------------------------------------- comparisons */
+
+.compare {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 2rem;
+  font-size: 0.9375rem;
+}
+
+.compare caption {
+  text-align: left;
+  padding-bottom: 0.9rem;
+  color: var(--text3);
+  font-size: 0.8125rem;
+}
+
+.compare th,
+.compare td {
+  text-align: left;
+  padding: 0.85rem 1rem 0.85rem 0;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.compare thead th {
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.8125rem;
+  letter-spacing: 0.02em;
+  padding-bottom: 0.6rem;
+}
+
+/* Each column says what it is and then what it means, in place, which is the
+   sentence that used to sit above the table doing the same job from further
+   away. */
+.compare .th-name {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.compare .th-eg {
+  display: block;
+  margin-top: 0.28rem;
+  font-family: 'JetBrains Mono Variable', ui-monospace, Menlo, monospace;
+  font-size: 0.6875rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: var(--text3);
+}
+
+.compare tbody th {
+  padding-right: 1.25rem;
+  color: var(--text3);
+  font-weight: 500;
+  font-family: 'JetBrains Mono Variable', ui-monospace, Menlo, monospace;
+  font-size: 0.6875rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  width: 8.5rem;
+  padding-top: 1rem;
+}
+
+.compare td {
+  color: var(--text2);
+}
+
+.compare .is-nightbell {
+  color: var(--text);
+}
+
+.table-scroll {
+  overflow-x: auto;
+  margin-top: 2rem;
+}
+
+/* On a phone the table is wider than the screen and the column that matters is
+   the one off the right edge, so say so rather than hoping the cut-off cell
+   reads as an affordance. */
+.scroll-hint {
+  display: none;
+  margin-top: 0.8rem;
+}
+
+@media (max-width: 47.99rem) {
+  .scroll-hint {
+    display: block;
+  }
+}
+
+.table-scroll .compare {
+  margin-top: 0;
+  /* Narrow enough that a 390 px phone only has to scroll about a column, wide
+     enough that six rows of real sentences do not turn into one word a line. */
+  min-width: 30rem;
+}
+
+/* -------------------------------------------------------------- spec list */
+
+/*
+  What Nightbell can watch, as a spec sheet: a term, its real modes, and one honest
+  sentence about the cost. Hairlines and a mono column instead of three
+  identical rounded cards, because the three kinds are not interchangeable and a
+  grid of equal boxes says they are.
+*/
+.spec {
+  border-top: 1px solid var(--line);
+  margin-top: 2.5rem;
+}
+
+.spec-row {
+  display: grid;
+  gap: 0.6rem 2.5rem;
+  padding-block: 1.75rem;
+  border-bottom: 1px solid var(--line);
+}
+
+@media (min-width: 48rem) {
+  .spec-row {
+    grid-template-columns: 13rem minmax(0, 1fr);
+    padding-block: 2rem;
+  }
+}
+
+.spec-row h3 {
+  margin: 0;
+}
+
+/* The glyph the app puts on that kind of monitor's card, in the app's own path
+   data. It is a label rather than a decoration: these are the three shapes you
+   scan the monitor list by. */
+.spec-glyph {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-bottom: 0.75rem;
+  border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--spine) 40%, var(--line));
+  background: color-mix(in srgb, var(--spine) 10%, transparent);
+  color: var(--spine);
+}
+
+.spec-row .spec-kind .label {
+  margin-top: 0.5rem;
+}
+
+.spec-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 1rem;
+}
+
+.spec-values code {
+  font-family: 'JetBrains Mono Variable', ui-monospace, Menlo, monospace;
+  font-size: 0.75rem;
+  color: var(--text2);
+  background: var(--slate);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.28rem 0.55rem;
+  white-space: nowrap;
+}
+
+.spec-note {
+  margin-top: 1rem;
+  font-size: 0.9375rem;
+  color: var(--text3);
+}
+
+/* ------------------------------------------------------------- the steps */
+
+.steps {
+  counter-reset: step;
+  margin-top: 2.5rem;
+  border-top: 1px solid var(--line);
+}
+
+.step {
+  counter-increment: step;
+  display: grid;
+  gap: 0.5rem 1.5rem;
+  padding-block: 1.5rem;
+  border-bottom: 1px solid var(--line);
+  align-items: baseline;
+}
+
+@media (min-width: 40rem) {
+  .step {
+    grid-template-columns: 3.5rem minmax(0, 18rem) minmax(0, 1fr);
+    gap: 0 1.5rem;
+  }
+}
+
+.step::before {
+  content: counter(step, decimal-leading-zero);
+  font-family: 'JetBrains Mono Variable', ui-monospace, Menlo, monospace;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--spine);
+}
+
+.step h3 {
+  margin: 0;
+}
+
+.step p {
+  color: var(--text2);
+  margin: 0;
+  font-size: 0.9375rem;
+}
+
+@media (max-width: 39.99rem) {
+  .step p {
+    margin-top: 0.4rem;
+  }
+}
+
+/* ------------------------------------------------------------ the payoff */
+
+/*
+  The one place the page raises its voice. A rose wash and a rose spine, once,
+  at the section about the thing that only happens when something is actually
+  broken. If every section could do this, none of them would mean anything,
+  which is the same argument healthRim() makes in the app.
+*/
+.payoff {
+  --spine: var(--rose);
+  background:
+    radial-gradient(90% 70% at 78% 30%, color-mix(in srgb, var(--rose) 13%, transparent), transparent 68%),
+    var(--void);
+}
+
+.payoff h2 .hot {
+  color: var(--rose);
+}
+
+.payoff-grid {
+  display: grid;
+  gap: clamp(2rem, 4vw, 3rem);
+  margin-top: 2.5rem;
+}
+
+@media (min-width: 56rem) {
+  .payoff-grid {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  /* In the payoff the right column is a spec list of real sentences rather than
+     a 300 px phone, and at 1.15fr against 1fr it was breaking "re-arms" across
+     two lines at the hyphen. Even columns, and every value fits its row. */
+  .payoff .payoff-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.facts {
+  border-top: 1px solid color-mix(in srgb, var(--rose) 28%, var(--line));
+}
+
+/*
+  Term over value, not term against value.
+
+  Right aligning the value gave "A dedicated alarm channel that bypasses Do Not
+  Disturb" a ragged right edge across two lines, pushed away from the word it
+  answers by however much room the row had left. Same correction the hero's rules
+  took, for the same reason: the pair is one thing, so it reads as one block.
+*/
+.facts div {
+  display: grid;
+  gap: 0.2rem;
+  padding-block: 0.8rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.facts dt {
+  font-family: 'JetBrains Mono Variable', ui-monospace, Menlo, monospace;
+  font-size: 0.6875rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+
+.facts dd {
+  margin: 0;
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+
+/* --------------------------------------------------------------- devices */
+
+/*
+  The phone is drawn here, and the raster inside it is only the screen.
+
+  Every screenshot on this page used to arrive as an opaque render with a
+  blue-black gradient and a drawn phone shell baked into it, which meant the page
+  was laying out somebody else's composition: a rounded blue rectangle on a black
+  document with a second frame drawn inside it. `scripts/clean-screens.mjs` takes
+  both off, so what an `<img>` contains now is the pixels the app itself drew and
+  nothing else.
+
+  What is left for CSS is the device, and it is four rings on one element rather
+  than a stack of nested boxes: the screen's own edge, the bezel, the body, and
+  the light catching the outside of it. Rings follow the border radius, so the
+  outside corner is `--r-screen` plus the total spread, which is the relationship
+  a real phone has and one that no amount of nesting gets right by accident.
+
+  Because it is drawn rather than photographed it can answer to the section it is
+  in: `--device-cast` is what the ground under the phone is doing, and the payoff
+  section is the only place that is anything other than black.
+*/
+.device {
+  /*
+    About five per cent of the rendered width, which is where a phone puts it.
+    It stays the stylesheet's number rather than the raster's, but the two now
+    agree rather than fight: `clean-screens.mjs` measures each plate's own
+    corner arc off the flood and masks to it, which lands every crop between
+    5.6% and 6.1% of its width. Rounding a shade inside all of them is what
+    makes eight screenshots look like one device.
+  */
+  --r-screen: 15px;
+  --device-cast: transparent;
+  position: relative;
+  /*
+    Minus the room the rings need, not 100%.
+
+    `width: 100%` next to `margin: 9px` is 100% of the container plus 18 px, so
+    every phone on this page whose container was a fixed track overflowed it by
+    exactly the width of its own bezel: a 220 px column got a 220 px picture with
+    9 px of margin either side, and the outer ring finished 18 px past the column
+    it was supposed to sit in. Nothing showed it until the wizard's panels started
+    clipping, at which point the right hand edge of the phone was cut off.
+
+    Capped this way the picture shrinks only in containers too narrow to hold it
+    and its rings, which is the only case that was ever wrong.
+  */
+  width: calc(100% - 18px);
+  max-width: 300px;
+  border-radius: var(--r-screen);
+  background: var(--void);
+  box-shadow:
+    /* the screen's own edge, where the glass meets the bezel */
+    0 0 0 1px color-mix(in srgb, var(--text) 7%, transparent),
+    /* the bezel and the body of the phone */ 0 0 0 8px #0a0a0c,
+    /* the light on the outside edge of it */ 0 0 0 9px color-mix(in srgb, var(--text) 15%, transparent),
+    /* what the phone is standing on */ 0 26px 50px -22px rgba(0, 0, 0, 0.95),
+    0 0 60px -12px var(--device-cast);
+  /* The rings are drawn outside the box, so the box needs to be told to leave
+     room for them or the one next to it sits on top of the body. */
+  margin: 9px;
+}
+
+.device img {
+  display: block;
+  width: 100%;
+  border-radius: inherit;
+}
+
+/* No camera is drawn here. The punch-hole is inside the screen on this device,
+   so it is in the screenshot already, and a second one in CSS would be two. */
+
+.figure {
+  margin-top: 2.5rem;
+}
+
+/*
+  Objects on the page's own ground rather than a picture of objects on somebody
+  else's. The widget shot is cut into its three cards and everything around them
+  is transparent, so there is no plate to draw a border on and nothing to round.
+
+  The row is bottom aligned, because these are the same widget dragged to three
+  heights on one home screen and a home screen has a bottom. Stacked on a phone
+  they go back to the left, where a widget lives.
+*/
+.widget-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1.5rem;
+}
+
+.widget-row img {
+  width: auto;
+  max-width: 100%;
+}
+
+@media (min-width: 52rem) {
+  .widget-row {
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: clamp(1rem, 3vw, 2.5rem);
+  }
+
+  .widget-row img {
+    /* Each keeps its own share of the row, so all three stay at one scale and
+       the picture reads as one widget at three sizes rather than three widgets. */
+    width: auto;
+    height: auto;
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+}
+
+.figure figcaption,
+.device-figure figcaption {
+  margin-top: 0.85rem;
+  font-size: 0.8125rem;
+  color: var(--text3);
+  max-width: 54ch;
+}
+
+.device-figure {
+  margin: 0;
+}
+
+/* --------------------------------------------------------------- grants */
+
+/*
+  Two by two, each grant a term with its meaning under it.
+
+  It was `15rem minmax(0, 1fr)` at full page width, which is a fifteen rem column
+  holding the word "Notifications" and then a gap the width of the word again
+  before the sentence that finishes it, four times over, with every label
+  vertically centred against however many lines its own explanation ran to. Two
+  columns of pairs is the same information in half the height with none of the
+  gutter, and each pair sits together.
+
+  The hairline is a divider between rows only, so the grid does not read as a
+  table with an empty left column.
+*/
+.grants {
+  margin-top: 2.5rem;
+  display: grid;
+  gap: 0;
+  border-top: 1px solid var(--line);
+}
+
+@media (min-width: 46rem) {
+  .grants {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: clamp(2rem, 4vw, 3.5rem);
+  }
+}
+
+.grant {
+  display: grid;
+  gap: 0.3rem;
+  padding-block: 1.15rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.grant dt {
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+
+.grant dd {
+  margin: 0;
+  /* Under the label's text, not under its icon. The tile is 28 px against a
+     0.7rem gap, which is the same relationship the hero's rules use. */
+  padding-left: calc(28px + 0.7rem);
+  color: var(--text2);
+  font-size: 0.9375rem;
+}
+
+/*
+  Where Android makes you go. It is a place rather than a sentence, so it is set
+  as a tag: this page already uses mono caps for anything that names a location,
+  a unit or a status, and this was trailing dim body copy that read like the end
+  of the explanation above it.
+
+  `flex` with a fitted width rather than `inline-flex`, so the tag takes a line of
+  its own instead of landing wherever the sentence above it happened to stop.
+*/
+.grant dd .where {
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+  padding: 0.22rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--slate);
+  color: var(--text3);
+  font-family: 'JetBrains Mono Variable', ui-monospace, Menlo, monospace;
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+}
+
+.grant dd .where svg {
+  flex: none;
+  color: var(--spine);
+}
+
+/* ------------------------------------------------- the limits, on the page */
+
+/*
+  The first-launch screen beside the list of things Android refuses.
+
+  These two were a collapsed accordion next to a phone eight times its height. The
+  phone shows the four grants being counted; the list says what is still not
+  possible once you have all four. Together they are the section, and at 240 px the
+  phone runs to about the height the six items do.
+*/
+.limits-grid {
+  margin-top: clamp(2.5rem, 5vw, 3.5rem);
+  display: grid;
+  gap: clamp(2rem, 4vw, 3rem);
+  align-items: start;
+}
+
+@media (min-width: 52rem) {
+  .limits-grid {
+    grid-template-columns: minmax(0, 240px) minmax(0, 1fr);
+  }
+}
+
+.limits-shot {
+  --r-screen: 13px;
+  max-width: 240px;
+}
+
+.limits-list h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 1rem;
+  letter-spacing: -0.015em;
+}
+
+.limits-list h3 svg {
+  flex: none;
+  color: var(--spine);
+}
+
+.limits-list ul {
+  margin-top: 1.1rem;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.limits-list li {
+  padding-block: 0.8rem;
+  border-bottom: 1px solid var(--line);
+  color: var(--text3);
+  font-size: 0.9375rem;
+}
+
+.limits-list li strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ---------------------------------------------------------------- install */
+
+/*
+  The release, drawn as the instrument the rest of the page draws numbers with.
+
+  Nothing about this section is a new component: the plate, the hairline, the
+  four-up mono readout and the pill buttons are all already on this page. What
+  changed is that the download is now the loudest thing in the section it belongs
+  to, which it was not: it was a text link inside the first of three prose cards.
+*/
+.release {
+  margin-top: 2.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background:
+    radial-gradient(120% 140% at 88% 0%, color-mix(in srgb, var(--aqua) 6%, transparent), transparent 60%),
+    var(--plate);
+}
+
+.release-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem clamp(1.5rem, 4vw, 3rem);
+  padding: clamp(1.15rem, 2.5vw, 1.6rem);
+}
+
+/* Not mono. A fixed pitch face gives each full stop a whole cell, so "v2.4.3" at
+   this size reads as v2 . 4 . 3. Tabular figures in the text face keep the digits
+   aligned without spacing the dots out. */
+.release-v {
+  margin-top: 0.3rem;
+  font-size: clamp(1.75rem, 1.2rem + 1.6vw, 2.35rem);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.035em;
+  color: var(--text);
+}
+
+/* Shrinkable, so its own `flex-wrap` can do the work when the plate runs out of
+   room. `flex: none` held the pair at max-content width and pushed "Release
+   notes" straight out through the right hand edge on a phone. */
+.release .actions {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* The same readout the hero's panel uses, on the same grammar: term in tracked
+   mono caps, value in mono under it. */
+.release-specs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem 1.5rem;
+  padding: clamp(1.15rem, 2.5vw, 1.6rem);
+  border-top: 1px solid var(--line);
+}
+
+@media (min-width: 52rem) {
+  .release-specs {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.release-specs div {
+  min-width: 0;
+}
+
+.release-specs dt {
+  font-family: 'JetBrains Mono Variable', ui-monospace, Menlo, monospace;
+  font-size: 0.6875rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+
+.release-specs dd {
+  margin: 0.3rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+/*
+  Three channels as three rows, not three cards.
+
+  Each was an icon tile over a paragraph over a status line in a bordered third of
+  the page: the shape a generated page ships, holding two sentences where one
+  clause was needed. A row can carry a name, what it is, whether it works and
+  where to click, on one line, and three of them read in the time one card did.
+*/
+.channels {
+  margin-top: 1.5rem;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+/* `p, li { max-width: var(--measure) }` is the right default for a list of
+   sentences and the wrong one for a row of columns: it was capping these at the
+   reading measure and leaving 220 px of the row empty. */
+.channel {
+  max-width: none;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.15rem 0.75rem;
+  padding-block: 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+@media (min-width: 56rem) {
+  .channel {
+    grid-template-columns: auto minmax(0, 13rem) minmax(0, 1fr) auto auto;
+    gap: 1.25rem;
+  }
+}
+
+/* Health as a dot, which is what this page uses a dot for everywhere else. */
+.channel-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--mint);
+}
+
+.channel[data-live='no'] .channel-dot {
+  background: var(--text3);
+}
+
+.channel-name {
+  font-weight: 600;
+  font-size: 0.9375rem;
+  color: var(--text);
+}
+
+.channel-note {
+  grid-column: 2;
+  font-size: 0.875rem;
+  color: var(--text3);
+}
+
+@media (min-width: 56rem) {
+  .channel-note {
+    grid-column: auto;
+  }
+}
+
+.channel-state {
+  grid-column: 2;
+  color: var(--mint);
+}
+
+.channel[data-live='no'] .channel-state {
+  color: var(--text3);
+}
+
+@media (min-width: 56rem) {
+  .channel-state {
+    grid-column: auto;
+    text-align: right;
+  }
+}
+
+.channel-go {
+  grid-column: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.875rem;
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+@media (min-width: 56rem) {
+  .channel-go {
+    grid-column: auto;
+  }
+}
+
+/* The arrow leans into the direction it is pointing when you are going to press
+   it, which is the only hover flourish in this section. */
+.channel-go svg {
+  flex: none;
+  transition: transform 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.channel-go:hover svg {
+  transform: translateX(3px);
+}
+
+.release-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin-top: 1.25rem;
+  font-size: 0.875rem;
+  color: var(--text3);
+}
+
+.release-warn svg {
+  flex: none;
+  margin-top: 0.1rem;
+  color: var(--amber);
+}
+
+/*
+  The rows arrive one after another rather than together.
+
+  A list of three is exactly the length where a stagger reads as the list being
+  dealt out and a longer one would read as a page loading slowly. It is keyed off
+  the reveal class the section already has, so with no script or at reduced motion
+  all three are simply there.
+*/
+html[data-revealing] .channels:not(.is-in) .channel {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.channels .channel {
+  transition:
+    opacity 480ms ease-out,
+    transform 620ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.channels.is-in .channel:nth-child(2) {
+  transition-delay: 90ms;
+}
+
+.channels.is-in .channel:nth-child(3) {
+  transition-delay: 180ms;
+}
+
+pre {
+  margin-top: 1.5rem;
+  background: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 1rem 1.15rem;
+  overflow-x: auto;
+  font-size: 0.8125rem;
+  line-height: 1.7;
+}
+
+pre code {
+  font-family: 'JetBrains Mono Variable', ui-monospace, Menlo, monospace;
+  color: var(--text2);
+}
+
+pre .c {
+  color: var(--text3);
+}
+
+.copy-wrap {
+  position: relative;
+}
+
+.copy {
+  position: absolute;
+  top: 1.5rem;
+  right: 0.6rem;
+  background: var(--slate);
+  border: 1px solid var(--line);
+  color: var(--text3);
+  border-radius: 6px;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.6875rem;
+  font-family: 'JetBrains Mono Variable', ui-monospace, Menlo, monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.copy:hover {
+  color: var(--text);
+  border-color: var(--aqua);
+}
+
+/* A copy button that sits in the flow after the value rather than pinned to a
+   corner of the block, because there are three values here and one corner. */
+.copy-inline {
+  position: static;
+  align-self: start;
+  flex: none;
+  padding: 0.22rem 0.5rem;
+  font-size: 0.625rem;
+}
+
+.fingerprint-note {
+  margin-top: 1.15rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.875rem;
+  color: var(--text3);
+}
+
+.fingerprint {
+  margin-top: 1.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 1.15rem;
+}
+
+.fingerprint dl {
+  margin-top: 0.9rem;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.fingerprint div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.fingerprint dt {
+  font-family: 'JetBrains Mono Variable', ui-monospace, Menlo, monospace;
+  font-size: 0.625rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+
+/* The value and its copy button on one line, the value taking whatever is left. */
+.fingerprint dd {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin: 0;
+  font-family: 'JetBrains Mono Variable', ui-monospace, Menlo, monospace;
+  font-size: 0.75rem;
+  color: var(--text2);
+}
+
+/* `anywhere` rather than `break-all`: a 64 character hex string has to break
+   somewhere, but it should break at the end of a line rather than being chopped
+   at a fixed column with room to spare. */
+.fingerprint .fp-val {
+  min-width: 0;
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+/* -------------------------------------------------------------------- faq */
+
+.faq {
+  margin-top: 2.5rem;
+  border-top: 1px solid var(--line);
+}
+
+.faq details {
+  border-bottom: 1px solid var(--line);
+}
+
+.faq summary {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  padding-block: 1.15rem;
+  cursor: pointer;
+  color: var(--text);
+  font-weight: 600;
+  font-size: 1.0625rem;
+  list-style: none;
+  letter-spacing: -0.015em;
+}
+
+.faq summary::-webkit-details-marker {
+  display: none;
+}
+
+.faq summary::after {
+  content: '+';
+  margin-left: auto;
+  color: var(--text3);
+  font-family: 'JetBrains Mono Variable', ui-monospace, Menlo, monospace;
+  font-weight: 400;
+  flex: none;
+}
+
+.faq details[open] summary::after {
+  content: '\2212';
+  color: var(--aqua);
+}
+
+.faq summary:hover {
+  color: var(--sky);
+}
+
+.faq .answer {
+  padding-bottom: 1.5rem;
+  max-width: var(--measure);
+}
+
+.faq .answer > * + * {
+  margin-top: 0.9rem;
+}
+
+/* ------------------------------------------------------------- transcript */
+
+.transcript {
+  margin-top: 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+.transcript summary {
+  padding: 0.85rem 1.1rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: var(--text2);
+  font-weight: 500;
+}
+
+.transcript summary:hover {
+  color: var(--text);
+}
+
+.transcript .body {
+  padding: 0 1.1rem 1.1rem;
+  border-top: 1px solid var(--line);
+  padding-top: 1.1rem;
+}
+
+.transcript ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.transcript li {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  gap: 1rem;
+  font-size: 0.875rem;
+  max-width: none;
+}
+
+.transcript li time {
+  font-family: 'JetBrains Mono Variable', ui-monospace, Menlo, monospace;
+  font-size: 0.75rem;
+  color: var(--text3);
+}
+
+/* ---------------------------------------------------------------- footer */
+
+/*
+  Centred, on a phone and on a desk.
+
+  It was a three column grid weighted 1.4/1/1, which on a wide screen left the
+  two link columns floating in the right half and on a phone stacked into a
+  ragged left edge under a paragraph that stopped at 34ch. The footer is four
+  short things and a colophon: a single centred column reads as the end of the
+  document at every width, and the rule above the colophon is the full measure
+  rather than however wide the sentence above it happened to be.
+*/
+.footer {
+  border-top: 1px solid var(--line);
+  padding-block: clamp(3rem, 6vw, 4.5rem);
+  background: var(--ink);
+  text-align: center;
+}
+
+.footer-grid {
+  display: grid;
+  gap: 2.5rem;
+  justify-items: center;
+}
+
+@media (min-width: 48rem) {
+  .footer-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 3rem;
+    align-items: start;
+  }
+}
+
+/* Every measure-capped block in here centres itself rather than hanging off
+   the left edge of a centred column. */
+.footer p,
+.footer .brand {
+  margin-inline: auto;
+}
+
+.footer .brand {
+  justify-content: center;
+}
+
+.footer h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.6875rem;
+  font-family: 'JetBrains Mono Variable', ui-monospace, Menlo, monospace;
+  letter-spacing: 0.19em;
+  text-transform: uppercase;
+  color: var(--text3);
+  font-weight: 500;
+  margin-bottom: 1rem;
+}
+
+.footer h2 svg {
+  flex: none;
+  color: var(--aqua);
+}
+
+.footer ul {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  justify-items: center;
+  gap: 0.6rem;
+  font-size: 0.9375rem;
+}
+
+.footer li {
+  max-width: none;
+}
+
+/* The glyph is part of the link, so the whole row is one target and the icon
+   picks up the same hover colour the text does. */
+.footer li a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.footer li svg {
+  flex: none;
+  opacity: 0.72;
+}
+
+.footer .colophon {
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem 1.5rem;
+  max-width: none;
+  font-size: 0.75rem;
+}
+
+.footer .colophon span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.footer .colophon svg {
+  flex: none;
+  color: var(--text3);
+}
+
+/* ------------------------------------------------------------- diagram */
+
+.diagram {
+  margin-top: 2.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: clamp(1.25rem, 4vw, 2.25rem);
+  background: var(--ink);
+  overflow-x: auto;
+}
+
+.diagram svg {
+  width: 100%;
+  min-width: 30rem;
+  height: auto;
+}
+
+/* Both horizontal scrollers take focus, so they need a visible ring. */
+.table-scroll:focus-visible,
+.diagram:focus-visible {
+  box-shadow:
+    0 0 0 2px var(--void),
+    0 0 0 4px var(--aqua);
+  border-radius: var(--r-md);
+}
+
+/* --------------------------------------------------------------- motion */
+
+/*
+  Everything above is written so that switching motion off removes an
+  embellishment, never a fact: the bars, the verdict, the poster frames and
+  every word are in the document either way. `rememberLoopingFloat()` in the app
+  makes the same promise: reduced motion stops the loop rather than speeding
+  it up, so the frame clock can go idle.
+*/
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* The player keeps working; it just stops easing. The cover mark and the
+     tracker snap instead of growing. */
+  .player-cover-mark,
+  .scrub::-webkit-slider-thumb {
+    transition: none;
+  }
+
+  /*
+    Nothing below is a fallback. Every one of these is the state the document
+    already ships, restated here so that a `transition` or an `animation`
+    shorthand elsewhere in the file cannot leave anything half drawn.
+  */
+  [data-reveal],
+  .trace path,
+  .esc-beat,
+  .esc-screen,
+  .instrument .verdict > span,
+  .page-card {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .trace path {
+    stroke-dashoffset: 0;
+  }
+
+  /* The readout holds on its conclusion: the checks failed, so the verdict is
+     Down and the page has arrived, and both stay put. */
+  .instrument .verdict [data-for='up'],
+  .instrument .verdict [data-for='degraded'] {
+    opacity: 0;
+  }
+
+  /* Both cards rest in place. The one word each stage would have uncovered goes
+     with the movement that uncovered it: the figcaption under each column says
+     the same thing in a sentence, which is why it is a figcaption and not a
+     tooltip. */
+  .note {
+    animation: none !important;
+  }
+
+  .shade-verdict {
+    display: none;
+  }
+
+  .w-tab-run {
+    animation: none !important;
+  }
+}
+
+/* -------------------------------------------------------- polish corrections */
+
+.hero-facts span svg,
+.title-icon svg,
+.title-icon svg {
+  flex: none;
+}
+
+.hero-facts span::before {
+  display: none;
+}
+
+.hero-facts span {
+  color: var(--text2);
+}
+
+.hero-facts span svg {
+  color: var(--aqua);
+}
+
+/*
+  What is missing, as a list of the things it is missing.
+
+  Nine chips in the same mono the wizard sets its field names in, struck through,
+  under a heading that says they are absences. Struck rather than prefixed with a
+  word: nine repetitions of "no" is heavier than nine strikes, and a plain chip row
+  under "not in the path" can be misread at a glance as the opposite of what it is.
+*/
+.absent {
+  margin-top: 2rem;
+  padding: clamp(1.15rem, 2.5vw, 1.5rem);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--ink);
+}
+
+.absent-head {
+  color: var(--text2);
+}
+
+.absent-head > svg {
+  color: var(--rose);
+}
+
+.absent ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.absent li {
+  max-width: none;
+  padding: 0.26rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--slate);
+  font-family: 'JetBrains Mono Variable', ui-monospace, Menlo, monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  color: var(--text3);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--rose) 70%, transparent);
+  text-decoration-thickness: 1px;
+  white-space: nowrap;
+}
+
+/* The caveat sits with the boast rather than three sections away from it. */
+.absent-note {
+  max-width: 62ch;
+  margin-top: 1.25rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.9375rem;
+  color: var(--text3);
+}
+
+.title-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--spine, var(--aqua)) 40%, var(--line));
+  background: color-mix(in srgb, var(--spine, var(--aqua)) 11%, transparent);
+  color: var(--spine, var(--aqua));
+}
+
+.deep-cut {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--ink) 72%, transparent);
+}
+
+.deep-cut summary {
+  cursor: pointer;
+  padding: 0.85rem 1rem;
+  color: var(--text2);
+  font-weight: 600;
+  list-style: none;
+}
+
+.deep-cut summary::-webkit-details-marker {
+  display: none;
+}
+
+.deep-cut summary::after {
+  content: '+';
+  float: right;
+  color: var(--text3);
+  font-family: 'JetBrains Mono Variable', ui-monospace, Menlo, monospace;
+}
+
+.deep-cut[open] summary {
+  border-bottom: 1px solid var(--line);
+  color: var(--text);
+}
+
+.deep-cut[open] summary::after {
+  content: '\2212';
+  color: var(--aqua);
+}
+
+.deep-cut > p,
+.deep-cut > h3,
+.deep-cut > ul {
+  margin-inline: 1rem;
+}
+
+.deep-cut > p:first-of-type,
+.deep-cut > h3:first-child,
+.deep-cut > ul:first-child {
+  margin-top: 1rem;
+}
+
+.deep-cut > p:last-child,
+.deep-cut > ul:last-child {
+  margin-bottom: 1rem;
+}
+
+.grant dt,
+.channel h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.grant dt .title-icon,
+.channel h3 .title-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+}
+
+.device {
+  overflow: hidden;
+  background: transparent;
+}
+
+.device img {
+  background: transparent;
+  transform: translateZ(0);
+}
+
+@media (max-width: 43rem) {
+  .hero {
+    padding-top: 2.1rem;
+  }
+
+  .hero-grid {
+    gap: 1.5rem;
+  }
+
+  /*
+    Down from `clamp(2rem, 12vw, 2.75rem)`, which drew 44 px on any phone wider
+    than 367 css px. The headline is shorter than it was, but 44 px still spent
+    three lines and 130 px of a 390 px screen on it, and everything below the
+    headline on this page is something a visitor came here to do.
+  */
+  .hero h1 {
+    font-size: clamp(1.85rem, 9.4vw, 2.45rem);
+  }
+
+  .hero-copy h1,
+  .hero-copy .lede {
+    max-width: none;
+  }
+
+  .hero .lede {
+    font-size: 1rem;
+  }
+
+  /* Two full width buttons rather than a wrapped row, because a 44 px tall
+     target that ends halfway across the screen looks like it is still loading. */
+  .hero .actions {
+    display: grid;
+    gap: 0.6rem;
+  }
+
+  .hero .actions .btn {
+    justify-content: center;
+  }
+
+  .instrument {
+    width: min(100%, calc(100vw - 2rem));
+    justify-self: center;
+    padding: 0.85rem;
+    gap: 0.8rem;
+  }
+
+  .bars {
+    height: clamp(80px, 28vw, 112px);
+    gap: 1px;
+  }
+
+  .ins-readout {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .page-card,
+  .page-idle {
+    padding: 0.62rem;
+    border-radius: 12px;
+  }
+
+  .page-card {
+    gap: 0.55rem;
+  }
+
+  .page-title {
+    font-size: 0.875rem;
+  }
+
+  .page-sub {
+    font-size: 0.75rem;
+  }
+
+  .pill {
+    font-size: 0.625rem;
+    padding-inline: 0.45rem;
+  }
+
+  .film {
+    margin-top: 2rem;
+  }
+
+  .section-head,
+  .prose {
+    max-width: 100%;
+  }
+}
+
+/* ------------------------------------------------ visible redesign pass */
+
+/*
+  The hero has no wash behind it.
+
+  It had two: a rose one over the right third and a blue one under the middle,
+  from a pass that is where most of what is corrected below came from. Rose is a
+  state on this page and it was being spent as a mood two sections before the
+  one that is actually about an outage, and the blue one was the gradient blob
+  behind a heading that DESIGN_NOTES opens its refused list by refusing. The
+  graticule in `.hero::before` is the one background effect, which is what that
+  list says and is now true again.
+
+  So this block sets no background at all. It is left here as the place the
+  ground was, because the next thing anyone reaches for on a hero this dark is
+  to put one back.
+*/
+
+/*
+  Both columns start at the top edge.
+
+  `center` floated the phone to the optical middle of whatever the copy happened
+  to measure, so its top edge landed 170 px below the eyebrow and lined up with
+  nothing: a void above it, a void below it, and a graticule drawn in the
+  background of a hero whose only object was not on any grid. Aligned to start,
+  the top of the device and the top of the eyebrow are the same line.
+*/
+.hero-grid {
+  align-items: start;
+}
+
+/*
+  Three rules, each a term with what it means underneath it. It was a two by two
+  of rounded cards with tinted icon tiles and coloured glows: the exact component
+  a generated page ships, and it used mint as an accent, which this stylesheet
+  reserves for a monitor that is up.
+
+  The term and the explanation were then set at opposite edges of the row, which
+  is the shape `.facts` in section 06 uses. That works there, at full width, on
+  short pairs. Here it put about 200 px of nothing between "No server path" and
+  the words that finish it, and three of those rows with a hairline under each is
+  a pricing table. Stacked, the pair reads as one thing, and the explanation
+  starts under the label's first letter rather than under its icon.
+*/
+.hero-proof {
+  margin-top: 1.6rem;
+  max-width: 34rem;
+  border-top: 1px solid var(--line);
+}
+
+.hero-proof > div {
+  display: grid;
+  gap: 0.15rem;
+  padding-block: 0.8rem;
+  border-bottom: 1px solid var(--line);
+}
+
+/* The glyph is 17 px against a 0.6rem gap, so the explanation hangs to the
+   label's text rather than to the icon's left edge. */
+.hero-proof dd {
+  padding-left: calc(17px + 0.6rem);
+}
+
+.hero-proof dt {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  letter-spacing: -0.015em;
+}
+
+/* Aqua on all three. Chrome is blue and health is mint, amber and rose, and a
+   claim about the app is chrome. */
+.hero-proof dt svg {
+  flex: none;
+  color: var(--aqua);
+}
+
+.hero-proof dd {
+  margin: 0;
+  color: var(--text3);
+  font-size: 0.875rem;
+}
+
+.hero .actions {
+  margin-top: 1.5rem;
+}
+
+/*
+  Margin only. What shape this row is, and why it is two items rather than four,
+  is settled at the rule up top.
+*/
+.hero-facts {
+  margin-top: 1.25rem;
+}
+
+.instrument {
+  border-color: color-mix(in srgb, var(--aqua) 35%, var(--line));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 4%, transparent) inset;
+}
+
+/*
+  The clip is on what is inside the phone, never on the phone.
+
+  This used to name `.device` as well, and `clip-path` clips an element's own
+  outset shadows, so it was cutting off all four of the rings the devices rule
+  draws: the glass edge, the bezel, the body and the light on the outside of it.
+  Every phone on the page has been a flat rounded rectangle with a radius, which
+  is precisely the "cropped README asset with a frame around it" that DESIGN_NOTES
+  spends a section explaining was taken apart. `overflow: hidden` with the radius
+  it already has holds the raster in; the clip is only here to stop a webp's
+  corner pixels crawling out from under an anti-aliased edge.
+*/
+.device picture,
+.device img {
+  overflow: hidden;
+  clip-path: inset(0 round var(--r-screen));
+}
+
+/* ------------------------------------------------- the hero on a phone */
+
+/*
+  The readout is a phone screen, in the page's own device.
+
+  `.device` was written for the cleaned screenshots, where the raster is the
+  screen and CSS draws the four rings around it. Nothing in it cares whether the
+  screen is a picture or live markup, so the hero borrows it rather than growing
+  a second way to draw the same phone. What changes is only what a live screen
+  needs: a painted surface, because there is no opaque raster to supply one, and
+  a little more width than a screenshot column, because this is the one device on
+  the page that is the subject rather than an illustration of one.
+*/
+.hero-device {
+  display: flex;
+  justify-content: center;
+}
+
+.device-live {
+  max-width: 392px;
+  background: var(--plate);
+}
+
+/* The phone is the frame now, so the panel stops drawing one. Its own border,
+   radius and inset highlight inside a bezel is two frames, which is the exact
+   thing DESIGN_NOTES says the imported README rasters were doing. */
+.device-live .instrument {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  width: 100%;
+}
+
+/*
+  Android's status bar, and the only invented chrome in the panel.
+
+  Without it a live screen inside a bezel reads as a card with a thick border,
+  because every other device on this page is recognisable as a phone from the
+  status bar baked into its screenshot. This one has to draw its own. It earns
+  the space by saying what the headline says: 3:12 am, Do Not Disturb, paged
+  anyway.
+*/
+.ins-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: -0.4rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text3);
+}
+
+.ins-status-icons {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--text2);
+}
+
+.ins-status-icons svg {
+  display: block;
+}
+
+@media (max-width: 43rem) {
+  /* Tighter rows than the desktop stack, same shape. */
+  .hero-proof > div {
+    gap: 0.1rem;
+    padding-block: 0.7rem;
+  }
+
+  .hero-facts span {
+    font-size: 0.6875rem;
+  }
+
+  /*
+    A phone drawn at 330 px on a 390 px screen. It was `100vw - 2rem`, which was
+    right for a panel that was its own object and is wrong inside a bezel: the
+    screen would be wider than the phone around it. Capped, it reads as a device
+    held up next to the copy rather than as a band across the viewport.
+  */
+  .device-live {
+    max-width: min(330px, 100% - 1.5rem);
+  }
+
+  /* Same call the hero's buttons make at this width: one target a line, full
+     width, rather than a pair that runs off the edge of the plate. */
+  .release .actions {
+    flex: 1 1 100%;
+    display: grid;
+    gap: 0.6rem;
+  }
+
+  .release .actions .btn {
+    justify-content: center;
+  }
+}
+
+/* ------------------------------------------------------------ glyph slots */
+
+/*
+  Where a glyph sits next to a word.
+
+  The reset sets `svg { display: block }`, which is right for a glyph that is
+  the whole of its element and wrong for one sitting in a line of type, so
+  anything that pairs an icon with a label has to say which of the two it is.
+  Two shapes cover the page: a flex line whose first child is the glyph, and an
+  inline glyph inside a block that is already doing something else with its
+  layout, such as a summary with a floated caret.
+
+  Everything below is a label, a heading or a control that already existed and
+  was carrying its meaning in words alone. None of these glyphs is the only
+  statement of anything: pull them all out and the page still reads.
+*/
+.eyebrow,
+.fingerprint > .label,
+.scroll-hint,
+.release-top .label,
+.absent-head,
+.w-no,
+.facts dt,
+.copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.eyebrow > svg,
+.fingerprint > .label > svg,
+.scroll-hint > svg,
+.release-top .label > svg,
+.absent-head > svg,
+.w-no > svg,
+.facts dt > svg,
+.copy > svg,
+.btn > svg {
+  flex: none;
+}
+
+/* A `th` has to stay a table cell, so its glyph goes inline rather than the
+   heading turning into a flex line. Setting `display` on a cell takes it out of
+   the table box tree, which drops the whole header row out of the grid. */
+.compare thead th > svg {
+  display: inline-block;
+  vertical-align: -0.16em;
+  margin-right: 0.45rem;
+  color: var(--text3);
+}
+
+.compare thead th.is-nightbell > svg {
+  color: var(--aqua);
+}
+
+.facts dt > svg,
+.channel .status > svg,
+.scroll-hint > svg {
+  color: currentColor;
+  opacity: 0.8;
+}
+
+/* The escalation beat number and its glyph are one unit before the tag. */
+.esc-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--rose);
+}
+
+/* The wizard's tab strip is a tight row, so the glyph only appears where there
+   is room for it beside the number and the name. */
+.w-tab-glyph {
+  display: none;
+  align-items: center;
+  color: var(--text3);
+}
+
+.w-tab[aria-selected='true'] .w-tab-glyph {
+  color: var(--spine);
+}
+
+@media (min-width: 56rem) {
+  .w-tab-glyph {
+    display: inline-flex;
+  }
+}
+
+/* Summaries keep their block layout, because the caret on each of them is a
+   floated pseudo-element and a flex line would drop it on its own row. */
+.deep-cut summary > svg,
+.transcript summary > svg {
+  display: inline-block;
+  vertical-align: -0.2em;
+  margin-right: 0.55rem;
+  color: var(--text3);
+}
+
+.deep-cut[open] summary > svg,
+.transcript[open] summary > svg {
+  color: var(--aqua);
+}
+
+/* ------------------------------------------------------------------ field */
+
+/*
+  The lit ground, drawn by Field.astro. Fixed to the viewport rather than the
+  document, so it does not scroll: this is the room the page is in, and the page
+  moves through it.
+
+  Negative z-index puts it above the canvas and below everything else, including
+  the hero's graticule, which stays the only background element on the page with
+  an edge on it.
+*/
+.field {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
+}
+
+.field span {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: var(--d);
+  height: var(--d);
+  /* The centre sits on the point, so a field placed past an edge really is half
+     off screen instead of being pushed back in by its own box. */
+  margin: calc(var(--d) / -2);
+  border-radius: 50%;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--tone) var(--a), transparent),
+    transparent 100%
+  );
+  animation: drift var(--t) var(--lag) ease-in-out infinite;
+  will-change: transform;
+}
+
+/*
+  Four paths, one keyframe set.
+
+  Each path is the same drift read at a different quarter of its own cycle,
+  which is `animation-direction` and a delay rather than four blocks of
+  keyframes saying nearly the same thing. Amplitude stays under 7% of the
+  viewport: these are a thousand pixels across, and anything further reads as a
+  shape crossing the screen rather than as the light changing.
+*/
+@keyframes drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  25% {
+    transform: translate3d(5vw, -6vh, 0);
+  }
+  50% {
+    transform: translate3d(6vw, 5vh, 0);
+  }
+  75% {
+    transform: translate3d(-5vw, 3vh, 0);
+  }
+}
+
+.field span[data-path='2'] {
+  animation-direction: reverse;
+}
+
+.field span[data-path='3'] {
+  animation-direction: alternate;
+}
+
+.field span[data-path='4'] {
+  animation-direction: alternate-reverse;
+}
+
+/*
+  Half the field, and none of it moving, on a phone.
+
+  Not a guess: the payoff stage reads `getBoundingClientRect` on every frame of
+  a scroll it does not own, and it is the one interaction on this page that has
+  to stay at rate. A phone GPU compositing eight full-viewport layers under that
+  is the trade nothing here is worth. Four still fields are enough to keep the
+  black from going flat, which is the entire job.
+*/
+@media (max-width: 48rem) {
+  .field span {
+    animation: none;
+  }
+
+  .field span:nth-child(n + 5) {
+    display: none;
+  }
+}
+
+/*
+  At reduced motion the fields rest where they were placed. The global rule
+  above collapses the duration, and the drift begins and ends at no offset, so
+  what is left is the same eight fields with nothing moving. Nothing is lost,
+  because there was never anything here to read.
+*/
+
+
+/* ------------------------------------------------------------------ the 404
+  One number, one status line, one sentence, one button, stacked and centred.
+
+  Centred is a deliberate exception to the rest of the site, which sets type
+  against the left of the content column. It earns the exception by having no
+  column to belong to: there is no rail, no section number and no second block to
+  align with, so the axis the left edge normally provides is not there to hold.
+  A single stack centred on the page is a composition; the same stack pushed left
+  with two thirds of the viewport empty beside it is an accident.
+
+  Everything here except the number and the axis is a primitive that already
+  exists, which is the point. .label, .lede, .actions and .btn-primary all arrive
+  looking like the landing page because they are the landing page's rules.
+*/
+.gone {
+  min-height: min(78vh, 44rem);
+  display: flex;
+  align-items: center;
+  padding-block: clamp(2.5rem, 8vw, 5rem);
+  text-align: center;
+}
+
+/*
+  As large as the viewport will carry, in the headline's own setting.
+
+  27vw is the number that keeps "404" on one line at every width from 320 px up
+  without ever touching the right edge of the content column, and the clamp stops
+  it running away on an ultrawide. line-height 0.72 crops the generous space Inter
+  leaves above and below digits, which at this size is most of a screen.
+
+  The tracking is tighter than the headline's -0.038em. Tracking is optical, not
+  proportional: the value that sets a 3.5 rem headline correctly leaves visible
+  gaps between three digits eight times that size.
+*/
+.gone-num {
+  /* The floor is the phone case and it is doing real work: 27vw of a 390 px
+     screen is 105 px, which lands the number at about half the width of the
+     column and stops it being the page. 8.5 rem takes it to roughly 250 px of a
+     350 px column, which reads as boldly on a phone as 21 rem does at 1440.
+     At 320 px the column is 280 px wide, so it still has 30 px to spare. */
+  font-size: clamp(8.5rem, 28vw, 21rem);
+  font-weight: 800;
+  letter-spacing: -0.055em;
+  line-height: 0.72;
+  color: var(--bone);
+  font-variant-numeric: tabular-nums;
+
+  /*
+    Cancel the trailing letter-spacing so the digits centre on the page.
+
+    Tracking is applied after every glyph including the last, so the line's advance
+    width is 0.055em narrower than its ink here, the tracking being negative. Centre
+    that advance box and the ink lands half a tracking step right of true centre,
+    which at 21 rem is 18 px and plainly visible.
+
+    A full tracking step as right margin moves the box left by half of one, which
+    is exactly the correction. Measured against the rendered page, and the first
+    attempt had the sign inverted and doubled the error instead.
+  */
+  margin-right: 0.055em;
+}
+
+/*
+  A drawn axis, not a divider.
+
+  The site's instrument language is graticules, traces and rails, so the rule
+  under the number carries ticks and reads as the bottom of a chart. It passes the
+  test DESIGN_NOTES sets for anything behind or beneath type: a reader could
+  describe it, because it is an axis with tick marks on it.
+*/
+.gone-axis {
+  margin: clamp(1.25rem, 3vw, 2rem) auto 0;
+  width: min(100%, 32rem);
+  height: 0.4rem;
+  border-top: 1px solid var(--line-lit);
+  background: repeating-linear-gradient(to right, var(--line-lit) 0 1px, transparent 1px 3.5rem)
+    top left / 100% 0.4rem no-repeat;
+}
+
+/*
+  `max-width: none` is what actually centres this, and it took a debug outline to
+  see why.
+
+  The stylesheet sets `p, li { max-width: var(--measure) }`, and --measure is 68ch.
+  A ch is measured in the element's own font, so on a `.label` at 11 px mono that
+  is about 451 px rather than the 640 the same rule gives the lede. The box was
+  451 px wide, sitting at the left of a 1100 px column, with its content perfectly
+  centred inside it, which is why `justify-content: center` looked like it had done
+  nothing at all.
+
+  A one line status readout has no measure to keep, so the cap comes off and the
+  auto margins are there in case the copy ever outgrows one line.
+*/
+.gone-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  margin: 1.1rem auto 0;
+  max-width: none;
+  color: var(--rose);
+}
+
+/*
+  The app's own down indicator, and the only rose on the page.
+
+  It blinks because that is what it does in the app and in the widget when a
+  monitor is failing, which makes this the one animation here that is replaying a
+  cause rather than decorating a page. 1.6 s is slow enough to read as a state
+  rather than as an alert demanding a tap.
+*/
+.gone-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--rose);
+  flex: none;
+  animation: gone-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes gone-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.28;
+  }
+}
+
+/* The global reduced-motion rule collapses durations, which would leave this
+   resting at whichever opacity the collapse lands on. Stated explicitly so it
+   rests lit. */
+@media (prefers-reduced-motion: reduce) {
+  .gone-dot {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+.gone-say {
+  margin: 1.5rem auto 0;
+  max-width: 46ch;
+}
+
+.gone .actions {
+  margin-top: 2rem;
+  justify-content: center;
+}
+
+/* The wrap is the flex item, and without this it is only as wide as its widest
+   line, so `margin-inline: auto` on the children above would have nothing to
+   centre inside. */
+.gone > .wrap {
+  flex: 1;
+}
+
+/*
+  The player's state glyphs, hidden until their state is the current one.
+
+  `data-off` rather than the `hidden` attribute, because every one of these is an
+  SVG and `hidden` is not permitted on a foreign element. `[hidden]` did work, the
+  UA rule matching any element, but the markup was invalid and this costs one
+  selector. player.ts toggles the attribute; see `show()` there.
+*/
+svg[data-off] {
+  /*
+    `!important`, for the same reason `[hidden]` above carries it.
+
+    The specificity here is actually sufficient: `svg[data-off]` is one element plus
+    one attribute, which already beats the reset's `svg { display: block }`. The
+    important is for the same reason the `[hidden]` rule has one, stated up at line
+    148: this visibility is scripted and load-bearing, the player draws its play and
+    pause glyphs on top of each other the moment it loses, and a future
+    `.player-btn svg { display: grid }` would silently win. Cheap insurance on a
+    rule whose failure mode is a visibly broken control.
+  */
+  display: none !important;
+}

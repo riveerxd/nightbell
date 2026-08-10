@@ -1,0 +1,107 @@
+---
+/**
+ * The 404.
+ *
+ * It exists because Nginx serves this build off a VPS, and without a 404.html the
+ * reply to a mistyped path is Nginx's own grey wall with a version number on it.
+ *
+ * ## What it is
+ *
+ * The number, at the largest size the viewport will carry, and then one line and
+ * one button. That is the whole page.
+ *
+ * The first version of this file was a four row list of every destination on the
+ * site, which is a navigation menu wearing an error page's clothes. Somebody who
+ * lands here followed a link that did not work; they do not need a directory,
+ * they need to be told plainly and handed the one door that is open.
+ *
+ * ## Why it looks like the app
+ *
+ * `Rose appears only where it means down` is the rule the stylesheet and the app's
+ * own theme both keep. A request that did not resolve is a down state, so the
+ * status strip under the number is the one place on this page rose is correct, and
+ * it is used once. The number itself stays bone, because the number is the
+ * subject and not the alarm.
+ *
+ * The rule under the number carries tick marks. That is the same instrument
+ * language as the hero graticule and the Trace between sections: a drawn axis,
+ * describable as an axis, which is the test `What was refused` in DESIGN_NOTES
+ * sets for anything sitting behind type.
+ *
+ * `noindex` is set rather than left to the status code. Nginx serves this through
+ * `error_page 404`, which does send a real 404, but the file is also reachable at
+ * `/404.html` directly, and ranking a soft 404 for a brand term is the one bad
+ * outcome available on a page this small.
+ */
+import Base from '../layouts/Base.astro';
+import Mark from '../components/Mark.astro';
+import Glyph from '../components/Glyph.astro';
+import Footer from '../components/Footer.astro';
+import { REPO } from '../../site.config.mjs';
+---
+
+<Base
+  title="Page not found: Nightbell"
+  description="That page does not exist on this site. Nightbell is an open-source Android uptime monitor that runs every check on your phone, with no account and no server, and the landing page has the download and the source."
+  robots="noindex, follow"
+>
+
+  <header class="masthead">
+    <div class="wrap">
+      <a class="brand" href="/"><Mark size={22} />Nightbell</a>
+      <nav aria-label="Sections">
+        <a href="/#why">Why</a>
+        <a class="only-mid" href="/#watch">What it watches</a>
+        <a href="/#install">Install</a>
+        <a href={REPO.url} target="_blank" rel="noopener">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    {/*
+      Not `.section`. That class turns its `.wrap` into the instrument grid,
+      `var(--rail) minmax(0, 1fr)`, and every direct child of the wrap is then
+      auto-placed into a cell of its own: the number lands in the 5.5 rem rail
+      column, the axis lands beside it instead of under it, and the button gets a
+      5.5 rem track and renders as a circle with four lines of wrapped text in it.
+      Sections on the landing page avoid this by putting everything inside a single
+      `.section-body` child. There is no rail and no section number here, so the
+      simpler fix is not to be a section.
+    */}
+    <section class="gone">
+      <div class="wrap">
+        {/*
+          The number is the h1, which needs the accessible name to be a sentence
+          rather than three digits read out on their own. The digits are marked
+          decorative and the real name sits beside them, unstyled and unseen.
+        */}
+        <h1 class="gone-num">
+          <span aria-hidden="true">404</span>
+          <span class="sr-only">404, page not found</span>
+        </h1>
+
+        <p class="gone-axis" aria-hidden="true"></p>
+
+        <p class="label gone-state">
+          <span class="gone-dot"></span>
+          No route to this path
+        </p>
+
+        <p class="lede gone-say">
+          The link you followed points at something this site does not serve. Nothing on your phone
+          or your network is broken, and there is nothing to retry.
+        </p>
+
+        <div class="actions">
+          <a class="btn btn-primary" href="/">
+            <Glyph name="home" size={17} />
+            Go to the landing page
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <Footer home="/" />
+</Base>

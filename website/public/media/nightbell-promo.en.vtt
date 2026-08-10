@@ -1,0 +1,62 @@
+WEBVTT
+
+NOTE
+Captions for nightbell-promo.mp4 (40.0 s).
+
+The text is the narration verbatim, from promo-video/scripts/narration.mjs.
+Cue starts are the `at` frames in that file divided by 30; cue ends are the
+start plus the measured duration of the corresponding take under
+promo-video/audio/vo/. Two of the seven lines are split across two cues so no
+cue holds more than about two lines of text on screen.
+
+Re-check these against `npm run voiceover` in promo-video/ after any change to
+the script or the scene budgets. The lines are anchored to cuts, so a re-budget
+moves them.
+
+1
+00:00:01.500 --> 00:00:05.215
+Most uptime alerts are one more
+notification you swipe away.
+
+2
+00:00:05.400 --> 00:00:08.670
+Nightbell runs entirely on your Android phone.
+
+3
+00:00:08.670 --> 00:00:11.948
+No server, no account, no third party.
+
+4
+00:00:12.200 --> 00:00:13.860
+Four steps to add a monitor.
+
+5
+00:00:13.860 --> 00:00:16.519
+Point it at anything that answers over HTTP.
+
+6
+00:00:17.300 --> 00:00:19.120
+Every check runs on the phone.
+
+7
+00:00:19.120 --> 00:00:21.480
+Your tokens never touch a third party.
+
+8
+00:00:23.100 --> 00:00:26.676
+When a check fails, Nightbell doesn't send you
+something you can miss.
+
+9
+00:00:28.000 --> 00:00:32.365
+It takes the whole screen, and the alarm
+loops until you acknowledge it.
+
+10
+00:00:33.600 --> 00:00:37.920
+Nightbell. The uptime monitor that needs
+no server, no account,
+
+11
+00:00:37.920 --> 00:00:39.823
+and actually wakes you up.

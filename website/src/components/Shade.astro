@@ -1,0 +1,71 @@
+---
+/**
+ * The last ten centimetres, drawn.
+ *
+ * Two notifications on one phone: the ordinary one, and the one Nightbell posts.
+ * The whole product argument is the difference between them, and it is a
+ * difference about behaviour rather than about looks, so it is shown as
+ * behaviour: the first card takes a swipe and is gone, the second takes the same
+ * swipe and comes back.
+ *
+ * ## No script
+ *
+ * Both cards are CSS animations, started by the reveal class the section already
+ * gets, and they loop for as long as you are looking at them: a demonstration
+ * that has quietly finished by the time you scroll to it is a still picture of two
+ * notifications, and the claim here is entirely about behaviour. Both cycles are
+ * written to return to their own first frame without a visible seam.
+ *
+ * At reduced motion the animation is never declared, and each card sits in its
+ * resting state under a caption that says in words what the movement says. The
+ * captions are one line each, because they are a fallback rather than an essay.
+ *
+ * Every string in the Nightbell card is out of `docs/screens/urgent-b.png`, which is
+ * that notification on a real device. The ordinary card is deliberately generic,
+ * because that is the point being made about it.
+ */
+import Glyph from './Glyph.astro';
+---
+
+<div class="shade" data-reveal>
+  <figure class="shade-col">
+    <p class="label shade-kind">An ordinary alert</p>
+
+    <div class="shade-stage">
+      <div class="note note-plain" data-swipe="away">
+        <span class="note-icon" aria-hidden="true"><Glyph name="globe" size={15} /></span>
+        <div>
+          <p class="note-app label">Monitoring service &middot; 03:04</p>
+          <p class="note-title">api.example.com is not responding</p>
+          <p class="note-sub">Tap to open the dashboard</p>
+        </div>
+      </div>
+      <p class="shade-verdict" aria-hidden="true">Gone</p>
+    </div>
+
+    <figcaption>One swipe, and there is no second one.</figcaption>
+  </figure>
+
+  <figure class="shade-col">
+    <p class="label shade-kind shade-kind-hot">An urgent Nightbell monitor</p>
+
+    <div class="shade-stage">
+      <div class="note note-urgent" data-swipe="stays">
+        <span class="note-icon" aria-hidden="true"><Glyph name="warning" size={15} /></span>
+        <div>
+          <p class="note-app label">Nightbell &middot; ongoing</p>
+          <p class="note-title">Checkout API is down</p>
+          <p class="note-sub">Connection refused &middot; down for 22m</p>
+          <p class="note-acts" aria-hidden="true">
+            <span class="pill pill-ack"><Glyph name="check" size={13} />Ack</span>
+            <span class="pill pill-recheck"><Glyph name="refresh" size={13} />Re-check</span>
+            <span class="pill pill-mute"><Glyph name="bellOff" size={13} /></span>
+          </p>
+        </div>
+      </div>
+      <p class="shade-verdict shade-verdict-hot" aria-hidden="true">Re-posted</p>
+    </div>
+
+    <figcaption>Marked ongoing, so the swipe does nothing. It comes straight back.</figcaption>
+  </figure>
+</div>

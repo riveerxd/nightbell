@@ -1,0 +1,264 @@
+---
+/**
+ * The document shell: head, landmarks, structured data.
+ *
+ * Every absolute URL below is derived from SITE_URL in site.config.mjs. There
+ * is no second place a domain is written down, which is the only way the
+ * canonical, the card metadata, the sitemap and the JSON-LD can be guaranteed
+ * to agree once a real domain finally exists.
+ */
+import { SITE_URL, IS_PLACEHOLDER_DOMAIN, SEO, REPO, RELEASE, MEDIA } from '../../site.config.mjs';
+import Field from '../components/Field.astro';
+import media from '../media.json';
+import '../styles/global.css';
+
+const canonical = new URL(Astro.url.pathname, SITE_URL).href.replace(/\/$/, '') || SITE_URL;
+const abs = (p: string) => new URL(p, SITE_URL).href;
+
+/**
+ * SoftwareApplication, and only the fields that are true.
+ *
+ * No aggregateRating (there are no reviews), no interactionStatistic (download
+ * counts are three, and publishing them would be worse than silence), no
+ * screenshot array padded out with the same image twice. `offers` at 0 is the
+ * accurate way to say free, and is the field that makes the entry eligible for
+ * anything at all.
+ */
+const softwareApplication = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  '@id': abs('/#app'),
+  name: 'Nightbell',
+  applicationCategory: 'DeveloperApplication',
+  applicationSubCategory: 'Uptime monitoring',
+  operatingSystem: `Android ${RELEASE.minAndroid}+`,
+  softwareVersion: RELEASE.version,
+  fileSize: `${(RELEASE.apkBytes / 1024 / 1024).toFixed(2)} MB`,
+  installUrl: REPO.latestRelease,
+  downloadUrl: RELEASE.apkUrl,
+  license: 'https://www.apache.org/licenses/LICENSE-2.0',
+  isAccessibleForFree: true,
+  url: canonical,
+  description: SEO.description,
+  softwareHelp: REPO.reference,
+  codeRepository: REPO.url,
+  programmingLanguage: 'Kotlin',
+  offers: {
+    '@type': 'Offer',
+    price: '0',
+    priceCurrency: 'USD',
+  },
+  featureList: [
+    'HTTP status checks with exact, any 2xx, range and any-response matching',
+    'Request and response monitors with custom method, headers, body and body assertions',
+    'Page-element monitors that resolve DOM nodes in a real WebView',
+    'Full-screen urgent alert with a looping alarm until acknowledged',
+    'Latency budgets with a separate degraded alert track',
+    'Home-screen widget, worst monitor first',
+    'On-device checks with no account and no server',
+  ],
+};
+
+const website = {
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  '@id': abs('/#website'),
+  url: SITE_URL,
+  name: 'Nightbell',
+  description: SEO.description,
+  inLanguage: 'en',
+  publisher: { '@id': abs('/#author') },
+  about: { '@id': abs('/#app') },
+};
+
+const person = {
+  '@context': 'https://schema.org',
+  '@type': 'Person',
+  '@id': abs('/#author'),
+  name: 'river',
+  url: `https://github.com/${REPO.owner}`,
+};
+
+/**
+ * The promo, as a VideoObject.
+ *
+ * Worth emitting because every field in it is measured or written down rather
+ * than inferred: the duration comes from ffprobe by way of src/media.json, the
+ * poster is a real frame cut from the render, the captions are hand-authored
+ * against the narration, and the file is served from this origin. A video on a
+ * page is also the one thing here that is eligible for a rich result that the
+ * page does not otherwise qualify for.
+ *
+ * `hasPart` is deliberately absent even though the six chapter boundaries are
+ * right there in media.json. Google's Clip markup requires each part to carry a
+ * URL that starts playback at that offset, and this player does not read a time
+ * fragment, so every one of those URLs would be a link that does not do what the
+ * markup promises. Teaching the player `?t=` is the prerequisite, not the markup.
+ */
+const promoDuration = (seconds: number | null) =>
+  seconds == null ? undefined : `PT${Math.round(seconds)}S`;
+
+const promoVideo = {
+  '@context': 'https://schema.org',
+  '@type': 'VideoObject',
+  '@id': abs('/#promo'),
+  name: MEDIA.promoName,
+  description: MEDIA.promoDescription,
+  thumbnailUrl: [abs(MEDIA.promoPoster)],
+  contentUrl: abs(media.promo.file),
+  uploadDate: MEDIA.promoUploaded,
+  duration: promoDuration(media.promo?.seconds ?? null),
+  width: media.promo.width ?? undefined,
+  height: media.promo.height ?? undefined,
+  inLanguage: 'en',
+  isFamilyFriendly: true,
+  license: 'https://www.apache.org/licenses/LICENSE-2.0',
+  creator: { '@id': abs('/#author') },
+  about: { '@id': abs('/#app') },
+};
+
+interface Props {
+  title?: string;
+  description?: string;
+  /**
+   * The robots directive for this page.
+   *
+   * Defaulted rather than omitted so there is exactly one robots meta on every
+   * page. The 404 passes `noindex, follow` and gets that instead of a second,
+   * contradicting tag, which is the failure mode of emitting a default and then
+   * adding an override through the head slot.
+   */
+  robots?: string;
+  /**
+   * Whether this page actually embeds the promo.
+   *
+   * Gates the VideoObject and the og:video tags. Emitting either on a page that
+   * does not contain the video is a claim the page cannot support: the 404 would
+   * be telling Google it has a 40 second film on it, and an unfurler would offer
+   * to play a video that is not there. Defaults to false so a new page has to opt
+   * in rather than inherit the claim.
+   */
+  video?: boolean;
+}
+
+const {
+  title = SEO.title,
+  description = SEO.description,
+  /*
+    The three max- directives are what turn an indexed result into a rich one:
+    a large image thumbnail rather than a 100 px one, an untruncated snippet, and
+    an unlimited video preview. They are Google's own opt-ins and there is nothing
+    on this page worth withholding from a preview.
+  */
+  robots = 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1',
+  video = false,
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <meta name="robots" content={IS_PLACEHOLDER_DOMAIN ? 'noindex, follow' : robots} />
+
+    {/* One language, said out loud. x-default names this page as the fallback for
+        any locale that is not English, which is the whole world here, and stops a
+        crawler inferring an unlabelled locale from the content. */}
+    <link rel="alternate" hreflang="en" href={canonical} />
+    <link rel="alternate" hreflang="x-default" href={canonical} />
+
+    <meta name="theme-color" content={SEO.themeColor} />
+    <meta name="color-scheme" content="dark" />
+    <meta name="author" content="river" />
+
+    {/* Both, and in this order, because no single file covers every consumer.
+        A browser that understands the SVG takes it and scales cleanly to any
+        density. Safari on both macOS and iOS does not support SVG favicons at
+        all, and every browser also requests /favicon.ico implicitly whatever
+        this markup says, so shipping only the SVG left those two cases fetching
+        a 404 and drawing nothing. The .ico carries 16, 32 and 48, and its 16px
+        frame is rendered from a slightly heavier trace because one pixel is the
+        thinnest line a raster holds. See docs/brand/web_favicon.py. */}
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+
+    {/* The two faces the page is set in. Preloaded rather than swapped: they
+        are 88 KB together, they are on the critical path for the H1, and a
+        headline that reflows a beat after paint is the layout shift most worth
+        spending a preload on. */}
+    <link
+      rel="preload"
+      href="/fonts/inter-latin-wght-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/jetbrains-mono-latin-wght-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Nightbell" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:locale" content="en_GB" />
+    <meta property="og:image" content={abs(SEO.ogImage)} />
+    <meta property="og:image:secure_url" content={abs(SEO.ogImage)} />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content={String(SEO.ogImageWidth)} />
+    <meta property="og:image:height" content={String(SEO.ogImageHeight)} />
+    <meta property="og:image:alt" content={SEO.ogImageAlt} />
+
+    {/* The promo, for the unfurlers that will play it inline rather than showing
+        the card image. Same file the page serves, so there is no second encode to
+        keep in step. */}
+    {
+      video && (
+        <>
+          <meta property="og:video" content={abs(media.promo.file)} />
+          <meta property="og:video:secure_url" content={abs(media.promo.file)} />
+          <meta property="og:video:type" content="video/mp4" />
+          {media.promo.width && (
+            <meta property="og:video:width" content={String(media.promo.width)} />
+          )}
+          {media.promo.height && (
+            <meta property="og:video:height" content={String(media.promo.height)} />
+          )}
+        </>
+      )
+    }
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={abs(SEO.ogImage)} />
+    <meta name="twitter:image:alt" content={SEO.ogImageAlt} />
+
+    <script type="application/ld+json" set:html={JSON.stringify(softwareApplication)} />
+    <script type="application/ld+json" set:html={JSON.stringify(website)} />
+    <script type="application/ld+json" set:html={JSON.stringify(person)} />
+    {video && <script type="application/ld+json" set:html={JSON.stringify(promoVideo)} />}
+    <slot name="head" />
+  </head>
+
+  <body>
+    {/* First in the document and behind all of it. The page's ground colour is
+        on `html` rather than on `body`, because a background on `body` paints
+        after negative z-index children and would cover this. */}
+    <Field />
+    <a class="skip" href="#main">Skip to content</a>
+    <slot />
+  </body>
+</html>

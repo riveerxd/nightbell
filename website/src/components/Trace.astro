@@ -1,0 +1,83 @@
+---
+/**
+ * The line between sections, and the page's whole visual argument.
+ *
+ * A Nightbell section boundary is not a border. It is a stretch of the trace the
+ * mark is made of, drawn at page width, and it carries the state the page is
+ * moving into. Scroll the page and you are reading one continuous instrument
+ * strip: calm, calm, then one enormous complex where the service fails, then a
+ * decay back to calm.
+ *
+ * `spike` is not drawn by eye. It is the six trace points the mark is built from,
+ * mapped off their 108-unit grid onto this 1200 x 96 one, x by 1200/108 and y by
+ * 96/108, with the flat run extended to both edges. Since 3.0.0 the icon is a
+ * bell with that trace knocked out of it, so the divider is no longer the icon
+ * stretched wide; it is the line from inside it, run out to page width.
+ *
+ * `preserveAspectRatio="none"` on purpose: a strip chart is already a
+ * non-uniform projection of time against a value, so stretching one horizontally
+ * is the correct thing to do to it rather than a compromise. The flat variants
+ * are unaffected by definition.
+ *
+ * Every variant is a single path with `pathLength="1"`, so the stylesheet can
+ * dash it to exactly one unit and draw it in on scroll without measuring
+ * anything in script. With motion off the dash is never applied and the line is
+ * simply there.
+ */
+interface Props {
+  /** calm: the line breathing. spike: the mark. decay: settling back down. */
+  variant?: 'calm' | 'spike' | 'decay';
+  /** Which health colour the line is in. Defaults to the section rule grey. */
+  state?: 'line' | 'up' | 'degraded' | 'down' | 'brand';
+  /** A calm line has three small beats; offsetting them stops repeats matching. */
+  seed?: number;
+}
+
+const { variant = 'calm', state = 'line', seed = 0 } = Astro.props;
+
+const stroke = {
+  line: 'var(--line-lit)',
+  up: 'var(--mint)',
+  degraded: 'var(--amber)',
+  down: 'var(--rose)',
+  brand: 'var(--aqua)',
+}[state];
+
+/** Three small beats along an otherwise flat 1200 unit line. */
+function calm(offset: number): string {
+  const at = [220, 560, 900].map((x) => x + ((offset * 37) % 90) - 45);
+  const dip = [-5, 4, -3];
+  let d = 'M0 48';
+  at.forEach((x, i) => {
+    d += ` H${(x - 22).toFixed(1)} L${x.toFixed(1)} ${(48 + dip[i]).toFixed(1)} L${(x + 22).toFixed(1)} 48`;
+  });
+  return `${d} H1200`;
+}
+
+/**
+ * The mark, at page width. Icon grid 108 -> 1200 wide, 108 -> 96 tall:
+ *   8.31,53.39  27.01,53.39  36.83,27.63  52.77,80.37  62.59,53.39  99.69,53.39
+ */
+const SPIKE = 'M0 47.5 H300.1 L409.2 24.6 L586.3 71.4 L695.4 47.5 H1200';
+
+/** After the alarm: the same complex, three times smaller each time, then flat. */
+const DECAY =
+  'M0 48 H120 L168 33 L216 66 L252 48 H520 L556 41 L592 58 L620 48 ' +
+  'H860 L884 45 L908 52 L928 48 H1200';
+
+const d = variant === 'spike' ? SPIKE : variant === 'decay' ? DECAY : calm(seed);
+---
+
+<div class={`trace trace-${variant}`} data-reveal aria-hidden="true">
+  <svg viewBox="0 0 1200 96" preserveAspectRatio="none" focusable="false">
+    <path
+      d={d}
+      pathLength="1"
+      fill="none"
+      stroke={stroke}
+      stroke-width={variant === 'spike' ? 2.4 : 1.4}
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      vector-effect="non-scaling-stroke"></path>
+  </svg>
+</div>

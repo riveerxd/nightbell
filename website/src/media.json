@@ -1,0 +1,49 @@
+{
+  "promo": {
+    "file": "/media/nightbell-promo.mp4",
+    "bytes": 6395486,
+    "seconds": 40,
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "chapters": [
+      {
+        "at": 0,
+        "label": "Intro",
+        "title": "The claim"
+      },
+      {
+        "at": 4.133,
+        "label": "On your phone",
+        "title": "Monitoring, on your phone"
+      },
+      {
+        "at": 9.333,
+        "label": "Add a monitor",
+        "title": "Four steps to add a monitor"
+      },
+      {
+        "at": 17.133,
+        "label": "Checks running",
+        "title": "Every check runs on the device"
+      },
+      {
+        "at": 22.533,
+        "label": "The alert",
+        "title": "The alert firing"
+      },
+      {
+        "at": 33.533,
+        "label": "Download",
+        "title": "Where to get it"
+      }
+    ]
+  },
+  "payoff": {
+    "file": "/media/nightbell-alert-firing.mp4",
+    "bytes": 2131442,
+    "seconds": 11.4,
+    "width": 1920,
+    "height": 1080
+  }
+}

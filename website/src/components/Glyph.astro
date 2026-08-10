@@ -1,0 +1,166 @@
+---
+/**
+ * The app's icons, on the web.
+ *
+ * Every path below is verbatim from
+ * `app/src/main/kotlin/me/river/nightbell/ui/icons/NightbellIcons.kt`, on the same
+ * 24-unit grid at the same stroke widths, so a button drawn on this page is
+ * drawn in the same hand as the button it is describing. Nothing here is
+ * borrowed from an icon set, and nothing is redrawn by eye.
+ *
+ * `book` is the one exception, and it says so where it is defined: the app has
+ * nothing to read, so it has no such glyph, and this one is drawn to the spec
+ * rather than lifted from a set. Same rule the player's fullscreen glyph follows.
+ *
+ * `circle()` in that file expands to two half arcs, which is why the round
+ * glyphs below start with an `M` at the left of the circle rather than with a
+ * `<circle>` element.
+ */
+const circle = (cx: number, cy: number, r: number) =>
+  `M${cx - r} ${cy} A${r} ${r} 0 1 0 ${cx + r} ${cy} A${r} ${r} 0 1 0 ${cx - r} ${cy}`;
+
+const ICONS = {
+  activity: ['M2.4 12.6 L6.8 12.6 L9.4 6.2 L14.2 17.8 L16.8 12.6 L21.6 12.6', 1.9],
+  check: ['M4.5 12.6 L9.5 17.6 L19.5 6.6', 2.1],
+  close: ['M6.5 6.5 L17.5 17.5 M17.5 6.5 L6.5 17.5', 1.9],
+  refresh: ['M20.2 12 A8.2 8.2 0 1 1 17.4 5.9 M20.4 3 L20.4 8 L15.4 8', 1.7],
+  bellOff: [
+    'M6.2 10.6 A5.8 5.8 0 0 1 17.8 10.6 L17.8 15.2 L19.8 18 L4.2 18 L6.2 15.2 Z ' +
+      'M9.9 18 A2.3 2.3 0 0 0 14.1 18 M3.6 3.6 L20.4 20.4',
+    1.7,
+  ],
+  bell: [
+    'M6.2 10.6 A5.8 5.8 0 0 1 17.8 10.6 L17.8 15.2 L19.8 18 L4.2 18 L6.2 15.2 Z ' +
+      'M9.9 18 A2.3 2.3 0 0 0 14.1 18',
+    1.7,
+  ],
+  warning: [
+    'M12 3.6 L21.4 19.4 L2.6 19.4 Z M12 9.4 L12 14 M12 16.4 L12 16.5',
+    1.7,
+  ],
+  clock: [`${circle(12, 12, 8.6)} M12 6.9 L12 12.4 L15.8 14.6`, 1.7],
+  globe: [
+    `${circle(12, 12, 8.6)} M3.4 12 L20.6 12 ` +
+      'M12 3.4 C15.2 6.8 15.2 17.2 12 20.6 M12 3.4 C8.8 6.8 8.8 17.2 12 20.6',
+    1.7,
+  ],
+  braces: [
+    'M9.4 4 C7 4 7.6 8 7.6 9.6 C7.6 11.1 5.8 12 5.8 12 C5.8 12 7.6 12.9 7.6 14.4 ' +
+      'C7.6 16 7 20 9.4 20 M14.6 4 C17 4 16.4 8 16.4 9.6 C16.4 11.1 18.2 12 18.2 12 ' +
+      'C18.2 12 16.4 12.9 16.4 14.4 C16.4 16 17 20 14.6 20',
+    1.7,
+  ],
+  pointer: ['M6 3.2 L18.6 11.6 L12.9 12.8 L15.9 18.8 L13.3 20.1 L10.3 14.1 L6 17.6 Z', 1.7],
+  shield: [
+    'M12 3.2 L20 6.2 L20 11.8 C20 16.8 16.4 20 12 21.2 C7.6 20 4 16.8 4 11.8 L4 6.2 Z',
+    1.7,
+  ],
+  zap: ['M13.6 2.6 L5.2 13.4 L11.2 13.4 L10.4 21.4 L18.8 10.6 L12.8 10.6 Z', 1.7],
+  moon: ['M20.4 14.6 A8.6 8.6 0 1 1 9.6 3.8 A7 7 0 0 0 20.4 14.6 Z', 1.7],
+  power: ['M12 3 L12 11.4 M7.3 6.1 A7.2 7.2 0 1 0 16.7 6.1', 1.7],
+  gauge: ['M12 19.6 A8.6 8.6 0 1 1 20.6 11 M12 12 L16.8 8.2', 1.7],
+  arrowRight: ['M4 12 L20 12 M14 6 L20 12 L14 18', 1.9],
+  /*
+    The second exception, on the same terms `book` is. The app has no home screen
+    to navigate to and so has no such glyph in NightbellIcons.kt, and this is
+    drawn to that file's spec rather than lifted from a set: the same 24 unit
+    grid, the same 1.7 stroke as globe, clock and bell, ends left round by the
+    shared linecap. Roof apex on the vertical centre, eaves overhanging the walls
+    by 2.4 units either side, and a door on the centre line so the glyph stays
+    symmetrical at 17 px where a lopsided one would show.
+  */
+  home: [
+    'M3.4 10.8 L12 3.6 L20.6 10.8 M5.8 9 L5.8 19.9 L18.2 19.9 L18.2 9 ' +
+      'M9.8 19.9 L9.8 14 L14.2 14 L14.2 19.9',
+    1.7,
+  ],
+  plus: ['M12 5 L12 19 M5 12 L19 12', 2],
+  chevronRight: ['M9.5 5.5 L16 12 L9.5 18.5', 1.9],
+  info: [`${circle(12, 12, 8.6)} M12 11 L12 16.4 M12 7.4 L12 8.1`, 1.7],
+  search: [`${circle(11, 11, 6.9)} M16.1 16.1 L21 21`, 1.7],
+  target: [`${circle(12, 12, 8.6)} ${circle(12, 12, 4.4)} ${circle(12, 12, 1.1)}`, 1.7],
+  radar: ['M12 20.6 A8.6 8.6 0 1 0 3.4 12 M12 16.8 A4.8 4.8 0 1 0 7.2 12 M12 12 L18.2 5.8', 1.7],
+  server: [
+    'M4 4.4 L20 4.4 L20 9.6 L4 9.6 Z M4 14.4 L20 14.4 L20 19.6 L4 19.6 Z ' +
+      'M7.4 7 L7.5 7 M7.4 17 L7.5 17',
+    1.7,
+  ],
+  layers: [
+    'M12 3.2 L20.8 8 L12 12.8 L3.2 8 Z M3.2 12.4 L12 17.2 L20.8 12.4 M3.2 16.4 L12 21.2 L20.8 16.4',
+    1.7,
+  ],
+  sliders: [
+    'M4 7.5 L13 7.5 M17.5 7.5 L20 7.5 M4 16.5 L7 16.5 M11.5 16.5 L20 16.5 ' +
+      'M15.2 4.7 L15.2 10.3 M9.2 13.7 L9.2 19.3',
+    1.7,
+  ],
+  link: [
+    'M10.4 13.6 A4.2 4.2 0 0 0 16.3 13.9 L18.7 11.5 A4.2 4.2 0 0 0 12.8 5.6 L11.4 7 ' +
+      'M13.6 10.4 A4.2 4.2 0 0 0 7.7 10.1 L5.3 12.5 A4.2 4.2 0 0 0 11.2 18.4 L12.6 17',
+    1.7,
+  ],
+  copy: ['M9 8.8 L19.2 8.8 L19.2 19.4 L9 19.4 Z M5.6 15.2 L5.6 4.6 L15.8 4.6', 1.7],
+  chart: ['M4 19.6 L20 19.6 M7.4 19.6 L7.4 13 M12 19.6 L12 6.6 M16.6 19.6 L16.6 10', 1.7],
+  history: [
+    'M3.8 12 A8.2 8.2 0 1 0 6.6 5.9 M3.6 3 L3.6 8 L8.6 8 M12 7.6 L12 12.3 L15.4 14.2',
+    1.7,
+  ],
+  eye: [
+    'M2.6 12 C5.2 7.4 8.5 5.4 12 5.4 C15.5 5.4 18.8 7.4 21.4 12 ' +
+      `C18.8 16.6 15.5 18.6 12 18.6 C8.5 18.6 5.2 16.6 2.6 12 Z ${circle(12, 12, 2.9)}`,
+    1.7,
+  ],
+  play: ['M7.4 5.2 L18.6 12 L7.4 18.8 Z', 1.7],
+  /** The tray-and-arrow pair the app calls Export, which is a download here. */
+  download: ['M4.4 15.4 L4.4 19.4 L19.6 19.4 L19.6 15.4 M12 3.6 L12 14.2 M7.8 9.8 L12 14.2 L16.2 9.8', 1.7],
+  /**
+   * New, like the player's fullscreen glyph: the app has no reading surface and
+   * so has no book. Drawn to the same spec, 24-unit grid at 1.7, with the spine
+   * on the centre line so it sits beside `braces` without looking borrowed.
+   */
+  book: [
+    'M4 4.8 L9.4 4.8 A2.6 2.6 0 0 1 12 7.4 L12 19.6 A2.2 2.2 0 0 0 9.8 17.4 L4 17.4 Z ' +
+      'M20 4.8 L14.6 4.8 A2.6 2.6 0 0 0 12 7.4 L12 19.6 A2.2 2.2 0 0 1 14.2 17.4 L20 17.4 Z',
+    1.7,
+  ],
+  /**
+   * The second exception, for the same reason as `book`: nothing in the app has a
+   * star, because nothing in the app is starrable. This one is the only glyph
+   * here that describes GitHub rather than the product.
+   *
+   * Computed rather than eyeballed: ten vertices on the 24-unit grid, alternating
+   * an 8.8 outer radius and a 3.9 inner one about (12, 12), first point at the
+   * top. That 0.44 ratio is what keeps the arms from going needle-thin at 17 px,
+   * which is the only size this is ever drawn at.
+   */
+  star: [
+    'M12 3.2 L14.29 8.85 L20.37 9.28 L15.71 13.21 L17.17 19.12 L12 15.9 ' +
+      'L6.83 19.12 L8.29 13.21 L3.63 9.28 L9.71 8.85 Z',
+    1.7,
+  ],
+} as const;
+
+interface Props {
+  name: keyof typeof ICONS;
+  size?: number;
+  class?: string;
+}
+
+const { name, size = 18, class: className } = Astro.props;
+const [d, width] = ICONS[name];
+---
+
+<svg
+  viewBox="0 0 24 24"
+  width={size}
+  height={size}
+  class={className}
+  aria-hidden="true"
+  focusable="false"
+><path
+    d={d}
+    fill="none"
+    stroke="currentColor"
+    stroke-width={width}
+    stroke-linecap="round"
+    stroke-linejoin="round"></path></svg>

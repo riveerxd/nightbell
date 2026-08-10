@@ -1,0 +1,55 @@
+{
+  "syncedFrom": "/home/river/Projects/monitoring app",
+  "files": {
+    "promo-video/node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2": {
+      "bytes": 48256,
+      "sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62",
+      "copiedTo": "public/fonts/inter-latin-wght-normal.woff2"
+    },
+    "promo-video/node_modules/@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2": {
+      "bytes": 40404,
+      "sha256": "18be452724bfdc236c074ca94a249a7f41a86752c7d04ab258ce9ed5651f6a7e",
+      "copiedTo": "public/fonts/jetbrains-mono-latin-wght-normal.woff2"
+    },
+    "docs/video/nightbell-promo.mp4": {
+      "bytes": 6395486,
+      "sha256": "3031a5f2bce156563b98d5e5b2f11a89c1fd8aabe9c00c7c385b62a8b7810ba7",
+      "copiedTo": "public/media/nightbell-promo.mp4"
+    },
+    "docs/video/nightbell-alert-firing.mp4": {
+      "bytes": 2131442,
+      "sha256": "1596255773027e0b16eede0b4352c0db4d8d4f0f3d8838b247082ab6b61dfae3",
+      "copiedTo": "public/media/nightbell-alert-firing.mp4"
+    },
+    "docs/screens/urgent-b.png": {
+      "bytes": 407635,
+      "sha256": "77d472c2fe336d7cc35416002de3d5a39531dadd63ed95279a16456f7078b195",
+      "copiedTo": "src/assets/screens/urgent.png"
+    },
+    "docs/screens/setup-b.png": {
+      "bytes": 1748988,
+      "sha256": "63470de381bf50c205a1197c083f1c5a20674dd4ad88d6a883dcbd0023bab4c0",
+      "copiedTo": "src/assets/screens/pager-setup.png"
+    },
+    "docs/screens/create-monitor.png": {
+      "bytes": 3790197,
+      "sha256": "7172d18dd98d4e2ccd9e71bb08ddbb552b9438980919569a7ebf118a214c9f22",
+      "copiedTo": "src/assets/screens/create-monitor.png"
+    },
+    "docs/screens/widget-243.png": {
+      "bytes": 1266971,
+      "sha256": "df9aad00f2d0c292a22643e4e55373ffc26b9d213b9707a160379d9b1920fd0e",
+      "copiedTo": "src/assets/screens/widget.png"
+    },
+    "docs/screens/settings-group.png": {
+      "bytes": 5170646,
+      "sha256": "491ec6b47ad7f7107f3b4adca87dee7edf13da939307326e8e7994795855bacb",
+      "copiedTo": "src/assets/screens/settings.png"
+    },
+    "docs/screens/hero-b.png": {
+      "bytes": 4381708,
+      "sha256": "89e02717aad9c8185776ec3bbaaff5538d8e8c667c03a0bfcabe63a1ef6a74ba",
+      "copiedTo": "src/assets/screens/group.png"
+    }
+  }
+}

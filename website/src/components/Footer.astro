@@ -1,0 +1,87 @@
+---
+/**
+ * The site footer, once.
+ *
+ * It was written inline in index.astro and then a second, shorter one was written
+ * for the 404, which is how a site ends up with two footers that disagree about
+ * what the licence is. There is one footer, it lives here, and both pages render
+ * it. Every fact in it still comes from site.config.mjs.
+ *
+ * `home` is the only thing that differs between the two, and only because the
+ * landing page's brand link is an in-page jump to the top while the 404's has to
+ * be a real navigation off the page. Defaulting it to the anchor keeps the
+ * landing page's markup byte-identical to what it was before this was extracted.
+ */
+import Glyph from './Glyph.astro';
+import Mark from './Mark.astro';
+import { REPO, RELEASE } from '../../site.config.mjs';
+
+interface Props {
+  /** Where the brand lockup points. `#top` on the landing page, `/` anywhere else. */
+  home?: string;
+}
+
+const { home = '#top' } = Astro.props;
+---
+
+<footer class="footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <a class="brand" href={home}><Mark size={22} />Nightbell</a>
+        <p style="margin-top:1rem;font-size:0.9375rem;max-width:34ch">
+          Uptime monitoring that runs on your phone, keeps your tokens on the device, and pages
+          you like a phone call when something actually breaks.
+        </p>
+        <p class="label" style="margin-top:1.25rem">
+          No telemetry. No analytics. No account. Nothing leaves the device except the check
+          itself, and that goes to the host you typed in.
+        </p>
+      </div>
+
+      <div>
+        <h2><Glyph name="braces" size={14} />Source</h2>
+        <ul>
+          <li>
+            <a href={REPO.url} target="_blank" rel="noopener"><Glyph name="link" size={15} />Repository</a>
+          </li>
+          <li>
+            <a href={REPO.reference} target="_blank" rel="noopener"><Glyph name="book" size={15} />Reference docs</a>
+          </li>
+          <li>
+            <a href={REPO.releases} target="_blank" rel="noopener"><Glyph name="download" size={15} />All releases</a>
+          </li>
+          <li>
+            <a href={REPO.license} target="_blank" rel="noopener"><Glyph name="shield" size={15} />Licence, Apache 2.0</a>
+          </li>
+        </ul>
+      </div>
+
+      <div>
+        <h2><Glyph name="bell" size={14} />Contact</h2>
+        <ul>
+          <li>
+            <a href={REPO.issues} target="_blank" rel="noopener"><Glyph name="warning" size={15} />Report a bug</a>
+          </li>
+          <li>
+            <a href={`${REPO.issues}/new`} target="_blank" rel="noopener"><Glyph name="plus" size={15} />Request a feature</a>
+          </li>
+          <li>
+            <a href={`https://github.com/${REPO.owner}`} target="_blank" rel="noopener"><Glyph name="pointer" size={15} />The person who built it</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="colophon label">
+      <span><Glyph name="activity" size={13} />Nightbell v{RELEASE.version}</span>
+      <span><Glyph name="shield" size={13} />Apache 2.0</span>
+      <span>
+        <Glyph name="power" size={13} />Android {RELEASE.minAndroid} and up, targeting API {
+          RELEASE.targetSdk
+        }
+      </span>
+      <span><Glyph name="pointer" size={13} />Built and operated by one person</span>
+    </p>
+  </div>
+</footer>

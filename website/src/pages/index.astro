@@ -1,0 +1,1119 @@
+---
+import { Image } from 'astro:assets';
+import Base from '../layouts/Base.astro';
+import Mark from '../components/Mark.astro';
+import Glyph from '../components/Glyph.astro';
+import Section from '../components/Section.astro';
+import Trace from '../components/Trace.astro';
+import Instrument from '../components/Instrument.astro';
+import Shade from '../components/Shade.astro';
+import Wizard from '../components/Wizard.astro';
+import Escalation from '../components/Escalation.astro';
+import PathDiagram from '../components/PathDiagram.astro';
+import Player from '../components/Player.astro';
+import Footer from '../components/Footer.astro';
+import { REPO, RELEASE, SITE_URL } from '../../site.config.mjs';
+import media from '../media.json';
+
+import pagerShot from '../assets/screens/clean/pager-setup.png';
+import widgetTall from '../assets/screens/clean/widget-tall.png';
+import widgetWide from '../assets/screens/clean/widget-wide.png';
+import widgetFlat from '../assets/screens/clean/widget-flat.png';
+
+const apkMb = (RELEASE.apkBytes / 1024 / 1024).toFixed(2);
+
+/**
+ * Media facts, measured by scripts/sync-assets.mjs rather than typed here.
+ * The promo went from 55.5 s to 40 s while this page was being built, so a
+ * hand-written "55 seconds" in a caption was already wrong once.
+ */
+const abs = (p: string) => new URL(p, SITE_URL).href;
+
+/**
+ * The FAQ, once. The list below renders the visible section and the FAQPage
+ * structured data, so an answer cannot be edited in one and left stale in the
+ * other. Every answer here is one the repository can be checked against.
+ */
+const faqs: { q: string; a: string }[] = [
+  {
+    q: 'Does it keep checking when my phone is off?',
+    a: 'No. The checks run on the phone, so a phone that is off, out of signal or in flight mode is a monitor that is not checking. That is the honest cost of having no server. If you need something watching while the phone is in a drawer, you need a machine that stays awake, and Nightbell is the wrong tool.',
+  },
+  {
+    q: 'Can it check more often than every 15 minutes?',
+    a: 'Only in strict mode. Android’s PeriodicWorkRequest has a hard 15 minute minimum and WorkManager silently clamps anything shorter, so Nightbell clamps it visibly instead and says so in Settings under Checker health. Turning on strict foreground monitoring runs a foreground service that keeps your interval exactly, down to about 15 seconds. It costs a permanent notification and real battery, which is Android’s price for a real cadence and not a design choice.',
+  },
+  {
+    q: 'Why is it not on the Play Store?',
+    a: 'There is no Play listing. Grab the APK from GitHub Releases and sideload it. It is signed with my own key, so Play Protect will ask you to confirm the first time. The foreground service also declares specialUse rather than dataSync, because dataSync is capped at six hours a day on API 34 and up, which would quietly break the one guarantee strict mode exists to make. Shipping that through Play review would mean justifying the subtype. Sideloading is unaffected.',
+  },
+  {
+    q: 'Does anything leave my phone?',
+    a: 'The check itself, to the service you pointed it at. Nothing else. There is no analytics library, no crash reporter and no backend in the dependency list, the permission list is short enough to read in one go, and site icons are fetched from the monitored origin rather than through an icon proxy. Your service sees the request and your IP, the same as any other client on your network would. What never happens is a third party seeing your tokens, your URLs or your uptime history.',
+  },
+  {
+    q: 'Can I watch something on my home network, or over plain HTTP?',
+    a: 'Yes. Cleartext traffic is allowed on purpose, so a box on your LAN answering on http:// is a valid target. The catch is the same one everywhere else: the check comes from the phone, so the phone has to be able to reach the host. A monitor on a LAN address stops passing the moment you leave the house, which is a true fact about your network rather than a bug.',
+  },
+  {
+    q: 'What happens to my monitors when I update?',
+    a: 'Anything from 3.0.1 onward installs over the top and keeps your monitors, history and settings. 3.0.0 is the exception: 3.0.1 is signed with a new key, because the old certificate’s subject still carried the previous name and a subject cannot be edited, so a 3.0.0 install has to be uninstalled rather than updated. Coming from Pulse 2.x is different again: 3.0.0 renamed the app and moved its application id, which Android treats as a different app entirely, so it installs beside the old one with an empty data directory rather than upgrading it. The route across is Settings, Backup and transfer in 2.4.3, then import on the new install. Export before uninstalling anything, because once the old app is gone so is its data. Placed widgets and your notification channel settings do not come across either.',
+  },
+  {
+    q: 'How is this different from UptimeRobot or Uptime Kuma?',
+    a: 'Both are better than Nightbell at being a monitoring service: they keep watching when your phone is in a drawer, they hold years of history, they have status pages. Nightbell is not trying to win that. It is trying to be the thing that wakes you at 3am without a subscription, a server or an account, by running on hardware you already carry and paging you with a local alarm instead of a push notification. If you already run Uptime Kuma, Nightbell is a reasonable pager to put in front of it.',
+  },
+  {
+    q: 'Will the alarm really get through Do Not Disturb?',
+    a: 'Once you grant Do Not Disturb access, yes: urgent alerts go to a dedicated DND bypassing alarm channel. One thing to know first, because it is the current known bug rather than a feature: quiet hours still suppress urgent pages unless you turn on the bypass. That default is wrong and is the next thing on my list, with a migration rather than a flipped constant.',
+  },
+  {
+    q: 'What does it do to my battery?',
+    a: 'With the default WorkManager scheduling, close to nothing. Strict foreground monitoring costs real battery, because it wakes for every due check instead of letting Android batch them, and it holds a permanent notification while it does. An unacknowledged urgent outage starts that same service on its own regardless of the setting, and stops it the moment you acknowledge or the monitor recovers.',
+  },
+  {
+    q: 'Is it actually free?',
+    a: 'Apache 2.0, the whole thing, source included. No paid tier, no account, no upsell, nothing to cancel. Same licence as everything it depends on, so forking it or lifting a piece of it is straightforward. Keep the notice and say what you changed.',
+  },
+];
+
+const faqPage = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  '@id': abs('/#faq'),
+  mainEntity: faqs.map((f) => ({
+    '@type': 'Question',
+    name: f.q,
+    acceptedAnswer: { '@type': 'Answer', text: f.a },
+  })),
+};
+
+/**
+ * `m:ss` as an ISO 8601 duration, for the `datetime` attribute on each transcript
+ * timestamp.
+ *
+ * `<time>` requires its text to be a valid date, time or duration unless it carries
+ * `datetime`, and "0:01" is none of those: the W3C validator rejected all seven.
+ * The visible text stays `0:01`, which is what a reader wants, and the attribute
+ * carries `PT1S`, which is what a parser wants. These are offsets into the film
+ * rather than times of day, so a duration is the correct form.
+ */
+const isoOffset = (t: string): string => {
+  const [m, s] = t.split(':').map(Number);
+  return `PT${(m || 0) * 60 + (s || 0)}S`;
+};
+
+/** The transcript, in the order the video says it. Same source as the VTT. */
+const transcript: { t: string; s: string }[] = [
+  { t: '0:01', s: 'Most uptime alerts are one more notification you swipe away.' },
+  { t: '0:05', s: 'Nightbell runs entirely on your Android phone. No server, no account, no third party.' },
+  { t: '0:12', s: 'Four steps to add a monitor. Point it at anything that answers over HTTP.' },
+  { t: '0:17', s: 'Every check runs on the phone. Your tokens never touch a third party.' },
+  { t: '0:23', s: 'When a check fails, Nightbell doesn’t send you something you can miss.' },
+  { t: '0:28', s: 'It takes the whole screen, and the alarm loops until you acknowledge it.' },
+  {
+    t: '0:33',
+    s: 'Nightbell. The uptime monitor that needs no server, no account, and actually wakes you up.',
+  },
+];
+---
+
+<Base video={true}>
+  <script type="application/ld+json" slot="head" set:html={JSON.stringify(faqPage)} />
+
+  {/*
+    `data-here` is where motion.ts writes the section you are in and the state
+    colour that section is about, and the rule along the bottom edge is how far
+    through the document you have scrolled. It is the only navigation aid on a
+    page this long, so it runs at reduced motion too.
+  */}
+  <header class="masthead" data-here="top">
+    <div class="wrap">
+      <a class="brand" href="#top"><Mark size={22} />Nightbell</a>
+
+      <p class="here" aria-hidden="true">
+        <span class="here-no" data-here-no>00</span>
+        <span class="here-name label" data-here-name>Top</span>
+      </p>
+
+      <nav aria-label="Sections">
+        <a href="#why">Why</a>
+        <a class="only-mid" href="#watch">What it watches</a>
+        <a class="only-wide" href="#urgent">Urgent alerts</a>
+        <a class="only-wide" href="#limits">Limits</a>
+        <a href="#install">Install</a>
+        <a href={REPO.url} target="_blank" rel="noopener">GitHub</a>
+      </nav>
+    </div>
+    <span class="progress" data-progress aria-hidden="true"></span>
+  </header>
+
+  <main id="main">
+    <!-- ============================================================ 01 hero -->
+    <section id="top" class="section hero">
+      <div class="wrap">
+        <div class="hero-grid">
+          <div class="hero-copy">
+            {/*
+              The eyebrow is metadata and nothing else: platform, licence,
+              version. It used to open with "On-device uptime monitoring", which
+              the headline says again two lines later and the lede said a third
+              time, so the first thing a stranger read was the same sentence
+              three times in three registers.
+            */}
+            <p class="label eyebrow">
+              <Glyph name="activity" size={14} />Android &middot; Apache 2.0 &middot; v{RELEASE.version}
+            </p>
+            <h1>The uptime monitor that actually wakes you up.</h1>
+            <p class="lede">
+              An open-source Android app that runs every check from the phone in your pocket.
+            </p>
+
+            {/*
+              The CTA is above the rules, not under them.
+
+              It used to be the fifth block down, after a five line headline, a
+              five line lede and three rules, which put the APK button under the
+              fold of a 1440 by 900 laptop and off a phone entirely. On a page
+              whose entire job is handing over a 2 MB file, the download was the
+              one thing you had to scroll to find.
+
+              Claim, one line of what it is, the button, then the evidence. The
+              rules below are corroboration, and corroboration reads fine after
+              the ask.
+            */}
+            {/*
+              Three buttons on one row, so the labels lose their articles:
+              "Download APK", not "Download the APK". At 1440 the row has space
+              either way, but at 390 a third button plus two "the"s wraps the row
+              onto three lines and the ask stops looking like one decision.
+            */}
+            <div class="actions">
+              <a class="btn btn-primary" href={RELEASE.apkUrl} target="_blank" rel="noopener">
+                <Glyph name="download" size={17} />
+                Download APK
+                <span class="mono apk-size">{apkMb} MB</span>
+              </a>
+              <a class="btn btn-ghost" href={REPO.url} target="_blank" rel="noopener">
+                <Glyph name="book" size={17} />
+                Read source
+              </a>
+              {/*
+                The repository root, not /stargazers. GitHub has no anonymous
+                "star this" URL, and the stargazers page 404s for a signed-out
+                visitor on a repo with no stars yet, which is exactly who this
+                button is for. So it lands on the page where the Star control
+                actually is. Same href as "Read source" on purpose: two intents,
+                one destination, and neither of them a dead end.
+              */}
+              <a class="btn btn-ghost" href={REPO.url} target="_blank" rel="noopener">
+                <Glyph name="star" size={17} />
+                Star on GitHub
+              </a>
+            </div>
+
+            {/*
+              Three claims on rules, not three cards, and these three rules are
+              now the only place any of them is stated.
+
+              This was a two by two of rounded cards, each with a tinted icon
+              tile and a coloured glow under it, and the fourth of them was a
+              specimen alert drawn in the same shape as the three claims above
+              it. That shape is the one every generated landing page reaches
+              for, DESIGN_NOTES refuses the version of it in section 04 for the
+              reason that applies here too, and putting "Checkout API is down"
+              in a box next to "No server path" files an incident as a bullet.
+
+              The alert is gone from here entirely. The panel in the next column
+              is a real one arriving off real bars, which is the same claim made
+              by demonstration, and making it twice weakened it once.
+
+              The term and its explanation stack rather than sitting at opposite
+              edges of the column. Right aligning the explanation put 200 px of
+              nothing between a label and the words that finish it, gave three
+              hairlined rows the shape of a pricing table, and the explanation
+              is the interesting half. It reads left, under the label, where the
+              eye already is.
+            */}
+            <dl class="hero-proof">
+              <div>
+                <dt><Glyph name="globe" size={17} />No server path</dt>
+                <dd>Phone → your service → phone</dd>
+              </div>
+              <div>
+                <dt><Glyph name="shield" size={17} />Tokens stay local</dt>
+                <dd>No account. Headers and history live on the device.</dd>
+              </div>
+              <div>
+                <dt><Glyph name="bell" size={17} />Alarm, not a ping</dt>
+                <dd>Full-screen page that loops until you acknowledge it</dd>
+              </div>
+            </dl>
+
+            <p class="hero-facts label">
+              <span><Glyph name="power" size={13} />Android {RELEASE.minAndroid} and up</span>
+              <span><Glyph name="arrowRight" size={13} />Sideload, not on Play</span>
+            </p>
+          </div>
+
+          {/*
+            The readout is on a phone, because it is a phone app.
+
+            Off the frame it was a dark rounded card holding a bar chart, a
+            status pill and a four up stat row, which is the exact furniture
+            Grafana, Pingdom and every hosted checker ships. So the fold argued
+            "no server" in type while the only picture on it said "server
+            dashboard", and nothing above the fold said the word phone at all.
+
+            Same four rings as every other device on the page, from the same
+            rule, so this is the page's existing shell around live markup rather
+            than a second way of drawing a phone.
+          */}
+          <div class="hero-device">
+            <div class="device device-live">
+              <Instrument />
+            </div>
+          </div>
+        </div>
+
+        {/*
+          The promo gets a band of its own at page width rather than a slot in
+          the hero beside a wall of body copy. It is the only forty seconds that
+          shows the app moving, and shrinking it into a column would be spending
+          the best asset this project has on a decoration.
+
+          It has no heading and no standfirst. A poster frame with a play button
+          on it does not need a label reading "The forty second version" and a
+          sentence listing the four things you are about to watch, and the
+          chapter row under the scrubber already names all four.
+        */}
+        <div class="film" data-reveal>
+          <Player
+            id="promo"
+            src={media.promo.file}
+            poster="/media/nightbell-promo-poster.webp"
+            seconds={media.promo.seconds}
+            bytes={media.promo.bytes}
+            captions="/media/nightbell-promo.en.vtt"
+            chapters={media.promo.chapters}
+            label="The Nightbell promo: the mark, monitoring on your phone, the four-step wizard, checks running on the device, the alert firing, and where to get it."
+            note="Forty seconds. Watch it with the sound off if you like, the captions are on the CC button."
+          />
+
+          <details class="transcript">
+            <summary><Glyph name="book" size={15} />Read the video transcript</summary>
+            <div class="body">
+              <ol>
+                {
+                  transcript.map((line) => (
+                    <li>
+                      <time datetime={isoOffset(line.t)}>{line.t}</time>
+                      <span>{line.s}</span>
+                    </li>
+                  ))
+                }
+              </ol>
+            </div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <Trace variant="calm" state="brand" seed={1} />
+
+    <!-- ============================================================= 02 why -->
+    <Section id="why" no="02" rail="Why it exists" state="quiet">
+      <div class="section-head">
+        <p class="label eyebrow"><Glyph name="info" size={14} />The problem</p>
+        <h2>A notification you can swipe away is not an alert.</h2>
+      </div>
+
+      <Shade />
+
+      {/*
+        One line, and the rest folded away.
+
+        This was a paragraph, then a details holding two more, then another
+        paragraph introducing the table: four blocks of prose to make a point the
+        two cards above have already made by moving. Nobody reads a wall of
+        reasoning under a demonstration of the same thing.
+
+        Nothing was deleted. `<details>` content is in the markup and indexed like
+        any other text, so the long version is still here for a crawler and for
+        anyone who wants it, and the summary says which it is rather than
+        addressing crawlers out loud the way the old one did.
+      */}
+      <div class="prose compact-copy" style="margin-top:2.5rem">
+        <p>
+          Checking a URL has been a solved problem for twenty years. The hard part is the last ten
+          centimetres, between a server that knows and a person who is asleep.
+        </p>
+        <details class="deep-cut">
+          <summary><Glyph name="book" size={15} />Why I built it instead of paying for one</summary>
+          <p>
+            I kept missing outages because ordinary monitoring notifications behaved like
+            everything else in the shade. The services I tried either wanted a subscription before
+            they would text me, or sent something that looked exactly like a marketing email and
+            got swiped away with one. By the time I noticed, the interesting part of the incident
+            was over.
+          </p>
+          <p>
+            The hard part is alerting without crying wolf. An outage on an urgent monitor is not a
+            line in the shade. It behaves like an incoming call, and everything else in the app
+            exists to earn the right to do that.
+          </p>
+        </details>
+      </div>
+
+      {/* A scrollable region needs to be reachable by keyboard, hence the
+          tabindex and the label. The caption names the table for a screen
+          reader; the sentence above explains it to everyone else, and lives
+          outside the scroller so it is readable without scrolling. */}
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Hosted, self-hosted and Nightbell compared">
+        <table class="compare">
+          <caption class="sr-only">
+            Hosted monitoring, self-hosted monitoring and Nightbell compared across six aspects
+          </caption>
+          <thead>
+            {/*
+              The examples are in the headers rather than in a sentence above the
+              table. "Hosted means something like UptimeRobot; self-hosted means
+              something like Uptime Kuma" was a line of prose whose only job was
+              telling you what two of the three columns are, which is a thing a
+              column heading can do itself, in place, where you are looking.
+            */}
+            <tr>
+              <th scope="col"><span class="sr-only">Aspect</span></th>
+              <th scope="col">
+                <span class="th-name"><Glyph name="globe" size={14} />Hosted service</span>
+                <span class="th-eg">like UptimeRobot</span>
+              </th>
+              <th scope="col">
+                <span class="th-name"><Glyph name="server" size={14} />Self-hosted</span>
+                <span class="th-eg">like Uptime Kuma</span>
+              </th>
+              <th scope="col" class="is-nightbell">
+                <span class="th-name"><Glyph name="activity" size={14} />Nightbell</span>
+                <span class="th-eg">on your own phone</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">Infrastructure</th>
+              <td>Theirs. Nothing to run.</td>
+              <td>A box, a container, a certificate, and monitoring for the monitor.</td>
+              <td class="is-nightbell">The phone you already carry.</td>
+            </tr>
+            <tr>
+              <th scope="row">Account</th>
+              <td>Required.</td>
+              <td>Usually required, at least locally.</td>
+              <td class="is-nightbell">None. There is nothing to sign up to.</td>
+            </tr>
+            <tr>
+              <th scope="row">Where tokens sit</th>
+              <td>On their servers.</td>
+              <td>On your server.</td>
+              <td class="is-nightbell">On the device, in one JSON document.</td>
+            </tr>
+            <tr>
+              <th scope="row">Paging you</th>
+              <td>Usually the paid tier.</td>
+              <td>Yours to build, on top of a push service.</td>
+              <td class="is-nightbell">A local alarm, so there is nothing to bill for.</td>
+            </tr>
+            <tr>
+              <th scope="row">At 3am you get</th>
+              <td>An email or a push notification.</td>
+              <td>Whatever you wired up.</td>
+              <td class="is-nightbell">
+                A full-screen page and an alarm that loops until you acknowledge it.
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">It cannot</th>
+              <td>Fail quietly. You will get a bill.</td>
+              <td>Watch itself.</td>
+              <td class="is-nightbell">
+                Check while the phone is off, or beat Android's 15 minute background floor without a
+                foreground service.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="label scroll-hint"><Glyph name="arrowRight" size={13} />Scroll the table sideways for the Nightbell column</p>
+    </Section>
+
+    <Trace variant="calm" seed={2} />
+
+    <!-- ======================================================= 03 on device -->
+    <Section id="on-device" no="03" rail="On the device">
+      <div class="section-head">
+        <p class="label eyebrow"><Glyph name="server" size={14} />How a check runs</p>
+        <h2>The check leaves your phone and goes to your service. That is the entire path.</h2>
+      </div>
+
+      <PathDiagram />
+
+      {/*
+        An inventory, not a triptych.
+
+        This was three articles in a bordered row, each an icon tile over a heading
+        over a sentence: the shape every generated page ships, and the one the
+        refused list names. Worse than the shape was the content. The diagram
+        directly above already draws the request going to your service and back, the
+        crossed-out monitoring company, and "state stays here: one JSON document in
+        DataStore". The three cards said those same three things again in prose, and
+        two of them were the hero's rules for a third time.
+
+        So the cards say something the diagram cannot. A diagram can draw what the
+        path is; it cannot list what is absent from the dependency graph, and that
+        list is the actual claim: every one of these is a thing a monitoring app
+        normally has, all of them are checkable against the repository, and none of
+        them is there.
+      */}
+      <div class="absent" data-reveal>
+        <p class="label absent-head">
+          <Glyph name="close" size={14} />Not in the path, and not in the dependency list
+        </p>
+        <ul aria-label="Components Nightbell does not have">
+          <li>relay</li>
+          <li>queue</li>
+          <li>worker</li>
+          <li>backend</li>
+          <li>account</li>
+          <li>push service</li>
+          <li>analytics SDK</li>
+          <li>crash reporter</li>
+          <li>icon proxy</li>
+        </ul>
+        <p class="absent-note">
+          What it does not buy you is anonymity from the thing you are watching. Your service sees
+          the request and the IP it came from, exactly as it would for any other client on your
+          network. That is what a check is.
+        </p>
+      </div>
+
+      <details class="deep-cut prose" style="margin-top:2rem">
+        <summary><Glyph name="braces" size={15} />Implementation details</summary>
+        <p>
+          A status or request monitor is an OkHttp call from your phone to the host you typed in. A
+          page-element monitor loads the page in an offscreen WebView on the same phone and reads
+          the DOM nodes you picked by tapping them. There is no relay, no queue and no worker
+          somewhere else, because there is nowhere else.
+        </p>
+        <p>
+          Everything the app knows lives in one JSON document in DataStore: your monitors, their
+          headers and bodies, their sample history and your settings. Backup and transfer writes
+          that document through the Storage Access Framework, which is why Nightbell asks for no
+          storage permission and why you choose where the file goes. Nothing is uploaded, and there
+          is no import path that could reach anything you did not hand it.
+        </p>
+
+        <h3>What that does and does not buy you</h3>
+        <p>
+          It buys you this: an API token in a monitor's headers is on your phone and on your
+          server, and nowhere in between. No third party can leak it, subpoena it, or change its
+          terms of service. There is no analytics library, no crash reporter and no backend in the
+          dependency list, and site icons are fetched from the monitored origin itself rather than
+          through an icon proxy.
+        </p>
+        <p>
+          It does not buy you anonymity from the thing you are watching. Your service sees the
+          request and the IP it came from, exactly as it would for any other client on your
+          network. That is what a check is.
+        </p>
+      </details>
+    </Section>
+
+    <Trace variant="calm" state="up" seed={3} />
+
+    <!-- ============================================================ 04 what -->
+    <Section id="watch" no="04" rail="What it watches" state="up">
+      <div class="section-head">
+        <p class="label eyebrow"><Glyph name="radar" size={14} />Three kinds of check</p>
+        <h2>Point it at a status code, a response body, or one element on a rendered page.</h2>
+      </div>
+
+      <div class="spec">
+        <article class="spec-row">
+          <div class="spec-kind">
+            <span class="spec-glyph" aria-hidden="true"><Glyph name="activity" size={18} /></span>
+            <h3>Status check</h3>
+            <p class="label">The cheap one</p>
+          </div>
+          <div>
+            <p>
+              Hit a URL, assert on the status code. Four modes, because "is it up" means different
+              things to a health endpoint and to a page that is allowed to redirect.
+            </p>
+            <div class="spec-values">
+              <code>exact code</code>
+              <code>any 2xx</code>
+              <code>a range</code>
+              <code>any response at all</code>
+            </div>
+            <p class="spec-note">
+              Cheapest check in the app. A connection refused has no status code and no round trip,
+              so it reports no response and no latency rather than inventing a zero.
+            </p>
+          </div>
+        </article>
+
+        <article class="spec-row">
+          <div class="spec-kind">
+            <span class="spec-glyph" aria-hidden="true"><Glyph name="braces" size={18} /></span>
+            <h3>Request and response</h3>
+            <p class="label">The precise one</p>
+          </div>
+          <div>
+            <p>
+              Choose the method, set headers, send a body with its content type, then assert on
+              what comes back. Six body assertions, and JSON paths that understand nesting and
+              array indices.
+            </p>
+            <div class="spec-values">
+              <code>GET</code>
+              <code>POST</code>
+              <code>PUT</code>
+              <code>PATCH</code>
+              <code>DELETE</code>
+              <code>HEAD</code>
+            </div>
+            <div class="spec-values">
+              <code>contains</code>
+              <code>does not contain</code>
+              <code>exactly equals</code>
+              <code>matches regex</code>
+              <code>JSON field equals</code>
+              <code>JSON field exists</code>
+            </div>
+            <div class="spec-values">
+              <code>data.items[0].state</code>
+            </div>
+            <p class="spec-note">
+              This is the one that catches a deploy that returns 200 and an empty payload, which is
+              the outage a status check is blind to.
+            </p>
+          </div>
+        </article>
+
+        <article class="spec-row">
+          <div class="spec-kind">
+            <span class="spec-glyph" aria-hidden="true"><Glyph name="pointer" size={18} /></span>
+            <h3>Page element</h3>
+            <p class="label">The expensive one</p>
+          </div>
+          <div>
+            <p>
+              Loads the real page in an embedded WebView and watches DOM nodes you picked by
+              tapping them. Each node carries its own expectation and an optional nickname, and the
+              alert names the one that broke.
+            </p>
+            <div class="spec-values">
+              <code>element exists</code>
+              <code>element is gone</code>
+              <code>text equals</code>
+              <code>text contains</code>
+              <code>text unchanged</code>
+              <code>attribute equals</code>
+            </div>
+            <p class="spec-note">
+              Every node resolves against one page load, so watching six costs about what watching
+              one costs. The expensive part is booting the WebView, not the assertions. Selectors
+              are re-resolved in a fixed order, id first, then a stable data attribute, then the
+              shortest unique CSS path, then XPath, then a text fingerprint, so a cosmetic markup
+              change degrades instead of paging you at 4am about a renamed class.
+            </p>
+          </div>
+        </article>
+      </div>
+
+      {/*
+        Three objects rather than one picture of three objects. The plate they
+        were shot on is cut apart by scripts/clean-screens.mjs, so each size of
+        the widget is its own transparent asset and the page can stack them where
+        there is no room for a row. As one raster they were about a hundred
+        pixels across on a phone, which is a strange thing to do to the one asset
+        whose subject is a list you are meant to read at a glance.
+      */}
+      <figure class="figure widgets" data-reveal>
+        <div class="widget-row">
+          <Image
+            src={widgetTall}
+            alt="The Nightbell widget at its tall size, one column listing six monitors worst first: Marketing site down, Checkout API at 4100 ms, then four healthy services with their response times."
+            widths={[330, 656]}
+            sizes="(min-width: 52rem) 22vw, min(78vw, 330px)"
+          />
+          <Image
+            src={widgetWide}
+            alt="The same widget dragged wider, the six monitors spilling into two columns with a checked just now line underneath."
+            widths={[420, 840]}
+            sizes="(min-width: 52rem) 28vw, min(92vw, 420px)"
+          />
+          <Image
+            src={widgetFlat}
+            alt="The same widget dragged flat into a single wide row, showing the three worst monitors and nothing else."
+            widths={[525, 1050]}
+            sizes="(min-width: 52rem) 34vw, min(100vw, 525px)"
+          />
+        </div>
+        <figcaption>
+          There is a widget too, worst monitor first. Monitors flow into columns rather than
+          disappearing below the fold when you drag it flat, because a widget's height is whatever
+          you dragged it to.
+        </figcaption>
+      </figure>
+    </Section>
+
+    <Trace variant="calm" seed={4} />
+
+    <!-- =========================================================== 05 setup -->
+    <Section id="setup" no="05" rail="Setup">
+      <div class="section-head">
+        <p class="label eyebrow"><Glyph name="sliders" size={14} />Adding a monitor</p>
+        <h2>Four steps, and everything is changeable afterwards.</h2>
+      </div>
+
+      <Wizard />
+
+      <p class="dim" style="margin-top:1.5rem;font-size:0.875rem;max-width:56ch">
+        Nothing here is locked in. Every field is editable from the monitor's detail screen
+        afterwards, and Test now runs the whole check once before you commit to it.
+      </p>
+    </Section>
+
+    <Trace variant="spike" state="down" />
+
+    <!-- ========================================================== 06 urgent -->
+    <Section id="urgent" no="06" rail="The payoff" state="down" class="payoff">
+      <div class="section-head">
+        <p class="label eyebrow"><Glyph name="bell" size={14} />Urgent alerts</p>
+        <h2>When it breaks, <span class="hot">Nightbell wakes you up.</span></h2>
+        <p class="lede">
+          Urgent is a per-monitor switch for the things you cannot afford to sleep through. It is
+          the only part of the app that is allowed to be loud, and it is deliberately hard to
+          ignore.
+        </p>
+      </div>
+
+      <Escalation />
+
+      <div class="payoff-grid">
+        <Player
+          id="payoff"
+          src={media.payoff.file}
+          poster="/media/nightbell-alert-firing-poster.webp"
+          seconds={media.payoff.seconds}
+          bytes={media.payoff.bytes}
+          loop
+          silent
+          autoplayInView
+          label="A check fails, the monitor card turns red, the phone wakes, and the full-screen urgent page fills the screen."
+          note="A screen recording off a real phone. No sound, and it loops."
+        />
+
+        <dl class="facts">
+          <div>
+            <dt><Glyph name="refresh" size={14} />Repeat</dt>
+            <dd>Every 5 min, until acknowledged</dd>
+          </div>
+          <div>
+            <dt><Glyph name="bell" size={14} />Channel</dt>
+            <dd>A dedicated alarm channel that bypasses Do Not Disturb</dd>
+          </div>
+          <div>
+            <dt><Glyph name="close" size={14} />Swipe away</dt>
+            <dd>Not possible. The notification is ongoing</dd>
+          </div>
+          <div>
+            <dt><Glyph name="warning" size={14} />On the page</dt>
+            <dd>Acknowledge, Re-check now</dd>
+          </div>
+          <div>
+            <dt><Glyph name="layers" size={14} />On the card</dt>
+            <dd>Ack, Re-check, Mute 1h</dd>
+          </div>
+          <div>
+            <dt><Glyph name="check" size={14} />Acknowledging</dt>
+            <dd>Stops this outage only. Recovery re-arms it</dd>
+          </div>
+        </dl>
+      </div>
+
+      <details class="deep-cut prose" style="margin-top:2rem">
+        <summary><Glyph name="check" size={15} />Exact acknowledgement behaviour</summary>
+        <p>
+          Acknowledging stops the repeats for that outage and nothing else. The monitor stays red,
+          the ordinary down notification stays where it was, and recovery re-arms the loop so the
+          next outage shouts again. Urgent overrides cooldown and the repeat toggle, because that
+          is the point, but it still honours the master switch, the per-monitor switch, mute and
+          the failure threshold. It means "do not let me miss this", not "ignore everything I
+          configured".
+        </p>
+      </details>
+    </Section>
+
+    <Trace variant="decay" state="degraded" />
+
+    <!-- ========================================================== 07 limits -->
+    <Section id="limits" no="07" rail="Honest limits" state="degraded">
+      <div class="section-head">
+        <p class="label eyebrow"><Glyph name="shield" size={14} />What Android allows</p>
+        <h2>Four grants, and the limits that stay after them.</h2>
+        <p class="lede">
+          Android will happily let an app think it is alerting you while delivering nothing. This
+          is the part most phone monitoring apps skip, so it is worth being specific about.
+        </p>
+      </div>
+
+      {/*
+        Four grants, two by two, each one a term with what it means under it.
+
+        This was a two column definition list at full page width, so "Notifications"
+        sat in a 270 px column with 270 px of nothing after it before the sentence
+        that finishes the thought, and the label was vertically centred against
+        however many lines its explanation ran to, which floated it. Where Android
+        makes you go to grant it is the useful third fact about each one, and it was
+        set as dim body copy trailing the sentence; it is a place, so it is a tag.
+      */}
+      <dl class="grants">
+        <div class="grant">
+          <dt><span class="title-icon"><Glyph name="bell" size={16} /></span>Notifications</dt>
+          <dd>
+            Without it nothing is posted at all.
+            <span class="where"><Glyph name="check" size={12} />Dialog, in the app</span>
+          </dd>
+        </div>
+        <div class="grant">
+          <dt><span class="title-icon"><Glyph name="zap" size={16} /></span>Unrestricted battery</dt>
+          <dd>
+            Lets checks keep their schedule, and lets an urgent page keep repeating while the
+            screen is off.
+            <span class="where"><Glyph name="check" size={12} />Dialog, in the app</span>
+          </dd>
+        </div>
+        <div class="grant">
+          <dt><span class="title-icon"><Glyph name="warning" size={16} /></span>Full-screen alerts</dt>
+          <dd>
+            Lets an urgent page wake the screen instead of waiting on the lockscreen.
+            <span class="where"><Glyph name="arrowRight" size={12} />Android settings, deep-linked</span>
+          </dd>
+        </div>
+        <div class="grant">
+          <dt><span class="title-icon"><Glyph name="moon" size={16} /></span>Do Not Disturb access</dt>
+          <dd>
+            Without it, Do Not Disturb and Bedtime mode silence urgent pages completely, which is
+            exactly when you want one.
+            <span class="where"><Glyph name="arrowRight" size={12} />Android settings, deep-linked</span>
+          </dd>
+        </div>
+      </dl>
+
+      {/*
+        The limits are the section, so they are on the page.
+
+        They were inside a collapsed `<details>` sitting in a two column row next to
+        a 645 px phone, so the layout was a 60 px summary bar beside a phone eight
+        times its height, and the six things this section is named after were the
+        one thing you had to click to read. A section called Honest limits that
+        hides its limits is doing the opposite of what it says.
+
+        Beside the first-launch screen they run to about the same height as it, which
+        is what that row was missing.
+      */}
+      <div class="limits-grid">
+        <figure class="device-figure" data-reveal>
+          <div class="device limits-shot">
+            <Image
+              src={pagerShot}
+              alt="The Nightbell first-launch setup screen listing four requirements: notifications, unrestricted battery, full-screen alerts, and Do Not Disturb access, with three granted and one outstanding."
+              widths={[240, 496]}
+              sizes="240px"
+            />
+          </div>
+          <figcaption>
+            The first-launch screen counts what is ready, deep-links to the two toggles Android has
+            no API for, and re-checks itself when you come back.
+          </figcaption>
+        </figure>
+
+        <div class="limits-list">
+          <h3><Glyph name="close" size={16} />Things the platform will not do</h3>
+          <ul>
+            <li>
+              <strong>Sub-15-minute background intervals are impossible, not unreliable.</strong>
+              WorkManager's periodic minimum is 15 minutes and there is no supported way around it.
+              Strict mode is the only way to get the interval you asked for.
+            </li>
+            <li>
+              <strong>Doze can delay even a 15 minute interval.</strong> Exempting Nightbell from battery
+              optimisation helps and is not a guarantee. Delay is reported in Settings and never
+              notified about, because it is not an outage.
+            </li>
+            <li>
+              <strong>Strict mode costs a permanent notification and real battery.</strong> That is
+              Android's price for a real cadence, not a design choice.
+            </li>
+            <li>
+              <strong>Element checks need a renderable page.</strong> Heavy single-page apps are
+              polled for about five seconds after load; anything slower to hydrate may report
+              element not found.
+            </li>
+            <li>
+              <strong>Quiet hours still suppress urgent pages unless you turn on the bypass.</strong>
+              That default is wrong. It is the next thing I want to fix properly, with a migration
+              rather than a flipped constant.
+            </li>
+            <li>
+              <strong>There is no CI.</strong> The 359 JVM and 173 on-device tests are run by hand.
+            </li>
+          </ul>
+        </div>
+      </div>
+
+    </Section>
+
+    <Trace variant="calm" state="brand" seed={5} />
+
+    <!-- ========================================================= 08 install -->
+    <Section id="install" no="08" rail="Install">
+      <div class="section-head">
+        <p class="label eyebrow"><Glyph name="download" size={14} />Getting it</p>
+        <h2>One APK, {apkMb} MB, signed with a key you can check.</h2>
+      </div>
+
+      {/*
+        The release, as a readout.
+
+        This section used to open with three prose cards, each an icon tile over a
+        paragraph, and the actual download was a link inside the first of them: on
+        the page whose entire job is handing over a file, there was no button. Then
+        came a paragraph about signing, a fingerprint block, and another paragraph
+        about upgrading from 1.x, which is four blocks of prose to install a 2 MB
+        APK.
+
+        What replaces it is the same four-up mono readout the hero's instrument
+        uses, because these are units and counts and that is what this page sets
+        units and counts in, with the download beside them.
+      */}
+      <div class="release" data-reveal>
+        <div class="release-top">
+          <div>
+            <p class="label"><Glyph name="download" size={14} />Latest release</p>
+            <p class="release-v">v{RELEASE.version}</p>
+          </div>
+
+          <div class="actions">
+            <a class="btn btn-primary" href={RELEASE.apkUrl} target="_blank" rel="noopener">
+              <Glyph name="download" size={17} />
+              Download the APK
+              <span class="mono apk-size">{apkMb} MB</span>
+            </a>
+            <a class="btn btn-ghost" href={REPO.latestRelease} target="_blank" rel="noopener">
+              <Glyph name="arrowRight" size={17} />
+              Release notes
+            </a>
+          </div>
+        </div>
+
+        <dl class="release-specs">
+          <div>
+            <dt>File</dt>
+            <dd class="mono">{RELEASE.apkName}</dd>
+          </div>
+          <div>
+            <dt>Needs</dt>
+            <dd class="mono">Android {RELEASE.minAndroid}+</dd>
+          </div>
+          <div>
+            <dt>Licence</dt>
+            <dd class="mono">Apache 2.0</dd>
+          </div>
+          <div>
+            <dt>Store listing</dt>
+            <dd class="mono">None anywhere</dd>
+          </div>
+        </dl>
+      </div>
+
+      {/*
+        Three channels, three lines.
+
+        Each of these was a paragraph. What a reader wants from this block is
+        whether a channel works yet and where to click, so that is what is in it,
+        and the row's own status chip carries the rest. The rows stagger in, which
+        is the one animation this section has and enough for a list of three.
+      */}
+      <ul class="channels" data-reveal>
+        <li class="channel" data-live="yes">
+          <span class="channel-dot" aria-hidden="true"></span>
+          <span class="channel-name">GitHub Releases</span>
+          <span class="channel-note">The APK, from the tag it was built at.</span>
+          <span class="channel-state label">Available now</span>
+          <a class="channel-go" href={REPO.latestRelease} target="_blank" rel="noopener">
+            Open<Glyph name="arrowRight" size={14} />
+          </a>
+        </li>
+        <li class="channel" data-live="yes">
+          <span class="channel-dot" aria-hidden="true"></span>
+          <span class="channel-name">Obtainium</span>
+          <span class="channel-note">Paste the repository URL for updates without a store.</span>
+          <span class="channel-state label">Works today</span>
+          <a class="channel-go" href={REPO.url} target="_blank" rel="noopener">
+            Copy the URL<Glyph name="arrowRight" size={14} />
+          </a>
+        </li>
+        <li class="channel" data-live="no">
+          <span class="channel-dot" aria-hidden="true"></span>
+          <span class="channel-name">F-Droid and IzzyOnDroid</span>
+          <span class="channel-note">Not submitted. IzzyOnDroid first, then F-Droid proper.</span>
+          <span class="channel-state label">Not yet</span>
+        </li>
+      </ul>
+
+      <p class="release-warn">
+        <Glyph name="shield" size={15} />
+        There is no store listing for Nightbell anywhere. If you find one, it is not mine.
+      </p>
+
+      <div class="copy-wrap">
+        <pre><code><span class="c"># download the APK from the release above, then</span>
+adb install -r {RELEASE.apkName}</code></pre>
+        <button class="copy" type="button" data-copy={`adb install -r ${RELEASE.apkName}`} hidden>
+          <Glyph name="copy" size={14} /><span data-copy-text>Copy</span>
+        </button>
+      </div>
+
+      {/*
+        The three numbers, each with its own copy button, because a 64 character
+        hex string exists to be compared against another one and selecting it by
+        hand off a dark background is the worst way to do that.
+
+        The paragraph that used to sit above this explained key pinning in five
+        lines. One line says it, and the long version is under the summary below
+        with the 1.x upgrade note it was next to.
+      */}
+      <div class="fingerprint" data-reveal>
+        <p class="label"><Glyph name="shield" size={14} />Check what you downloaded</p>
+        <dl>
+          <div>
+            <dt>APK SHA-256</dt>
+            <dd>
+              <span class="fp-val">{RELEASE.apkSha256}</span>
+              <button class="copy copy-inline" type="button" data-copy={RELEASE.apkSha256} hidden>
+                <Glyph name="copy" size={13} /><span data-copy-text>Copy</span>
+              </button>
+            </dd>
+          </div>
+          <div>
+            <dt>Signing certificate SHA-256</dt>
+            <dd>
+              <span class="fp-val">{RELEASE.signingCertSha256}</span>
+              <button class="copy copy-inline" type="button" data-copy={RELEASE.signingCertSha256} hidden>
+                <Glyph name="copy" size={13} /><span data-copy-text>Copy</span>
+              </button>
+            </dd>
+          </div>
+          <div>
+            <dt>Certificate subject</dt>
+            <dd><span class="fp-val">{RELEASE.signingCertDn}</span></dd>
+          </div>
+        </dl>
+        <p class="fingerprint-note">
+          Signed with my key, not Google's, so Play Protect asks once. The certificate number is
+          what says the next version came from the same person.
+        </p>
+      </div>
+
+      <details class="deep-cut prose" style="margin-top:2rem">
+        <summary><Glyph name="info" size={15} />Upgrading, and building it yourself</summary>
+        <p>
+          Android refuses an update signed by a different key, which is what makes the certificate
+          number above worth checking before you trust an APK you did not get from the link on this
+          page.
+        </p>
+        <p>
+          Anything from 2.0.0 onward updates in place and keeps your monitors. 1.x used a different
+          application id, so the only route across is the JSON export in Settings. Building it
+          yourself needs JDK 17 and an Android SDK with API 36; the commands are in the
+          <a href={REPO.readme} target="_blank" rel="noopener">README</a>.
+        </p>
+      </details>
+
+    </Section>
+
+    <Trace variant="calm" seed={6} />
+
+    <!-- ============================================================= 09 faq -->
+    <Section id="faq" no="09" rail="Questions" state="quiet">
+      <div class="section-head">
+        <p class="label eyebrow"><Glyph name="search" size={14} />Answers</p>
+        <h2>The questions worth asking before you sideload something.</h2>
+      </div>
+
+      <div class="faq">
+        {
+          faqs.map((f) => (
+            <details>
+              <summary>{f.q}</summary>
+              <div class="answer">
+                <p>{f.a}</p>
+              </div>
+            </details>
+          ))
+        }
+      </div>
+    </Section>
+  </main>
+
+  <Footer />
+
+  <script>
+    /*
+      The page's JavaScript, all of it, and the page works without every line.
+
+      The player script removes the native controls only once it is certain it
+      can replace them, so a failed load leaves a working `<video controls>`
+      rather than a poster nobody can press. Every animation in motion.ts is
+      written the same way round: the document ships the finished state, and
+      script is what temporarily hides it in order to replay how it got there.
+      The copy button stays hidden unless the clipboard API is there to back it.
+    */
+    import { enhancePlayers } from '../scripts/player';
+    import { enhanceMotion } from '../scripts/motion';
+
+    enhancePlayers();
+    enhanceMotion();
+
+    /*
+      Every copy button, not the first one.
+
+      This used to be `querySelector`, which was right when the only thing worth
+      copying was the adb line. The two hashes in the fingerprint block each have
+      one now, and a 64 character hex string is the single best argument for a
+      copy button on this page: it exists to be compared against another one.
+
+      Only the word changes. The glyph beside it is a sibling of this span rather
+      than a child of the button's text, so confirming the copy cannot wipe the
+      icon out of the button.
+    */
+    if (navigator.clipboard) {
+      for (const button of document.querySelectorAll<HTMLButtonElement>('.copy')) {
+        const word = button.querySelector<HTMLElement>('[data-copy-text]');
+        if (!word) continue;
+        button.hidden = false;
+        button.addEventListener('click', async () => {
+          await navigator.clipboard.writeText(button.dataset.copy ?? '');
+          const was = word.textContent;
+          word.textContent = 'Copied';
+          setTimeout(() => {
+            word.textContent = was;
+          }, 1600);
+        });
+      }
+    }
+  </script>
+</Base>

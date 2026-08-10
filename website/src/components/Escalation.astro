@@ -1,0 +1,101 @@
+---
+/**
+ * The four beats of an outage, on the screens they happen on.
+ *
+ * Every frame here is real. `monitors.png` and `detail.png` are cut out of
+ * `docs/screens/hero-b.png` and `urgent.png` is `docs/screens/urgent-b.png`, all
+ * three shot on a device. Nothing in this section is drawn to look like the app.
+ *
+ * ## A list that script turns into a stage
+ *
+ * Shipped, this is an ordered list: four headings, four sentences, four figures,
+ * in the order they happen. Everything is on the page, in the document, at once.
+ *
+ * `motion.ts` adds `data-on`, which is what makes the wrapper tall, pins the
+ * stage and shows one beat at a time as you scroll through it. The scroll itself
+ * is never touched: no wheel handler, no scroll jacking, no smooth-scroll
+ * hijack. The page scrolls at the speed the reader's own input says, and all the
+ * stage does is read where it got to.
+ *
+ * That upgrade does not happen at all under reduced motion, on a narrow screen,
+ * or with no JavaScript. In each of those cases what is left is the list, which
+ * is the reason the list is the shipped state rather than the fallback.
+ */
+import { Image } from 'astro:assets';
+import Glyph from './Glyph.astro';
+
+import monitorsShot from '../assets/screens/clean/monitors.png';
+import urgentShot from '../assets/screens/clean/urgent.png';
+import detailShot from '../assets/screens/clean/detail.png';
+
+const beats = [
+  {
+    icon: 'warning',
+    tag: 'The check fails',
+    body:
+      'The failure threshold is met, so this is an outage and not a blip. The card goes red, the banner at the top of the list counts it, and the sparkline keeps the wall of refused connections where you can see it.',
+  },
+  {
+    icon: 'bell',
+    tag: 'The page arrives',
+    body:
+      'One notification, on a dedicated alarm channel that bypasses Do Not Disturb. It is marked ongoing, so there is no swipe that dismisses it, and if full-screen alerts are granted it wakes the screen rather than waiting politely on the lockscreen. It comes back every five minutes until you deal with it.',
+  },
+  {
+    icon: 'check',
+    tag: 'You decide one thing',
+    body:
+      'Ack silences this outage and nothing else. Re-check runs the check again right now. Mute buys an hour. The monitor stays red until it is not, and recovery re-arms the loop so the next outage shouts again.',
+  },
+] as const;
+---
+
+<div class="esc" data-escalation>
+  <div class="esc-stage">
+    <ol class="esc-beats">
+      {
+        beats.map((beat, i) => (
+          <li class="esc-beat" data-beat={i}>
+            <p class="esc-tag label">
+              <span class="esc-no">{String(i + 1).padStart(2, '0')}</span>
+              <span class="esc-icon" aria-hidden="true">
+                <Glyph name={beat.icon} size={14} />
+              </span>
+              {beat.tag}
+            </p>
+            <p class="esc-body">{beat.body}</p>
+          </li>
+        ))
+      }
+    </ol>
+
+    <div class="esc-screens">
+      <figure class="device esc-screen" data-screen="0">
+        <Image
+          src={monitorsShot}
+          alt="The Nightbell monitor list with a red banner reading 1 of 5 is down, a Check all now button, a red Price watch card with a sparkline ending in a wall of failures, and an amber Asset CDN card marked degraded."
+          widths={[320, 505]}
+          sizes="(min-width: 60rem) 320px, min(64vw, 260px)"
+        />
+      </figure>
+
+      <figure class="device esc-screen" data-screen="1">
+        <Image
+          src={urgentShot}
+          alt="A phone home screen with the Nightbell urgent alert as a red heads-up card reading Checkout API is down, connection refused, down for 22m, with Ack, Re-check and mute buttons."
+          widths={[320, 498]}
+          sizes="(min-width: 60rem) 320px, min(64vw, 260px)"
+        />
+      </figure>
+
+      <figure class="device esc-screen" data-screen="2">
+        <Image
+          src={detailShot}
+          alt="The Nightbell monitor detail screen for Price watch: a red dial reading 93 per cent over the past ten hours, a Down verdict, the element text that changed, and Check now, Pause and Mute 1h buttons above a response time chart that ends in red."
+          widths={[320, 505]}
+          sizes="(min-width: 60rem) 320px, min(64vw, 260px)"
+        />
+      </figure>
+    </div>
+  </div>
+</div>

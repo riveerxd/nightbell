@@ -1,0 +1,86 @@
+---
+/**
+ * The ground the document sits on.
+ *
+ * Eight very large, very faint blue fields drifting behind everything, so that
+ * black reads as depth rather than as an unpainted surface. The reference was
+ * the blob field on videre.cz: thirty 150 to 300 px circles at 64 px blur and
+ * up to 0.45 opacity, drifting fast enough to watch.
+ *
+ * This is the same mechanism at a different register, and the differences are
+ * the whole point of it being allowed on this page at all.
+ *
+ * ## Why it is not the thing DESIGN_NOTES refuses
+ *
+ * That list refuses a gradient blob behind a heading, and it is right to. What
+ * it is refusing is decoration you notice: a coloured shape that competes with
+ * the type in front of it and says nothing about the product. Eight fields at
+ * 0.05 to 0.10, a thousand pixels across, moving about six per cent of the
+ * viewport over four minutes, are below the threshold where you can point at
+ * one. You see that the black is not flat. You do not see blobs.
+ *
+ * It also stays under the hero's graticule, which remains the top layer and the
+ * only background element with an edge on it. The instrument reading is intact:
+ * a lit ground with a measuring grid over it, not a light show.
+ *
+ * ## Radial gradients, not blurred circles
+ *
+ * The reference blurs a solid circle with `filter: blur(64px)`. A filter that
+ * size forces the layer to re-rasterise whenever the element's box changes, and
+ * this page cannot afford that: `motion.ts` reads `getBoundingClientRect` every
+ * frame for the pinned payoff stage, the player runs its own frame loop, and
+ * two videos decode on the same compositor.
+ *
+ * `radial-gradient(closest-side, ...)` is soft by construction, costs one
+ * raster at paint time and never again, and the animation touches nothing but
+ * `transform`, which the compositor handles without involving the main thread.
+ * No `scale()` for the same reason: scaling a rasterised layer this large is
+ * the one transform that does force a re-raster.
+ *
+ * ## The positions are computed, not random
+ *
+ * Same rule as `Instrument.astro`. `Math.random()` here would mean the markup
+ * differed between builds and every deploy would read as a content change. The
+ * angle below is the golden angle, which is the cheapest way to get eight
+ * points that look scattered without any two of them landing on top of each
+ * other.
+ */
+const COUNT = 8;
+
+/** 2.39996 rad. Successive multiples never repeat and never clump. */
+const GOLDEN = Math.PI * (3 - Math.sqrt(5));
+
+const fields = Array.from({ length: COUNT }, (_, i) => {
+  const a = i * GOLDEN;
+  return {
+    /* Spread past the edges on purpose: a field whose centre is off screen is
+       what stops the set reading as eight circles arranged on a page. */
+    left: Math.round(50 + 62 * Math.sin(a * 2.1)),
+    top: Math.round(50 + 58 * Math.cos(a * 1.3)),
+    size: 720 + (i % 4) * 130,
+    /* Indigo on the odd ones, so the field has a near and a far without ever
+       leaving the one blue family the palette allows. */
+    tone: i % 3 === 1 ? 'var(--indigo)' : 'var(--aqua)',
+    strength: [7, 5, 9, 6, 8, 5, 7, 6][i],
+    path: (i % 4) + 1,
+    /* Four minutes at the slowest. Long enough that nothing appears to be on a
+       loop while you are reading a section. */
+    seconds: 210 + (i % 5) * 24,
+    /* Negative, so every field is already mid-drift on first paint rather than
+       the whole set setting off together. */
+    delay: i * 37,
+  };
+});
+---
+
+<div class="field" aria-hidden="true">
+  {
+    fields.map((f) => (
+      <span
+        data-path={f.path}
+        style={`--x:${f.left}%;--y:${f.top}%;--d:${f.size}px;--tone:${f.tone};` +
+          `--a:${f.strength}%;--t:${f.seconds}s;--lag:-${f.delay}s`}
+      />
+    ))
+  }
+</div>

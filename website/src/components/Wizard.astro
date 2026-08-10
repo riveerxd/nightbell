@@ -1,0 +1,149 @@
+---
+/**
+ * The four steps, on the phone they happen on.
+ *
+ * The four screens are real: `scripts/sync-assets.mjs` cuts them out of
+ * `docs/screens/create-monitor.png`, which is one contact sheet of the wizard
+ * shot on a device. Nothing here is a mock of the app.
+ *
+ * ## It is a list first and a stepper second
+ *
+ * With no JavaScript this is four figures under four headings, in order, all
+ * four screens visible. That is a complete and honest account of the flow, and it
+ * is what a crawler reads. The tab strip ships `hidden`, exactly as the player's
+ * control bar does, and script unhides it and collapses the four panels to one.
+ * So there is never a row of buttons that does nothing.
+ *
+ * While it is a stepper it advances itself every few seconds, because the point
+ * being made is that this is a short flow. The first interaction of any kind
+ * stops that for good: nothing is worse than a control that keeps moving under
+ * the hand of somebody trying to read it. It does not auto-advance at all under
+ * reduced motion.
+ */
+import { Image } from 'astro:assets';
+import Glyph from './Glyph.astro';
+
+import s1 from '../assets/screens/clean/wizard-1.png';
+import s2 from '../assets/screens/clean/wizard-2.png';
+import s3 from '../assets/screens/clean/wizard-3.png';
+import s4 from '../assets/screens/clean/wizard-4.png';
+
+/**
+ * `keys` is what the step actually sets, read off the screen beside it. It is
+ * there because the left column was one sentence next to a tall phone, and a
+ * paragraph explaining a screen is weaker than the screen's own field names
+ * sitting under it.
+ */
+const steps = [
+  {
+    icon: 'radar',
+    tab: 'What to watch',
+    title: 'What to watch',
+    body:
+      'Status check, request and response, or page element. This is the only choice that changes the rest of the wizard.',
+    keys: ['status check', 'request and response', 'page element'],
+    shot: s1,
+    alt:
+      'Step one of the new-monitor wizard: three kinds of check listed as rows, Status check selected with a tick, Request and response, and Page element.',
+  },
+  {
+    icon: 'target',
+    tab: 'Target',
+    title: 'Target',
+    body:
+      'The URL, and for a request monitor the method, headers and body. For a page monitor this is where the live preview opens and you tap the nodes you care about.',
+    keys: ['name', 'url', 'method', 'headers', 'body', 'test now'],
+    shot: s2,
+    alt:
+      'Step two: a name field reading Orders service, a URL field reading https://api.example.com/orders/health, a row of methods with GET selected, an empty headers section, and a Test now button.',
+  },
+  {
+    icon: 'check',
+    tab: 'Expectations',
+    title: 'Expectations',
+    body:
+      'What healthy means. A status mode, a body assertion, or one expectation per watched element. Test now runs the whole thing once, there and then, before you commit to it.',
+    keys: ['status mode', 'expected code', 'body assertion', 'test now'],
+    shot: s3,
+    alt:
+      'Step three: status code modes with Exact code selected, an expected code of 200 with a grid of common codes, six response body assertions with No body check selected, and a Test now button.',
+  },
+  {
+    icon: 'clock',
+    tab: 'Cadence',
+    title: 'Cadence and alerts',
+    body:
+      'How often, how long to wait for an answer, and whether this monitor is urgent. Also the latency budget, above which a successful but slow answer counts as degraded rather than down.',
+    keys: ['interval', 'timeout', 'follow redirects', 'latency budget', 'urgent'],
+    shot: s4,
+    alt:
+      'Step four: check every 15 minutes with shortcuts from one minute to twelve hours, a 15 second timeout, follow redirects and active both switched on, a custom latency budget switched off, and a Create monitor button.',
+  },
+] as const;
+---
+
+<div class="wizard" data-wizard>
+  {/* Hidden until script can drive it, so a page with no JavaScript never shows
+      four buttons that do nothing. */}
+  <div class="w-tabs" role="tablist" aria-label="The four steps of adding a monitor" hidden data-tabs>
+    {
+      steps.map((step, i) => (
+        <button
+          type="button"
+          role="tab"
+          class="w-tab"
+          id={`w-tab-${i + 1}`}
+          aria-controls={`w-panel-${i + 1}`}
+          aria-selected={i === 0 ? 'true' : 'false'}
+          tabindex={i === 0 ? 0 : -1}
+          data-step={i}
+        >
+          <span class="w-tab-no mono">{String(i + 1).padStart(2, '0')}</span>
+          <span class="w-tab-glyph" aria-hidden="true">
+            <Glyph name={step.icon} size={14} />
+          </span>
+          <span class="w-tab-name">{step.tab}</span>
+          <span class="w-tab-run" aria-hidden="true"></span>
+        </button>
+      ))
+    }
+  </div>
+
+  <div class="w-panels">
+    {
+      steps.map((step, i) => (
+        <section
+          class="w-panel"
+          id={`w-panel-${i + 1}`}
+          role="tabpanel"
+          aria-labelledby={`w-tab-${i + 1}`}
+          data-panel={i}
+        >
+          <div class="w-copy">
+            <p class="label w-no">
+              <Glyph name={step.icon} size={14} />Step {i + 1} of 4
+            </p>
+            <h3>{step.title}</h3>
+            <p>{step.body}</p>
+            <p class="w-keys">
+                {/* A visually hidden label rather than aria-label, which the HTML
+                    spec does not permit on a p: aria-label only names elements
+                    whose role supports a name, and p's does not. Same words, same
+                    announcement, valid markup. */}
+                <span class="sr-only">{`What step ${i + 1} sets: `}</span>
+              {step.keys.map((key) => <code>{key}</code>)}
+            </p>
+          </div>
+          <div class="device w-shot">
+            <Image
+              src={step.shot}
+              alt={step.alt}
+              widths={[220, 440]}
+              sizes="(min-width: 46rem) 220px, min(56vw, 220px)"
+            />
+          </div>
+        </section>
+      ))
+    }
+  </div>
+</div>
