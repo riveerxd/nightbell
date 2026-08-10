@@ -1,0 +1,9 @@
+3.0.2
+
+The icon is the same icon everywhere now, and a cold start rings.
+
+Fixed: the widget header and the status-bar glyph had shipped as solid bells since 3.0.0, while every other surface carried the heartbeat knocked out of it. On a home screen they disagreed with the launcher icon next to them. All six drawables carry the trace now, and the two 24dp canvases widen it by a third so the hole survives a 1x density.
+
+Added: a cold-start animation. The bell arrives, rings, and the word wipes in beside it over 2.8 seconds, on cold start only. It draws the same mark the dashboard header uses, so it cannot drift from the icon it introduces. Skipped when the system says animations are off, and it does not replay on rotation.
+
+Updating: same signing key as 3.0.1, so 3.0.1 updates in place. Coming from 3.0.0 needs an uninstall first, because 3.0.1 changed the key. Coming from Pulse 2.x needs export and import, because 3.0.0 moved the package.

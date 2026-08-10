@@ -1,0 +1,1 @@
+Uptime monitoring that runs on your phone. No server, no account.

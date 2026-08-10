@@ -1,0 +1,26 @@
+Point Nightbell at anything that answers over HTTP, or at one element on a
+rendered web page, and it watches it, charts it, and gets loud when it
+breaks.
+
+There is no server and no account. The phone in your pocket does the
+checking, and your API tokens and target URLs never leave the device.
+
+Three kinds of monitor:
+- Status check: hit a URL, assert on the status code.
+- Request and response: pick the method, set headers and a body, assert
+  on what comes back (contains, equals, regex, or a JSON field by path).
+- Page element: load the real page in an embedded browser and watch DOM
+  nodes you picked by tapping them.
+
+Urgent alerts arrive as a full-screen red page with a looping alarm that
+keeps going until you acknowledge it, and it wakes the screen even if the
+phone is locked. A first-launch screen walks through the four Android
+grants a paging app actually needs (notifications, unrestricted battery,
+full-screen intent, Do Not Disturb access), because two of them have no
+system dialog and have to be opened by hand.
+
+A home-screen widget shows the worst monitor first. Settings let you shape
+the alert policy: what counts as down, sound, haptics, escalation, and
+quiet hours.
+
+Signed with the developer's own key. No Play Store listing.
