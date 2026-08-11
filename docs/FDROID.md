@@ -73,16 +73,20 @@ repositories {
 }
 ```
 
-That revision is whatever `HEAD` was at build time. F-Droid checks out the tag, so
-their copy records the tag's commit. Build the APK before committing and the two
-disagree on this one file while all 147 others match.
+That revision is whatever `HEAD` was at build time. F-Droid checks out the commit
+named in the metadata, so their copy records that commit. Build the APK before
+committing the version bump and the two disagree on this one file while all 147
+others match.
 
 `local_root_path` is normalised to the literal `$PROJECT_DIR`, so the build
 directory does not have to match. Only the revision does.
 
-The tag therefore has to point at the commit the APK was built from. On 3.0.4 the
-artifacts APK was committed first, which put the tag one commit past the recorded
-revision, and the tag had to be moved back.
+Three things therefore have to be the same hash: the commit the APK recorded, the
+commit `metadata/me.river.nightbell.yml` names, and the commit the release tag
+points at. The tag is not what F-Droid reads, since `commit` is a hash, but keeping
+it aligned is what makes the release legible later. On 3.0.4 the artifacts APK was
+committed before tagging, which put the tag one commit past the recorded revision,
+and the tag had to be moved back.
 
 ### 3. Ship no signing block beyond the signature
 
@@ -147,7 +151,7 @@ Binaries:
 Builds:
   - versionName: 3.0.4
     versionCode: 26
-    commit: v3.0.4
+    commit: bbb366584225f5318b743e62e94ead94fd8bedfe
     subdir: app
     gradle:
       - yes
@@ -193,9 +197,25 @@ with PyYAML, which follows YAML 1.1 and turns `yes` into boolean `true`, then fa
 the schema. F-Droid's `check-jsonschema` reads it as a string. The preflight script
 disables PyYAML's boolean resolver to match.
 
-**`commit: v3.0.4`** can be a tag now. It was a full SHA for the first attempt,
-because the `v3.0.2` tag predated `fastlane/` being added to the repo and a
-checkout of it had no localized metadata. Any tag cut from here on carries it.
+**`commit` is a full 40 character hash, never a tag or a branch.** The schema
+accepts a tag and the pipeline passes with one, so this is a review rule rather
+than a mechanical one. From linsui on the merge request:
+
+> Please don't use tag or branch in commit. Use the full commit hash instead.
+
+Which makes sense: a tag can be moved, and this project moved one during this very
+release when the artifacts commit ended up tagged by mistake. A hash cannot drift.
+
+The hash to use is the commit the tag points at, and it has to be the same one the
+APK recorded in `META-INF/version-control-info.textproto`, or the reproducible
+build comparison fails on that file:
+
+```bash
+git rev-parse v3.0.4^{commit}
+unzip -p artifacts/Nightbell-3.0.4-release.apk META-INF/version-control-info.textproto
+```
+
+Those two must print the same hash before the metadata is written.
 
 **`AllowedAPKSigningKeys`** is the lowercase hex SHA-256 of the signing
 certificate:
@@ -290,8 +310,8 @@ Order matters. Steps 2 and 3 are the ones that are easy to get backwards.
    and the asset `Nightbell-<version>-release.apk`.
 7. **Commit the artifacts APK** afterwards. It lands past the tag, which is correct:
    the tag must stay on the commit the APK recorded.
-8. **Update the fdroiddata metadata**: `versionName`, `versionCode`, `commit`,
-   `CurrentVersion`, `CurrentVersionCode`.
+8. **Update the fdroiddata metadata**: `versionName`, `versionCode`, `commit` as a
+   full hash, `CurrentVersion`, `CurrentVersionCode`.
 
 Because `AutoUpdateMode: Version` and `UpdateCheckMode: Tags ^v.+$` are set,
 F-Droid picks up later tags on its own once the first build lands, so step 8 is
@@ -332,6 +352,7 @@ Kept as a lookup table, since the error strings are searchable.
 | `compared built binary to supplied reference binary but failed`, `classes.dex` and `baseline.prof` differ | JDK mismatch, 21.0.11 against their 21.0.12 | Match the JDK, re-release |
 | Same error, only `version-control-info.textproto` differs | APK built before the release commit existed | Rebuild at the tagged commit |
 | `found extra signing block 'Dependency metadata'` | AGP default for Play reporting | `dependenciesInfo { includeInApk = false }` |
+| Review comment: `Please don't use tag or branch in commit` | A tag in `commit`. Passes CI, fails review | Use the full 40 character hash |
 
 ---
 
