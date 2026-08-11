@@ -18,9 +18,13 @@ keystore/keystore.properties
 artifacts/*-debug.apk
 .impeccable/
 
-# Working briefs. These are instructions written to a tool, not documentation of
-# the project, and the repository is public. Kept locally, never committed.
-NIGHTBELL_*.md
+# Working briefs and the local tooling that goes with them. These are notes and
+# instructions written to a tool, not documentation of the project, and the
+# repository is public. Kept locally, never committed.
+#
+# The pattern is deliberately not NIGHTBELL_*.md. Scripts belong in here too, and a
+# NIGHTBELL_*.sh was one `git add` away from being public before this was widened.
+NIGHTBELL_*
 
 # The launch checklist annotates each task with which of them needs a human and
 # which does not, in terms of the tool that was doing the other half. That is the
