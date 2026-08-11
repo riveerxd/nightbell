@@ -1,0 +1,11 @@
+3.0.5
+
+Answers a security review of 3.0.4 on the F-Droid merge request. The verdict was pass with recommendations, so nothing here was a defect, but three of the four were worth doing.
+
+The cleartext policy moved out of the manifest into res/xml/network_security_config.xml. It still permits cleartext, because a lot of what people monitor has no certificate and never will: a NAS on a LAN address, a container on a homelab box, a printer. What changed is that the policy is now a file you can read and argue with, and the one host the app contacts on its own behalf, the connectivity probe at www.gstatic.com, is pinned to HTTPS and can no longer be downgraded.
+
+The element picker's WebView closed doors it never used. It loads a URL you typed, with script enabled, so file and content access are off, mixed content is refused and geolocation is disabled. File access mattered most: it defaults to on below Android 11.
+
+Release builds no longer carry Log.d and Log.v. Warnings and errors stay, because a build with no log at all cannot be diagnosed from a bug report.
+
+Nothing about how the app behaves has changed. If you are on 3.0.4 there is nothing here you will see.

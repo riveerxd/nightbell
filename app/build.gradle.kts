@@ -200,8 +200,34 @@ android {
         // the JDK matches their buildserver, the version bump is committed before
         // the APK is built, and the APK carries no signing block beyond the
         // signature itself.
-        versionCode = 26
-        versionName = "3.0.4"
+        // 3.0.5 answers a security review of 3.0.4 on the F-Droid merge request.
+        // Its verdict was pass with recommendations, so none of this was a defect,
+        // but three of the four were worth doing and the fourth was worth writing
+        // down rather than changing.
+        //
+        // The cleartext policy moved out of the manifest. usesCleartextTraffic was a
+        // single boolean saying "anything goes"; res/xml/network_security_config.xml
+        // says the same thing for user-entered hosts, which it has to, and pins
+        // www.gstatic.com to HTTPS because that probe is the app's own traffic
+        // rather than the user's. The reviewer asked for cleartext to be scoped to
+        // user-configured domains, which cannot be done: the file is compiled at
+        // build time and the domains are typed later, with no runtime API to add
+        // one. That is argued in the file.
+        //
+        // The element picker's WebView closed doors it never used. allowFileAccess
+        // is the one that mattered, because it defaults to true below API 30 and
+        // minSdk here is 26, so on API 26 to 29 a page loaded from a user's URL
+        // could reach file:// with script enabled and a bridge attached.
+        //
+        // R8 now drops Log.d and Log.v. Log.i, w and e stay, because a release with
+        // no log cannot be diagnosed from a bug report.
+        //
+        // BootReceiver was left alone. It already returns unless the action is
+        // BOOT_COMPLETED or MY_PACKAGE_REPLACED, and directBootAware stays false on
+        // purpose: the store it needs is credential-encrypted, so a direct-boot
+        // receiver would run before it could be read.
+        versionCode = 27
+        versionName = "3.0.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

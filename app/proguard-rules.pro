@@ -90,3 +90,24 @@
 # app/build/outputs/mapping/release/mapping.txt.
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
+
+# --- Debug logging, out of release builds ------------------------------------
+#
+# A security review of 3.0.4 counted 21 Log.d, 2 Log.v, 5 System.out.print and 8
+# println calls surviving into the release APK, most of them inside libraries. None
+# of it leaks anything sensitive, but it is noise in logcat on a user's device and
+# it is dead weight in the dex, so R8 can drop it.
+#
+# `-assumenosideeffects` lets R8 treat a call as removable when its result is
+# unused. It applies to library code as well as ours, which is the point: the count
+# above is mostly androidx and OkHttp.
+#
+# d and v only. Log.i, Log.w and Log.e stay, deliberately. When somebody reports
+# that a monitor stopped firing after a reboot, the answer is usually in a warning
+# from the scheduler, and a release build with no log at all cannot be diagnosed
+# from a bug report.
+-assumenosideeffects class android.util.Log {
+    public static *** d(...);
+    public static *** v(...);
+    public static boolean isLoggable(...);
+}

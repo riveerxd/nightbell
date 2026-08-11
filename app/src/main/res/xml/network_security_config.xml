@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cleartext policy, moved out of the manifest so it is reviewable rather than a
+  single boolean.
+
+  This replaces android:usesCleartextTraffic="true". A network security config
+  supersedes that attribute, and unlike the attribute it can say different things
+  about different hosts, which is the point.
+
+  ## Why cleartext is permitted at all
+
+  Nightbell monitors endpoints the user types in. A large share of what people
+  point it at has no certificate and never will: a NAS admin page on a LAN
+  address, a service on a homelab box reached over Tailscale, a container on
+  http://192.168.1.20:8080, a printer. Refusing cleartext would not make those
+  endpoints safer, it would make them unmonitorable, and the user would go back to
+  not knowing when they break.
+
+  ## Why it cannot be scoped to the user's domains
+
+  A reviewer asked for cleartext to be restricted to user-configured domains,
+  which is the right instinct and is not expressible here. This file is compiled
+  into the APK at build time. The domains are typed months later on someone's
+  phone, and there is no runtime API to add a domain-config entry. Android offers
+  no per-request cleartext opt-in either: NetworkSecurityPolicy is consulted by
+  OkHttp per host, and if the policy says no for a host then that host cannot be
+  checked at all.
+
+  So base-config permits it, and the compensating controls are elsewhere: the app
+  asks for no location, camera, contacts or storage permission, it has no
+  analytics and no crash reporter, it sends the user's credentials only to the host
+  the user named, and the setup screen shows the scheme of the URL being saved.
+
+  ## What is pinned
+
+  The one host this app contacts on its own behalf is www.gstatic.com, for the
+  204 connectivity probe that distinguishes "the monitored service is down" from
+  "this phone has no working network". That is the app's own traffic rather than
+  the user's, so it is nailed to HTTPS here and cannot be downgraded even though
+  the base config is permissive.
+
+  If a future release adds any other endpoint of its own, add it here the same way
+  rather than letting it inherit the permissive base.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="false">www.gstatic.com</domain>
+    </domain-config>
+</network-security-config>

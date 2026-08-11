@@ -107,6 +107,34 @@ private fun parsePick(raw: String): PickedElement? {
     )
 }
 
+/**
+ * The only thing reachable from JavaScript in this app, and the whole of it.
+ *
+ * A WebView that renders a user-supplied URL with script enabled and a bridge
+ * attached is worth being explicit about, so: this class is the entire attack
+ * surface a loaded page can address, it is three methods wide, and each one takes
+ * a String and returns Unit.
+ *
+ * What the page can do through it: hand back a picked element as JSON, report the
+ * document title once, report an error string. Nothing else is annotated, and R8
+ * keeps only annotated members, so nothing else is callable by name either.
+ *
+ * What it cannot do. There is no Context, Activity, File, ContentResolver or
+ * ClassLoader on this object, so there is nothing to walk to via the reflection
+ * path that made addJavascriptInterface dangerous before API 17. Every parameter
+ * is a String, so a page cannot pass an object in. `onPick` runs the JSON through
+ * `parsePick`, which returns null on anything malformed and is dropped, so a
+ * hostile page gets no further than a discarded parse. Each handler hops to the
+ * main thread rather than touching state on the WebView's thread.
+ *
+ * What it can still do, stated rather than glossed: `onError` and `onReady` take
+ * strings that end up on screen, so a page can put text of its choosing in the
+ * picker's own UI. It is not a privilege boundary, it is a label, and the page
+ * already controls everything else on that screen by definition.
+ *
+ * The WebView's own settings are trimmed where this class cannot help, notably
+ * file and content access. See the settings block below.
+ */
 private class PickerBridge(
     private val pickHandler: (PickedElement) -> Unit,
     private val readyHandler: (String) -> Unit,
@@ -279,6 +307,10 @@ private fun PickerContent(
                         WebView(ctx).apply {
                             setBackgroundColor(webBackground)
                             settings.apply {
+                                // Required, and the reason this screen exists. The
+                                // picker injects script into the loaded page so a tap
+                                // can resolve to a selector; without JS there is
+                                // nothing to pick with.
                                 javaScriptEnabled = true
                                 domStorageEnabled = true
                                 useWideViewPort = true
@@ -287,6 +319,33 @@ private fun PickerContent(
                                 displayZoomControls = false
                                 cacheMode = WebSettings.LOAD_DEFAULT
                                 userAgentString = ElementChecker.MOBILE_UA
+
+                                // Everything below is closing doors this WebView has
+                                // no use for. It loads a URL the user typed, which
+                                // means it renders arbitrary remote script, and it has
+                                // a bridge attached, so the surface is worth trimming
+                                // even though the bridge itself takes only strings.
+                                //
+                                // allowFileAccess is the one that matters: it defaults
+                                // to true below API 30 and minSdk here is 26, so on
+                                // API 26 to 29 a remote page could reach file:// URLs
+                                // unless it is turned off. There is no local content
+                                // to show, so it goes off on every API level.
+                                allowFileAccess = false
+                                allowContentAccess = false
+                                // Default since API 21, stated so a future edit has to
+                                // remove it deliberately rather than inherit it.
+                                mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                                // The app holds no location permission, so this could
+                                // only ever produce a prompt or a denial. Off.
+                                setGeolocationEnabled(false)
+
+                                // allowFileAccessFromFileURLs,
+                                // allowUniversalAccessFromFileURLs and databaseEnabled
+                                // are not set here on purpose. All three are already
+                                // false by default at this minSdk and all three are
+                                // deprecated, so assigning them only adds compiler
+                                // warnings to every build in exchange for nothing.
                             }
                             addJavascriptInterface(bridge, PickerScripts.BRIDGE_NAME)
                             webViewClient = object : WebViewClient() {
