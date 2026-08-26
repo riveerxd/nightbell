@@ -1,0 +1,26 @@
+Setting up a page-element monitor on a .onion or .i2p address no longer sends
+that address to your phone's own DNS. The live preview you pick elements in now
+loads through the same SOCKS5 proxy the check uses, and refuses to open at all
+rather than loading a hidden service directly.
+
+The routing switch has also moved to where you can reach it. It renders on every
+setup screen that offers Test, including the first one where you type the name
+and the URL, instead of two screens further on under Cadence. So a routed
+monitor's first test can be made to pass on the screen where it fails. The URL
+placeholder carries a port now, because a self-hosted service on a port other
+than 443 was the first thing anyone tried.
+
+Refusing is deliberate and it works both ways. A monitor set to route with no
+usable proxy address gets no preview, and an address that only resolves inside
+Tor or I2P gets no direct preview either, because the lookup leaks the name
+whether or not the page then loads. There is no quiet fallback to a direct load.
+
+Routed page loads run one at a time, because the WebView proxy setting belongs to
+the whole app rather than to one page. The preview holds it while it is open, and
+a routed check that cannot have it within fifteen seconds fails that check and
+says so instead of stalling the others.
+
+Settings said the opposite of all this, on the privacy card, since 3.1.0. It
+claimed page-element monitors always go out directly because Android's WebView
+cannot speak SOCKS. It can, the checks were already routed, and the text now says
+what the code does.

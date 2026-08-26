@@ -261,8 +261,18 @@ android {
         // were reported as outages; each now gets one retry, and only for methods
         // that are safe to repeat. Importing a backup ran the whole check pass
         // before reporting anything, which read as a frozen screen.
-        versionCode = 28
-        versionName = "3.1.0"
+        //
+        // 3.1.1 finishes the routing that 3.1.0 left half done. The element picker
+        // loaded its page outside the proxy, so setting a monitor up on a hidden
+        // service published that hostname to this device's own resolver at pick
+        // time, before the first check ran. The picker now takes the monitor's
+        // route, holds the process-wide override for as long as it is open, and
+        // refuses to open rather than loading a hidden service directly. Settings
+        // claimed the opposite of all of it and no longer does, and the routing
+        // switch renders on every setup screen that offers Test rather than two
+        // screens past the first one that does.
+        versionCode = 29
+        versionName = "3.1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
