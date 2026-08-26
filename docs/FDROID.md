@@ -317,6 +317,46 @@ Because `AutoUpdateMode: Version` and `UpdateCheckMode: Tags ^v.+$` are set,
 F-Droid picks up later tags on its own once the first build lands, so step 8 is
 mostly a first-submission concern.
 
+### The first 500 characters of the changelog are the store description
+
+Step 2 writes a changelog for people who already have the app. F-Droid renders it
+somewhere else entirely: `changelogs/<versionCode>.txt` for the latest build is
+printed on the package page as **New in version x.y.z**, in a box directly under
+the app name and the one-line summary, above the description, above the
+screenshots. It is the first prose a stranger reads about the app, and it is cut
+at roughly 500 characters, mid-word, with no ellipsis.
+
+`27.txt` is 1174 characters and opens with "Answers a security review of 3.0.4 on
+the F-Droid merge request." For anyone on 3.0.4 that is exactly the right first
+sentence. For the visitor arriving from a search, the app's own front page led
+with a security review and then stopped mid-sentence about cleartext policy,
+which reads as an app with a security problem rather than one that passed a
+review. That was the listing's first impression for its whole first fortnight,
+the period when f-droid.org became the largest referrer to the repository.
+
+So the rule for step 2, which costs nothing at writing time:
+
+- **Sentence one says what the release gives the user**, in language that means
+  something to somebody who has never run the app. Not what it answers, not what
+  it refactors, not which review it responds to.
+- **Keep the whole first paragraph under 400 characters** so the cut lands after
+  it rather than inside it. Everything after that paragraph is for upgraders and
+  can be as long and as specific as it likes.
+- **A release with no user-visible change says so in sentence one.** `27.txt`
+  does say it, in its last line, where the truncation guarantees nobody reads it.
+
+This cannot be fixed after the fact. F-Droid builds from the tag, so the
+changelog it renders is the file as it existed at `v3.0.5`; editing `27.txt` on
+`master` changes nothing on the listing. The only fix is that the next changelog
+is written for both audiences, and the next release replaces the text on the
+page.
+
+There is no check for this. `docs/fdroid-preflight.sh` validates the three build
+constraints, and none of them is prose. The reason it is written down here rather
+than turned into a lint is that "does this sentence mean anything to a stranger"
+is not a thing a script can answer, and a length check alone would have passed
+`27.txt`, whose first paragraph is 179 characters.
+
 ### Updating the metadata without a browser
 
 ```bash
