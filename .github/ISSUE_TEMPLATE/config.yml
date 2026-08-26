@@ -1,0 +1,27 @@
+# Blank issues stay ON, on purpose.
+#
+# The three issues this repo got from strangers before any template existed were all
+# freeform, and two of them were excellent: one named the exact file and line and included
+# a suggested diff, one described a slow-link failure precisely enough to find the cause.
+# Forcing those two people through a form would have produced worse reports, not better
+# ones. The form exists for the reports that arrive without a version or a stack trace, and
+# it is an offer rather than a gate.
+#
+# The cost is real and accepted: anybody can still open a blank issue and leave out
+# everything the form asks for. That is the right trade for a project whose best bug
+# reporters write prose.
+blank_issues_enabled: true
+
+contact_links:
+  - name: How something is meant to work
+    url: https://github.com/riveerxd/nightbell/blob/master/docs/reference.md
+    about: >-
+      The four alert tracks, sample retention, the certificate track, quiet hours and the
+      checker's own health. Worth a look before filing a bug about alerting, because several
+      behaviours that look wrong are documented decisions.
+
+  - name: Install and update questions
+    url: https://nightbell.app/#faq
+    about: >-
+      Why there is no Play listing, what happens to your monitors when you update, whether
+      checks run while the phone is off, and why the interval floors at 15 minutes.

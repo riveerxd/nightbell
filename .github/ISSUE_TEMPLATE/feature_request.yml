@@ -1,0 +1,43 @@
+name: Feature request
+description: Something Nightbell should be able to do and cannot.
+title: "[Feature] "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This one is deliberately short. The best request this repo has had was three
+        paragraphs of plain prose about monitoring a Monero node over Tor, and a form with
+        eight required fields would have made it worse. Write it however you like.
+
+        One thing worth knowing before you ask: Nightbell runs every check on the phone,
+        with no server anywhere. So anything that needs to keep watching while the phone is
+        off, out of signal or in a drawer is not a feature that can be added, it is a
+        different product. Everything else is fair game.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What you want it to do
+      description: >-
+        What the feature is, and what you are trying to accomplish with it. Saying what you
+        do today instead is usually the most useful part, because it is the thing that shows
+        what is actually missing.
+      placeholder: |
+        I run my Monero node's RPC as an onion hidden service and I would like to monitor it.
+
+        Right now I would have to put my Tor app into VPN mode, which forces every app on
+        the device through Tor, and I do not want that.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version you are on
+      description: >-
+        Settings, then About. Only so a request that already shipped can be answered with
+        "this is in 3.1.0" instead of a conversation.
+      placeholder: "3.1.0 (28)"
+    validations:
+      required: false

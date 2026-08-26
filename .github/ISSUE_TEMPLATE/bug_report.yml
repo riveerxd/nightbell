@@ -1,0 +1,137 @@
+name: Bug report
+description: Something in the app is broken or does not behave the way it says it does.
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. Two things before you start.
+
+        **Do not paste anything you would not publish.** Issues here are public, and a
+        monitor can hold an API token in its headers, an internal hostname, or a URL you
+        would rather nobody indexed. Redact those. The bug is almost always reproducible
+        against `https://httpbin.org/status/500` or any host you do not mind naming, and
+        a redacted report is worth more than no report.
+
+        **If the app crashes,** a logcat is the single most useful thing you can attach.
+        There is a field for it at the bottom, with the command.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+      placeholder: |
+        I added a status check for https://example.com on a 15 minute interval.
+        I expected it to alert once when the host went down.
+        Instead it paged me every 15 minutes and Acknowledge did not silence it.
+    validations:
+      required: true
+
+  - type: input
+    id: about-block
+    attributes:
+      label: Version and device
+      description: >-
+        Open Settings and scroll to About. Copy the Version and Android rows exactly as
+        they appear. That one line carries the version, the build number, the API level
+        and the device model, which is everything needed to reproduce.
+      placeholder: "Version 3.1.0 (28) / Android API 34 · Pixel 7a"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install-source
+    attributes:
+      label: Where you installed it from
+      description: >-
+        Worth asking because the builds are not interchangeable in one respect: F-Droid
+        serves the same signed APK as the release, but a build from source is your own
+        and may differ.
+      options:
+        - F-Droid
+        - APK from GitHub Releases or nightbell.app
+        - Obtainium
+        - Built it from source
+        - Not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: monitor-kind
+    attributes:
+      label: Which kind of monitor
+      description: Skip if the problem is not about a specific monitor.
+      options:
+        - Not specific to one, or not applicable
+        - Status check
+        - Request and response
+        - Page element
+    validations:
+      required: false
+
+  - type: dropdown
+    id: routing
+    attributes:
+      label: Is the check routed through a proxy
+      description: >-
+        Settings has a SOCKS5 proxy section, and a monitor can also be routed on its own in
+        the setup wizard. If you are watching a hidden service, say so here and say which
+        daemon, because a routed check has a different timeout and a different failure mode
+        from a direct one.
+      options:
+        - "No, checked straight from the device"
+        - "Yes, SOCKS5 to Tor"
+        - "Yes, SOCKS5 to I2P"
+        - "Yes, some other SOCKS5 proxy"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: strict-mode
+    attributes:
+      label: Is strict foreground monitoring on
+      description: >-
+        Settings, under Strict cadence. It changes how checks are scheduled, so it matters
+        for anything about timing, missed checks or battery.
+      options:
+        - "Off, the default"
+        - "On"
+        - Not sure
+    validations:
+      required: false
+
+  - type: textarea
+    id: logcat
+    attributes:
+      label: Logcat
+      description: |
+        For a crash, this is the part that actually identifies the bug. With the phone
+        plugged in and USB debugging on:
+
+        ```
+        adb logcat -d --pid=$(adb shell pidof me.river.nightbell) > nightbell.log
+        ```
+
+        Or, to catch a crash that happens on launch, start this first and then open the app:
+
+        ```
+        adb logcat -c && adb logcat | grep -i nightbell
+        ```
+
+        Paste the stack trace rather than the whole file. Release builds carry warnings and
+        errors but no debug logging, so there is less noise than you might expect.
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Before submitting
+      options:
+        - label: I am on the latest release, or I have said which version I am on above.
+          required: true
+        - label: I have removed any token, password or private hostname from what I pasted.
+          required: true
