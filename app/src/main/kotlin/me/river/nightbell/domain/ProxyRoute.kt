@@ -88,6 +88,36 @@ object ProxyRoute {
     }
 
     /**
+     * Why a live preview of [url] must not be opened over [route], or null when it
+     * can be.
+     *
+     * The element picker renders the target page in a WebView, so it is a request
+     * to the same host the check talks to, made from the same device, and it has
+     * to obey the same rule. 3.1.0 routed the check and left the picker loading
+     * direct, which meant setting up a monitor on a hidden service published the
+     * hostname to the phone's own resolver at pick time, once, before the feature
+     * that exists to prevent exactly that had run at all.
+     *
+     * Refused rather than downgraded in both directions. A monitor that asked to
+     * be routed and has nowhere to route through does not get a direct preview,
+     * and an address that only exists inside Tor or I2P does not get one either:
+     * the lookup is the leak, and it happens whether or not the page then loads.
+     */
+    fun previewRefusal(url: String, route: Route): String? = when {
+        route is Route.Unconfigured ->
+            "This monitor is set to route through a SOCKS5 proxy and no usable address is " +
+                "configured, so the page was not loaded. Set one in Settings, or on the monitor " +
+                "itself, or turn routing off."
+
+        route is Route.Direct && isHiddenService(url) ->
+            "This address only resolves inside Tor or I2P, and opening it from here would send " +
+                "the name to this phone's own resolver first. Turn on \"Route through SOCKS5\" " +
+                "for this monitor, then open the preview again."
+
+        else -> null
+    }
+
+    /**
      * Whether [url] names a hidden service.
      *
      * Worth knowing on its own: these addresses have no public DNS record, so a

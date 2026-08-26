@@ -234,6 +234,7 @@ fun SetupScreen(
         ElementPickerOverlay(
             visible = viewModel.pickerOpen,
             url = draft.url.trim(),
+            route = viewModel.pickerRoute,
             existingSelector = draft.targets.getOrNull(viewModel.pickingIndex)
                 ?.displaySelector.orEmpty(),
             alreadyWatching = draft.targets.size,

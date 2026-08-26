@@ -453,19 +453,30 @@ class SetupViewModel(
         private set
 
     /**
-     * The SOCKS5 proxy settings had when this screen opened, or null when there
-     * is no usable one.
+     * Global settings as they stood when this screen opened.
      *
      * Read once at open like [realBlurEnabled], because the routing toggle needs
      * to say where a check would actually go, and a toggle offering to route
      * traffic nowhere is worse than one that says the proxy is not set up yet.
      */
-    var proxy by mutableStateOf<ProxyRoute.Endpoint?>(null)
+    var settings by mutableStateOf(GlobalSettings())
         private set
 
+    /** The shared proxy, or null when there is nothing usable to route through. */
+    val proxy: ProxyRoute.Endpoint? get() = ProxyRoute.endpoint(settings)
+
     /** The shared budget a routed check inherits when this monitor sets none. */
-    var proxiedTimeoutSeconds by mutableStateOf(GlobalSettings().proxiedTimeoutSeconds)
-        private set
+    val proxiedTimeoutSeconds: Int get() = settings.proxiedTimeoutSeconds
+
+    /**
+     * Where the element picker is allowed to load the draft's URL from.
+     *
+     * The same decision the check makes, from the same two inputs, because the
+     * picker renders the same page from the same device. 3.1.0 routed the check
+     * and left the picker unrouted, so a monitor on a hidden service leaked the
+     * hostname to the phone's resolver at setup time.
+     */
+    val pickerRoute: ProxyRoute.Route get() = ProxyRoute.forMonitor(draft, settings)
 
     /**
      * The draft as it stood once the screen had finished opening.
@@ -489,8 +500,7 @@ class SetupViewModel(
         viewModelScope.launch {
             val snapshot = graph.store.currentSnapshot()
             realBlurEnabled = snapshot.settings.realBlurEnabled
-            proxy = ProxyRoute.endpoint(snapshot.settings)
-            proxiedTimeoutSeconds = snapshot.settings.proxiedTimeoutSeconds
+            settings = snapshot.settings
             if (editingId != null) {
                 snapshot.monitors.firstOrNull { it.id == editingId }?.let { draft = it.migrated }
             } else {

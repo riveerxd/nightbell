@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -56,11 +57,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import me.river.nightbell.data.check.ElementChecker
+import me.river.nightbell.data.check.WebViewProxy
 import me.river.nightbell.data.web.PickerScripts
+import me.river.nightbell.domain.ProxyRoute
 import me.river.nightbell.ui.components.ButtonTone
 import me.river.nightbell.ui.components.GlassIconButton
 import me.river.nightbell.ui.components.MicroTag
@@ -70,6 +75,10 @@ import me.river.nightbell.ui.icons.NightbellIcons
 import me.river.nightbell.ui.theme.NightbellColors
 import me.river.nightbell.ui.theme.NightbellRadii
 import me.river.nightbell.ui.theme.glass
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
@@ -163,11 +172,19 @@ private class PickerBridge(
  * Full-screen live preview of the target site. The user browses normally, flips
  * on "Tap to select", and picks the node they want watched — the injected
  * script derives a durable selector and streams it back over the JS bridge.
+ *
+ * [route] is where the monitor being edited says its traffic goes, and this
+ * screen obeys it. Nothing here is optional or best-effort: a preview is a real
+ * request to the real host, so a monitor routed through a proxy gets a routed
+ * preview or no preview at all. See [ProxyRoute.previewRefusal] for the two
+ * cases that are refused outright, and [WebViewProxy] for what holding the
+ * override costs while this is open.
  */
 @Composable
 fun ElementPickerOverlay(
     visible: Boolean,
     url: String,
+    route: ProxyRoute.Route,
     existingSelector: String,
     onDismiss: () -> Unit,
     onConfirm: (PickedElement) -> Unit,
@@ -178,13 +195,14 @@ fun ElementPickerOverlay(
         enter = slideInVertically(spring(dampingRatio = 0.85f)) { it } + fadeIn(),
         exit = slideOutVertically(spring(dampingRatio = 0.9f)) { it } + fadeOut(),
     ) {
-        PickerContent(url, existingSelector, alreadyWatching, onDismiss, onConfirm)
+        PickerContent(url, route, existingSelector, alreadyWatching, onDismiss, onConfirm)
     }
 }
 
 @Composable
 private fun PickerContent(
     url: String,
+    route: ProxyRoute.Route,
     existingSelector: String,
     alreadyWatching: Int,
     onDismiss: () -> Unit,
@@ -199,6 +217,11 @@ private fun PickerContent(
     var webView by remember { mutableStateOf<WebView?>(null) }
     var progress by remember { mutableStateOf(0) }
 
+    // Nothing is loaded until routing has been settled one way or the other, so
+    // there is no window in which the page is fetched before the proxy is on.
+    var routeReady by remember { mutableStateOf(false) }
+    var refusal by remember { mutableStateOf(ProxyRoute.previewRefusal(url, route)) }
+
     BackHandler(enabled = true) {
         val view = webView
         if (view != null && view.canGoBack()) view.goBack() else onDismiss()
@@ -212,18 +235,61 @@ private fun PickerContent(
         )
     }
 
-    LaunchedEffect(pickMode) {
-        webView?.evaluateJavascript(PickerScripts.setPickMode(pickMode), null)
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
+    /**
+     * Kills the WebView, once, whoever asks first.
+     *
+     * Called from two places on purpose, and the order between them is the point:
+     * the routed branch below tears the view down *inside* the block that holds
+     * the proxy override, so the override is still in place when the last request
+     * this view could make becomes impossible. Clearing it first would leave a
+     * live WebView on a page that is mid-load with no proxy, which is the leak
+     * this screen is being fixed for.
+     */
+    val released = remember { AtomicBoolean(false) }
+    val release: () -> Unit = {
+        if (released.compareAndSet(false, true)) {
             webView?.apply {
                 stopLoading()
+                loadUrl("about:blank")
                 removeJavascriptInterface(PickerScripts.BRIDGE_NAME)
                 destroy()
             }
         }
+    }
+
+    LaunchedEffect(pickMode) {
+        webView?.evaluateJavascript(PickerScripts.setPickMode(pickMode), null)
+    }
+
+    // Keyed on nothing that changes while the picker is up: `url` and `route` are
+    // read from the draft when it opens, and the draft cannot be edited from here.
+    LaunchedEffect(Unit) {
+        if (refusal != null) return@LaunchedEffect
+        val endpoint = (route as? ProxyRoute.Route.Via)?.endpoint
+        if (endpoint == null) {
+            routeReady = true
+            return@LaunchedEffect
+        }
+        try {
+            WebViewProxy.routed(endpoint) {
+                routeReady = true
+                try {
+                    // Held for as long as this screen is up. The override is
+                    // process-wide, so a routed check finishing in the middle of a
+                    // picking session would otherwise clear it under this page.
+                    awaitCancellation()
+                } finally {
+                    withContext(NonCancellable) { release() }
+                }
+            }
+        } catch (unavailable: WebViewProxy.Unavailable) {
+            routeReady = false
+            refusal = unavailable.message
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { release() }
     }
 
     Box(
@@ -251,7 +317,9 @@ private fun PickerContent(
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
-                        text = pageTitle.ifBlank { "Loading page…" },
+                        text = pageTitle.ifBlank {
+                            if (refusal != null) "No preview" else "Loading page…"
+                        },
                         style = MaterialTheme.typography.titleMedium,
                         color = NightbellColors.TextPrimary,
                         maxLines = 1,
@@ -266,13 +334,17 @@ private fun PickerContent(
                     )
                 }
                 Spacer(Modifier.width(12.dp))
-                GlassIconButton(
-                    icon = NightbellIcons.Refresh,
-                    onClick = { webView?.reload() },
-                    contentDescription = "Reload page",
-                    accent = NightbellColors.TextSecondary,
-                    size = 38.dp,
-                )
+                // Nothing to reload on a refused preview, and a button that does
+                // nothing is worse than no button.
+                if (refusal == null) {
+                    GlassIconButton(
+                        icon = NightbellIcons.Refresh,
+                        onClick = { webView?.reload() },
+                        contentDescription = "Reload page",
+                        accent = NightbellColors.TextSecondary,
+                        size = 38.dp,
+                    )
+                }
             }
 
             // --- loading bar --------------------------------------------------
@@ -289,7 +361,9 @@ private fun PickerContent(
             ) {
                 Box(
                     Modifier
-                        .fillMaxWidth(if (loading) barWidth.coerceIn(0.02f, 1f) else 0f)
+                        .fillMaxWidth(
+                            if (loading && refusal == null) barWidth.coerceIn(0.02f, 1f) else 0f,
+                        )
                         .height(2.dp)
                         .background(NightbellColors.Aqua),
                 )
@@ -301,99 +375,115 @@ private fun PickerContent(
             // black on every load.
             val webBackground = NightbellColors.Ink.toArgb()
             Box(Modifier.weight(1f)) {
-                AndroidView(
-                    modifier = Modifier.fillMaxSize(),
-                    factory = { ctx ->
-                        WebView(ctx).apply {
-                            setBackgroundColor(webBackground)
-                            settings.apply {
-                                // Required, and the reason this screen exists. The
-                                // picker injects script into the loaded page so a tap
-                                // can resolve to a selector; without JS there is
-                                // nothing to pick with.
-                                javaScriptEnabled = true
-                                domStorageEnabled = true
-                                useWideViewPort = true
-                                loadWithOverviewMode = true
-                                builtInZoomControls = true
-                                displayZoomControls = false
-                                cacheMode = WebSettings.LOAD_DEFAULT
-                                userAgentString = ElementChecker.MOBILE_UA
+                // Composed only once routing is settled. The factory below is what
+                // loads the page, so gating the whole view is what makes the fix a
+                // fix rather than a race: there is no WebView to load anything
+                // through until the proxy override is on.
+                if (routeReady) {
+                    AndroidView(
+                        modifier = Modifier.fillMaxSize(),
+                        factory = { ctx ->
+                            WebView(ctx).apply {
+                                setBackgroundColor(webBackground)
+                                settings.apply {
+                                    // Required, and the reason this screen exists. The
+                                    // picker injects script into the loaded page so a tap
+                                    // can resolve to a selector; without JS there is
+                                    // nothing to pick with.
+                                    javaScriptEnabled = true
+                                    domStorageEnabled = true
+                                    useWideViewPort = true
+                                    loadWithOverviewMode = true
+                                    builtInZoomControls = true
+                                    displayZoomControls = false
+                                    cacheMode = WebSettings.LOAD_DEFAULT
+                                    userAgentString = ElementChecker.MOBILE_UA
 
-                                // Everything below is closing doors this WebView has
-                                // no use for. It loads a URL the user typed, which
-                                // means it renders arbitrary remote script, and it has
-                                // a bridge attached, so the surface is worth trimming
-                                // even though the bridge itself takes only strings.
-                                //
-                                // allowFileAccess is the one that matters: it defaults
-                                // to true below API 30 and minSdk here is 26, so on
-                                // API 26 to 29 a remote page could reach file:// URLs
-                                // unless it is turned off. There is no local content
-                                // to show, so it goes off on every API level.
-                                allowFileAccess = false
-                                allowContentAccess = false
-                                // Default since API 21, stated so a future edit has to
-                                // remove it deliberately rather than inherit it.
-                                mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-                                // The app holds no location permission, so this could
-                                // only ever produce a prompt or a denial. Off.
-                                setGeolocationEnabled(false)
+                                    // Everything below is closing doors this WebView has
+                                    // no use for. It loads a URL the user typed, which
+                                    // means it renders arbitrary remote script, and it has
+                                    // a bridge attached, so the surface is worth trimming
+                                    // even though the bridge itself takes only strings.
+                                    //
+                                    // allowFileAccess is the one that matters: it defaults
+                                    // to true below API 30 and minSdk here is 26, so on
+                                    // API 26 to 29 a remote page could reach file:// URLs
+                                    // unless it is turned off. There is no local content
+                                    // to show, so it goes off on every API level.
+                                    allowFileAccess = false
+                                    allowContentAccess = false
+                                    // Default since API 21, stated so a future edit has to
+                                    // remove it deliberately rather than inherit it.
+                                    mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                                    // The app holds no location permission, so this could
+                                    // only ever produce a prompt or a denial. Off.
+                                    setGeolocationEnabled(false)
 
-                                // allowFileAccessFromFileURLs,
-                                // allowUniversalAccessFromFileURLs and databaseEnabled
-                                // are not set here on purpose. All three are already
-                                // false by default at this minSdk and all three are
-                                // deprecated, so assigning them only adds compiler
-                                // warnings to every build in exchange for nothing.
-                            }
-                            addJavascriptInterface(bridge, PickerScripts.BRIDGE_NAME)
-                            webViewClient = object : WebViewClient() {
-                                override fun onPageStarted(
-                                    view: WebView?,
-                                    url: String?,
-                                    favicon: android.graphics.Bitmap?,
-                                ) {
-                                    loading = true
-                                    progress = 12
-                                    error = ""
+                                    // allowFileAccessFromFileURLs,
+                                    // allowUniversalAccessFromFileURLs and databaseEnabled
+                                    // are not set here on purpose. All three are already
+                                    // false by default at this minSdk and all three are
+                                    // deprecated, so assigning them only adds compiler
+                                    // warnings to every build in exchange for nothing.
                                 }
-
-                                override fun onPageFinished(view: WebView?, url: String?) {
-                                    loading = false
-                                    progress = 100
-                                    view?.evaluateJavascript(PickerScripts.BOOTSTRAP) {
-                                        view.evaluateJavascript(PickerScripts.setPickMode(pickMode), null)
+                                addJavascriptInterface(bridge, PickerScripts.BRIDGE_NAME)
+                                webViewClient = object : WebViewClient() {
+                                    override fun onPageStarted(
+                                        view: WebView?,
+                                        url: String?,
+                                        favicon: android.graphics.Bitmap?,
+                                    ) {
+                                        loading = true
+                                        progress = 12
+                                        error = ""
                                     }
-                                }
 
-                                override fun onReceivedError(
-                                    view: WebView?,
-                                    request: WebResourceRequest?,
-                                    err: WebResourceError?,
-                                ) {
-                                    if (request?.isForMainFrame == true) {
+                                    override fun onPageFinished(view: WebView?, url: String?) {
                                         loading = false
-                                        error = err?.description?.toString() ?: "Page failed to load"
+                                        progress = 100
+                                        view?.evaluateJavascript(PickerScripts.BOOTSTRAP) {
+                                            view.evaluateJavascript(
+                                                PickerScripts.setPickMode(pickMode),
+                                                null,
+                                            )
+                                        }
+                                    }
+
+                                    override fun onReceivedError(
+                                        view: WebView?,
+                                        request: WebResourceRequest?,
+                                        err: WebResourceError?,
+                                    ) {
+                                        if (request?.isForMainFrame == true) {
+                                            loading = false
+                                            error = err?.description?.toString()
+                                                ?: "Page failed to load"
+                                        }
                                     }
                                 }
-                            }
-                            webChromeClient = object : android.webkit.WebChromeClient() {
-                                override fun onProgressChanged(view: WebView?, newProgress: Int) {
-                                    progress = newProgress
-                                }
+                                webChromeClient = object : android.webkit.WebChromeClient() {
+                                    override fun onProgressChanged(
+                                        view: WebView?,
+                                        newProgress: Int,
+                                    ) {
+                                        progress = newProgress
+                                    }
 
-                                override fun onReceivedTitle(view: WebView?, title: String?) {
-                                    if (!title.isNullOrBlank()) pageTitle = title
+                                    override fun onReceivedTitle(view: WebView?, title: String?) {
+                                        if (!title.isNullOrBlank()) pageTitle = title
+                                    }
                                 }
+                                loadUrl(url)
+                                webView = this
                             }
-                            loadUrl(url)
-                            webView = this
-                        }
-                    },
-                )
+                        },
+                    )
+                }
 
-                if (loading && progress < 45) {
+                val blocked = refusal
+                if (blocked != null) {
+                    RefusedPreview(reason = blocked, onDismiss = onDismiss)
+                } else if (!routeReady || (loading && progress < 45)) {
                     Box(
                         Modifier
                             .fillMaxSize()
@@ -404,7 +494,11 @@ private fun PickerContent(
                             SpinnerDot(color = NightbellColors.Aqua, size = 30.dp)
                             Spacer(Modifier.height(14.dp))
                             Text(
-                                "Rendering the real page…",
+                                if (routeReady) {
+                                    "Rendering the real page…"
+                                } else {
+                                    "Pointing the preview through the proxy…"
+                                },
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = NightbellColors.TextSecondary,
                             )
@@ -412,7 +506,7 @@ private fun PickerContent(
                     }
                 }
 
-                if (error.isNotBlank()) {
+                if (error.isNotBlank() && refusal == null) {
                     Box(
                         Modifier
                             .align(Alignment.TopCenter)
@@ -439,17 +533,77 @@ private fun PickerContent(
             }
 
             // --- bottom sheet ---------------------------------------------------
-            PickerBottomBar(
-                pickMode = pickMode,
-                onPickModeChange = { pickMode = it },
-                picked = picked,
-                existingSelector = existingSelector,
-                alreadyWatching = alreadyWatching,
-                onClear = {
-                    picked = null
-                    webView?.evaluateJavascript(PickerScripts.CLEAR_SELECTION, null)
-                },
-                onConfirm = { picked?.let(onConfirm) },
+            // No bar on a refused preview: there is no page, so "Tap to select"
+            // and "Watch this element" would both be lies.
+            if (refusal == null) {
+                PickerBottomBar(
+                    pickMode = pickMode,
+                    onPickModeChange = { pickMode = it },
+                    picked = picked,
+                    existingSelector = existingSelector,
+                    alreadyWatching = alreadyWatching,
+                    onClear = {
+                        picked = null
+                        webView?.evaluateJavascript(PickerScripts.CLEAR_SELECTION, null)
+                    },
+                    onConfirm = { picked?.let(onConfirm) },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * What the picker shows instead of a page when it will not load one.
+ *
+ * States the reason rather than a generic failure, because both reasons are
+ * fixable by the person reading it and neither is the site being down. There is
+ * no retry button on purpose: nothing about this screen can change the answer,
+ * the monitor's routing switch can.
+ */
+@Composable
+private fun RefusedPreview(reason: String, onDismiss: () -> Unit) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(NightbellColors.Void.copy(alpha = 0.94f))
+            .padding(24.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            // Capped rather than centred alone: a refusal is three lines of prose,
+            // and three lines the width of a tablet is harder to read than to skip.
+            modifier = Modifier
+                .widthIn(max = 420.dp)
+                .testTag("picker-refused"),
+        ) {
+            Icon(
+                NightbellIcons.Shield,
+                contentDescription = null,
+                tint = NightbellColors.Amber,
+                modifier = Modifier.size(28.dp),
+            )
+            Spacer(Modifier.height(14.dp))
+            Text(
+                "The preview was not opened",
+                style = MaterialTheme.typography.titleMedium,
+                color = NightbellColors.TextPrimary,
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                reason,
+                style = MaterialTheme.typography.bodyMedium,
+                color = NightbellColors.TextSecondary,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(20.dp))
+            NightbellButton(
+                text = "Back to setup",
+                onClick = onDismiss,
+                icon = NightbellIcons.Close,
+                tone = ButtonTone.Secondary,
+                accent = NightbellColors.Amber,
             )
         }
     }

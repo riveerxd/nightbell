@@ -117,7 +117,7 @@ class ElementChecker(
                 ok = false,
                 latencyMs = 0,
                 failureKind = FailureKind.BAD_CONFIG,
-                message = "This WebView cannot be routed",
+                message = unavailable.headline,
                 detail = unavailable.message.orEmpty(),
                 at = nowMs(),
             )

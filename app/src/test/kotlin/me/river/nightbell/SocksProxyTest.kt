@@ -14,6 +14,7 @@ import kotlin.concurrent.thread
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -285,6 +286,53 @@ class SocksProxyTest {
             30,
             base.copy(timeoutSeconds = 90, proxyTimeoutSeconds = 30)
                 .effectiveTimeoutSeconds(settings, true),
+        )
+    }
+
+    @Test
+    fun `the live preview is refused in both the cases a direct load would leak`() {
+        val endpoint = ProxyRoute.Endpoint("127.0.0.1", 9_050)
+        val onion = "http://x${"a".repeat(55)}.onion/"
+        val clearnet = "https://status.example.com/health"
+
+        // The two refusals. One is the monitor asking to be routed with nowhere to
+        // route through, the other is an address that has no meaning outside Tor
+        // or I2P being opened straight from the device. Both leak at the lookup,
+        // which happens before any page loads and cannot be taken back.
+        assertNotNull(ProxyRoute.previewRefusal(onion, ProxyRoute.Route.Unconfigured))
+        assertNotNull(ProxyRoute.previewRefusal(clearnet, ProxyRoute.Route.Unconfigured))
+        assertNotNull(ProxyRoute.previewRefusal(onion, ProxyRoute.Route.Direct))
+
+        // And the two that are allowed. A routed preview of anything, and an
+        // ordinary direct preview of a clearnet page, which is what nearly every
+        // page-element monitor is.
+        assertNull(ProxyRoute.previewRefusal(onion, ProxyRoute.Route.Via(endpoint)))
+        assertNull(ProxyRoute.previewRefusal(clearnet, ProxyRoute.Route.Via(endpoint)))
+        assertNull(ProxyRoute.previewRefusal(clearnet, ProxyRoute.Route.Direct))
+    }
+
+    @Test
+    fun `a page element monitor gives the picker the same route as the check`() {
+        val settings = GlobalSettings(
+            socksProxyEnabled = true,
+            socksProxyHost = "127.0.0.1",
+            socksProxyPort = 9_050,
+        )
+        val page = monitor("http://y${"b".repeat(55)}.onion/", proxied = true)
+            .copy(kind = MonitorKind.WEBSITE_ELEMENT)
+
+        // The whole of the picker bug in one line: the route the check uses is the
+        // route the picker has to use, because it is the same page fetched from the
+        // same device. 3.1.0 computed this for the check only.
+        val route = ProxyRoute.forMonitor(page, settings)
+        assertEquals(ProxyRoute.Route.Via(ProxyRoute.Endpoint("127.0.0.1", 9_050)), route)
+        assertNull(ProxyRoute.previewRefusal(page.url, route))
+        // Routing off, and the address is one only the proxy can reach: no preview.
+        assertNotNull(
+            ProxyRoute.previewRefusal(
+                page.url,
+                ProxyRoute.forMonitor(page.copy(useProxy = false), settings),
+            ),
         )
     }
 

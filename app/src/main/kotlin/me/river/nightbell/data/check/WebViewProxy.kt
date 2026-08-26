@@ -8,8 +8,8 @@ import java.util.concurrent.Executor
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import me.river.nightbell.domain.ProxyRoute
 
@@ -35,11 +35,25 @@ import me.river.nightbell.domain.ProxyRoute
  * that case [routed] refuses instead of loading direct, for the same reason the
  * HTTP checker refuses: silently going out in the clear is how a hidden service
  * name reaches an ISP's resolver.
+ *
+ * Because [gate] is held for as long as the caller's block runs, and the element
+ * picker holds it for as long as a person is looking at the page, waiting for it
+ * is **bounded**. A check that cannot have the override within [DEFAULT_WAIT_MS]
+ * is refused with [Unavailable] rather than left suspended: the check pass runs
+ * one monitor at a time, so an unbounded wait here would stop the whole fleet
+ * for as long as the picker stayed open.
  */
 object WebViewProxy {
 
-    /** Raised when a routed page load cannot be honoured. Never means "site down". */
-    class Unavailable(message: String) : Exception(message)
+    /**
+     * Raised when a routed page load cannot be honoured. Never means "site down".
+     *
+     * [headline] is the short form for a check result or a refusal panel, because
+     * the two reasons a load is refused are not the same fault: a WebView that
+     * has no proxy support at all is a device limit, and a busy override is a
+     * moment to wait out.
+     */
+    class Unavailable(val headline: String, message: String) : Exception(message)
 
     private val gate = Mutex()
 
@@ -52,20 +66,57 @@ object WebViewProxy {
      * Serialised against other routed loads, and always cleared afterwards. The
      * clear runs `NonCancellable`: a cancelled check that left the override in
      * place would silently route the next unrelated page load.
+     *
+     * @param waitMs how long to wait for another routed load to hand the override
+     *   back. Refused rather than queued past it, so a caller on a schedule cannot
+     *   be parked behind one that is waiting for a person.
      */
-    suspend fun <T> routed(endpoint: ProxyRoute.Endpoint, block: suspend () -> T): T {
+    suspend fun <T> routed(
+        endpoint: ProxyRoute.Endpoint,
+        waitMs: Long = DEFAULT_WAIT_MS,
+        block: suspend () -> T,
+    ): T {
         if (!isSupported) {
             throw Unavailable(
-                "This device's WebView cannot be pointed at a proxy, so the page was not loaded.",
+                headline = "This WebView cannot be routed",
+                message = "This device's WebView cannot be pointed at a proxy, so the page was " +
+                    "not loaded.",
             )
         }
-        return gate.withLock {
+        if (!acquire(waitMs)) {
+            throw Unavailable(
+                headline = "Another routed page load is in progress",
+                message = "The WebView proxy setting is shared by the whole app, so routed page " +
+                    "loads run one at a time. Something else held it for longer than " +
+                    "${waitMs / 1_000}s, which the live preview does while it is open.",
+            )
+        }
+        try {
             apply(config(endpoint))
-            try {
+            return try {
                 block()
             } finally {
                 withContext(NonCancellable) { clear() }
             }
+        } finally {
+            gate.unlock()
+        }
+    }
+
+    /**
+     * Takes [gate] within [waitMs], or gives up and says so.
+     *
+     * Polled rather than a timeout around `lock()` on purpose: cancelling a
+     * suspended `lock()` at the instant it succeeds is the one way to lose the
+     * mutex for the rest of the process, and `tryLock` cannot be caught in that
+     * state.
+     */
+    private suspend fun acquire(waitMs: Long): Boolean {
+        val deadline = System.nanoTime() + waitMs * 1_000_000L
+        while (true) {
+            if (gate.tryLock()) return true
+            if (System.nanoTime() >= deadline) return false
+            delay(POLL_MS)
         }
     }
 
@@ -102,6 +153,14 @@ object WebViewProxy {
 
     /** The callbacks only resume a coroutine, so there is nothing to hand off. */
     private val immediate = Executor { it.run() }
+
+    /**
+     * Long enough for an ordinary routed check to finish and hand the override
+     * back, short enough that a check pass is not visibly stalled by one.
+     */
+    const val DEFAULT_WAIT_MS = 15_000L
+
+    private const val POLL_MS = 50L
 
     private const val TAG = "WebViewProxy"
 }
