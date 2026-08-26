@@ -502,7 +502,8 @@ const transcript: { t: string; s: string }[] = [
         <p class="absent-note">
           What it does not buy you is anonymity from the thing you are watching. Your service sees
           the request and the IP it came from, exactly as it would for any other client on your
-          network. That is what a check is.
+          network. That is what a check is. Routing a monitor through your own proxy is the one
+          thing that changes it, and only for that monitor.
         </p>
       </div>
 
@@ -512,7 +513,10 @@ const transcript: { t: string; s: string }[] = [
           A status or request monitor is an OkHttp call from your phone to the host you typed in. A
           page-element monitor loads the page in an offscreen WebView on the same phone and reads
           the DOM nodes you picked by tapping them. There is no relay, no queue and no worker
-          somewhere else, because there is nowhere else.
+          somewhere else, because there is nowhere else. The one exception is a hop you set up
+          yourself: a monitor can be routed through a SOCKS5 proxy running on your own device,
+          which is how a Tor or I2P hidden service gets checked. It goes where you point it and
+          nowhere else, and it is off until you turn it on.
         </p>
         <p>
           Everything the app knows lives in one JSON document in DataStore: your monitors, their
