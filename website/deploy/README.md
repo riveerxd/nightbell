@@ -261,6 +261,23 @@ sudo install -m 644 deploy/logrotate/nightbell-download /etc/logrotate.d/
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
+One thing the list above does not tell you, found on the first real install: nginx
+creates `download.log` itself, as `root:root 0644`, because the master process opens
+its logs before dropping privileges. The `create 0640 www-data adm` line in the
+logrotate stanza only takes effect at the first rotation, which is a month away, so
+until then the file is looser than every other log on the box and does not match
+the policy this repo documents for it. Nothing breaks, `downloads.sh` uses `sudo`
+either way, but the state and the documentation disagree for a month. Fix it once,
+at install time:
+
+```bash
+sudo chown www-data:adm /var/log/nginx/nightbell/download.log
+sudo chmod 640 /var/log/nginx/nightbell/download.log
+```
+
+Safe while nginx is running: it holds the file by descriptor, so ownership changes
+do not interrupt writing and no reload is needed.
+
 Check it from outside, and expect a `302` to a GitHub URL carrying the current
 version:
 

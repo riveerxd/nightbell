@@ -312,6 +312,35 @@ Order matters. Steps 2 and 3 are the ones that are easy to get backwards.
    the tag must stay on the commit the APK recorded.
 8. **Update the fdroiddata metadata**: `versionName`, `versionCode`, `commit` as a
    full hash, `CurrentVersion`, `CurrentVersionCode`.
+9. **Update the website**, which is the step this list did not have and which cost
+   three releases. Edit `RELEASE` in `website/site.config.mjs`: `version`, `tag`,
+   `apkName`, `apkUrl`, `apkBytes`, `apkSha256`, `versionCode`, together, and take
+   the digest and the byte count from the asset **downloaded back off the release**
+   rather than from the local build. Then `npm run verify`, which regenerates and
+   checks the `/download` redirect.
+10. **Deploy the site and copy the Nginx snippet.** `deploy.sh` uploads `dist/`
+    only, so `deploy/nginx/snippets/nightbell/download-target.conf` has to be
+    installed on the box and Nginx reloaded, or `/download` keeps handing out the
+    previous APK. Then purge the Cloudflare cache. Full procedure in
+    `website/deploy/README.md`.
+
+### Why steps 9 and 10 are on this list at all
+
+They are not F-Droid steps. They are here because leaving them off a release
+checklist is what happened: `RELEASE` sat at 3.0.2 through 3.0.3, 3.0.4 and 3.0.5,
+so for sixteen days the download button on the landing page served a
+three-version-old APK, under a page printing that old release's size and digest as
+though they were current.
+
+It failed silently for the same reason the build constraints above do. An old
+GitHub asset URL resolves forever, so the button kept working and nobody had a
+broken link to report. Every number on the page agreed with every other number,
+because they were all generated from the same stale block, and internal
+consistency is what made it invisible.
+
+`npm run verify` catches the generated snippet disagreeing with `site.config.mjs`.
+Nothing can catch `site.config.mjs` disagreeing with GitHub, because nothing in the
+build knows what the latest tag is. That check is a human on this list.
 
 Because `AutoUpdateMode: Version` and `UpdateCheckMode: Tags ^v.+$` are set,
 F-Droid picks up later tags on its own once the first build lands, so step 8 is
