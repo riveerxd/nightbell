@@ -82,14 +82,14 @@ export const REPO = {
  * report about which build somebody is running.
  */
 export const RELEASE = {
-  version: '3.1.0',
-  tag: 'v3.1.0',
-  apkName: 'Nightbell-3.1.0-release.apk',
+  version: '3.1.1',
+  tag: 'v3.1.1',
+  apkName: 'Nightbell-3.1.1-release.apk',
   apkUrl:
-    'https://github.com/riveerxd/nightbell/releases/download/v3.1.0/Nightbell-3.1.0-release.apk',
+    'https://github.com/riveerxd/nightbell/releases/download/v3.1.1/Nightbell-3.1.1-release.apk',
   apkBytes: 2185657,
-  apkSha256: 'cc86d12af8f62fb98bc6329fc46a2e79d875c9e63ff3a6d9fb1ac07be9e8e3ba',
-  versionCode: 28,
+  apkSha256: '96315c16d680f7df90ea96e9669bf6b0cf108a5ac16ce434925c09c306fee548',
+  versionCode: 29,
   minSdk: 26,
   minAndroid: '8.0',
   targetSdk: 36,
