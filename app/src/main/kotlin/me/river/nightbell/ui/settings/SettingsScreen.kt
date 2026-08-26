@@ -656,9 +656,12 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                             Text(
                                 text = "The proxy resolves the hostname, not this phone, which " +
                                     "is what makes an .onion address work and keeps the name " +
-                                    "off the device's own DNS. Page-element monitors are the " +
-                                    "exception: they render in a WebView, and Android's WebView " +
-                                    "cannot speak SOCKS at all, so those always go out directly.",
+                                    "off the device's own DNS. Page-element monitors are " +
+                                    "routed as well, and so is the live preview you pick their " +
+                                    "elements in. Those loads run one at a time, because the " +
+                                    "WebView proxy setting belongs to the whole app rather " +
+                                    "than to one page, and a WebView too old to accept one at " +
+                                    "all refuses the check instead of loading it in the clear.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = NightbellColors.TextTertiary,
                             )
@@ -969,7 +972,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                     SectionHeader("About", icon = NightbellIcons.Info, accent = NightbellColors.Sky)
                     AboutRow("Version", "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
                     AboutRow("Android", "API ${Build.VERSION.SDK_INT} · ${Build.MODEL}")
-                    AboutRow("Storage", "Local only — nothing leaves the device")
+                    AboutRow("Storage", "Local only, nothing leaves the device")
                     Spacer(Modifier.height(10.dp))
                     Text(
                         text = "Nightbell checks HTTP endpoints, asserts on response bodies, and " +
