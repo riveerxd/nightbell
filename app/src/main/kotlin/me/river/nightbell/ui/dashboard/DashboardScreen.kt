@@ -151,6 +151,7 @@ fun DashboardScreen(
     val viewModel = rememberDashboardViewModel()
     val cards by viewModel.cards.collectAsStateWithLifecycle()
     val offline by viewModel.offline.collectAsStateWithLifecycle()
+    val pause by viewModel.pause.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val gridState = rememberLazyGridState()
     val scope = rememberCoroutineScope()
@@ -244,6 +245,10 @@ fun DashboardScreen(
                                 stats = fleetStatsOf(cards, nowMs = nowMs, offline = offline),
                                 refreshing = viewModel.refreshing,
                                 onCheckAll = { viewModel.checkAll() },
+                                pause = pause,
+                                nowMs = nowMs,
+                                promptOpen = viewModel.pausePrompt != null,
+                                onPauseTapped = { viewModel.onPauseTapped() },
                             )
                         }
                     }
@@ -414,6 +419,17 @@ fun DashboardScreen(
                 .padding(end = 22.dp, bottom = bottomInset + 26.dp),
         ) {
             MorphingFab(onClick = onAddMonitor)
+        }
+
+        // Asked over the dashboard rather than inside the banner: it is a question
+        // with a handful of answers, and the banner's job is to be a readout.
+        viewModel.pausePrompt?.let { prompt ->
+            PauseDialog(
+                prompt = prompt,
+                onChooseScope = { viewModel.choosePauseScope(it) },
+                onPauseFor = { viewModel.pauseFor(it) },
+                onDismiss = { viewModel.dismissPausePrompt() },
+            )
         }
 
         SelectionBar(
@@ -599,21 +615,18 @@ private fun FirstRunStarter(
             }
             Spacer(Modifier.height(10.dp))
         }
-        // Deliberately not full-width. The floating add button is anchored to the
-        // bottom-right corner and this is the last thing in the list, so a
-        // full-width button put two controls for the same action on top of each
-        // other. Leaving the right third clear keeps both legible and lets the FAB
-        // stay where every other dashboard state has it.
-        Row(Modifier.fillMaxWidth()) {
-            NightbellButton(
-                text = "Start from scratch",
-                onClick = onBlank,
-                icon = NightbellIcons.Plus,
-                tone = ButtonTone.Secondary,
-                modifier = Modifier.weight(0.68f),
-            )
-            Spacer(Modifier.weight(0.32f))
-        }
+        // Full width, squared off with the template rows above it. This was held
+        // to two thirds for a while to keep clear of the floating add button in
+        // the corner, but the empty state is short enough that they never meet,
+        // and the short button read as a ragged edge at the bottom of a column of
+        // cards that all reach both margins.
+        NightbellButton(
+            text = "Start from scratch",
+            onClick = onBlank,
+            icon = NightbellIcons.Plus,
+            tone = ButtonTone.Secondary,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 

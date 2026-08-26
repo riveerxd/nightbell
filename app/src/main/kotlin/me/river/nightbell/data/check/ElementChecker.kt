@@ -14,6 +14,8 @@ import me.river.nightbell.domain.Assertions
 import me.river.nightbell.domain.CheckResult
 import me.river.nightbell.domain.ElementTarget
 import me.river.nightbell.domain.FailureKind
+import me.river.nightbell.domain.GlobalSettings
+import me.river.nightbell.domain.ProxyRoute
 import me.river.nightbell.domain.Monitor
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.coroutines.resume
@@ -41,6 +43,11 @@ import kotlinx.serialization.json.jsonPrimitive
 class ElementChecker(
     private val context: Context,
     private val nowMs: () -> Long = System::currentTimeMillis,
+    /**
+     * The settings a check is judged against, read per check. Mirrors
+     * [HttpChecker] so both kinds of monitor agree about where traffic goes.
+     */
+    private val settingsFor: () -> GlobalSettings = { GlobalSettings() },
 ) {
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
@@ -78,8 +85,43 @@ class ElementChecker(
                 at = nowMs(),
             )
         }
+        val settings = settingsFor()
+        val route = ProxyRoute.forMonitor(monitor, settings)
+        // Refused rather than downgraded, exactly as in HttpChecker: a page
+        // element on a hidden service must not be fetched in the clear because
+        // the proxy happens to be misconfigured.
+        if (route is ProxyRoute.Route.Unconfigured) {
+            return CheckResult(
+                ok = false,
+                latencyMs = 0,
+                failureKind = FailureKind.BAD_CONFIG,
+                message = "No proxy to route through",
+                detail = "This monitor is set to use a SOCKS5 proxy and no usable address is " +
+                    "configured, so the page was not loaded. Set one in Settings, or on the " +
+                    "monitor itself, or turn routing off.",
+                at = nowMs(),
+            )
+        }
+        val endpoint = (route as? ProxyRoute.Route.Via)?.endpoint
+        val timeout = monitor.effectiveTimeoutSeconds(settings, proxied = endpoint != null)
+
         val started = System.nanoTime()
-        val page = locateAll(monitor.url, targets, monitor.timeoutSeconds)
+        val page = try {
+            if (endpoint == null) {
+                locateAll(monitor.url, targets, timeout)
+            } else {
+                WebViewProxy.routed(endpoint) { locateAll(monitor.url, targets, timeout) }
+            }
+        } catch (unavailable: WebViewProxy.Unavailable) {
+            return CheckResult(
+                ok = false,
+                latencyMs = 0,
+                failureKind = FailureKind.BAD_CONFIG,
+                message = "This WebView cannot be routed",
+                detail = unavailable.message.orEmpty(),
+                at = nowMs(),
+            )
+        }
         val latency = ((System.nanoTime() - started) / 1_000_000L).coerceAtLeast(0L)
 
         if (page == null) {
@@ -87,7 +129,7 @@ class ElementChecker(
                 ok = false,
                 latencyMs = latency,
                 failureKind = FailureKind.TIMEOUT,
-                message = "Page did not finish loading in ${monitor.timeoutSeconds}s",
+                message = "Page did not finish loading in ${timeout}s",
                 detail = "The embedded browser never reached a usable DOM.",
                 at = nowMs(),
             )

@@ -25,9 +25,13 @@ import me.river.nightbell.domain.Monitor
 import me.river.nightbell.domain.MonitorCard
 import me.river.nightbell.domain.MonitorQuery
 import me.river.nightbell.domain.MonitorTemplates
+import me.river.nightbell.domain.PauseScope
+import me.river.nightbell.domain.PauseState
 import me.river.nightbell.domain.MonitorKind
+import me.river.nightbell.domain.ProxyRoute
 import me.river.nightbell.domain.Validation
 import me.river.nightbell.domain.isCancellation
+import me.river.nightbell.domain.runCatchingCancellable
 import java.util.UUID
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -61,6 +65,21 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
         private set
 
     var toast by mutableStateOf<String?>(null)
+        private set
+
+    /** The standing pause, if any. Drives the banner and the button's label. */
+    val pause: StateFlow<PauseState> = graph.store.snapshot
+        .map { it.pause }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PauseState())
+
+    /**
+     * Open when the user has tapped pause and still has something to answer.
+     *
+     * Null when the sheet is closed. Holds the scope once it is known, so the
+     * sheet can ask for a scope first and a duration second without the caller
+     * having to track which half it is on.
+     */
+    var pausePrompt by mutableStateOf<PausePrompt?>(null)
         private set
 
     /** Drives the banner's paused state. See [me.river.nightbell.data.net.NetworkMonitor]. */
@@ -246,6 +265,63 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
 
     private fun plural(count: Int) = if (count == 1) "monitor" else "monitors"
 
+    /**
+     * Tapping pause. Resumes if a pause is standing, otherwise starts asking.
+     *
+     * Which questions get asked is [GlobalSettings.pauseChoice]: with a scope
+     * already chosen the sheet only needs a duration, and with
+     * [PauseChoice.ASK] it needs both.
+     */
+    fun onPauseTapped() {
+        if (pause.value.isActive(System.currentTimeMillis())) {
+            resume()
+            return
+        }
+        pausePrompt = PausePrompt(scope = settings.value.pauseChoice.scope)
+    }
+
+    fun choosePauseScope(scope: PauseScope) {
+        pausePrompt = (pausePrompt ?: PausePrompt()).copy(scope = scope)
+    }
+
+    fun dismissPausePrompt() {
+        pausePrompt = null
+    }
+
+    /** Commits the pause. [minutes] of null is the indefinite entry. */
+    fun pauseFor(minutes: Int?) {
+        val scope = pausePrompt?.scope ?: settings.value.pauseChoice.scope ?: PauseScope.STOP_CHECKS
+        pausePrompt = null
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            val state = if (minutes == null) {
+                PauseState.forever(now, scope)
+            } else {
+                PauseState.timed(now, minutes, scope)
+            }
+            graph.engine.pauseAll(state)
+            toast = when {
+                minutes == null && scope == PauseScope.STOP_CHECKS -> "Paused until you resume"
+                minutes == null -> "Silenced until you resume"
+                scope == PauseScope.STOP_CHECKS -> "Paused for ${durationLabel(minutes)}"
+                else -> "Silenced for ${durationLabel(minutes)}"
+            }
+        }
+    }
+
+    fun resume() {
+        pausePrompt = null
+        refreshing = true
+        viewModelScope.launch {
+            try {
+                graph.engine.resumeAll()
+                toast = "Monitoring again"
+            } finally {
+                refreshing = false
+            }
+        }
+    }
+
     fun checkAll() {
         if (refreshing) return
         // Say so rather than reporting "nothing to check yet", which is what the
@@ -377,6 +453,21 @@ class SetupViewModel(
         private set
 
     /**
+     * The SOCKS5 proxy settings had when this screen opened, or null when there
+     * is no usable one.
+     *
+     * Read once at open like [realBlurEnabled], because the routing toggle needs
+     * to say where a check would actually go, and a toggle offering to route
+     * traffic nowhere is worse than one that says the proxy is not set up yet.
+     */
+    var proxy by mutableStateOf<ProxyRoute.Endpoint?>(null)
+        private set
+
+    /** The shared budget a routed check inherits when this monitor sets none. */
+    var proxiedTimeoutSeconds by mutableStateOf(GlobalSettings().proxiedTimeoutSeconds)
+        private set
+
+    /**
      * The draft as it stood once the screen had finished opening.
      *
      * Captured *after* the store has loaded, so an edit is compared against what
@@ -398,6 +489,8 @@ class SetupViewModel(
         viewModelScope.launch {
             val snapshot = graph.store.currentSnapshot()
             realBlurEnabled = snapshot.settings.realBlurEnabled
+            proxy = ProxyRoute.endpoint(snapshot.settings)
+            proxiedTimeoutSeconds = snapshot.settings.proxiedTimeoutSeconds
             if (editingId != null) {
                 snapshot.monitors.firstOrNull { it.id == editingId }?.let { draft = it.migrated }
             } else {
@@ -701,8 +794,17 @@ class SettingsViewModel(private val graph: Nightbell.Graph) : ViewModel() {
     var refetchingFavicons by mutableStateOf(false)
         private set
 
-    var transferring by mutableStateOf(false)
+    /**
+     * Which file transfer is running, if either.
+     *
+     * More than a boolean because both buttons read it, and a single flag made
+     * the import button announce itself as busy while an export was the thing
+     * actually happening.
+     */
+    var transfer by mutableStateOf<Transfer?>(null)
         private set
+
+    val transferring: Boolean get() = transfer != null
 
     /**
      * Writes the whole store out through [sink].
@@ -715,7 +817,7 @@ class SettingsViewModel(private val graph: Nightbell.Graph) : ViewModel() {
      */
     fun exportBackup(sink: suspend (String) -> Unit) {
         if (transferring) return
-        transferring = true
+        transfer = Transfer.EXPORT
         viewModelScope.launch {
             try {
                 val snapshot = graph.store.currentSnapshot()
@@ -734,7 +836,7 @@ class SettingsViewModel(private val graph: Nightbell.Graph) : ViewModel() {
                 Log.w(TAG, "Export failed", error)
                 toast = "Couldn't write that file"
             } finally {
-                transferring = false
+                transfer = null
             }
         }
     }
@@ -753,7 +855,7 @@ class SettingsViewModel(private val graph: Nightbell.Graph) : ViewModel() {
      */
     fun importBackup(source: suspend () -> String) {
         if (transferring) return
-        transferring = true
+        transfer = Transfer.IMPORT
         viewModelScope.launch {
             try {
                 val raw = source()
@@ -762,7 +864,13 @@ class SettingsViewModel(private val graph: Nightbell.Graph) : ViewModel() {
                         ?: BackupError.Unreadable.message
                     return@launch
                 }
-                val imported = backup.toImportableSnapshot()
+                // The pause belongs to this device and this afternoon, not to the
+                // file. A backup describes monitors; being somewhere with one bar
+                // is a live local instruction, and letting an unrelated import
+                // clear it would resume the whole fleet and page for every failure
+                // the pause existed to hold back.
+                val standing = graph.store.currentSnapshot().pause
+                val imported = backup.toImportableSnapshot().copy(pause = standing)
                 graph.store.replaceAll(imported)
                 graph.scheduler.syncAll(imported.monitors, imported.settings)
                 graph.scheduler.ensureSweep(imported.settings)
@@ -771,15 +879,32 @@ class SettingsViewModel(private val graph: Nightbell.Graph) : ViewModel() {
                 // it worked rather than like a screen of grey cards.
                 graph.engine.clearCheckerHealth("store replaced by import")
                 graph.notifyStateChanged()
-                if (graph.network.isOnline()) graph.engine.runAllDue(force = true)
                 val count = imported.monitors.size
                 toast = "Imported $count monitor" + if (count == 1) "" else "s"
+
+                // The import is done at this point: the monitors are in the store
+                // and on screen. The first check pass is not part of it, and
+                // waiting on it here is what made importing look like the app had
+                // frozen, because it is a full round trip per monitor before
+                // anything at all is reported back.
+                //
+                // On `appScope`, not this ViewModel's: leaving Settings to go and
+                // look at the dashboard is the expected thing to do the moment the
+                // toast appears, and that must not cancel the pass. The cards
+                // carry their own checking shimmer while it runs, which is a
+                // better account of what is happening than a spinner on a button
+                // in a screen the user has already left.
+                if (graph.network.isOnline()) {
+                    graph.appScope.launch {
+                        runCatchingCancellable { graph.engine.runAllDue(force = true) }
+                    }
+                }
             } catch (error: Throwable) {
                 if (isCancellation(error)) throw error
                 Log.w(TAG, "Import failed", error)
                 toast = "Couldn't read that file"
             } finally {
-                transferring = false
+                transfer = null
             }
         }
     }
@@ -891,3 +1016,22 @@ fun rememberDetailViewModel(monitorId: String): DetailViewModel = viewModel(
 fun rememberSettingsViewModel(): SettingsViewModel = viewModel(
     factory = viewModelFactory { initializer { SettingsViewModel(Nightbell.require()) } },
 )
+
+/**
+ * What the pause sheet still has to ask.
+ *
+ * A null [scope] means the scope question is still open; a set one means the
+ * only thing left is how long.
+ */
+data class PausePrompt(val scope: PauseScope? = null)
+
+/** "30 minutes", "4 hours". Used in toasts and on the sheet. */
+fun durationLabel(minutes: Int): String = when {
+    minutes < 60 -> "$minutes minutes"
+    minutes == 60 -> "1 hour"
+    minutes % 60 == 0 -> "${minutes / 60} hours"
+    else -> "$minutes minutes"
+}
+
+/** The two directions a backup can move. See [SettingsViewModel.transfer]. */
+enum class Transfer { EXPORT, IMPORT }

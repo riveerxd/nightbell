@@ -226,8 +226,43 @@ android {
         // BOOT_COMPLETED or MY_PACKAGE_REPLACED, and directBootAware stays false on
         // purpose: the store it needs is credential-encrypted, so a direct-boot
         // receiver would run before it could be read.
-        versionCode = 27
-        versionName = "3.0.5"
+        // 3.1.0 adds a pause and a SOCKS5 route, and fixes three things the first
+        // people to file issues found.
+        //
+        // The pause is a dashboard button that stops the whole fleet for a chosen
+        // stretch, or until it is turned back on. 1.3.0 already stopped checking
+        // while the device had no connectivity, and that turns out to cover the
+        // wrong half of the problem: one bar of signal counts as online, so every
+        // check times out at once and every one of those alerts is about the walk
+        // rather than the services. The user picks what a pause stops. Stopping the
+        // checks keeps false samples out of the uptime history; staying silent
+        // keeps the dashboard live and only holds the alerts. A pause is felt as
+        // the master alert switch being off, so no track can page through one, and
+        // `force` still gets through it because a pause stops the schedule and is
+        // not a lock on the app.
+        //
+        // SOCKS5 routing is per monitor, with the address in Settings and an
+        // override on the monitor, because Tor listens on 9050 and I2P's SOCKS
+        // proxy on 4447 and one address cannot serve both. OkHttp builds an
+        // unresolved socket address for a SOCKS route, so the hostname is resolved
+        // at the proxy rather than here, which is the only reason an .onion address
+        // resolves at all. Page-element monitors are routed too: ProxyConfig takes
+        // a SOCKS scheme, contrary to a claim this app briefly made in its own UI,
+        // and the override is process-wide so those loads are serialised.
+        //
+        // Routing fails closed. A monitor that asked for a proxy and has no usable
+        // address fails the check instead of going out directly, because the
+        // alternative publishes the hostname the proxy existed to hide.
+        //
+        // The three issues: VibrationAttributes was built above the branch that
+        // used it, which is API 30 against a minSdk of 26 and so a hard crash on
+        // Android 10 and below. Connections that died before answering, whether a
+        // reaped keep-alive or a fresh one that broke mid-handshake on a poor link,
+        // were reported as outages; each now gets one retry, and only for methods
+        // that are safe to repeat. Importing a backup ran the whole check pass
+        // before reporting anything, which read as a frozen screen.
+        versionCode = 28
+        versionName = "3.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -357,6 +392,8 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.okhttp)
+    // ProxyController, so a page-element check can be routed through SOCKS5 too.
+    implementation(libs.androidx.webkit)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

@@ -136,8 +136,15 @@ class NightbellMonitorService : Service() {
                 delay(CheckEngine_MIN_TICK)
                 continue
             }
+            // A pause that stops the checks stops this too. Strict mode exists to
+            // hold a cadence, and there is no cadence to hold while paused: left
+            // running it sat there once a minute doing nothing behind a permanent
+            // notification claiming the fleet was being watched, which is the one
+            // lie a monitoring app cannot afford. Resuming starts it again, the
+            // same way enabling a monitor does.
             val strict = snapshot.settings.strictForegroundMonitoring &&
-                snapshot.monitors.any { it.enabled }
+                snapshot.monitors.any { it.enabled } &&
+                !snapshot.pause.stopsChecks(System.currentTimeMillis())
             val nagging = snapshot.monitors.any { monitor ->
                 monitor.urgent && snapshot.runtimes[monitor.id]?.urgentState?.nagging == true
             }
@@ -432,8 +439,13 @@ class NightbellMonitorService : Service() {
             graph.appScope.launch {
                 val snapshot = runCatchingCancellable { graph.store.currentSnapshot() }
                     .getOrNull() ?: return@launch
+                // Same rule as `runLoop`, and it has to be the same rule. With only
+                // the loop knowing about the pause, this went on starting the
+                // service through one: promote to the foreground, notice there is
+                // nothing to do, stop, and do it again on the next state change.
                 val strict = snapshot.settings.strictForegroundMonitoring &&
-                    snapshot.monitors.any { it.enabled }
+                    snapshot.monitors.any { it.enabled } &&
+                    !snapshot.pause.stopsChecks(System.currentTimeMillis())
                 val nagging = snapshot.monitors.any { monitor ->
                     monitor.urgent && snapshot.runtimes[monitor.id]?.urgentState?.nagging == true
                 }

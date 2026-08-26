@@ -16,6 +16,7 @@ import me.river.nightbell.domain.LegacyCrashRepair
 import me.river.nightbell.domain.Monitor
 import me.river.nightbell.domain.MonitorCard
 import me.river.nightbell.domain.MonitorRuntime
+import me.river.nightbell.domain.PauseState
 import me.river.nightbell.domain.ReferenceSample
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -51,6 +52,15 @@ data class NightbellSnapshot(
      * [CheckerStreak] for why this cannot live in memory alone.
      */
     val checkerStreak: CheckerStreak = CheckerStreak(),
+    /**
+     * The standing "leave me alone" instruction, if there is one.
+     *
+     * Top level rather than inside [GlobalSettings] because it is state with an
+     * expiry, not a preference: the preference is
+     * [GlobalSettings.pauseChoice], which says what the button does, while this
+     * says what it did.
+     */
+    val pause: PauseState = PauseState(),
     /**
      * Monotonic write counter, bumped by every [NightbellStore.mutate].
      *
@@ -280,6 +290,8 @@ class NightbellStore(
     suspend fun updateSettings(transform: (GlobalSettings) -> GlobalSettings) = mutate { snap ->
         snap.copy(settings = transform(snap.settings))
     }
+
+    suspend fun setPause(state: PauseState) = mutate { snap -> snap.copy(pause = state) }
 
     suspend fun replaceAll(snapshot: NightbellSnapshot) = mutate { snapshot }
 

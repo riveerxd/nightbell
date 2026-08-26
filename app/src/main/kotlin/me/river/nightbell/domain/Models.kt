@@ -39,6 +39,16 @@ enum class HttpMethod { GET, POST, PUT, PATCH, DELETE, HEAD;
 
     /** HEAD/GET cannot carry a request body. */
     val allowsBody: Boolean get() = this != GET && this != HEAD
+
+    /**
+     * Whether sending this twice is defined to be the same as sending it once.
+     *
+     * Straight out of RFC 9110. It gates the checker's retry: a request that a
+     * server may have read and acted on before the connection died must not be
+     * replayed, because nothing on the wire can tell that case apart from one the
+     * server never saw.
+     */
+    val isIdempotent: Boolean get() = this != POST && this != PATCH
 }
 
 @Serializable
@@ -202,6 +212,132 @@ enum class SoundChoice {
  * Named haptic personalities. Patterns are `off, on, off, on…` in millis, which
  * is what both [android.os.Vibrator] and notification channels expect.
  */
+/** What a pause switches off. */
+@Serializable
+enum class PauseScope {
+    /**
+     * Nothing runs at all: no checks, no samples, no alerts.
+     *
+     * The same shape as the offline gate, and for the same reason. A phone with
+     * one bar in a forest is technically online, so every check times out, every
+     * monitor goes down at once, and all of it is written into the uptime history
+     * as fact. Not checking is the only way to not record that.
+     */
+    @SerialName("stop_checks")
+    STOP_CHECKS,
+
+    /**
+     * Checks keep running, nothing is announced.
+     *
+     * Costs the false history that [STOP_CHECKS] avoids, and buys a dashboard
+     * that is still live: useful when the outage is real and known and the only
+     * thing you want back is silence.
+     */
+    @SerialName("alerts_only")
+    ALERTS_ONLY,
+    ;
+
+    val label: String
+        get() = when (this) {
+            STOP_CHECKS -> "Stop checking"
+            ALERTS_ONLY -> "Stay silent"
+        }
+
+    val blurb: String
+        get() = when (this) {
+            STOP_CHECKS -> "No checks run, so nothing false lands in your history."
+            ALERTS_ONLY -> "Checks keep running, the dashboard stays live, nothing pages you."
+        }
+}
+
+/** What the pause button does when it is tapped. */
+@Serializable
+enum class PauseChoice {
+    @SerialName("stop_checks")
+    STOP_CHECKS,
+
+    @SerialName("alerts_only")
+    ALERTS_ONLY,
+
+    /** Ask which one, every time. One more tap, no assumptions. */
+    @SerialName("ask")
+    ASK,
+    ;
+
+    /** The scope this implies, or null when the user has to be asked. */
+    val scope: PauseScope?
+        get() = when (this) {
+            STOP_CHECKS -> PauseScope.STOP_CHECKS
+            ALERTS_ONLY -> PauseScope.ALERTS_ONLY
+            ASK -> null
+        }
+
+    val label: String
+        get() = when (this) {
+            STOP_CHECKS -> "Stop checking"
+            ALERTS_ONLY -> "Stay silent"
+            ASK -> "Ask me"
+        }
+}
+
+/**
+ * A standing instruction to leave the user alone.
+ *
+ * Separate from muting, which is per monitor and per outage. This is the whole
+ * fleet, and it exists for the case the offline gate cannot catch: a phone with
+ * just enough signal to count as online and not enough to complete a request.
+ * Every monitor fails at once, and every one of those alerts is about the walk,
+ * not the services.
+ *
+ * Persisted rather than held in memory because the check paths run in whatever
+ * process WorkManager gives them, and a pause that forgot itself on process
+ * death would be no pause at all.
+ */
+@Serializable
+data class PauseState(
+    /** Epoch millis at which monitoring resumes. Ignored when [indefinite]. */
+    val until: Long = 0L,
+    /** No end. Stays paused until the user says otherwise. */
+    val indefinite: Boolean = false,
+    val scope: PauseScope = PauseScope.STOP_CHECKS,
+    /** When it began, so the banner can say more than "paused". */
+    val since: Long = 0L,
+) {
+    fun isActive(nowMs: Long): Boolean = indefinite || until > nowMs
+
+    /**
+     * Whether checks should be skipped outright.
+     *
+     * Note the asymmetry with alerts: *any* active pause silences, and only
+     * [PauseScope.STOP_CHECKS] stops the checking. A pause that could still page
+     * would not be one.
+     */
+    fun stopsChecks(nowMs: Long): Boolean = isActive(nowMs) && scope == PauseScope.STOP_CHECKS
+
+    /** Millis until this lifts, or null when nothing will lift it. */
+    fun remainingMs(nowMs: Long): Long? =
+        if (!isActive(nowMs) || indefinite) null else (until - nowMs).coerceAtLeast(0L)
+
+    companion object {
+        /** The durations the button offers. Null is the indefinite entry. */
+        val OFFERED_MINUTES: List<Int?> = listOf(30, 60, 240, 480, null)
+
+        fun timed(nowMs: Long, minutes: Int, scope: PauseScope): PauseState = PauseState(
+            until = nowMs + minutes * 60_000L,
+            indefinite = false,
+            scope = scope,
+            since = nowMs,
+        )
+
+        fun forever(nowMs: Long, scope: PauseScope): PauseState = PauseState(
+            until = 0L,
+            indefinite = true,
+            scope = scope,
+            since = nowMs,
+        )
+    }
+}
+
 @Serializable
 enum class VibrationStyle {
     TICK,
@@ -314,6 +450,44 @@ data class Monitor(
     val timeoutSeconds: Int = 15,
     val intervalMinutes: Int = 15,
     val followRedirects: Boolean = true,
+    /**
+     * Send this monitor's requests through the SOCKS5 proxy set up in settings
+     * rather than straight out of the device.
+     *
+     * Per monitor, not global, and that is the whole point: the ask was to watch
+     * one onion service without putting the entire phone behind Tor, and a single
+     * global switch would drag every clearnet check through it as well.
+     *
+     * Does nothing unless [GlobalSettings.socksProxyEnabled] is on, and nothing
+     * for a page-element monitor, which is rendered by a WebView that has no
+     * SOCKS support to offer. See [ProxyRoute].
+     */
+    val useProxy: Boolean = false,
+    /**
+     * A proxy address for this monitor alone, overriding the shared one.
+     *
+     * Blank inherits [GlobalSettings.socksProxyHost], which is the common case:
+     * one Tor daemon on the device, every routed monitor through it. It exists
+     * because one address cannot serve every hidden network, and the app offers
+     * both: Tor listens on 9050 and I2P's SOCKS proxy on 4447, so watching one
+     * service on each needs two addresses. See [ProxyRoute.override].
+     */
+    val proxyHost: String = "",
+    /** 0 borrows [GlobalSettings.socksProxyPort]. Only read when [proxyHost] is set. */
+    val proxyPort: Int = 0,
+    /**
+     * Seconds to allow a routed check, instead of [timeoutSeconds].
+     *
+     * A hidden service is not slow in the way a slow website is slow. Reaching one
+     * means Tor building a rendezvous circuit through six relays and fetching a
+     * descriptor first, which routinely takes tens of seconds on mobile and is
+     * bounded by Tor's own SocksTimeout of 120s, not by anything the server does.
+     * The 15s default that suits a clearnet endpoint reads that as an outage.
+     *
+     * 0 uses [GlobalSettings.proxiedTimeoutSeconds], which is what most people
+     * want. See [effectiveTimeoutSeconds].
+     */
+    val proxyTimeoutSeconds: Int = 0,
     val enabled: Boolean = true,
     /** When true this monitor inherits the global alert policy. */
     val useGlobalAlerts: Boolean = true,
@@ -370,6 +544,22 @@ data class Monitor(
     /** Effective latency budget, or 0 when neither monitor nor global sets one. */
     fun sloMs(settings: GlobalSettings): Int =
         if (latencySloMs > 0) latencySloMs else settings.defaultLatencySloMs
+
+    /**
+     * How long this check is allowed to take, in seconds.
+     *
+     * A routed check gets its own budget, because the circuit is most of the wait
+     * and none of it says anything about the monitored service. Precedence runs
+     * monitor override, then the global proxied default, then the monitor's own
+     * ordinary timeout: a monitor that has deliberately raised [timeoutSeconds]
+     * past the proxied default keeps the larger of the two rather than being
+     * quietly cut back.
+     */
+    fun effectiveTimeoutSeconds(settings: GlobalSettings, proxied: Boolean): Int {
+        if (!proxied) return timeoutSeconds
+        if (proxyTimeoutSeconds > 0) return proxyTimeoutSeconds
+        return maxOf(timeoutSeconds, settings.proxiedTimeoutSeconds)
+    }
 }
 
 @Serializable
@@ -769,6 +959,41 @@ data class GlobalSettings(
      * trace that it ever existed.
      */
     val dashboardSort: MonitorQuery.Sort = MonitorQuery.Sort.WORST_FIRST,
+
+    /**
+     * Make a SOCKS5 proxy available to the monitors that ask for it.
+     *
+     * Off by default, and even on it changes nothing by itself: a monitor is
+     * routed only when it sets [Monitor.useProxy]. Written for reaching Tor and
+     * I2P hidden services from a device that is otherwise on the clear net, where
+     * the alternative is putting the whole phone in VPN mode.
+     *
+     * A master switch, not a default: turning it off leaves a routed monitor with
+     * nowhere to go, and such a check fails rather than quietly going out direct.
+     */
+    val socksProxyEnabled: Boolean = false,
+    /** Where the shared proxy is listening. Tor's own default is 127.0.0.1:9050. */
+    val socksProxyHost: String = "127.0.0.1",
+    val socksProxyPort: Int = 9_050,
+    /**
+     * Seconds to allow any check that goes through the proxy.
+     *
+     * 60 rather than the ordinary 15. Building a rendezvous circuit to a v3 onion
+     * takes tens of seconds often enough that a 15s budget reports a healthy
+     * hidden service as down, and Tor itself waits up to 120s before giving up.
+     * Overridable per monitor with [Monitor.proxyTimeoutSeconds].
+     */
+    val proxiedTimeoutSeconds: Int = 60,
+
+    /**
+     * What the dashboard's pause button does when tapped.
+     *
+     * Defaults to stopping the checks rather than asking, because the case it is
+     * for is one where the user is somewhere with no signal and wants one tap,
+     * not a questionnaire. [PauseChoice.ASK] is there for anyone who genuinely
+     * uses both.
+     */
+    val pauseChoice: PauseChoice = PauseChoice.STOP_CHECKS,
 
     val certAlertsEnabled: Boolean = true,
     /** Days before expiry at which the advisory starts. 0 turns the track off. */

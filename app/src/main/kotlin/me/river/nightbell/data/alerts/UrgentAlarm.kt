@@ -199,11 +199,24 @@ class UrgentAlarm(private val context: Context) {
         // Alarm usage for the haptics regardless of the sound's usage: this is
         // the one output that must survive a phone set to vibrate, which is
         // exactly the case the ringer check quietens the sound for.
-        val attributes = VibrationAttributes.Builder()
-            .setUsage(VibrationAttributes.USAGE_ALARM)
-            .build()
+        //
+        // Built inside the branch because the branch is the only place it is
+        // usable. The class arrived in API 30 and minSdk here is 26, so hoisting
+        // it above the branch was a hard crash on Android 10 and below: nothing to
+        // load, and the construction sat above the runCatching so nothing caught
+        // it either.
+        //
+        // The gate is 33, not 30, and it has to stay 33. What is called with these
+        // attributes is Vibrator.vibrate(VibrationEffect, VibrationAttributes),
+        // which is API 33, and VibratorManager.vibrate(CombinedVibration,
+        // VibrationAttributes), which is 31. Loosening this to R to match the
+        // class's own API level would trade the old crash for NoSuchMethodError on
+        // 30 through 32.
         runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val attributes = VibrationAttributes.Builder()
+                    .setUsage(VibrationAttributes.USAGE_ALARM)
+                    .build()
                 val manager = context.getSystemService(VibratorManager::class.java)
                 if (manager != null) {
                     manager.vibrate(CombinedVibration.createParallel(effect), attributes)

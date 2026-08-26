@@ -86,9 +86,12 @@ private val topics = listOf(
         "Down means the check failed: unreachable, wrong status, or an assertion that " +
             "did not hold. Degraded means it succeeded but took longer than its " +
             "latency budget — the service answered, so it is amber rather than red. " +
-            "Paused means you switched it off and nothing is being checked. Muted is " +
-            "different again: still checked, still shown, just not allowed to make a " +
-            "noise.",
+            "Paused means nothing is being checked, and there are two of those: one " +
+            "monitor switched off with its Active toggle, or the whole fleet from the " +
+            "pause button on the banner. The banner also has a quieter setting, shown " +
+            "as SILENT, where checks carry on and only the alerts stop. Muted is " +
+            "different again: one monitor, still checked, still shown, just not " +
+            "allowed to make a noise.",
     ),
     HelpTopic(
         "What does “24h uptime” count?",

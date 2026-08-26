@@ -246,6 +246,27 @@ private fun sampleCenterX(index: Int, count: Int, width: Float, gap: Float): Flo
 }
 
 /**
+ * Horizontal position of sample [index] on the sparkline, spread edge to edge.
+ *
+ * Deliberately not [sampleCenterX]. The strip below draws cells, so its ticks
+ * have to sit at cell centres; the line above is a trend and only reads as one
+ * when it spans the same width the strip does. At two or three samples that
+ * difference is the whole picture: centres drew the line across the middle half
+ * of the card with dead space either side, which looks like a rendering fault
+ * rather than like two data points.
+ *
+ * Every point still lands within its own tick. The first sits on that tick's
+ * left edge, the last on the last tick's right edge, and in between the offset
+ * from the centre never exceeds half a cell, so no point ever drifts over a
+ * neighbour and the gradient stop for a failure stays above its own red tick.
+ */
+private fun sampleSpreadX(index: Int, count: Int, width: Float): Float =
+    if (count <= 1) width / 2f else index.toFloat() / (count - 1) * width
+
+/** Radius of the head dot's halo, and the room the line leaves it at the end. */
+private val HEAD_HALO = 6.dp
+
+/**
  * Latency sparkline with a gradient underfill.
  *
  * Failures are carried by the stroke's own colour rather than by markers on top
@@ -284,12 +305,17 @@ fun Sparkline(
     Canvas(modifier.clearAndSetSemantics { contentDescription = chartSummary("Response time trend", samples) }) {
         val w = size.width
         val h = size.height
-        val gap = SAMPLE_GAP.toPx()
+        val halo = HEAD_HALO.toPx()
+        // The line stops where the dot is, and the dot's halo is what reaches the
+        // edge. Running the line to the full width and then nudging the dot inwards
+        // so its halo would not clip left a stub of stroke sticking out past the
+        // dot, which is not what the head of a trend looks like.
+        val span = (w - halo).coerceAtLeast(1f)
         fun pointAt(index: Int): Offset {
             val sample = samples[index]
             val normalized = (sample.latencyMs.toFloat() / maxLatency).coerceIn(0f, 1f)
             return Offset(
-                x = sampleCenterX(index, samples.size, w, gap),
+                x = sampleSpreadX(index, samples.size, span),
                 y = h - (normalized * (h * 0.78f)) - h * 0.11f,
             )
         }
@@ -326,10 +352,14 @@ fun Sparkline(
         // blue as soon as the next check passes, so a single blip reads as a
         // blip and a run of them reads as a red plateau.
         //
-        // Stops must be positioned explicitly, not spread evenly: the points sit
-        // at cell centres, which are inset by half a cell at each end.
+        // Positioned from the same function the points are, so a stop cannot drift
+        // away from the sample it belongs to. Two formulas that merely agree in
+        // the common case is exactly how these drifted apart once already.
         val healthStops = samples.mapIndexed { index, sample ->
-            (sampleCenterX(index, samples.size, w, gap) / w) to
+            // Fractions of the full width, while the points are laid out across
+            // `span`. The last stop therefore lands just short of 1, and its colour
+            // carries on to the edge, which is what should happen under the head.
+            (sampleSpreadX(index, samples.size, span) / w) to
                 if (sample.ok) accent else fail
         }
         drawPath(
@@ -342,11 +372,12 @@ fun Sparkline(
             style = Stroke(width = 2.2.dp.toPx()),
         )
 
-        // Leading dot — "now", tinted by whether now is healthy.
+        // Leading dot, meaning "now", tinted by whether now is healthy. Sits exactly on
+        // the end of the stroke, because `span` already left room for it.
         val lastIndex = min(visibleCount, samples.size) - 1
         val head = pointAt(lastIndex)
         val headTone = if (samples[lastIndex].ok) accent else fail
-        drawCircle(headTone.copy(alpha = 0.3f), radius = 6.dp.toPx(), center = head)
+        drawCircle(headTone.copy(alpha = 0.3f), radius = halo, center = head)
         drawCircle(headCore, radius = 2.6.dp.toPx(), center = head)
     }
 }

@@ -67,14 +67,29 @@ object Summary {
             }
     }
 
-    fun of(monitors: List<Monitor>, runtimes: Map<String, MonitorRuntime>): Fleet = Fleet(
+    /**
+     * [fleetPaused] is a pause that has stopped the checks for everything.
+     *
+     * It reads through to every entry as [Health.PAUSED], which the headline
+     * already knows how to say. Without it a placed widget went on displaying the
+     * last verdict it had for as long as the pause lasted: "All 4 operational" on
+     * someone's home screen for eight hours during which nothing was checked,
+     * which is the one claim a monitoring app must never make falsely. A pause
+     * that only stops the *alerts* is not passed here, because those readings are
+     * still current.
+     */
+    fun of(
+        monitors: List<Monitor>,
+        runtimes: Map<String, MonitorRuntime>,
+        fleetPaused: Boolean = false,
+    ): Fleet = Fleet(
         monitors.map { monitor ->
             val runtime = runtimes[monitor.id] ?: MonitorRuntime()
             Entry(
                 id = monitor.id,
                 name = monitor.displayName,
                 host = monitor.prettyHost,
-                health = if (!monitor.enabled) Health.PAUSED else runtime.health,
+                health = if (!monitor.enabled || fleetPaused) Health.PAUSED else runtime.health,
                 latencyMs = runtime.lastLatencyMs,
                 lastCheckedAt = runtime.lastCheckedAt,
                 urgent = monitor.urgent,

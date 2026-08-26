@@ -1,0 +1,13 @@
+A pause button on the dashboard. Tap it and the whole fleet stops for thirty minutes, an hour, four hours, eight, or until you turn it back on. It is for the walk with one bar of signal, where every check times out at once and every one of those alerts is about the walk rather than about your services. Nightbell already stopped checking when the phone had no connection at all, but one bar still counts as online, and that was the gap.
+
+You pick what a pause stops. Stop checking runs nothing, so nothing false lands in your uptime history. Stay silent keeps checking and keeps the dashboard live, and only the alerts stop. Which one the button uses is a setting, and it can ask you each time instead. A timed pause lifts itself, which an indefinite one cannot, so it is the safer one to reach for at 2am.
+
+Monitors can now be routed through a SOCKS5 proxy. Point it at a Tor or I2P daemon running on your own device and Nightbell can watch a hidden service without putting the whole phone into VPN mode. It is per monitor, so everything else carries on going out normally, and a monitor can name its own proxy address, which is what watching an .onion and an .i2p service at the same time needs. Page-element monitors are routed too. The proxy resolves the address rather than your phone, so the name never reaches your own DNS, and a monitor set to route with no proxy configured now fails the check instead of quietly going out in the clear.
+
+Fixed a crash on Android 10 and below. An urgent page reached for a vibration API that only arrived in Android 11, and took the app down with it on every version older than that.
+
+Fixed monitors reporting an outage that was not one. A keep-alive connection the far end had already closed, and a fresh connection that broke while it was still being set up, both read as "connection refused or dropped" when there was nothing wrong with the service. Each now gets one more attempt before the app says anything. Requests that are not safe to send twice are never sent twice.
+
+Importing a backup no longer locks up the screen. The import was always quick. What took the time was checking every monitor before reporting anything, and that now happens afterwards.
+
+The response-time line on a card spans the whole card, so two checks look like two checks rather than like something failed to draw.

@@ -33,8 +33,11 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Text
 import me.river.nightbell.domain.Health
 import me.river.nightbell.domain.MonitorCard
+import me.river.nightbell.domain.PauseScope
+import me.river.nightbell.domain.PauseState
 import me.river.nightbell.domain.Summary
 import me.river.nightbell.ui.components.ButtonTone
+import me.river.nightbell.ui.components.GlassIconButton
 import me.river.nightbell.ui.components.NightbellButton
 import me.river.nightbell.ui.components.formatLatency
 import me.river.nightbell.ui.icons.NightbellIcons
@@ -152,6 +155,10 @@ fun FleetBanner(
     stats: FleetStats,
     refreshing: Boolean,
     onCheckAll: () -> Unit,
+    pause: PauseState,
+    nowMs: Long,
+    promptOpen: Boolean,
+    onPauseTapped: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val tone = stats.tone()
@@ -261,25 +268,85 @@ fun FleetBanner(
         FleetTicks(stats.healths, Modifier.fillMaxWidth())
         Spacer(Modifier.height(18.dp))
 
-        // Offline the button is shown disabled rather than hidden: a control that
-        // vanishes leaves you wondering where it went, one that greys out tells
-        // you it will come back.
-        NightbellButton(
-            text = when {
-                stats.offline -> "Waiting for a connection"
-                refreshing -> "Checking everything…"
-                else -> "Check all now"
-            },
-            onClick = onCheckAll,
-            icon = if (stats.offline) NightbellIcons.WifiOff else NightbellIcons.Radar,
-            loading = refreshing,
-            enabled = !stats.offline,
-            tone = ButtonTone.Primary,
-            accent = tone,
-            accentEnd = tone,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        // A standing pause takes the whole row over rather than sitting beside a
+        // "check all now" that would do nothing. Two buttons where one is inert is
+        // how a user concludes the app is broken.
+        if (pause.isActive(nowMs)) {
+            Mono(
+                text = pauseHeadline(pause, nowMs),
+                color = NightbellColors.Amber,
+                size = 10,
+                weight = FontWeight.Bold,
+                tracking = 1.2,
+            )
+            Spacer(Modifier.height(10.dp))
+            NightbellButton(
+                text = "Resume monitoring",
+                onClick = onPauseTapped,
+                icon = NightbellIcons.Play,
+                loading = refreshing,
+                tone = ButtonTone.Primary,
+                accent = NightbellColors.Amber,
+                accentEnd = NightbellColors.Amber,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        } else {
+            // Offline the button is shown disabled rather than hidden: a control that
+            // vanishes leaves you wondering where it went, one that greys out tells
+            // you it will come back.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                NightbellButton(
+                    text = when {
+                        stats.offline -> "Waiting for a connection"
+                        refreshing -> "Checking everything…"
+                        else -> "Check all now"
+                    },
+                    onClick = onCheckAll,
+                    icon = if (stats.offline) NightbellIcons.WifiOff else NightbellIcons.Radar,
+                    loading = refreshing,
+                    enabled = !stats.offline,
+                    tone = ButtonTone.Primary,
+                    accent = tone,
+                    accentEnd = tone,
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(10.dp))
+                // Enabled while offline, unlike the button beside it. Losing signal
+                // is exactly when someone reaches for this, and a pause is a local
+                // decision that needs no network to take effect.
+                GlassIconButton(
+                    icon = NightbellIcons.Pause,
+                    onClick = onPauseTapped,
+                    contentDescription = "Pause monitoring",
+                    accent = NightbellColors.Amber,
+                    active = promptOpen,
+                )
+            }
+
+        }
     }
+}
+
+/**
+ * What the banner says while a pause is standing.
+ *
+ * Names the scope, because "paused" and "silent" are different promises and the
+ * user picked one of them.
+ */
+private fun pauseHeadline(pause: PauseState, nowMs: Long): String {
+    val what = if (pause.scope == PauseScope.STOP_CHECKS) "PAUSED" else "SILENT"
+    val remaining = pause.remainingMs(nowMs) ?: return "$what · UNTIL YOU RESUME"
+    // Rounded down, not up. The clock driving this composition ticks on its own
+    // schedule and can sit a second behind the one the pause was stamped with,
+    // and rounding up turned that second into "31M LEFT" on a pause the user had
+    // just set to thirty minutes. Never claim more time than was asked for.
+    val minutes = (remaining / 60_000L).toInt().coerceAtLeast(1)
+    val left = when {
+        minutes < 60 -> "${minutes}M"
+        minutes % 60 == 0 -> "${minutes / 60}H"
+        else -> "${minutes / 60}H ${minutes % 60}M"
+    }
+    return "$what · $left LEFT"
 }
 
 // --------------------------------------------------------------------- pieces

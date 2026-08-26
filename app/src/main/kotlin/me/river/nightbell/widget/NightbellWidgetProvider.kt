@@ -102,7 +102,11 @@ class NightbellWidgetProvider : AppWidgetProvider() {
                 return
             }
             val snapshot = graph.store.snapshot.value
-            val fleet = Summary.of(snapshot.monitors, snapshot.runtimes)
+            val fleet = Summary.of(
+                snapshot.monitors,
+                snapshot.runtimes,
+                fleetPaused = snapshot.pause.stopsChecks(System.currentTimeMillis()),
+            )
             val size = measure(manager, appWidgetId)
             runCatching {
                 manager.updateAppWidget(

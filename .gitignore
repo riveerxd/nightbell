@@ -64,3 +64,4 @@ docs/video/pulse-promo-extended.mp4
 # stamped with the interpreter version, so it is noise that conflicts.
 __pycache__/
 *.pyc
+.hermes/

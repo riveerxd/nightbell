@@ -67,12 +67,14 @@ import me.river.nightbell.domain.HeaderPair
 import me.river.nightbell.domain.HttpMethod
 import me.river.nightbell.domain.Monitor
 import me.river.nightbell.domain.MonitorKind
+import me.river.nightbell.domain.ProxyRoute
 import me.river.nightbell.domain.StatusMode
 import me.river.nightbell.domain.Validation
 import me.river.nightbell.ui.SetupViewModel
 import me.river.nightbell.ui.components.AlertPolicyEditor
 import me.river.nightbell.ui.components.ButtonTone
 import me.river.nightbell.ui.components.ChipSelector
+import me.river.nightbell.ui.components.FieldNote
 import me.river.nightbell.ui.components.GlassCard
 import me.river.nightbell.ui.components.GlassField
 import me.river.nightbell.ui.components.GlassIconButton
@@ -1184,6 +1186,119 @@ private fun StepSchedule(
             accent = accent,
         )
     }
+    run {
+        // Routed page loads are possible too. This app told users otherwise for a
+        // while, on a wrong reading of the WebView API: ProxyConfig documents the
+        // scheme as HTTP, HTTPS or SOCKS, and Chromium resolves a SOCKS5 hostname
+        // at the proxy, which is exactly what an onion address needs.
+        //
+        // Always enabled. It used to grey out when Settings held no address,
+        // which read as "this app has no proxy option" to anyone who had just been
+        // told their .onion address needs one. A monitor can name its own address
+        // now, so there is always something to turn on.
+        val shared = viewModel.proxy
+        val own = draft.proxyHost.trim()
+        val target = when {
+            own.isNotBlank() -> {
+                val port = if (draft.proxyPort in ProxyRoute.PORTS) draft.proxyPort else shared?.port
+                port?.let { "$own:$it" }
+            }
+            shared != null -> "${shared.host}:${shared.port}"
+            else -> null
+        }
+        ToggleRow(
+            title = "Route through SOCKS5",
+            subtitle = when {
+                !draft.useProxy -> "Checked straight from this device"
+                target != null -> "Sent via $target"
+                else -> "No address yet. Add one below, or in Settings."
+            },
+            checked = draft.useProxy,
+            onCheckedChange = { v -> viewModel.update { it.copy(useProxy = v) } },
+            icon = NightbellIcons.Shield,
+            accent = accent,
+        )
+        AnimatedVisibility(
+            visible = draft.useProxy,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically(),
+        ) {
+            Column {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = if (shared == null) {
+                        "Settings has no shared proxy, so this monitor needs its own address."
+                    } else {
+                        "Blank uses the shared ${shared.host}:${shared.port} from Settings. " +
+                            "Fill these in only to send this monitor somewhere else, which is " +
+                            "what watching a Tor service and an I2P one at the same time takes."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = NightbellColors.TextTertiary,
+                )
+                Spacer(Modifier.height(8.dp))
+                GlassField(
+                    value = draft.proxyHost,
+                    onValueChange = { v -> viewModel.update { it.copy(proxyHost = v.trim()) } },
+                    label = "Proxy host for this monitor",
+                    placeholder = shared?.host ?: "127.0.0.1",
+                    leadingIcon = NightbellIcons.Server,
+                    accent = accent,
+                )
+                Spacer(Modifier.height(8.dp))
+                StepperRow(
+                    title = "Timeout when routed",
+                    value = if (draft.proxyTimeoutSeconds > 0) {
+                        draft.proxyTimeoutSeconds
+                    } else {
+                        viewModel.proxiedTimeoutSeconds
+                    },
+                    onValueChange = { v -> viewModel.update { it.copy(proxyTimeoutSeconds = v) } },
+                    range = 5..180,
+                    step = 5,
+                    suffix = "s",
+                    icon = NightbellIcons.Clock,
+                    accent = accent,
+                )
+                Text(
+                    text = if (draft.proxyTimeoutSeconds > 0) {
+                        "This monitor only. Its ordinary ${draft.timeoutSeconds}s applies when " +
+                            "routing is off."
+                    } else {
+                        "Using the ${viewModel.proxiedTimeoutSeconds}s default from Settings. A " +
+                            "circuit to a hidden service takes far longer to build than a " +
+                            "clearnet request takes to answer."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = NightbellColors.TextTertiary,
+                )
+                AnimatedVisibility(
+                    visible = own.isNotBlank(),
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically(),
+                ) {
+                    Column {
+                        Spacer(Modifier.height(8.dp))
+                        GlassField(
+                            value = if (draft.proxyPort > 0) draft.proxyPort.toString() else "",
+                            onValueChange = { v ->
+                                val digits = v.filter { it.isDigit() }.take(5)
+                                viewModel.update { it.copy(proxyPort = digits.toIntOrNull() ?: 0) }
+                            },
+                            label = "Port",
+                            placeholder = (shared?.port ?: 9050).toString(),
+                            helper = "Tor is 9050. I2P's SOCKS proxy is 4447, not the 4444 " +
+                                "its HTTP proxy uses.",
+                            leadingIcon = NightbellIcons.Link,
+                            accent = accent,
+                            keyboardType = KeyboardType.Number,
+                        )
+                    }
+                }
+            }
+        }
+    }
+    FieldNote(report.of(Validation.Field.PROXY))
     ToggleRow(
         title = "Active",
         subtitle = if (draft.enabled) "Runs on schedule" else "Paused — manual checks only",

@@ -16,6 +16,7 @@ import me.river.nightbell.domain.Health
 import me.river.nightbell.domain.Monitor
 import me.river.nightbell.domain.MonitorKind
 import me.river.nightbell.domain.MonitorRuntime
+import me.river.nightbell.domain.PauseState
 import me.river.nightbell.domain.NetworkBaseline
 import me.river.nightbell.domain.UrgentAlerts
 import me.river.nightbell.domain.runCatchingCancellable
@@ -132,7 +133,19 @@ class CheckEngine(
         val snapshot = store.currentSnapshot()
         val monitor = snapshot.monitors.firstOrNull { it.id == monitorId } ?: return null
         val before = snapshot.runtimes[monitorId] ?: MonitorRuntime()
-        val settings = snapshot.settings
+
+        // A pause is felt as the master alert switch being off for its duration.
+        //
+        // Every alert track in this class already honours that one gate, so
+        // routing a pause through it means a paused fleet cannot page from some
+        // track nobody remembered to teach about pausing. The copy is local and
+        // read-only: nothing here writes settings back.
+        val paused = snapshot.pause.isActive(nowMs())
+        val settings = if (paused) {
+            snapshot.settings.copy(masterAlertsEnabled = false)
+        } else {
+            snapshot.settings
+        }
 
         // Re-checked *inside* the lock, not only by the caller. Every scheduled
         // caller evaluates due-ness before waiting on this mutex, and what it waits
@@ -151,6 +164,21 @@ class CheckEngine(
         // makes it impossible for any of them to record an offline failure.
         if (!isOnline()) {
             Log.i(TAG, "Offline — skipping ${monitor.displayName}")
+            return null
+        }
+
+        // Before `markChecking` for the same reason the offline gate is: bailing
+        // after it leaves the monitor spinning forever.
+        //
+        // `force` is the escape hatch, and it has to be. A pause stops the
+        // *schedule*; it is not a lock on the app. Every hand-driven check comes
+        // through here with force set: the re-check button on a card, the detail
+        // screen's "Check now", the first check of a monitor the user just saved.
+        // Refusing those left the button saying "Checking…" and then nothing at
+        // all, which is indistinguishable from a dead tap and is the exact
+        // complaint this engine has been answering since 1.6.0.
+        if (!force && snapshot.pause.stopsChecks(nowMs())) {
+            Log.i(TAG, "Paused: skipping ${monitor.displayName}")
             return null
         }
 
@@ -769,6 +797,11 @@ class CheckEngine(
         // The standing notification is left alone; only the repeat pauses.
         if (!isOnline()) return 0
 
+        // Same argument as offline, one step stronger: the user has said out loud
+        // that they do not want to hear from this app right now. Reconciliation
+        // above still runs, because it only ever cancels.
+        if (snapshot.pause.isActive(now)) return 0
+
         var fired = 0
         for (monitor in snapshot.monitors) {
             val runtime = snapshot.runtimes[monitor.id] ?: continue
@@ -938,6 +971,14 @@ class CheckEngine(
             Log.i(TAG, "Offline — check pass skipped")
             return 0
         }
+        // Unlike the single-monitor path above, a whole pass is never something
+        // the user asks for while paused: the banner replaces "Check all now"
+        // with "Resume monitoring", and resuming lifts the pause before it calls
+        // this. So a pass arriving here during a pause is the scheduler.
+        if (store.currentSnapshot().pause.stopsChecks(nowMs())) {
+            Log.i(TAG, "Paused: check pass skipped")
+            return 0
+        }
         // Once, before the loop: the whole pass shares one reading of the control.
         refreshReference()
         val snapshot = store.currentSnapshot()
@@ -983,6 +1024,18 @@ class CheckEngine(
     suspend fun nextWakeDelayMs(): Long {
         val snapshot = store.currentSnapshot()
         val now = nowMs()
+
+        // Nothing is due while checks are stopped, so the only thing left worth
+        // waking for is the pause lifting. In practice that means the loop idles
+        // at MAX_IDLE_MS instead of the MIN_TICK_MS floor it would otherwise sit
+        // on: every monitor reads as overdue during a pause, and an overdue fleet
+        // is what drags this function down to the floor. The ceiling still
+        // applies, so this is a quieter loop rather than a sleeping one.
+        if (snapshot.pause.stopsChecks(now)) {
+            val remaining = snapshot.pause.remainingMs(now) ?: return MAX_IDLE_MS
+            return remaining.coerceIn(MIN_TICK_MS, MAX_IDLE_MS)
+        }
+
         var soonest = Long.MAX_VALUE
         for (monitor in snapshot.monitors) {
             val runtime = snapshot.runtimes[monitor.id]
@@ -1001,6 +1054,52 @@ class CheckEngine(
         }
         if (soonest == Long.MAX_VALUE) return MAX_IDLE_MS
         return soonest.coerceIn(MIN_TICK_MS, MAX_IDLE_MS)
+    }
+
+    /**
+     * Pauses the whole fleet, and shuts up anything already shouting.
+     *
+     * Written the way [mute] is, and for the same reason: one uncancellable block
+     * covering both the state and the notifications. Persisting the pause and then
+     * losing the cancel would leave the phone paging through a pause the user can
+     * see on screen, which is the worst of both.
+     *
+     * The alert *flags* are cleared across the fleet, because the notifications
+     * are. `urgentActive` has to go or the foreground service keeps looping its
+     * alarm with no monitor left willing to explain it. `alerting` and
+     * `degradedAlerting` have to go for a subtler reason: the down track treats
+     * them as "this monitor already has a notification up" and stays quiet
+     * accordingly. Cancel the notification and leave the flag, and a monitor that
+     * is still down when the pause lifts has nothing on screen and a track that
+     * believes it already said so, so it never speaks again until the monitor
+     * recovers and breaks a second time.
+     *
+     * The evidence is untouched. Health, failure streaks, samples and history all
+     * stay exactly as they were, so what comes back after a pause is the outage
+     * that was already running rather than a fresh one.
+     */
+    suspend fun pauseAll(state: PauseState) {
+        withContext(NonCancellable) {
+            store.setPause(state)
+            store.updateAllRuntimes {
+                it.copy(urgentActive = false, alerting = false, degradedAlerting = false)
+            }
+            alerts.cancelEverything()
+        }
+        onStateChanged?.invoke()
+    }
+
+    /**
+     * Lifts a pause immediately and checks everything that is due.
+     *
+     * The check is the point. Coming back into signal and being told "up" by a
+     * dashboard that has not looked in four hours is worse than being told
+     * nothing, and this is the moment the user is actually holding the phone.
+     */
+    suspend fun resumeAll() {
+        store.setPause(PauseState())
+        onStateChanged?.invoke()
+        runCatchingCancellable { runAllDue(force = true) }
     }
 
     suspend fun mute(monitorId: String, durationMs: Long) {

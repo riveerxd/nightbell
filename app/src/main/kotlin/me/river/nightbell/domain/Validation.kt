@@ -10,7 +10,7 @@ object Validation {
 
     enum class Field {
         NAME, URL, METHOD, HEADERS, BODY, STATUS, ASSERTION, JSON_PATH,
-        INTERVAL, TIMEOUT, ELEMENT, ELEMENT_TEXT, LATENCY_SLO, URGENT,
+        INTERVAL, TIMEOUT, ELEMENT, ELEMENT_TEXT, LATENCY_SLO, URGENT, PROXY,
     }
 
     /** Past this many watched elements the settle loop is worth warning about. */
@@ -50,6 +50,9 @@ object Validation {
             return Note(Field.URL, Severity.ERROR, "\"$hostOnly\" doesn't look like a valid host")
         }
         if (scheme == "http") {
+            // A hidden service is encrypted by the circuit that carries it, so the
+            // usual plain-http warning would be telling the user something untrue.
+            if (ProxyRoute.isHiddenService(url)) return null
             return Note(Field.URL, Severity.WARNING, "Plain http — traffic isn't encrypted")
         }
         return null
@@ -123,6 +126,26 @@ object Validation {
             } else if (!Regex("^[A-Za-z0-9_$\\[\\]. -]+$").matches(assertion.jsonPath)) {
                 notes += Note(Field.JSON_PATH, Severity.WARNING, "Unusual characters in the path")
             }
+        }
+
+        // Reaching a hidden service at all.
+        //
+        // There is no public DNS record behind a .onion or .i2p name, so a direct
+        // check cannot get past the lookup: it reports "can't resolve", which is
+        // true and completely unhelpful. Worth saying at setup time rather than
+        // letting the first check say it badly.
+        if (ProxyRoute.isHiddenService(monitor.url) && !monitor.useProxy) {
+            notes += Note(
+                Field.URL, Severity.WARNING,
+                "Only reachable through a SOCKS5 proxy. Set one up in Settings, then route this monitor through it.",
+            )
+        }
+        if (monitor.useProxy && monitor.kind == MonitorKind.WEBSITE_ELEMENT) {
+            notes += Note(
+                Field.PROXY, Severity.HINT,
+                "The page is loaded through the proxy. Routed page loads run one at a time, " +
+                    "because the WebView setting is shared by the whole app.",
+            )
         }
 
         // Cadence

@@ -493,6 +493,13 @@ class RevisionVerificationTest {
 
         composeRule.onNodeWithText("Why is my monitor checked less often than I set?").performClick()
         composeRule.waitForIdle()
+        // The answer expands underneath the question, so a question that scrolled
+        // to the fold leaves its own answer just off screen. Scroll to the answer
+        // rather than assuming the question landed high enough, which depends on
+        // how many cards happen to sit above it.
+        composeRule.onNodeWithTag("settings-list")
+            .performScrollToNode(hasText("fifteen-minute floor", substring = true))
+        composeRule.waitForIdle()
         composeRule.onNode(hasText("fifteen-minute floor", substring = true)).assertIsDisplayed()
         composeRule.captureScreenshot("help-02-expanded")
     }

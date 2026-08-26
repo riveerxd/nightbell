@@ -39,6 +39,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,7 +52,12 @@ import me.river.nightbell.BuildConfig
 import me.river.nightbell.data.Nightbell
 import me.river.nightbell.domain.CheckerHealth
 import me.river.nightbell.domain.CheckerLimit
+import me.river.nightbell.domain.PauseChoice
+import me.river.nightbell.domain.PauseScope
+import me.river.nightbell.domain.ProxyRoute
 import me.river.nightbell.domain.ThemeChoice
+import me.river.nightbell.domain.Validation
+import me.river.nightbell.ui.Transfer
 import me.river.nightbell.ui.components.AlertPolicyEditor
 import me.river.nightbell.ui.components.ButtonTone
 import me.river.nightbell.ui.components.GlassCard
@@ -134,6 +140,10 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         mutableStateOf(Nightbell.install(context).alerts.hasNotificationPermission())
     }
     val entrance = rememberEntranceLog()
+
+    // Null whenever the address is unusable, which is the same call the checker
+    // makes, so the subtitle cannot claim a route the checks would not take.
+    val proxyEndpoint = ProxyRoute.endpoint(settings)
 
     val toast = viewModel.toast
     LaunchedEffect(toast) {
@@ -478,8 +488,188 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
             }
         }
 
+        item(key = "pause") {
+            StaggeredEntrance(index = 6, key = "pause", log = entrance) {
+                GlassCard {
+                    SectionHeader("Pause button", icon = NightbellIcons.Pause, accent = NightbellColors.Amber)
+                    Text(
+                        text = "The pause on the dashboard banner. Nightbell already stops " +
+                            "checking when the phone has no connection at all, but one bar in " +
+                            "a forest still counts as online: every check times out, every " +
+                            "monitor goes down at once, and none of it is about your services.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = NightbellColors.TextTertiary,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    SegmentedSelector(
+                        options = PauseChoice.entries.toList(),
+                        selected = settings.pauseChoice,
+                        onSelect = { choice -> viewModel.update { it.copy(pauseChoice = choice) } },
+                        label = { it.label },
+                        accent = NightbellColors.Amber,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = when (settings.pauseChoice) {
+                            PauseChoice.STOP_CHECKS -> PauseScope.STOP_CHECKS.blurb
+                            PauseChoice.ALERTS_ONLY -> PauseScope.ALERTS_ONLY.blurb
+                            PauseChoice.ASK -> "The button asks which one every time, then how long."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = NightbellColors.TextTertiary,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "How long is always asked: 30 minutes up to 8 hours, or until you " +
+                            "turn it back on. A timed pause lifts itself, which an indefinite one " +
+                            "cannot, so it is the safer one to reach for at 2am.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = NightbellColors.TextTertiary,
+                    )
+                }
+            }
+        }
+
+        item(key = "proxy") {
+            StaggeredEntrance(index = 7, key = "proxy", log = entrance) {
+                GlassCard {
+                    SectionHeader("SOCKS5 proxy", icon = NightbellIcons.Shield, accent = NightbellColors.Aqua)
+                    Text(
+                        text = "Reach a Tor or I2P hidden service without putting the whole " +
+                            "phone in VPN mode. Nothing is routed until a monitor asks for " +
+                            "it: the switch is per monitor, on its Cadence step.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = NightbellColors.TextTertiary,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    ToggleRow(
+                        title = "Offer a proxy to monitors",
+                        subtitle = if (proxyEndpoint != null) {
+                            "Available at ${proxyEndpoint.host}:${proxyEndpoint.port}"
+                        } else if (settings.socksProxyEnabled) {
+                            "Needs a host and a port between 1 and 65535"
+                        } else {
+                            "Off, every check goes out directly"
+                        },
+                        checked = settings.socksProxyEnabled,
+                        onCheckedChange = { on ->
+                            viewModel.update { it.copy(socksProxyEnabled = on) }
+                        },
+                        icon = NightbellIcons.Shield,
+                        accent = NightbellColors.Aqua,
+                    )
+                    AnimatedVisibility(
+                        visible = settings.socksProxyEnabled,
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically(),
+                    ) {
+                        // Both fields below draw from local state once they have been
+                        // touched, and from the store until then.
+                        //
+                        // Binding a text field straight to the store looks right and
+                        // types appallingly: every keystroke writes the whole snapshot
+                        // to DataStore, the field's value only comes back when that
+                        // write lands, and the cursor jumps to the end when it does.
+                        // Typing an address at any speed drops and reorders characters.
+                        // "127.0.0.1" arrived as "27.0.0.11" on a device.
+                        //
+                        // Null means untouched, so the stored value still shows on
+                        // first open and after the settings flow has loaded.
+                        var typedHost by rememberSaveable { mutableStateOf<String?>(null) }
+                        var typedPort by rememberSaveable { mutableStateOf<String?>(null) }
+                        Column {
+                            Spacer(Modifier.height(8.dp))
+                            GlassField(
+                                value = typedHost ?: settings.socksProxyHost,
+                                onValueChange = { v ->
+                                    typedHost = v
+                                    viewModel.update { it.copy(socksProxyHost = v.trim()) }
+                                },
+                                label = "Proxy host",
+                                placeholder = "127.0.0.1",
+                                helper = "An IPv6 literal works here too, with or without " +
+                                    "brackets: ::1 and [::1] both dial the same place.",
+                                leadingIcon = NightbellIcons.Server,
+                                accent = NightbellColors.Aqua,
+                                note = if (settings.socksProxyHost.isBlank()) {
+                                    Validation.Note(
+                                        Validation.Field.PROXY,
+                                        Validation.Severity.ERROR,
+                                        "A host is required",
+                                    )
+                                } else {
+                                    null
+                                },
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            GlassField(
+                                value = typedPort ?: if (settings.socksProxyPort > 0) {
+                                    settings.socksProxyPort.toString()
+                                } else {
+                                    ""
+                                },
+                                onValueChange = { v ->
+                                    val digits = v.filter { it.isDigit() }.take(5)
+                                    typedPort = digits
+                                    viewModel.update { it.copy(socksProxyPort = digits.toIntOrNull() ?: 0) }
+                                },
+                                label = "Proxy port",
+                                placeholder = "9050",
+                                helper = "Tor listens on 9050 by default, and Orbot on 9050 too. " +
+                                    "I2P's HTTP proxy is 4444.",
+                                leadingIcon = NightbellIcons.Link,
+                                accent = NightbellColors.Aqua,
+                                keyboardType = KeyboardType.Number,
+                                note = if (settings.socksProxyPort !in ProxyRoute.PORTS) {
+                                    Validation.Note(
+                                        Validation.Field.PROXY,
+                                        Validation.Severity.ERROR,
+                                        "Ports run from 1 to 65535",
+                                    )
+                                } else {
+                                    null
+                                },
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            StepperRow(
+                                title = "Allow routed checks",
+                                value = settings.proxiedTimeoutSeconds,
+                                onValueChange = { v ->
+                                    viewModel.update { it.copy(proxiedTimeoutSeconds = v) }
+                                },
+                                range = 5..180,
+                                step = 5,
+                                suffix = "s",
+                                icon = NightbellIcons.Clock,
+                                accent = NightbellColors.Aqua,
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = "Longer than an ordinary check on purpose. Most of the wait " +
+                                    "is Tor building a circuit to the service, which says nothing " +
+                                    "about whether the service is healthy, and 15 seconds reports " +
+                                    "a working hidden service as down. Tor itself waits 120.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = NightbellColors.TextTertiary,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                text = "The proxy resolves the hostname, not this phone, which " +
+                                    "is what makes an .onion address work and keeps the name " +
+                                    "off the device's own DNS. Page-element monitors are the " +
+                                    "exception: they render in a WebView, and Android's WebView " +
+                                    "cannot speak SOCKS at all, so those always go out directly.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = NightbellColors.TextTertiary,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         item(key = "widgets") {
-            StaggeredEntrance(index = 6, key = "widgets", log = entrance) {
+            StaggeredEntrance(index = 8, key = "widgets", log = entrance) {
                 WidgetsCard(
                     ids = placedWidgetIds,
                     onConfigure = { id ->
@@ -496,7 +686,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         }
 
         item(key = "certificates") {
-            StaggeredEntrance(index = 7, key = "certificates", log = entrance) {
+            StaggeredEntrance(index = 9, key = "certificates", log = entrance) {
                 GlassCard {
                     SectionHeader(
                         "TLS certificates",
@@ -557,7 +747,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         }
 
         item(key = "favicons") {
-            StaggeredEntrance(index = 8, key = "favicons", log = entrance) {
+            StaggeredEntrance(index = 10, key = "favicons", log = entrance) {
                 GlassCard {
                     SectionHeader("Site icons", icon = NightbellIcons.Globe, accent = NightbellColors.Sky)
                     Text(
@@ -589,7 +779,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         }
 
         item(key = "backup") {
-            StaggeredEntrance(index = 9, key = "backup", log = entrance) {
+            StaggeredEntrance(index = 11, key = "backup", log = entrance) {
                 GlassCard {
                     SectionHeader("Backup and transfer", icon = NightbellIcons.Export, accent = NightbellColors.Violet)
                     Text(
@@ -601,10 +791,15 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                     )
                     Spacer(Modifier.height(10.dp))
                     NightbellButton(
-                        text = "Export to a file",
+                        text = if (viewModel.transfer == Transfer.EXPORT) {
+                            "Writing the file…"
+                        } else {
+                            "Export to a file"
+                        },
                         onClick = { exportBackup.launch(backupFileName()) },
                         icon = NightbellIcons.Export,
                         tone = ButtonTone.Secondary,
+                        loading = viewModel.transfer == Transfer.EXPORT,
                         enabled = !viewModel.transferring,
                         modifier = Modifier.fillMaxWidth().testTag("export-backup"),
                     )
@@ -614,11 +809,20 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                         enter = fadeIn() + expandVertically(),
                         exit = fadeOut() + shrinkVertically(),
                     ) {
+                        // Reading, decoding and replacing the store takes long
+                        // enough on a real backup to look like nothing happened.
+                        // The button says what it is doing rather than just going
+                        // grey, which is indistinguishable from a dead tap.
                         NightbellButton(
-                            text = "Import from a file",
+                            text = if (viewModel.transfer == Transfer.IMPORT) {
+                                "Reading the file…"
+                            } else {
+                                "Import from a file"
+                            },
                             onClick = { confirmImport = true },
                             icon = NightbellIcons.Import,
                             tone = ButtonTone.Secondary,
+                            loading = viewModel.transfer == Transfer.IMPORT,
                             enabled = !viewModel.transferring,
                             modifier = Modifier.fillMaxWidth().testTag("import-backup"),
                         )
@@ -684,13 +888,13 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         }
 
         item(key = "help") {
-            StaggeredEntrance(index = 10, key = "help", log = entrance) {
+            StaggeredEntrance(index = 12, key = "help", log = entrance) {
                 HelpCard()
             }
         }
 
         item(key = "appearance") {
-            StaggeredEntrance(index = 11, key = "appearance", log = entrance) {
+            StaggeredEntrance(index = 13, key = "appearance", log = entrance) {
                 GlassCard {
                     SectionHeader("Appearance", icon = NightbellIcons.Eye, accent = NightbellColors.Aqua)
                     Text(
@@ -714,7 +918,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         }
 
         item(key = "motion") {
-            StaggeredEntrance(index = 12, key = "motion", log = entrance) {
+            StaggeredEntrance(index = 14, key = "motion", log = entrance) {
                 GlassCard {
                     SectionHeader("Motion", icon = NightbellIcons.Sparkle, accent = NightbellColors.Mint)
                     Text(
@@ -760,7 +964,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         }
 
         item(key = "about") {
-            StaggeredEntrance(index = 13, key = "about", log = entrance) {
+            StaggeredEntrance(index = 15, key = "about", log = entrance) {
                 GlassCard {
                     SectionHeader("About", icon = NightbellIcons.Info, accent = NightbellColors.Sky)
                     AboutRow("Version", "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")

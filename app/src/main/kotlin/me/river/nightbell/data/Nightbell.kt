@@ -42,8 +42,14 @@ object Nightbell {
          * [me.river.nightbell.data.work.NightbellMonitorService] ever calls `start`.
          */
         val alarm = UrgentAlarm(context)
-        val http = HttpChecker()
-        val element = ElementChecker(context)
+        /**
+         * Reads the proxy settings per check rather than capturing them, so an
+         * address corrected in Settings applies to the next check instead of the
+         * next launch. `snapshot.value` and not `currentSnapshot()` because this
+         * is called from a non-suspending path.
+         */
+        val http = HttpChecker(settingsFor = { store.snapshot.value.settings })
+        val element = ElementChecker(context, settingsFor = { store.snapshot.value.settings })
         val reference = LatencyReference()
         val engine = CheckEngine(store, http, element, alerts, reference)
         val scheduler = MonitorScheduler(context)
@@ -99,7 +105,13 @@ object Nightbell {
             // becoming visible.
             appScope.launch {
                 store.snapshot
-                    .map { Summary.of(it.monitors, it.runtimes) }
+                    .map { snap ->
+                        Summary.of(
+                            snap.monitors,
+                            snap.runtimes,
+                            fleetPaused = snap.pause.stopsChecks(System.currentTimeMillis()),
+                        )
+                    }
                     .distinctUntilChanged()
                     .collect { NightbellWidgetProvider.refresh(context) }
             }

@@ -3,13 +3,17 @@ package me.river.nightbell.data.check
 import me.river.nightbell.domain.Assertions
 import me.river.nightbell.domain.CheckResult
 import me.river.nightbell.domain.FailureKind
+import me.river.nightbell.domain.GlobalSettings
 import me.river.nightbell.domain.HttpMethod
 import me.river.nightbell.domain.Monitor
+import me.river.nightbell.domain.ProxyRoute
 import me.river.nightbell.domain.Validation
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InterruptedIOException
 import java.net.ConnectException
+import java.net.InetSocketAddress
+import java.net.Proxy
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.security.cert.X509Certificate
@@ -18,6 +22,9 @@ import javax.net.ssl.SSLException
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.Call
+import okhttp3.Connection
+import okhttp3.EventListener
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -32,6 +39,15 @@ import okhttp3.RequestBody.Companion.toRequestBody
 class HttpChecker(
     baseClient: OkHttpClient? = null,
     private val nowMs: () -> Long = System::currentTimeMillis,
+    /**
+     * The settings a check is judged against, read per check rather than captured.
+     *
+     * The graph builds this checker once at startup while the proxy address and
+     * the proxied timeout are things the user can retype at any point afterwards,
+     * so reading them here is what lets a corrected port take effect on the next
+     * check instead of the next launch.
+     */
+    private val settingsFor: () -> GlobalSettings = { GlobalSettings() },
 ) {
     private val base: OkHttpClient = baseClient ?: OkHttpClient.Builder()
         .retryOnConnectionFailure(false)
@@ -50,13 +66,38 @@ class HttpChecker(
             )
         }
 
+        val settings = settingsFor()
+        val route = ProxyRoute.forMonitor(monitor, settings)
+        // Refused, not downgraded. A monitor that asked to be routed and has
+        // nowhere to route through is a configuration failure, and the one thing
+        // it must never do is go out directly: that publishes the hostname the
+        // proxy existed to hide, to this device's resolver, on every interval,
+        // without ever telling the user it stopped protecting them.
+        if (route is ProxyRoute.Route.Unconfigured) {
+            return@withContext CheckResult(
+                ok = false,
+                latencyMs = 0,
+                failureKind = FailureKind.BAD_CONFIG,
+                message = "No proxy to route through",
+                detail = "This monitor is set to use a SOCKS5 proxy and no usable " +
+                    "address is configured, so the check was not sent. Set one in " +
+                    "Settings, or on the monitor itself, or turn routing off.",
+                at = nowMs(),
+            )
+        }
+        val endpoint = (route as? ProxyRoute.Route.Via)?.endpoint
+        // A routed check gets its own budget. Most of the wait is Tor building a
+        // rendezvous circuit, which says nothing about the monitored service, and
+        // the ordinary 15s reads a perfectly healthy hidden service as down.
+        val timeout = monitor.effectiveTimeoutSeconds(settings, proxied = endpoint != null)
         val client = base.newBuilder()
-            .connectTimeout(monitor.timeoutSeconds.toLong(), TimeUnit.SECONDS)
-            .readTimeout(monitor.timeoutSeconds.toLong(), TimeUnit.SECONDS)
-            .writeTimeout(monitor.timeoutSeconds.toLong(), TimeUnit.SECONDS)
-            .callTimeout((monitor.timeoutSeconds + 5).toLong(), TimeUnit.SECONDS)
+            .connectTimeout(timeout.toLong(), TimeUnit.SECONDS)
+            .readTimeout(timeout.toLong(), TimeUnit.SECONDS)
+            .writeTimeout(timeout.toLong(), TimeUnit.SECONDS)
+            .callTimeout((timeout + 5).toLong(), TimeUnit.SECONDS)
             .followRedirects(monitor.followRedirects)
             .followSslRedirects(monitor.followRedirects)
+            .apply { if (endpoint != null) proxy(socksProxy(endpoint)) }
             .build()
 
         val request = runCatching { buildRequest(monitor) }.getOrElse { error ->
@@ -70,9 +111,61 @@ class HttpChecker(
             )
         }
 
+        attempt(client, request, monitor, timeout, retriesLeft = 1)
+    }
+
+    /**
+     * One request, plus a single retry reserved for a connection this app
+     * poisoned rather than a service that is actually down.
+     *
+     * [HttpChecker] is a process singleton, so its connection pool outlives the
+     * gap between one check and the next. A monitor on a short interval routinely
+     * picks up a keep-alive connection the far end reaped in the meantime: OkHttp
+     * writes the request into a socket that is already closed, reads EOF, and
+     * throws "unexpected end of stream" before a single byte of response exists.
+     * Nothing in that says the site is down, and on a slow link there is more
+     * time for the far end to hang up, which is why it shows up there first.
+     *
+     * The retry stays narrow and `retryOnConnectionFailure` stays off. The
+     * blanket version also retries refused connections and connect timeouts,
+     * which is how a genuinely dead host costs two full timeouts and is reported
+     * down anyway. Only a connection that came out of the pool and died before
+     * the response began earns a second attempt:
+     *
+     *  - pooled, because a fresh socket dying mid-request is the server's problem
+     *    and has to be reported as one,
+     *  - before the response began, because anything after that is a real answer
+     *    for the assertions to judge,
+     *  - not a timeout, because slow is the one failure a monitor exists to catch,
+     *  - idempotent, because "the connection died before a response" cannot be told
+     *    apart on the wire from "the server read it, acted on it, and then died".
+     *    Replaying a POST there submits it twice, and a monitor is not worth a
+     *    duplicate order,
+     *  - and only when the first attempt failed fast enough to leave room for a
+     *    second. That is a bound on how early the retry may start, not on when it
+     *    finishes: the new call carries its own timeouts, so a retried check can
+     *    run to roughly half the timeout plus a full one. Sized deliberately, and
+     *    worth stating rather than pretending otherwise.
+     *
+     * Each attempt is timed on its own, so a retried check reports the round trip
+     * that produced the verdict instead of one inflated by a dead socket that was
+     * never the user's to pay for.
+     */
+    private fun attempt(
+        client: OkHttpClient,
+        request: Request,
+        monitor: Monitor,
+        timeoutSeconds: Int,
+        retriesLeft: Int,
+    ): CheckResult {
+        val watcher = ConnectionWatcher()
+        val call = client.newBuilder()
+            .eventListener(watcher)
+            .build()
+            .newCall(request)
         val started = System.nanoTime()
-        try {
-            client.newCall(request).execute().use { response ->
+        return try {
+            call.execute().use { response ->
                 val body = if (monitor.method == HttpMethod.HEAD) "" else readBoundedBody(response)
                 val latency = elapsedMs(started)
                 val verdict = Assertions.evaluateHttp(monitor, response.code, body)
@@ -106,6 +199,13 @@ class HttpChecker(
             throw cancellation
         } catch (error: Throwable) {
             val latency = elapsedMs(started)
+            if (retriesLeft > 0 &&
+                monitor.method.isIdempotent &&
+                watcher.diedBeforeAnswering(error) &&
+                latency * 2 < timeoutSeconds * 1_000L
+            ) {
+                return attempt(client, request, monitor, timeoutSeconds, retriesLeft - 1)
+            }
             val kind = classify(error)
             CheckResult(
                 ok = false,
@@ -117,6 +217,21 @@ class HttpChecker(
             )
         }
     }
+
+    /**
+     * A SOCKS5 route for OkHttp.
+     *
+     * The proxy's own address is resolved here, because the proxy is somewhere
+     * this device can reach. The monitored host is deliberately not resolved
+     * anywhere: OkHttp builds an *unresolved* socket address for a SOCKS route
+     * and hands the name over for the proxy to look up. That is the whole reason
+     * an .onion address works through this at all, since it has no record any
+     * resolver on this device could answer with. It also keeps a clearnet host
+     * that was routed on purpose off the device's own DNS, which would otherwise
+     * announce every hostname the proxy was supposed to be hiding.
+     */
+    private fun socksProxy(route: ProxyRoute.Endpoint): Proxy =
+        Proxy(Proxy.Type.SOCKS, InetSocketAddress(route.host, route.port))
 
     private fun buildRequest(monitor: Monitor): Request {
         val builder = Request.Builder().url(monitor.url.trim())
@@ -199,6 +314,82 @@ class HttpChecker(
         FailureKind.CONNECT -> "Connection refused or dropped"
         FailureKind.BAD_CONFIG -> "Invalid request: ${error.message ?: "bad configuration"}"
         else -> error.message ?: "Unexpected failure"
+    }
+
+    /**
+     * Whether a call was handed a connection out of the pool, and how far it got.
+     *
+     * `connectStart` fires only when OkHttp has to open a socket, so a call that
+     * acquired a connection without ever opening one was given a pooled one.
+     * That is the whole trick: OkHttp exposes no "was this reused" flag, but it
+     * does say whether it had to dial.
+     */
+    private class ConnectionWatcher : EventListener() {
+
+        @Volatile private var dialled = false
+
+        @Volatile private var acquired = false
+
+        @Volatile private var responded = false
+
+        override fun connectStart(call: Call, inetSocketAddress: InetSocketAddress, proxy: Proxy) {
+            dialled = true
+        }
+
+        override fun connectionAcquired(call: Call, connection: Connection) {
+            acquired = true
+        }
+
+        override fun responseHeadersStart(call: Call) {
+            responded = true
+        }
+
+        /**
+         * A redirect is a second exchange on the same call, so the flags reset here.
+         *
+         * Latched across the whole call they described the *first* hop forever, and
+         * `followRedirects` is on by default: one `http` to `https` hop, which is
+         * most of the web, left `responded` true and made the retry unreachable for
+         * the rest of the call. Reset at the end of each response so what is read
+         * after a failure describes the exchange that actually failed.
+         */
+        override fun responseHeadersEnd(call: Call, response: okhttp3.Response) {
+            dialled = false
+            acquired = false
+            responded = false
+        }
+
+        /**
+         * True when a connection was established and then died before answering.
+         *
+         * Two shapes, one rule. The first is the reported one: a keep-alive
+         * connection the far end had already reaped, which fails the instant the
+         * request is written into it. The second was found by putting a real check
+         * across an emulated GPRS link, where the *first* connection to a perfectly
+         * healthy endpoint failed with `Required SETTINGS preface not received`
+         * after 22 seconds, was reported as "Connection refused or dropped", and
+         * succeeded on the very next attempt. Both are a connection that broke, and
+         * neither is evidence about the monitored service.
+         *
+         * What is deliberately excluded is everything that says something real:
+         *
+         *  - timeouts, because slow is the failure a monitor exists to catch,
+         *  - a refused connection or an unresolvable name, which never get far
+         *    enough to acquire a connection and so never reach this at all,
+         *  - anything after the response began, which is a real answer.
+         *
+         * Note this no longer requires the connection to have come from the pool.
+         * It did at first, on the reasoning that a fresh socket dying is the
+         * server's problem. The GPRS measurement says otherwise: on a bad link a
+         * fresh socket dies for reasons that have nothing to do with the server,
+         * which is exactly the false outage the reporter was seeing.
+         */
+        fun diedBeforeAnswering(error: Throwable): Boolean =
+            acquired && !responded &&
+                error is IOException &&
+                // SocketTimeoutException is an InterruptedIOException, so this one
+                // check excludes the read timeout and the call timeout together.
+                error !is InterruptedIOException
     }
 
     companion object {
