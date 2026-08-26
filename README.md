@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/screens/hero-b.png" width="900" alt="Nightbell — the dashboard worst-first, an urgent alert, and a monitor detail" />
+<img src="docs/screens/hero-b.png" width="900" alt="Nightbell: the dashboard worst-first, an urgent alert, and a monitor detail" />
 
 ### Uptime monitoring that lives on your phone and actually wakes you up.
 
@@ -10,13 +10,16 @@
   <img src="https://img.shields.io/badge/Jetpack%20Compose-4285F4?style=flat-square&logo=jetpackcompose&logoColor=white" alt="Jetpack Compose" />
   <img src="https://img.shields.io/badge/minSdk-26-3a3f4b?style=flat-square" alt="minSdk 26" />
   <img src="https://img.shields.io/badge/targetSdk-36-3a3f4b?style=flat-square" alt="targetSdk 36" />
-  <img src="https://img.shields.io/badge/release-3.0.2-2F6BFF?style=flat-square" alt="Release 3.0.2" />
+  <a href="https://f-droid.org/en/packages/me.river.nightbell/"><img src="https://img.shields.io/f-droid/v/me.river.nightbell?style=flat-square&logo=fdroid&logoColor=white&color=1976D2&label=F-Droid" alt="Version on F-Droid" /></a>
+  <a href="../../releases/latest"><img src="https://img.shields.io/github/v/release/riveerxd/nightbell?style=flat-square&color=2F6BFF&label=release" alt="Latest release" /></a>
   <img src="https://img.shields.io/badge/tests-359%20JVM%20+%20173%20on--device-2FD98A?style=flat-square" alt="Tests" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/licence-Apache%202.0-3a3f4b?style=flat-square" alt="Apache 2.0" /></a>
 </p>
 
 <p>
-  <a href="../../releases/latest"><img src="https://img.shields.io/badge/Download%20APK-2F6BFF?style=for-the-badge&logo=android&logoColor=white" alt="Download APK" /></a>
+  <a href="https://f-droid.org/en/packages/me.river.nightbell/"><img src="https://img.shields.io/badge/Get%20it%20on%20F--Droid-1976D2?style=for-the-badge&logo=fdroid&logoColor=white" alt="Get it on F-Droid" /></a>
+  &nbsp;
+  <a href="https://nightbell.app/download"><img src="https://img.shields.io/badge/Download%20APK-2F6BFF?style=for-the-badge&logo=android&logoColor=white" alt="Download APK" /></a>
   &nbsp;
   <a href="docs/reference.md"><img src="https://img.shields.io/badge/Read%20the%20docs-11151f?style=for-the-badge&logo=readthedocs&logoColor=white" alt="Docs" /></a>
   &nbsp;
@@ -24,6 +27,7 @@
 </p>
 
 <p>
+  <a href="https://nightbell.app">nightbell.app</a> &nbsp;·&nbsp;
   <a href="#why">Why</a> &nbsp;·&nbsp;
   <a href="#what-it-watches">What it watches</a> &nbsp;·&nbsp;
   <a href="#getting-the-alerts-to-actually-arrive">Alerts</a> &nbsp;·&nbsp;
@@ -36,7 +40,7 @@
 
 Point it at anything that answers over HTTP, or at one element on a rendered web
 page, and it watches it, charts it, and gets loud when it breaks. **No server, no
-account, no third party** — the phone in your pocket does the checking.
+account, no third party.** The phone in your pocket does the checking.
 
 ---
 
@@ -74,7 +78,7 @@ Page-element monitors watch any number of nodes per page and resolve them all
 against one page load, so watching six costs about what watching one costs. The
 expensive part is booting the WebView, not the assertions.
 
-Setting one up is a four-step wizard — pick a kind, point it somewhere, say what
+Setting one up is a four-step wizard: pick a kind, point it somewhere, say what
 "healthy" means, and choose a cadence. Everything is changeable later.
 
 <div align="center">
@@ -110,7 +114,7 @@ straight to each toggle and re-checks when you come back. It cannot be one tap
 and it does not pretend to be. It is four taps instead of hunting three settings
 sections.
 
-Once they are granted, the alert policy is yours to shape — what counts as down,
+Once they are granted, the alert policy is yours to shape: what counts as down,
 how it sounds, the haptic pattern, how hard it escalates, and when to stay quiet.
 
 <div align="center">
@@ -118,7 +122,7 @@ how it sounds, the haptic pattern, how hard it escalates, and when to stay quiet
 </div>
 
 > [!TIP]
-> Urgent pages follow your ringer switch by default — vibrate mode gets haptics
+> Urgent pages follow your ringer switch by default, so vibrate mode gets haptics
 > only. There is a setting to override that if you want a pager that answers to
 > nothing.
 
@@ -127,8 +131,8 @@ how it sounds, the haptic pattern, how hard it escalates, and when to stay quiet
 ## The home-screen widget
 
 Worst monitor first, tap a row to open it, tap the cog to reconfigure it. Every
-piece of the header switches off independently — the mark, the word Nightbell, the
-"1 of 6 is down" summary, the cog — because "make it clean" means different
+piece of the header switches off independently: the mark, the word Nightbell, the
+"1 of 6 is down" summary, the cog. That is because "make it clean" means different
 things to different people, and one flag for all four meant losing the summary to
 keep the branding.
 
@@ -140,18 +144,18 @@ they move sideways:
   <img src="docs/screens/widget-243.png" width="820" alt="The widget tall in one column, spilling into two columns, and flat in a single wide row" />
 </div>
 
-Columns are chosen from the size the launcher reports, capped by width — no
+Columns are chosen from the size the launcher reports, capped by width, because no
 number of monitors justifies a column too narrow to read a name in. Below about
 150dp per column the trailing latency is dropped so the name keeps its room, and
 a widget too short for a footer *and* a monitor drops the footer rather than
-clipping both. `Columns: Auto` in the widget settings, or pin it to 1–3.
+clipping both. `Columns: Auto` in the widget settings, or pin it to 1, 2 or 3.
 
 ---
 
 ## How it works
 
 One `CheckEngine` runs a check, folds the result into persisted state, and
-decides whether to interrupt you. Four alert tracks come off that — deliberately
+decides whether to interrupt you. Four alert tracks come off that, deliberately
 separate, so a bug in Nightbell never gets reported as your website being down.
 
 ```mermaid
@@ -177,7 +181,7 @@ you turn on strict mode and want a cadence Android will not batch away.
 
 <br/>
 
-`docs/reference.md` has the full account — the four tracks and why the checker's
+`docs/reference.md` has the full account: the four tracks and why the checker's
 health is one of them, count-based sample retention, the certificate track, the
 light-theme re-pick, and the reasoning behind the awkward parts. It is the file
 to read before changing anything load-bearing.
@@ -188,12 +192,51 @@ to read before changing anything load-bearing.
 
 ## Install
 
-Grab the APK from [Releases](../../releases), or from `artifacts/` in this repo,
-and sideload it.
+### F-Droid
+
+<a href="https://f-droid.org/en/packages/me.river.nightbell/"><img align="right" width="170" src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png" alt="Get it on F-Droid" /></a>
+
+Listed since 13 August 2026. Take this one if you have the choice: it is the only
+channel that updates itself.
+
+It is also a reproducible build. F-Droid compiles
+Nightbell from this source on their own machines, compares the result against the
+APK attached to the GitHub release, and publishes mine only because the two match
+byte for byte. So the F-Droid download and the direct download are the same file
+with the same signature: either one updates the other, and you can move between
+them without uninstalling and losing your monitors. What it costs to keep that
+true is [docs/FDROID.md](docs/FDROID.md), and the choice is one directional, so
+read it before changing anything a build depends on.
+
+### Obtainium
+
+Point [Obtainium](https://github.com/ImranR98/Obtainium) at the repository and it
+watches Releases for you:
+
+```
+https://github.com/riveerxd/nightbell
+```
+
+### The APK on its own
+
+<img align="right" width="150" src="docs/screens/qr-download.png" alt="QR code linking to nightbell.app/download" />
+
+[**nightbell.app/download**](https://nightbell.app/download) redirects to the
+current release, so it is the link to scan off a phone or paste somewhere a
+versioned URL would rot. Every build is also in [Releases](../../releases/latest)
+and in `artifacts/` in this repo:
 
 ```bash
-adb install -r artifacts/Nightbell-3.0.2-release.apk
+adb install -r artifacts/Nightbell-3.0.5-release.apk
 ```
+
+Nightbell is not on IzzyOnDroid and not on Google Play. Play is not a "not yet":
+the foreground service declares `specialUse` rather than `dataSync`, because
+`dataSync` is capped at six hours a day from API 34 and that cap would quietly
+break the one guarantee strict mode exists to make. Getting it through review
+would mean justifying the subtype.
+
+### Coming from an older version
 
 > [!IMPORTANT]
 > **3.0.0 does not update a 2.x install.** The app was called Pulse until 3.0.0
@@ -208,8 +251,8 @@ adb install -r artifacts/Nightbell-3.0.2-release.apk
 > a fully-qualified `ComponentName` and channel grants belong to the old package.
 > Full detail in [docs/MIGRATION_3.0.0.md](docs/MIGRATION_3.0.0.md).
 >
-> It is signed with my own key, so Play Protect will ask you to confirm — there is
-> no Play listing. 3.0.1 onward updates in place as usual.
+> A direct APK is signed with my own key, so Play Protect will ask you to confirm
+> the first time. 3.0.1 onward updates in place as usual.
 >
 > **3.0.1 changed the signing key.** The old certificate's subject read
 > `CN=Pulse Monitor`, and a subject cannot be edited without issuing a new
@@ -232,13 +275,13 @@ gitignored along with the key itself. Without it the release task still builds,
 just unsigned.
 
 <details>
-<summary><b>Tests — 359 JVM + 173 on-device</b></summary>
+<summary><b>Tests: 359 JVM + 173 on-device</b></summary>
 
 <br/>
 
 359 JVM tests cover the pure logic: the alert state machines, escalation,
 quiet-hours arithmetic, assertions, the latency baseline, backup round-trips, and
-the widget's column arithmetic — which decides whether a monitor is visible at all
+the widget's column arithmetic, which decides whether a monitor is visible at all
 and can otherwise only be exercised by dragging a widget around a home screen.
 173 instrumented tests cover the parts that need a real Android: notifications,
 channels, the foreground service, the WebView element checker, widgets, the
@@ -251,7 +294,7 @@ adb shell am instrument -w -e class me.river.nightbell.UrgentPageEndToEndTest \
   me.river.nightbell.debug.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
-The urgent path has a habit of breaking in ways only a device shows — the alarm
+The urgent path has a habit of breaking in ways only a device shows: the alarm
 taking half a minute to stop after acknowledging, a custom notification layout
 getting squashed vertically, colorisation being silently dropped. None of that is
 visible from reading the code, so those cases got tests that were checked against
@@ -263,8 +306,8 @@ the broken version first.
 
 > [!IMPORTANT]
 > Quiet hours still suppress urgent pages unless you turn on the bypass. That
-> default is wrong and is the next thing I want to fix properly — with a
-> migration, not a flipped constant.
+> default is wrong and is the next thing I want to fix properly, with a
+> migration rather than a flipped constant.
 
 - Element checks need a WebView per page load. They are the slow kind of check.
 - Strict mode costs battery and a permanent notification. That is Android's price
