@@ -14,7 +14,10 @@
     "validate": "node scripts/validate.mjs",
     "precompress": "node scripts/precompress.mjs",
     "precompress:check": "node scripts/precompress.mjs --check",
-    "verify": "npm run assets:check && npm run screens:check && npm run build && npm run validate && npm run precompress",
+    "download-redirect": "node scripts/gen-download-redirect.mjs",
+    "download-redirect:check": "node scripts/gen-download-redirect.mjs --check",
+    "downloads": "./deploy/scripts/downloads.sh",
+    "verify": "npm run assets:check && npm run screens:check && npm run download-redirect:check && npm run build && npm run validate && npm run precompress",
     "screens": "node scripts/clean-screens.mjs",
     "screens:check": "node scripts/clean-screens.mjs --check"
   },

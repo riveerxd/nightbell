@@ -58,17 +58,38 @@ export const REPO = {
  * upload matched. The page prints that digest for people to verify against, so it
  * is the one value in this file that must never be predicted or copied forward.
  *
- * When a release ships, update `version`, `tag`, `apkName`, `apkUrl`, `apkBytes`
- * and `apkSha256` together, from the artifact as GitHub serves it.
+ * When a release ships, update `version`, `tag`, `apkName`, `apkUrl`, `apkBytes`,
+ * `apkSha256` and `versionCode` together, from the artifact as GitHub serves it.
+ *
+ * ## The failure this block already had
+ *
+ * This sat at 3.0.2 while 3.0.3, 3.0.4 and 3.0.5 shipped, and it is the block the
+ * download button is built from, so from 10 August 2026 the live site handed out
+ * 3.0.2 to everybody who pressed it. Old GitHub asset URLs never stop resolving,
+ * so nothing broke and nothing complained: the button worked, it just returned a
+ * release three versions old, under a page printing that release's size and that
+ * release's digest as though they described the current one. Every number in this
+ * block was internally consistent, which is what stopped it looking wrong.
+ *
+ * `npm run verify` catches a generated snippet that disagrees with this block. It
+ * cannot catch this block disagreeing with GitHub, because nothing here knows what
+ * the latest tag is. The only defence is that the release checklist ends here, so
+ * `docs/growth-prep/distribution/09-release-verification-checklist.md` names this
+ * file, and the digest below is measured off the download rather than the build.
+ *
+ * `versionCode` is here because F-Droid identifies a build by it rather than by
+ * the version name, so it is the number to quote in a store submission or a bug
+ * report about which build somebody is running.
  */
 export const RELEASE = {
-  version: '3.0.2',
-  tag: 'v3.0.2',
-  apkName: 'Nightbell-3.0.2-release.apk',
+  version: '3.0.5',
+  tag: 'v3.0.5',
+  apkName: 'Nightbell-3.0.5-release.apk',
   apkUrl:
-    'https://github.com/riveerxd/nightbell/releases/download/v3.0.2/Nightbell-3.0.2-release.apk',
-  apkBytes: 2160440,
-  apkSha256: '6a5a2a858ac3e245657b7c6a284596626a78f58eddf749f3af550f099be11115',
+    'https://github.com/riveerxd/nightbell/releases/download/v3.0.5/Nightbell-3.0.5-release.apk',
+  apkBytes: 2152728,
+  apkSha256: 'fe7c96643497bdad977b20d4752abd6a17c97e4e92c590e2df21eccd6a68aac8',
+  versionCode: 27,
   minSdk: 26,
   minAndroid: '8.0',
   targetSdk: 36,
@@ -90,6 +111,130 @@ export const RELEASE = {
   signingCertSha256: '20d8abdaa8416a9a751e3ea144ef1523d7ddbaaeee9ec6be01d63a65574a70de',
   signingCertDn: 'CN=Nightbell, OU=river, O=river, L=Prague, C=CZ',
 };
+
+/**
+ * Where Nightbell can actually be installed from, and where it cannot.
+ *
+ * Every entry here is a claim a visitor can check in one click, so the `live`
+ * flag is the important field rather than the URL. A channel listed as working
+ * that is not working costs more trust than a channel that is honestly missing,
+ * which is the mistake this object exists to stop repeating.
+ *
+ * ## What happened before this existed
+ *
+ * Nightbell was accepted into official F-Droid on 13 August 2026 and the page
+ * kept saying "Not submitted. IzzyOnDroid first, then F-Droid proper." for the
+ * next fortnight, under a line reading "There is no store listing for Nightbell
+ * anywhere. If you find one, it is not mine." By then f-droid.org was the single
+ * largest source of traffic to the repository. The site was denying its own best
+ * install route and warning people off it, and telling everyone who arrived to
+ * sideload an APK with no update path instead.
+ *
+ * The reason it went unnoticed is that nothing in the build could know. The
+ * listing lives on someone else's server, so there is no local file to diff and
+ * no check that fails. That makes it a hand-maintained fact, which is exactly the
+ * kind that rots, so it is written down once, here, with the date it became true.
+ *
+ * ## On the F-Droid entry
+ *
+ * `devSigned` is the part worth advertising and the part that took four rounds of
+ * CI to earn. F-Droid builds from source and normally signs the result with the
+ * F-Droid key; here it builds from source, compares its output against the APK
+ * attached to the GitHub release, and publishes the developer's APK because the
+ * two match byte for byte. That is why `signingCertSha256` above is the same
+ * number whichever channel an install came from, and why moving between them does
+ * not mean uninstalling and losing your monitors. The choice is one directional,
+ * so see `docs/FDROID.md` before touching anything a build depends on.
+ */
+export const CHANNELS = {
+  fdroid: {
+    live: true,
+    name: 'F-Droid',
+    url: 'https://f-droid.org/en/packages/me.river.nightbell/',
+    packageId: 'me.river.nightbell',
+    /** The day the listing went live, from the "Added on" line on that page. */
+    addedOn: '2026-08-13',
+    /** The merge request that landed it, kept for the paper trail. */
+    mergeRequest: 'https://gitlab.com/fdroid/fdroiddata/-/merge_requests/45381',
+    /** Metadata path inside `fdroid/fdroiddata`. */
+    metadata: 'metadata/me.river.nightbell.yml',
+    devSigned: true,
+  },
+  obtainium: {
+    live: true,
+    name: 'Obtainium',
+    /** Obtainium tracks the repository itself, so the URL is the repo. */
+    url: 'https://github.com/riveerxd/nightbell',
+  },
+  github: {
+    live: true,
+    name: 'GitHub Releases',
+    url: 'https://github.com/riveerxd/nightbell/releases/latest',
+  },
+  izzyondroid: {
+    live: false,
+    name: 'IzzyOnDroid',
+    /**
+     * Never submitted. It was meant to come first, as the fast route, and then
+     * the slow route landed instead, which removed the urgency without removing
+     * the reason: it is a second index with its own audience and its own search
+     * results. The tracker moved from GitLab to Codeberg, see
+     * `docs/growth-prep/distribution/01-izzyondroid-metadata.md`.
+     */
+    url: null,
+  },
+  play: {
+    live: false,
+    name: 'Google Play',
+    /**
+     * Not a "not yet". The foreground service declares `specialUse`, because
+     * `dataSync` is capped at six hours a day from API 34 and that cap would
+     * quietly break the guarantee strict mode exists to make. Shipping through
+     * Play review would mean justifying the subtype. See the FAQ on the page.
+     */
+    url: null,
+  },
+};
+
+/**
+ * The path the download buttons point at, on this origin, instead of pointing
+ * straight at GitHub.
+ *
+ * ## Why the indirection exists
+ *
+ * The APK is served by GitHub, so the bytes never touch this box and nothing here
+ * can observe the transfer. A button linking directly to
+ * `github.com/.../Nightbell-x.y.z-release.apk` therefore produces exactly zero
+ * evidence that anybody downloaded anything: the click is a cross-origin
+ * navigation, and the only party that counts it is GitHub.
+ *
+ * Sending the click through `/download` first makes it a request to this server,
+ * which means one line in one log file, and then a 302 to the same GitHub URL as
+ * before. The user gets the identical file from the identical host. What changes
+ * is that the click is now countable without a single byte of JavaScript, without
+ * a third party, without a cookie and therefore without a consent banner, on a
+ * site whose Content-Security-Policy says in as many words that there is no
+ * analytics on it. That claim stays true: nothing was added to the page.
+ *
+ * The secondary reason is that this is a stable URL. `nightbell.app/download` is
+ * short enough to say out loud, survives every version bump, and is the thing to
+ * put in a Reddit comment or a QR code, where a versioned GitHub URL would rot at
+ * the next release.
+ *
+ * ## What it cannot tell you
+ *
+ * A click is not a download. Somebody can click and cancel, and GitHub's own
+ * counter is the only thing that knows whether bytes moved. The two numbers are
+ * meant to be read side by side, which is what `deploy/scripts/downloads.sh`
+ * prints. Neither one is a count of people: see the log format in
+ * `deploy/nginx/nightbell.app.conf` for what is deliberately not recorded.
+ *
+ * Changing this value changes the generated Nginx snippet on the next
+ * `npm run build`, and the new path has to be added to the server block by hand,
+ * because a `location` cannot be generated from here without templating the whole
+ * file. `npm run verify` fails if the two have drifted.
+ */
+export const DOWNLOAD_PATH = '/download';
 
 /**
  * The promo, described for the things that read structured data.

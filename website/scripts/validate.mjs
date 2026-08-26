@@ -18,6 +18,7 @@ import { parse } from 'parse5';
 import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs';
 import { join, dirname, resolve, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DOWNLOAD_PATH } from '../site.config.mjs';
 
 const SITE = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = join(SITE, 'dist');
@@ -323,6 +324,23 @@ for (const file of htmlFiles) {
       }
       continue;
     }
+    // The one local URL that is not a file. Nginx answers DOWNLOAD_PATH with a
+    // 302 to the APK on GitHub so the click can be counted, which means it exists
+    // in production and cannot exist in dist. Exempting it here would normally be
+    // how a broken link gets a permanent excuse, so the exemption is paid for by
+    // the check further down that reads the server block and confirms the location
+    // is really there.
+    //
+    // target="_blank" is refused rather than merely allowed: this is same origin
+    // now, the response is a download and not a page, so a new tab would open,
+    // download and then sit there blank on top of the site.
+    if (href === DOWNLOAD_PATH) {
+      if (attr(a, 'target')) {
+        fail(`${label}: ${href} should not open in a new tab, it is a same-origin download.`);
+      }
+      continue;
+    }
+
     // Local: it has to exist in dist.
     const local = join(DIST, href.split('#')[0].split('?')[0]);
     if (!existsSync(local)) fail(`${label}: broken local link ${href}.`);
@@ -386,6 +404,54 @@ try {
   ok('site.webmanifest parses.');
 } catch (err) {
   fail(`site.webmanifest does not parse (${err.message}).`);
+}
+
+// ------------------------------------------------------- the download redirect
+//
+// DOWNLOAD_PATH is the only href on the site that resolves to nothing in dist,
+// because Nginx and not Astro is what answers it. The link check above lets it
+// through on that basis, and this is the part that makes the basis true.
+//
+// It matters more than it looks. If the server block loses this location, the
+// button stops being a download and starts being the 404 page, the page still
+// builds, every other check still passes, and the failure is invisible until
+// somebody clicks the primary call to action on the landing page. That is exactly
+// the class of mistake this validator exists for, so it is checked here rather
+// than trusted.
+//
+// The redirect target itself is not checked here. That is
+// `scripts/gen-download-redirect.mjs --check`, which owns the version, and
+// `npm run verify` runs both.
+{
+  const conf = join(SITE, 'deploy/nginx/nightbell.app.conf');
+  const snippet = join(SITE, 'deploy/nginx/snippets/nightbell/download-target.conf');
+  const linked = htmlFiles.some((f) => readFileSync(f, 'utf8').includes(`href="${DOWNLOAD_PATH}"`));
+
+  if (!existsSync(conf)) {
+    warn(`No deploy/nginx/nightbell.app.conf, so ${DOWNLOAD_PATH} could not be verified.`);
+  } else {
+    const text = readFileSync(conf, 'utf8');
+    const hasLocation = new RegExp(`location\\s*=\\s*${DOWNLOAD_PATH}\\s*\\{`).test(text);
+
+    if (linked && !hasLocation) {
+      fail(
+        `The page links to ${DOWNLOAD_PATH} but nightbell.app.conf has no "location = ${DOWNLOAD_PATH}", ` +
+          'so the download button would serve the 404 page.',
+      );
+    } else if (hasLocation && !existsSync(snippet)) {
+      fail(
+        'location = ' +
+          DOWNLOAD_PATH +
+          ' includes download-target.conf, which does not exist. Run `npm run download-redirect`.',
+      );
+    } else if (hasLocation && !text.includes('snippets/nightbell/download-target.conf')) {
+      fail(`location = ${DOWNLOAD_PATH} does not include the generated download-target.conf.`);
+    } else if (hasLocation && !text.includes('access_log /var/log/nginx/nightbell/download.log')) {
+      fail(`location = ${DOWNLOAD_PATH} has no access_log of its own, so nothing would be counted.`);
+    } else if (hasLocation && linked) {
+      ok(`${DOWNLOAD_PATH} is a logged 302 in the server block, and the page links to it.`);
+    }
+  }
 }
 
 // The whole point of a static build is that the first load is one document.

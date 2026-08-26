@@ -3263,10 +3263,16 @@ html[data-revealing] .trace:not(.is-in) {
 /*
   The rows arrive one after another rather than together.
 
-  A list of three is exactly the length where a stagger reads as the list being
-  dealt out and a longer one would read as a page loading slowly. It is keyed off
-  the reveal class the section already has, so with no script or at reduced motion
-  all three are simply there.
+  Four is about the limit where a stagger still reads as the list being dealt out
+  rather than as a page loading slowly, which is why the step is 90ms and not more:
+  the last row lands 270ms after the first. It is keyed off the reveal class the
+  section already has, so with no script or at reduced motion all four are simply
+  there.
+
+  Every row needs its own delay rule, so adding a channel without adding one here
+  is not a broken layout, it is a row that silently appears with the first one. The
+  F-Droid row was added at the top of the list, which shifted the other three down
+  a position and left the fourth with no rule at all.
 */
 html[data-revealing] .channels:not(.is-in) .channel {
   opacity: 0;
@@ -3285,6 +3291,10 @@ html[data-revealing] .channels:not(.is-in) .channel {
 
 .channels.is-in .channel:nth-child(3) {
   transition-delay: 180ms;
+}
+
+.channels.is-in .channel:nth-child(4) {
+  transition-delay: 270ms;
 }
 
 pre {

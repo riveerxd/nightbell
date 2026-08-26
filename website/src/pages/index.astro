@@ -12,7 +12,7 @@ import Escalation from '../components/Escalation.astro';
 import PathDiagram from '../components/PathDiagram.astro';
 import Player from '../components/Player.astro';
 import Footer from '../components/Footer.astro';
-import { REPO, RELEASE, SITE_URL } from '../../site.config.mjs';
+import { REPO, RELEASE, CHANNELS, SITE_URL, DOWNLOAD_PATH } from '../../site.config.mjs';
 import media from '../media.json';
 
 import pagerShot from '../assets/screens/clean/pager-setup.png';
@@ -44,8 +44,12 @@ const faqs: { q: string; a: string }[] = [
     a: 'Only in strict mode. Android’s PeriodicWorkRequest has a hard 15 minute minimum and WorkManager silently clamps anything shorter, so Nightbell clamps it visibly instead and says so in Settings under Checker health. Turning on strict foreground monitoring runs a foreground service that keeps your interval exactly, down to about 15 seconds. It costs a permanent notification and real battery, which is Android’s price for a real cadence and not a design choice.',
   },
   {
+    q: 'Is it on F-Droid?',
+    a: 'Yes, since 13 August 2026, and that is the install worth taking because it is the only one that updates itself. It is also a reproducible build: F-Droid compiles Nightbell from this source on their own machines, compares the result against the APK attached to the GitHub release, and publishes mine only because the two match byte for byte. So the F-Droid download and the direct download carry the same signature, which means either one updates the other and you can move between them without uninstalling and losing your monitors. IzzyOnDroid is a separate repository and Nightbell is not in it.',
+  },
+  {
     q: 'Why is it not on the Play Store?',
-    a: 'There is no Play listing. Grab the APK from GitHub Releases and sideload it. It is signed with my own key, so Play Protect will ask you to confirm the first time. The foreground service also declares specialUse rather than dataSync, because dataSync is capped at six hours a day on API 34 and up, which would quietly break the one guarantee strict mode exists to make. Shipping that through Play review would mean justifying the subtype. Sideloading is unaffected.',
+    a: 'There is no Play listing, and F-Droid covers the reason most people want one: a store client that installs it and keeps it updated. What keeps it off Play is the foreground service, which declares specialUse rather than dataSync, because dataSync is capped at six hours a day from API 34 and that cap would quietly break the one guarantee strict mode exists to make. Shipping it through Play review would mean justifying the subtype. Neither F-Droid nor a direct APK is affected, and both are signed with my own key, so a direct install makes Play Protect ask you to confirm the first time.',
   },
   {
     q: 'Does anything leave my phone?',
@@ -188,8 +192,14 @@ const transcript: { t: string; s: string }[] = [
               either way, but at 390 a third button plus two "the"s wraps the row
               onto three lines and the ask stops looking like one decision.
             */}
+            {/*
+              href is /download, not the GitHub URL, and it is the only link on
+              the page with no target="_blank". Both are deliberate: see
+              DOWNLOAD_PATH in site.config.mjs for why the click goes through this
+              origin, and the note on the second button for why the tab stays.
+            */}
             <div class="actions">
-              <a class="btn btn-primary" href={RELEASE.apkUrl} target="_blank" rel="noopener">
+              <a class="btn btn-primary" href={DOWNLOAD_PATH}>
                 <Glyph name="download" size={17} />
                 Download APK
                 <span class="mono apk-size">{apkMb} MB</span>
@@ -252,7 +262,7 @@ const transcript: { t: string; s: string }[] = [
 
             <p class="hero-facts label">
               <span><Glyph name="power" size={13} />Android {RELEASE.minAndroid} and up</span>
-              <span><Glyph name="arrowRight" size={13} />Sideload, not on Play</span>
+              <span><Glyph name="arrowRight" size={13} />On F-Droid, not on Play</span>
             </p>
           </div>
 
@@ -906,8 +916,20 @@ const transcript: { t: string; s: string }[] = [
             <p class="release-v">v{RELEASE.version}</p>
           </div>
 
+          {/*
+            Same /download indirection as the hero button, and the same dropped
+            target="_blank".
+
+            The attribute was there because this used to be an outbound link to
+            another origin, where a new tab is the polite default. It is now a
+            same-origin URL that answers 302 to a file GitHub serves with
+            Content-Disposition: attachment, so the browser starts a download and
+            never navigates: the page, the scroll position and the video all stay
+            exactly where they were. With _blank the identical download happens and
+            leaves a blank tab open on top of the site, which is worse for no gain.
+          */}
           <div class="actions">
-            <a class="btn btn-primary" href={RELEASE.apkUrl} target="_blank" rel="noopener">
+            <a class="btn btn-primary" href={DOWNLOAD_PATH}>
               <Glyph name="download" size={17} />
               Download the APK
               <span class="mono apk-size">{apkMb} MB</span>
@@ -934,49 +956,86 @@ const transcript: { t: string; s: string }[] = [
           </div>
           <div>
             <dt>Store listing</dt>
-            <dd class="mono">None anywhere</dd>
+            <dd class="mono">F-Droid</dd>
           </div>
         </dl>
       </div>
 
       {/*
-        Three channels, three lines.
+        Four channels, one line each.
 
         Each of these was a paragraph. What a reader wants from this block is
         whether a channel works yet and where to click, so that is what is in it,
         and the row's own status chip carries the rest. The rows stagger in, which
-        is the one animation this section has and enough for a list of three.
+        is the one animation this section has and enough for a list of four.
+
+        F-Droid leads, and it did not used to be here at all. The listing went
+        live on 13 August 2026 and this block spent the next fortnight saying
+        "F-Droid and IzzyOnDroid, not submitted" under a line claiming there was no
+        store listing anywhere, while f-droid.org was the largest single source of
+        traffic to the repository. The fix that matters is not the wording: the
+        URLs and the live flags now come from CHANNELS in site.config.mjs, so this
+        markup can no longer hold an opinion about what is shipping.
+
+        It leads rather than GitHub because it is the only channel that updates
+        itself, and an app whose job is to wake you up is a bad one to be running
+        a stale build of.
       */}
       <ul class="channels" data-reveal>
         <li class="channel" data-live="yes">
           <span class="channel-dot" aria-hidden="true"></span>
-          <span class="channel-name">GitHub Releases</span>
-          <span class="channel-note">The APK, from the tag it was built at.</span>
-          <span class="channel-state label">Available now</span>
-          <a class="channel-go" href={REPO.latestRelease} target="_blank" rel="noopener">
+          <span class="channel-name">{CHANNELS.fdroid.name}</span>
+          <span class="channel-note">Updates itself, and it serves my APK rather than a rebuild of it.</span>
+          <span class="channel-state label">Recommended</span>
+          <a class="channel-go" href={CHANNELS.fdroid.url} target="_blank" rel="noopener">
             Open<Glyph name="arrowRight" size={14} />
           </a>
         </li>
         <li class="channel" data-live="yes">
           <span class="channel-dot" aria-hidden="true"></span>
-          <span class="channel-name">Obtainium</span>
+          <span class="channel-name">{CHANNELS.github.name}</span>
+          <span class="channel-note">The APK, from the tag it was built at.</span>
+          <span class="channel-state label">Available now</span>
+          <a class="channel-go" href={CHANNELS.github.url} target="_blank" rel="noopener">
+            Open<Glyph name="arrowRight" size={14} />
+          </a>
+        </li>
+        <li class="channel" data-live="yes">
+          <span class="channel-dot" aria-hidden="true"></span>
+          <span class="channel-name">{CHANNELS.obtainium.name}</span>
           <span class="channel-note">Paste the repository URL for updates without a store.</span>
           <span class="channel-state label">Works today</span>
-          <a class="channel-go" href={REPO.url} target="_blank" rel="noopener">
+          <a class="channel-go" href={CHANNELS.obtainium.url} target="_blank" rel="noopener">
             Copy the URL<Glyph name="arrowRight" size={14} />
           </a>
         </li>
         <li class="channel" data-live="no">
           <span class="channel-dot" aria-hidden="true"></span>
-          <span class="channel-name">F-Droid and IzzyOnDroid</span>
-          <span class="channel-note">Not submitted. IzzyOnDroid first, then F-Droid proper.</span>
+          <span class="channel-name">{CHANNELS.izzyondroid.name}</span>
+          <span class="channel-note">Not submitted. It was meant to be the fast route and F-Droid proper landed first.</span>
           <span class="channel-state label">Not yet</span>
         </li>
       </ul>
 
       <p class="release-warn">
         <Glyph name="shield" size={15} />
-        There is no store listing for Nightbell anywhere. If you find one, it is not mine.
+        F-Droid is the only store Nightbell is listed in. There is no Play listing and no other
+        store anywhere. If you find one, it is not mine.
+      </p>
+
+      {/*
+        The reproducibility claim, next to the digests rather than in the pitch.
+
+        It is the strongest thing on this page and the easiest to read as marketing,
+        so it sits where the numbers are: F-Droid publishes this exact file, so the
+        digest below is the digest of the store download too, and anybody can check
+        that rather than take it on trust.
+      */}
+      <p class="release-warn">
+        <Glyph name="check" size={15} />
+        F-Droid rebuilds Nightbell from this source and publishes it only when their output
+        matches the APK above byte for byte, so both downloads carry the same signature and
+        either one updates the other.
       </p>
 
       <div class="copy-wrap">
@@ -1051,7 +1110,7 @@ adb install -r {RELEASE.apkName}</code></pre>
     <Section id="faq" no="09" rail="Questions" state="quiet">
       <div class="section-head">
         <p class="label eyebrow"><Glyph name="search" size={14} />Answers</p>
-        <h2>The questions worth asking before you sideload something.</h2>
+        <h2>The questions worth asking before you install it.</h2>
       </div>
 
       <div class="faq">

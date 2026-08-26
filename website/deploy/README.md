@@ -119,6 +119,10 @@ sudo mkdir -p /var/www/nightbell.app/releases /var/www/nightbell.app/acme/.well-
 sudo chown -R "$USER:www-data" /var/www/nightbell.app
 sudo chmod -R 755 /var/www/nightbell.app
 sudo mkdir -p /etc/nginx/snippets/nightbell
+
+# The /download click log lives here. nginx refuses to start if the directory
+# does not exist, which on a shared box takes all fifteen sites with it.
+sudo mkdir -p /var/log/nginx/nightbell
 ```
 
 **2. Upload the site**, so the bootstrap has something to serve:
@@ -213,6 +217,77 @@ command when it finishes.
 
 Then purge the Cloudflare cache.
 
+## Counting downloads
+
+The download buttons point at `nightbell.app/download`, not at GitHub. Nginx logs
+the request and answers `302` to the APK, so the click is countable without any
+JavaScript, any third party, any cookie or any consent banner, and the site's claim
+that it carries no analytics stays literally true. Nothing was added to the page.
+
+```bash
+NIGHTBELL_HOST=user@host ./deploy/scripts/downloads.sh
+NIGHTBELL_HOST=user@host ./deploy/scripts/downloads.sh --days 7
+```
+
+That prints two numbers side by side, and they answer different questions:
+
+| | Source | Knows | Cannot know |
+| --- | --- | --- | --- |
+| **Clicks** | `/var/log/nginx/nightbell/download.log` on the origin | Dates, referrer, country | Whether the file actually arrived |
+| **Downloads** | GitHub's asset `download_count` over the public API | The bytes moved | Where from, when, or by whom |
+
+Clicks above downloads means people are cancelling. Downloads well above clicks
+means the release is being fetched from somewhere that is not this site, which for
+a project posted to Reddit and heading for an F-Droid listing is both expected and
+the better direction.
+
+**Neither is a count of people.** The log format stores no IP address on purpose:
+it is personal data, keeping it starts a retention obligation and a lawful-basis
+question on a site that currently has neither, and the questions worth answering
+here are how many, from where, and from which link. The price is that clicks cannot
+be deduplicated, so one person on a flaky connection looks like five people. The
+full reasoning is in the `log_format` comment in `nightbell.app.conf`.
+
+### Installing it
+
+Three files, one of them generated:
+
+```bash
+npm run download-redirect     # regenerate snippets/nightbell/download-target.conf
+sudo mkdir -p /var/log/nginx/nightbell
+sudo install -m 644 deploy/nginx/snippets/nightbell/*.conf /etc/nginx/snippets/nightbell/
+sudo install -m 644 deploy/nginx/nightbell.app.conf /etc/nginx/sites-available/
+sudo install -m 644 deploy/logrotate/nightbell-download /etc/logrotate.d/
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+Check it from outside, and expect a `302` to a GitHub URL carrying the current
+version:
+
+```bash
+curl -sI https://nightbell.app/download | grep -i '^HTTP\|^location\|^cache-control'
+sudo logrotate --debug /etc/logrotate.d/nightbell-download   # dry run, no rotation
+```
+
+`deploy.sh` uploads `dist/` only, so **the Nginx config and the snippet are not
+deployed by it.** After a release, `download-target.conf` changes and has to be
+copied to the box and Nginx reloaded, or `/download` keeps handing out the previous
+APK. `npm run verify` fails if the snippet has drifted from `RELEASE`, and the
+validator fails if the page links to `/download` while the server block has no
+`location` for it, so both halves of that mistake are caught before a deploy. What
+neither can see is the config sitting un-copied on this machine.
+
+### Why not Google Analytics
+
+It cannot answer the question. The APK is served by GitHub, so a direct link makes
+the click a cross-origin navigation and GA would only ever record that somebody
+left. It also costs a `googletagmanager.com` and `google-analytics.com` exception in
+a CSP whose whole point is `default-src 'self'`, plus a cookie banner under GDPR and
+ePrivacy, on a landing page whose argument is that this app sends nothing anywhere.
+For visitor counts and referrers beyond the download itself, the Cloudflare
+dashboard already reports requests, unique visitors and countries for this zone with
+no script on the page at all.
+
 ## Caching, in three tiers
 
 Which tier a file is in depends only on whether its name changes when its contents
@@ -283,6 +358,12 @@ directly fetchable, dotfiles 404, seven security headers present on 200 **and** 
 - **No CSP `report-uri`.** It needs an endpoint that collects reports, this site
   has no backend, and a policy reporting to nowhere reads like monitoring while
   being none.
+- **No analytics on the page.** Not Google Analytics, not a cookieless hosted
+  beacon, not a self-hosted one. Download counting is a `302` through `/download`
+  logged by Nginx, which is server side by construction: no script, no cookie, no
+  consent banner, no CSP exception, and nothing about a visitor leaving this box.
+  See "Counting downloads". The deliberate cost is that there is no funnel and no
+  session, only clicks with a referrer.
 - **No CI deploy.** The APK hash in `site.config.mjs` has to be measured from the
   artifact as GitHub serves it, which is a step a human does. A pipeline that
   deployed without it would publish an unverified hash, and that is the one number

@@ -1,0 +1,58 @@
+# Rotation for the /download click log.
+#
+#   install to  /etc/logrotate.d/nightbell-download
+#   check with  sudo logrotate --debug /etc/logrotate.d/nightbell-download
+#
+# ## Why this file exists at all
+#
+# The distro ships /etc/logrotate.d/nginx, which owns `/var/log/nginx/*.log` and
+# keeps fourteen daily rotations. Under that policy the download log would be
+# deleted after two weeks, which is fine for debugging and useless for a running
+# total: the number everybody actually wants is "downloads since launch", and a log
+# that forgets January cannot produce it.
+#
+# It cannot simply be added to the nginx stanza either. logrotate refuses to start
+# when two stanzas name the same file, with a "duplicate log entry" error, and a
+# broken logrotate stops rotating the logs of all fifteen sites on this box, not
+# just this one. That is why the log is at /var/log/nginx/nightbell/download.log
+# and not /var/log/nginx/nightbell-download.log: the distro's glob is not
+# recursive, so a subdirectory is outside it, and this stanza is the only claim on
+# the file.
+#
+# Create the directory before the first reload, or nginx will not start:
+#
+#   sudo mkdir -p /var/log/nginx/nightbell
+#
+# ## The policy
+#
+# monthly with sixty rotations is five years of history, at roughly one line per
+# click and compressed after the first month. This will not become large: a hundred
+# thousand clicks is about eight megabytes before compression.
+/var/log/nginx/nightbell/download.log {
+    monthly
+    rotate 60
+    missingok
+
+    # An empty month should not consume a rotation slot.
+    notifempty
+
+    compress
+
+    # The most recent rotation stays uncompressed, so `downloads.sh` reading the
+    # current and previous file is a plain read for the common case. `zcat -f`
+    # there handles both either way.
+    delaycompress
+
+    # Matches the ownership the distro's nginx stanza uses, which is what makes
+    # these readable by a user in the adm group without sudo.
+    create 0640 www-data adm
+
+    # nginx holds the log file open by descriptor, so after the rename it would
+    # keep writing to the rotated file forever. USR1 makes the master reopen every
+    # log it has. Without this the download count stops growing after the first
+    # rotation, which is the kind of failure nobody notices for a month.
+    sharedscripts
+    postrotate
+        if [ -f /run/nginx.pid ]; then kill -USR1 "$(cat /run/nginx.pid)"; fi
+    endscript
+}
