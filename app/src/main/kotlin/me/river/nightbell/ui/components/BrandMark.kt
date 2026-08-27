@@ -17,8 +17,11 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import me.river.nightbell.BuildConfig
+import me.river.nightbell.R
 import me.river.nightbell.ui.theme.NightbellColors
 
 /**
@@ -63,15 +66,35 @@ private val TRACE = listOf(
 /** The mark's ink fills this fraction of the canvas. Height dominates, so it centres. */
 private const val FILL = 0.94f
 
+/**
+ * The ink every drawn copy of the mark uses.
+ *
+ * Release: Aqua, the brand blue. Green in the app means "this thing is working" (it is
+ * the colour of the charts and the status orbs), so a green mark read as one more status
+ * indicator rather than as the app's identity. Aqua darkens for the light scheme, so the
+ * mark stays legible there without a second set of values.
+ *
+ * Debug: `@color/brand_mark`, which the debug source set overrides with yellow. The
+ * generated vector drawables (launcher icon, splash, widget header) reference the same
+ * resource, so a debug build is yellow everywhere the bell appears and there is no way to
+ * mistake it for the release install sitting next to it in the launcher.
+ */
+val markInk: Color
+    @Composable get() = if (BuildConfig.DEBUG) colorResource(R.color.brand_mark) else NightbellColors.Aqua
+
+/**
+ * The mark as the vector drawables paint it: the fixed brand blue, ignoring the light
+ * scheme's darker Aqua, and the debug yellow in a debug build. For previews of a surface
+ * this app does not theme, which means the widget.
+ */
+val markInkFixed: Color
+    @Composable get() = colorResource(R.color.brand_mark)
+
 @Composable
 fun NightbellMark(
     size: Dp = 20.dp,
     modifier: Modifier = Modifier,
-    // Aqua — the brand blue. Green in the app means "this thing is working" (it is the
-    // colour of the charts and the status orbs), so a green mark read as one more status
-    // indicator rather than as the app's identity. Aqua darkens for the light scheme, so
-    // the mark stays legible there without a second set of values.
-    color: Color = NightbellColors.Aqua,
+    color: Color = markInk,
     /**
      * 0 to 1, how much of the trace has been cut out of the bell, left to right.
      * 1 is the resting state and every caller except the splash uses it.

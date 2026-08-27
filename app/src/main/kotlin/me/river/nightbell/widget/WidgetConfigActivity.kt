@@ -62,6 +62,7 @@ import me.river.nightbell.ui.components.NightbellMark
 import me.river.nightbell.ui.components.SectionHeader
 import me.river.nightbell.ui.components.StepperRow
 import me.river.nightbell.ui.components.ToggleRow
+import me.river.nightbell.ui.components.markInkFixed
 import me.river.nightbell.ui.icons.NightbellIcons
 import me.river.nightbell.ui.theme.NightbellColors
 import me.river.nightbell.ui.theme.NightbellTheme
@@ -607,10 +608,12 @@ private fun WidgetPreview(config: WidgetConfig, fleet: Summary.Fleet) {
                 if (config.showLogo) {
                     // The fixed brand blue rather than the theme-aware Aqua, because that is
                     // what ic_widget_mark draws — the light scheme's darker Aqua here would
-                    // make this a nicer picture of a widget that does not exist.
+                    // make this a nicer picture of a widget that does not exist. Same
+                    // resource the drawable references, so a debug build's yellow mark shows
+                    // up in the preview exactly as it does in the placed widget.
                     NightbellMark(
                         size = 18.dp,
-                        color = Color(0xFF2F6BFF),
+                        color = markInkFixed,
                     )
                     Spacer(Modifier.width(8.dp))
                 }

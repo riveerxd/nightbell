@@ -3,6 +3,7 @@ package me.river.nightbell
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.AdaptiveIconDrawable
+import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import me.river.nightbell.NightbellTestSupport.appContext
@@ -62,34 +63,68 @@ class LauncherIconInstrumentedTest {
     }
 
     @Test
-    fun theMarkIsABlueTraceWithNoRing() {
+    fun theMarkIsTheBrandInkWithACutoutAndNoRing() {
         val bitmap = render(R.drawable.ic_launcher_mark, size = 108)
+        val expected = ContextCompat.getColor(appContext, R.color.brand_mark)
 
-        // The trace's baseline runs across the middle. Sample the solid interior of the
-        // right-hand flat segment: it must be opaque and the brand blue (#2F6BFF, so the
-        // blue channel sits far above red and green) — not the old red trace, not empty.
-        val px = bitmap.getPixel(90, 54)
-        val a = px ushr 24 and 0xFF
-        val r = px ushr 16 and 0xFF
-        val g = px ushr 8 and 0xFF
-        val b = px and 0xFF
-        assertTrue("the mark must draw ink on its baseline (found nothing at 90,54)", a > 0)
-        assertTrue(
-            "the mark must be the brand blue, not the old red trace or a grey — got " +
-                "r=$r g=$g b=$b",
-            b > 150 && b > r + 60 && b > g + 40,
+        // Every fully covered pixel has to be exactly @color/brand_mark: the brand blue in
+        // a release build, the debug yellow in this one. Checked against the resource
+        // rather than a literal, because the icon is generated from that colour and a
+        // literal here would fail every debug run instead of catching a drawable that
+        // stopped using it. Partially covered pixels are skipped, since a premultiplied
+        // edge is the rasteriser's business and not the mark's.
+        //
+        // Counted over the whole bitmap rather than sampled at one coordinate. The old
+        // version of this test read (90,54) as "the solid interior of the trace", which
+        // stopped being ink in 3.0.2 when the trace became a real hole and the icon was
+        // refitted. That point is outside the bell now, and the test had been failing on
+        // it ever since.
+        var ink = 0
+        var foreign = 0
+        for (x in 0 until 108) {
+            for (y in 0 until 108) {
+                val px = bitmap.getPixel(x, y)
+                if (px ushr 24 != 0xFF) continue
+                if (px == expected) ink++ else foreign++
+            }
+        }
+        assertTrue("the mark must paint something (no opaque pixels at all)", ink > 1000)
+        assertEquals(
+            "every opaque pixel must be @color/brand_mark, not the old red trace or a grey",
+            0,
+            foreign,
         )
 
-        // The ring is gone. It used to arc across the very top of the icon; the trace's
-        // highest point sits well below the top band, so that band must now be completely
-        // empty. Any ink there is exactly the ring this release removed. Scanned as a band
-        // rather than one pixel so a stray arc anywhere across the top is caught.
-        val topBand = (0 until 108).flatMap { x -> (4..14).map { y -> bitmap.getPixel(x, y) } }
+        // The trace is a hole, not a painted line, which is the whole reason the themed and
+        // status-bar copies survive being tinted flat. So the row through the bell's middle
+        // has to read ink, gap, ink. Expressed as "there is a transparent pixel between the
+        // outermost two" rather than as a coordinate, so the next refit does not move it.
+        val row = (0 until 108).map { bitmap.getPixel(it, 54) ushr 24 != 0 }
+        val first = row.indexOfFirst { it }
+        val last = row.indexOfLast { it }
+        assertTrue("the bell must cross its own middle (found no ink on row 54)", first >= 0)
+        assertTrue(
+            "the trace must be a hole in the bell, but row 54 is solid ink from $first to $last",
+            (first..last).any { !row[it] },
+        )
+
+        // The ring is gone. It used to arc across the very top of the icon, so anything out
+        // at the shoulders of the top band is that ring coming back.
+        //
+        // The band is not empty and cannot be: the 3.0.2 refit grew the mark to 0.92 of the
+        // canvas and lifted the crown ball into rows 4 to 14, which is about 120 pixels of
+        // legitimate ink around x=54. This test asserted an empty band and had been failing
+        // on the crown since. What separates the two is width, so that is what is measured:
+        // the crown is a 13px ball on the centre line, a ring reached the edges.
+        val shoulders = (0 until 108)
+            .filter { it < 40 || it > 68 }
+            .flatMap { x -> (4..14).map { y -> bitmap.getPixel(x, y) } }
             .count { it.ushr(24) > 0 }
         assertEquals(
-            "no ring: the top of the icon must be empty, but found $topBand painted pixels",
+            "no ring: the top of the icon must hold nothing but the crown, but found " +
+                "$shoulders painted pixels out at the shoulders",
             0,
-            topBand,
+            shoulders,
         )
     }
 

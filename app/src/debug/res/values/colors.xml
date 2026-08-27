@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Debug builds paint the mark yellow. Every place the bell appears follows
+        from this one value: the launcher icon, the system splash, the widget
+        header, and NightbellMark in the app itself, which reads the same
+        resource. Deliberately not Amber #FFB020, which is the degraded status
+        colour: a mark in the same shade as a warning would read as one.
+    -->
+    <color name="brand_mark">#FFFFD400</color>
+</resources>

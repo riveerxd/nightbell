@@ -40,6 +40,23 @@ in their own header comments:
 - `website/scripts/sync-assets.mjs`, which reads `nightbell-mark-icon.svg` off disk
 - `promo-video/src/components/BrandMark.tsx`, which animates the cut being carved
 
+## Debug builds are yellow
+
+The four coloured drawables paint `@color/brand_mark` rather than a literal, and
+`app/src/debug/res/values/colors.xml` overrides it with `#FFD400`. So a debug
+install has a yellow launcher icon, a yellow splash, a yellow widget header and a
+yellow mark in the app, and it calls itself "Nightbell debug" in the launcher.
+The Compose mark reads the same resource, which is what keeps the drawn copy and
+the vector copies in step.
+
+This matters because the debug applicationId carries a `.debug` suffix, so a debug
+build installs next to a release one instead of replacing it. Two identical blue
+bells on one home screen was a guessing game.
+
+The two white assets, the status-bar icon and the themed-icon layer, are left
+alone: the system masks and tints both, so a debug colour there would be thrown
+away.
+
 ## `verify-mark.png`
 
 Every surface that ships the mark, rendered side by side: the six Android

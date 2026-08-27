@@ -47,10 +47,15 @@ from shapely.geometry import LineString
 HERE = os.path.dirname(os.path.abspath(__file__))
 RES = os.path.normpath(os.path.join(HERE, "..", "..", "app", "src", "main", "res"))
 
-# The mark is the brand blue. White is for the two places it is a flat silhouette:
-# the status-bar icon and the themed-icon monochrome layer, both masked and tinted
-# by the system, where colour is the system's choice and not ours.
-BLUE, WHITE = "#2F6BFF", "#FFFFFFFF"
+# The mark is the brand blue, referenced rather than written out. @color/brand_mark
+# is #2F6BFF in res/values, and the debug source set overrides it with yellow, so a
+# debug install is telling apart from a release one at a glance in the launcher. All
+# four coloured assets point at the one colour, so they all switch together.
+#
+# White is for the two places the mark is a flat silhouette: the status-bar icon and
+# the themed-icon monochrome layer, both masked and tinted by the system. Colour
+# there is the system's choice and not ours, so a debug tint would be thrown away.
+BLUE, WHITE = "@color/brand_mark", "#FFFFFFFF"
 
 # The bell, in its own 512-unit space, as absolute segments so it can be
 # transformed without parsing anything.

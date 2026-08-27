@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        The launcher label, so the yellow icon says what it is rather than just
+        looking wrong. The applicationId already carries a .debug suffix, so this
+        sits next to a release install rather than replacing it.
+    -->
+    <string name="app_name">Nightbell debug</string>
+</resources>
