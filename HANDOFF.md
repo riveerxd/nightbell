@@ -1080,3 +1080,159 @@ highest-value follow-up for startup.
 3. Import/export of the store JSON, and optional end-to-end-encrypted sync.
 4. A custom sound-file picker.
 5. Per-monitor tags/grouping once the list outgrows one screen.
+
+## 3.1.0, and the five things it left behind
+
+Written 2026-08-26, right after 3.1.0 went out. Read this before touching
+`app/**`. Every line number below was checked against the working tree at the
+3.1.0 release commit, not remembered.
+
+### What shipped
+
+Three issues were filed against 3.0.5 and all three are answered in 3.1.0. Two of
+them turned into features.
+
+- **Pause.** A dashboard button stops the whole fleet for 30m, 1h, 4h, 8h or
+  until it is turned back on. 1.3.0 already stopped checking with no connectivity,
+  which covers the wrong half: one bar of signal counts as online, so every check
+  times out at once. The user picks whether a pause stops the checks or only the
+  alerts. A pause is felt as the master alert switch being off, so no track can
+  page through one, and `force` still gets through because a pause stops the
+  schedule and is not a lock on the app.
+- **SOCKS5 routing**, per monitor, shared address in Settings with a per-monitor
+  override, because Tor is on 9050 and I2P's SOCKS proxy on 4447. Routing fails
+  closed: a monitor that asked for a proxy and has none fails its check rather
+  than going out in the clear.
+- **Fixes:** the Android 10 crash (`VibrationAttributes` built above the branch
+  that used it), connections that died before answering being reported as
+  outages, and a backup import that ran the whole check pass before saying
+  anything.
+
+Released as `versionCode 28`, tag `v3.1.0` on `94f6fd2`, artifact committed past
+the tag as `517fbc3`, website at `463db7d`. F-Droid MR 46909, nine of nine jobs
+green and the reproducible build verified.
+
+### The one thing to know about F-Droid from now on
+
+`AutoUpdateMode: Version` and `UpdateCheckMode: Tags ^v.+$` are set, so F-Droid
+picks up later tags on its own. **A merge request per release is not needed.** MR
+46909 was belt and braces. What still has to be right every time is the tag name
+`v<version>`, the asset name `Nightbell-<version>-release.apk`, JDK 21.0.12, the
+version bump committed before the APK is built, and a `changelogs/<code>.txt`.
+All five are what `docs/fdroid-preflight.sh` checks.
+
+### 1. The element picker loads a routed monitor's URL outside the proxy
+
+The highest-value item here, and it contradicts something already shipped.
+
+A page-element **check** is routed. The element **picker** is not. So setting up a
+page-element monitor on a `.onion` resolves that hostname through the phone's own
+DNS at pick time, which is the exact thing the feature exists to prevent.
+
+    ElementChecker.kt:106-113   the check path routes:
+                                WebViewProxy.routed(endpoint) { locateAll(...) }
+    ElementPicker.kt            grep -c "ProxyRoute|WebViewProxy|useProxy" -> 0
+    ElementPicker.kt:390        loadUrl(url), unproxied
+    ElementPicker.kt:168-175    ElementPickerOverlay(...) takes no route
+    SetupScreen.kt:234          the call site
+    NightbellViewModels.kt:574  openPicker gates only on urlNote severity ERROR,
+                                and Validation.kt:55 returns null for a hidden
+                                service, so an .onion opens the picker happily
+
+`WebViewProxy`'s own KDoc already says the override is process-wide and that
+switching it for a routed check switches it for the picker. The picker simply
+never asks. And `changelogs/28.txt` line 5 promises "the name never reaches your
+own DNS", which is currently false for this path.
+
+Fix by threading the draft's route into the picker and wrapping the load with the
+same API the checker uses: `ProxyRoute.forMonitor`, `Route.Via(endpoint)`,
+`WebViewProxy.routed(endpoint) { }`.
+
+**Fail closed.** If the draft is routed and the proxy cannot be applied, refuse to
+open the picker and say why. Do not fall back to a direct load. A silent direct
+load is the bug; a fallback would make it a designed behaviour.
+
+Worth considering: `ProxyRoute.isHiddenService(url)` already exists, so refusing
+to open an unrouted picker on a `.onion` or `.i2p` at all closes the same hole
+from the other side.
+
+The test that matters is **negative**: with a routed draft, the picker must not
+emit a DNS lookup or a direct connection for the target host. A test that only
+asserts the picker still works would pass today with the bug present.
+
+### 2. Settings ships a claim the release commit made false
+
+`SettingsScreen.kt:661` says page-element monitors "always go out directly"
+because "Android's WebView cannot speak SOCKS at all".
+
+That is untrue of the code shipped beside it. `ElementChecker.kt:113` routes,
+`ProxyRoute.kt:76-83` says page-element monitors are routed too, `Validation.kt`
+says the page is loaded through the proxy, and `changelogs/28.txt` line 5 tells
+the store the same. `git log -S "cannot speak SOCKS at all"` returns `94f6fd2`:
+the correct KDoc and the wrong UI string went in together, in the release commit.
+
+This is the privacy screen contradicting the store description, so it is not
+cosmetic. It has already misled one reader who repeated it back as fact.
+
+### 3. Two UX fixes the reporter of issue #1 asked for
+
+Confirmed against the code, both real:
+
+- **The routing switch is unreachable from where you can test.** `TestPanel`
+  renders from `step > 0`, which is `StepTarget`, the name-and-URL screen.
+  The switch is at `SetupScreen.kt:1210`, inside `StepSchedule`, two screens
+  later. So the first test anyone runs on a routed monitor fails and nothing on
+  that screen explains why. He asked for it to be on any screen offering Test,
+  and at minimum on the URL screen.
+- **The URL placeholder implies no port.** `SetupScreen.kt:541` reads
+  `https://example.com/health`. He got nothing until adding `:18089`. He
+  suggested `http://example.com:port/health`.
+
+Both were promised to him in the issue thread and are not yet done.
+
+### 4. One thing I told him that was wrong
+
+In the #1 thread I explained his 404 as "the restricted RPC does not answer a
+plain GET". That is false. It answers on `/get_info`; he had the path wrong. He
+corrected it twice, in an edit and then a follow-up, and it has not been
+acknowledged. A short correction is owed and was deliberately not posted, pending
+review.
+
+It does not change either of his suggestions. The port one is arguably stronger,
+since the address cost him time twice, once for the missing port and once for the
+path.
+
+### 5. Keep the next changelog's first paragraph under 400 characters
+
+`28.txt`'s opening paragraph is 438. `docs/FDROID.md:371` asks for under 400 so
+F-Droid's roughly 500 character cut lands after it. It currently severs mid-word:
+`head -c 500` ends on "so n".
+
+Not fixable now. F-Droid builds from the tag, so editing `28.txt` on master
+changes nothing on the listing. Nothing lints this;
+`docs/fdroid-preflight.sh` only checks the file exists.
+
+### Smaller, all confirmed, none urgent
+
+- `RealSocksProxyInstrumentedTest.kt:121-129` has two stacked KDoc blocks on
+  `ONION_URL`. The upper one claims a default that no longer exists; the value is
+  null without `-Ponion` and the `assumeTrue` skips. KDoc binds the nearest
+  comment, so the upper block is orphaned residue.
+- `HttpChecker`'s retry no longer requires a pooled connection, but a flag that
+  enforced that is now dead and the KDoc still describes the old rule.
+- A routed timeout failure reports the raw monitor timeout rather than the longer
+  routed one actually waited, so it misreports what happened.
+- `SettingsScreen.kt:972` has a real em dash in a user-visible string. There are
+  924 pre-existing ones repo-wide and 3.1.0 added none, so this is only worth
+  touching because #2 edits that file anyway.
+
+### Ground rules
+
+No em dashes or en dashes in anything authored for this repo, source comments
+included. Only scan what you write; the existing source and older docs still
+contain them. No mention of any AI tool, assistant or model in code, comments,
+commit messages, releases, docs or metadata.
+
+Run the on-device suites one class at a time. The tests that need a live Tor or
+I2P proxy skip cleanly without one and take their address from
+`-Pandroid.testInstrumentationRunnerArguments.onion=` or `.i2p=`.
