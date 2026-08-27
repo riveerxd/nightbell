@@ -50,6 +50,15 @@ data class WidgetPalette(
     val primary: Int,
     val secondary: Int,
     val tertiary: Int,
+    /**
+     * The star on a repository row.
+     *
+     * Gold, but not the same gold on every surface: #FFC53D on the white preset is
+     * a pale smudge, so a light widget gets the dark gold the app's light theme
+     * uses. Same decision as `NightbellColors.Gold`, made again here because
+     * RemoteViews cannot read a Compose palette.
+     */
+    val star: Int,
 )
 
 /** Replaces a colour's alpha channel. Input may be RGB or ARGB; alpha is 0f..1f. */
@@ -167,6 +176,7 @@ data class WidgetConfig(
                 primary = 0xFFFFFFFF.toInt(),
                 secondary = 0xFFD6D6D6.toInt(),
                 tertiary = 0xFF8A8A8A.toInt(),
+                star = STAR_ON_DARK,
             )
 
             WidgetTheme.WHITE -> WidgetPalette(
@@ -175,6 +185,7 @@ data class WidgetConfig(
                 primary = 0xFF0A0A0A.toInt(),
                 secondary = 0xFF3A3A3A.toInt(),
                 tertiary = 0xFF6B6B6B.toInt(),
+                star = STAR_ON_LIGHT,
             )
 
             WidgetTheme.BLUE -> WidgetPalette(
@@ -183,6 +194,7 @@ data class WidgetConfig(
                 primary = 0xFFFFFFFF.toInt(),
                 secondary = 0xFFBBD0FF.toInt(),
                 tertiary = 0xFF7E9BD6.toInt(),
+                star = STAR_ON_DARK,
             )
 
             WidgetTheme.CUSTOM -> {
@@ -195,11 +207,19 @@ data class WidgetConfig(
                     primary = text.withAlpha(1f),
                     secondary = text.withAlpha(SECONDARY_ALPHA),
                     tertiary = text.withAlpha(TERTIARY_ALPHA),
+                    // Judged by the surface it sits on, not by the text colour: the
+                    // star is gold either way, and only the background decides
+                    // which gold can be seen.
+                    star = if (customBackgroundRgb.luminance() > 0.55f) STAR_ON_LIGHT else STAR_ON_DARK,
                 )
             }
         }
 
     companion object {
+        /** `NightbellColors.Gold`, dark and light, as opaque ARGB. */
+        internal const val STAR_ON_DARK = 0xFFFFC53D.toInt()
+        internal const val STAR_ON_LIGHT = 0xFF7A5600.toInt()
+
         private const val BORDER_ALPHA = 0.20f
         private const val SECONDARY_ALPHA = 0.80f
         private const val TERTIARY_ALPHA = 0.55f

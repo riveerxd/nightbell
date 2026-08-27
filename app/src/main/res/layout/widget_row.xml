@@ -52,4 +52,15 @@
         android:maxLines="1"
         android:textSize="11sp"
         android:textColor="#FFD6D6D6" />
+
+    <!-- Follows the value, for a repository row: "13 ★". Gone on every other
+         kind of monitor, so a latency reading keeps the whole trailing slot. -->
+    <ImageView
+        android:id="@+id/row_value_icon"
+        android:layout_width="10dp"
+        android:layout_height="10dp"
+        android:layout_marginStart="3dp"
+        android:src="@drawable/widget_star"
+        android:visibility="gone"
+        android:contentDescription="@null" />
 </LinearLayout>

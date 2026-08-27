@@ -32,7 +32,19 @@ object Summary {
         /** Urgent outage still waiting for someone to acknowledge it. */
         val urgentNagging: Boolean,
         val message: String,
-    )
+        val kind: MonitorKind = MonitorKind.HTTP_STATUS,
+
+        // ---- repository facts, for a GITHUB_REPO entry ----------------------
+        // A latency reading is the wrong answer on a repository row: it measures
+        // api.github.com, which nobody is watching. These are what the row shows
+        // instead, and each is -1 or blank when the monitor is not watching that
+        // track: a releases-only monitor gets no star count it never asked for.
+        val stars: Int = -1,
+        val openIssues: Int = -1,
+        val releaseTag: String = "",
+    ) {
+        val isRepo: Boolean get() = kind == MonitorKind.GITHUB_REPO
+    }
 
     data class Fleet(
         val entries: List<Entry> = emptyList(),
@@ -85,6 +97,8 @@ object Summary {
     ): Fleet = Fleet(
         monitors.map { monitor ->
             val runtime = runtimes[monitor.id] ?: MonitorRuntime()
+            val repo = monitor.kind == MonitorKind.GITHUB_REPO && runtime.github.seeded
+            val watch = monitor.github
             Entry(
                 id = monitor.id,
                 name = monitor.displayName,
@@ -95,6 +109,14 @@ object Summary {
                 urgent = monitor.urgent,
                 urgentNagging = monitor.urgent && runtime.urgentState.nagging,
                 message = runtime.lastMessage,
+                kind = monitor.kind,
+                stars = if (repo && watch.notifyOnStars) runtime.github.lastStarCount else -1,
+                openIssues = if (repo && (watch.notifyOnIssues || watch.watchPullRequests)) {
+                    runtime.github.openIssues
+                } else {
+                    -1
+                },
+                releaseTag = if (repo && watch.watchReleases) runtime.github.lastReleaseTag else "",
             )
         },
     )

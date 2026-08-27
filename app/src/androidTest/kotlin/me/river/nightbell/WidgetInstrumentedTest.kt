@@ -5,8 +5,11 @@ import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import me.river.nightbell.NightbellTestSupport.appContext
+import me.river.nightbell.domain.GitHubState
+import me.river.nightbell.domain.GitHubWatch
 import me.river.nightbell.domain.Health
 import me.river.nightbell.domain.Monitor
+import me.river.nightbell.domain.MonitorKind
 import me.river.nightbell.domain.MonitorRuntime
 import me.river.nightbell.domain.Summary
 import me.river.nightbell.domain.UrgentAlerts
@@ -122,6 +125,60 @@ class WidgetInstrumentedTest {
         walk(root)
     }
 
+    /** A fleet with a repository monitor in it, for the repo-row assertions. */
+    private fun repoFleet() = Summary.of(
+        listOf(
+            monitor("a", "Alpha"),
+            monitor("b", "Bravo"),
+            Monitor(
+                id = "gh",
+                name = "NightBell",
+                kind = MonitorKind.GITHUB_REPO,
+                url = "https://github.com/riveerxd/nightbell",
+                github = GitHubWatch(owner = "riveerxd", repo = "nightbell"),
+            ),
+        ),
+        mapOf(
+            "a" to runtime(Health.UP),
+            "b" to runtime(Health.UP),
+            "gh" to MonitorRuntime(
+                health = Health.UP,
+                lastLatencyMs = 491,
+                lastCheckedAt = System.currentTimeMillis() - 60_000,
+                github = GitHubState(
+                    seeded = true,
+                    lastStarCount = 13,
+                    openIssues = 1,
+                    lastReleaseTag = "v3.3.0",
+                ),
+            ),
+        ),
+    )
+
+    private fun inflateFleet(config: WidgetConfig, fleet: Summary.Fleet, widthDp: Int, heightDp: Int): View {
+        val views = NightbellWidgetProvider.build(appContext, config, fleet, 7, widthDp, heightDp)
+        return views.apply(appContext, FrameLayout(appContext))
+    }
+
+    @Test
+    fun aRepositoryRowReportsStarsRatherThanLatency() {
+        val rendered = texts(inflateFleet(WidgetConfig(maxRows = 4, columns = 1), repoFleet(), 250, 200))
+        assertTrue("expected the star count: $rendered", rendered.any { it == "13" })
+        assertFalse("a repo row must not report the API round trip: $rendered", rendered.any { it == "491 ms" })
+    }
+
+    @Test
+    fun threeColumnsKeepTheRepositoryNumber() {
+        // Narrow columns drop the trailing value on purpose: the dot carries health
+        // and the latency is one tap away. A repository row has no such fallback: its
+        // dot only says the poll worked, so dropping the number left the row saying
+        // nothing at all, which is what three columns did to every repo on a widget.
+        val rendered = texts(inflateFleet(WidgetConfig(maxRows = 6, columns = 3), repoFleet(), 320, 200))
+        assertTrue("three columns lost the star count: $rendered", rendered.any { it == "13" })
+        // And the plain monitors still give their number up for the name.
+        assertFalse("a narrow column should not carry a latency: $rendered", rendered.any { it.endsWith(" ms") })
+    }
+
     @Test
     fun everyThemeInflates() {
         WidgetTheme.entries.forEach { theme ->
@@ -182,10 +239,14 @@ class WidgetInstrumentedTest {
 
     @Test
     fun hidingTheTitleRemovesTheTitle() {
+        // Read from resources rather than written out: a debug build labels itself
+        // "Nightbell debug", and a literal here fails on the only variant anyone
+        // runs this on.
+        val name = appContext.getString(me.river.nightbell.R.string.app_name)
         val withTitle = texts(inflate(WidgetConfig(showTitle = true)))
         val without = texts(inflate(WidgetConfig(showTitle = false)))
-        assertTrue(withTitle.any { it == "Nightbell" })
-        assertFalse(without.any { it == "Nightbell" })
+        assertTrue("expected the wordmark: $withTitle", withTitle.any { it == name })
+        assertFalse(without.any { it == name })
     }
 
     // ---- reaching the settings again ---------------------------------------

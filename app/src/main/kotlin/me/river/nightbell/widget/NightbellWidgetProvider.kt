@@ -259,14 +259,38 @@ class NightbellWidgetProvider : AppWidgetProvider() {
             row.setTextColor(R.id.row_name, palette.primary)
             // In a narrow column the name is worth more than the number: the dot already
             // says whether this monitor is healthy, and the latency is one tap away.
-            row.setViewVisibility(R.id.row_value, if (showValue) VISIBLE else GONE)
+            //
+            // A repository row is the exception, and has to be. Its dot only says the
+            // poll is working, so dropping the value leaves a row carrying a name and
+            // nothing else, which is what three columns did to every repo on the
+            // widget. The number is short ("13" against "4100 ms"), so it costs the
+            // name very little to keep it.
+            val valueVisible = showValue || entry.isRepo
+            row.setViewVisibility(R.id.row_value, if (valueVisible) VISIBLE else GONE)
             row.setTextColor(R.id.row_value, if (entry.health == Health.UP) palette.secondary else color)
+            // A repository row reports the repository, not the round trip.
+            //
+            // "491 ms" on a GitHub row is the time api.github.com took to answer,
+            // which is a fact about GitHub's servers and not about the repo anybody
+            // added the monitor for. A failure still wins the slot: when the poll is
+            // broken, how broken is the only thing worth the space.
+            val stars = entry.stars.takeIf { entry.isRepo && it >= 0 && entry.health == Health.UP }
+            row.setViewVisibility(
+                R.id.row_value_icon,
+                if (valueVisible && stars != null) VISIBLE else GONE,
+            )
+            if (stars != null) {
+                row.setInt(R.id.row_value_icon, "setColorFilter", opaque(palette.star))
+                row.setInt(R.id.row_value_icon, "setImageAlpha", alphaOf(palette.star))
+            }
             row.setTextViewText(
                 R.id.row_value,
                 when {
                     entry.health == Health.DOWN -> "DOWN"
                     entry.health == Health.PAUSED -> "PAUSED"
                     entry.health == Health.UNKNOWN -> "—"
+                    stars != null -> stars.toString()
+                    entry.isRepo -> repoValue(entry)
                     entry.latencyMs > 0 -> "${entry.latencyMs} ms"
                     else -> entry.health.label
                 },
@@ -276,13 +300,36 @@ class NightbellWidgetProvider : AppWidgetProvider() {
                 row.setTextColor(R.id.row_meta, palette.tertiary)
                 row.setTextViewText(
                     R.id.row_meta,
-                    entry.message.ifBlank { entry.host },
+                    if (entry.isRepo) repoMeta(entry) else entry.message.ifBlank { entry.host },
                 )
             } else {
                 row.setViewVisibility(R.id.row_meta, GONE)
             }
             row.setOnClickPendingIntent(R.id.row_root, openMonitor(context, entry.id))
             return row
+        }
+
+        /**
+         * The trailing value for a repository row with no star count to show.
+         *
+         * A monitor watching only issues or only releases still has something
+         * worth a glance; falling through to a latency reading would put the
+         * wrong number in the one slot this row has.
+         */
+        private fun repoValue(entry: Summary.Entry): String = when {
+            entry.openIssues >= 0 -> "${entry.openIssues} open"
+            entry.releaseTag.isNotBlank() -> entry.releaseTag
+            else -> "—"
+        }
+
+        /** The detailed row's second line: whatever the star count did not say. */
+        private fun repoMeta(entry: Summary.Entry): String = buildString {
+            if (entry.openIssues >= 0 && entry.stars >= 0) append(entry.openIssues).append(" open")
+            if (entry.releaseTag.isNotBlank()) {
+                if (isNotEmpty()) append(" · ")
+                append(entry.releaseTag)
+            }
+            if (isEmpty()) append(entry.host)
         }
 
         private fun openDashboard(context: Context): PendingIntent {

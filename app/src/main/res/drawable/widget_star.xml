@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The star on a repository row. Filled, and tinted at runtime with
+     setColorFilter from WidgetPalette.star, so one drawable serves a black
+     widget and a white one. Same geometry as NightbellIcons.Star. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,3.4 L14.5,9.16 L20.75,9.76 L16.04,13.91 L17.41,20.04 L12,16.85 L6.59,20.04 L7.96,13.91 L3.25,9.76 L9.5,9.16 Z" />
+</vector>
