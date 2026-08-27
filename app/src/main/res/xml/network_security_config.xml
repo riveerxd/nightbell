@@ -31,11 +31,31 @@
   analytics and no crash reporter, it sends the user's credentials only to the host
   the user named, and the setup screen shows the scheme of the URL being saved.
 
+  ## Why user-installed CAs are trusted
+
+  The base config trusts `user` as well as `system`, which the 3.2.0 build did not.
+  Without it, someone who runs a private CA for their own machines could open the
+  page in Chrome on the same phone and still not monitor it here: the handshake
+  died with "Trust anchor for certification path not found" and the app had no way
+  to say why. That is the same NAS-and-homelab audience the cleartext section above
+  exists for, and telling them to turn certificate checking off entirely would be a
+  worse answer than trusting the CA they already installed.
+
+  Installing a CA is not a quiet act on Android. It takes a trip through Settings,
+  a screen that says the certificate can inspect network traffic, and on most
+  builds a lock-screen credential. Anyone who has been through that has decided
+  something, and second-guessing them here only pushes them towards the blunter
+  tool.
+
   ## What is pinned
 
   Every host this app contacts on its own behalf, rather than because a user typed
   it, is nailed to HTTPS below and cannot be downgraded even though the base config
-  is permissive:
+  is permissive. It is also held to `system` anchors alone, which is the other half
+  of trusting `user` above and has to move in the same commit: an MDM-installed CA
+  can otherwise sit in front of api.github.com, and that is where the GitHub token
+  added in 3.2.0 goes. Widening the base without narrowing these three would be a
+  security regression delivered inside a bug fix.
 
     - connectivitycheck.grapheneos.network, for the 204 probe that tells "the
       monitored service is down" apart from "this phone has no working network".
@@ -56,6 +76,7 @@
     <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
+            <certificates src="user" />
         </trust-anchors>
     </base-config>
 
@@ -63,5 +84,8 @@
         <domain includeSubdomains="false">connectivitycheck.grapheneos.network</domain>
         <domain includeSubdomains="false">api.github.com</domain>
         <domain includeSubdomains="false">f-droid.org</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
     </domain-config>
 </network-security-config>
