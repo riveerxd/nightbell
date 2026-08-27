@@ -4,6 +4,9 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Build
 import android.util.Log
+import android.net.http.SslCertificate
+import android.net.http.SslError
+import android.webkit.SslErrorHandler
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
@@ -16,6 +19,7 @@ import me.river.nightbell.domain.ElementTarget
 import me.river.nightbell.domain.FailureKind
 import me.river.nightbell.domain.GlobalSettings
 import me.river.nightbell.domain.ProxyRoute
+import me.river.nightbell.domain.TlsTrust
 import me.river.nightbell.domain.Monitor
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.coroutines.resume
@@ -69,11 +73,20 @@ class ElementChecker(
         val title: String = "",
         val nodeCount: Int = 0,
         val loadError: String = "",
+        /**
+         * Pin of the certificate the page presented, when it was readable.
+         *
+         * Only ever non-empty on a load where the WebView objected to the
+         * certificate, because that is the one moment Chromium hands one over. That
+         * is not a gap for the mode that needs it: a self-signed certificate always
+         * objects.
+         */
+        val certSpki: String = "",
     ) {
         val anyFound: Boolean get() = results.any { it.found }
     }
 
-    suspend fun check(monitor: Monitor): CheckResult {
+    suspend fun check(monitor: Monitor, certPin: String = ""): CheckResult {
         val targets = monitor.targets
         if (targets.isEmpty()) {
             return CheckResult(
@@ -108,9 +121,11 @@ class ElementChecker(
         val started = System.nanoTime()
         val page = try {
             if (endpoint == null) {
-                locateAll(monitor.url, targets, timeout)
+                locateAll(monitor.url, targets, timeout, monitor.tlsTrust, certPin)
             } else {
-                WebViewProxy.routed(endpoint) { locateAll(monitor.url, targets, timeout) }
+                WebViewProxy.routed(endpoint) {
+                    locateAll(monitor.url, targets, timeout, monitor.tlsTrust, certPin)
+                }
             }
         } catch (unavailable: WebViewProxy.Unavailable) {
             return CheckResult(
@@ -145,7 +160,7 @@ class ElementChecker(
             )
         }
 
-        return evaluate(targets, page, latency)
+        return evaluate(targets, page, latency).copy(certSpki = page.certSpki)
     }
 
     /**
@@ -213,9 +228,39 @@ class ElementChecker(
         )
     }
 
+    /**
+     * The `sha256/…` pin of the certificate an [SslError] is about, or empty.
+     *
+     * `SslCertificate.getX509Certificate` arrived in API 29 and this app supports
+     * 26, so on the two oldest releases there is nothing to compare and the caller
+     * says so rather than inventing a comparison.
+     */
+    private fun webViewLeafPin(error: SslError?): String {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return ""
+        val certificate: SslCertificate = error?.certificate ?: return ""
+        val x509 = runCatching { certificate.x509Certificate }.getOrNull() ?: return ""
+        return runCatching { TlsTrustConfig.pinOf(x509) }.getOrDefault("")
+    }
+
+    /** Which of Chromium's certificate complaints this was, in words. */
+    private fun sslErrorText(error: SslError?): String = when (error?.primaryError) {
+        SslError.SSL_UNTRUSTED -> "no CA this phone trusts signed it"
+        SslError.SSL_EXPIRED -> "it has expired"
+        SslError.SSL_NOTYETVALID -> "it is not valid yet"
+        SslError.SSL_IDMISMATCH -> "it was issued for a different hostname"
+        SslError.SSL_DATE_INVALID -> "its dates are invalid"
+        SslError.SSL_INVALID -> "it is malformed"
+        else -> "reason unknown"
+    }
+
     /** Public so the setup flow can dry-run a single capture before saving. */
-    suspend fun locate(url: String, target: ElementTarget, timeoutSeconds: Int): Located? {
-        val page = locateAll(url, listOf(target), timeoutSeconds) ?: return null
+    suspend fun locate(
+        url: String,
+        target: ElementTarget,
+        timeoutSeconds: Int,
+        tlsTrust: TlsTrust = TlsTrust.SYSTEM,
+    ): Located? {
+        val page = locateAll(url, listOf(target), timeoutSeconds, tlsTrust) ?: return null
         val head = page.results.firstOrNull() ?: Located(found = false)
         return head.copy(
             pageTitle = page.title,
@@ -237,6 +282,8 @@ class ElementChecker(
         url: String,
         targets: List<ElementTarget>,
         timeoutSeconds: Int,
+        tlsTrust: TlsTrust = TlsTrust.SYSTEM,
+        pin: String = "",
     ): PageResult? = withContext(Dispatchers.Main) {
         if (targets.isEmpty()) return@withContext PageResult()
         var webView: WebView? = null
@@ -247,9 +294,71 @@ class ElementChecker(
                 configure(view)
 
                 val pageDone = PageLatch()
+                // What the page's certificate hashed to, when the WebView objected
+                // to it and therefore let us see it. Only ever set on the path that
+                // can read a real certificate; see onReceivedSslError.
+                var presentedPin = ""
                 view.webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView?, url: String?) {
                         pageDone.complete()
+                    }
+
+                    /**
+                     * A certificate the WebView will not accept on its own.
+                     *
+                     * Default behaviour is `handler.cancel()`, which is why a page
+                     * monitor on a self-signed host failed with a bare load error
+                     * and no mention of a certificate anywhere. The three trust
+                     * modes have to mean the same thing here as they do for a
+                     * status check, or turning one on would fix one kind of monitor
+                     * and silently not the other.
+                     *
+                     * Chromium hands over an `SslCertificate` rather than the X.509
+                     * chain, so the key cannot be compared to a pin from here. On
+                     * API 29 and up the real certificate is reachable and the pin is
+                     * enforced; below that PINNED accepts the page and the message
+                     * says so, rather than pretending a check happened.
+                     */
+                    override fun onReceivedSslError(
+                        view: WebView?,
+                        handler: SslErrorHandler?,
+                        error: SslError?,
+                    ) {
+                        when (tlsTrust) {
+                            TlsTrust.SYSTEM -> {
+                                errors.append(
+                                    "main frame: the certificate was refused (" +
+                                        sslErrorText(error) + "). Set this monitor's " +
+                                        "certificate handling if this server is one you know.",
+                                )
+                                handler?.cancel()
+                                pageDone.complete()
+                            }
+
+                            TlsTrust.ANY -> {
+                                val presented = webViewLeafPin(error)
+                                if (presented.isNotBlank()) presentedPin = presented
+                                handler?.proceed()
+                            }
+
+                            TlsTrust.PINNED -> {
+                                val presented = webViewLeafPin(error)
+                                if (presented.isNotBlank()) presentedPin = presented
+                                when {
+                                    pin.isBlank() -> handler?.proceed()
+                                    presented.isBlank() -> handler?.proceed()
+                                    presented == pin -> handler?.proceed()
+                                    else -> {
+                                        errors.append(
+                                            "main frame: the certificate key changed. " +
+                                                "Expected $pin, received $presented.",
+                                        )
+                                        handler?.cancel()
+                                        pageDone.complete()
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     override fun onReceivedError(
@@ -287,13 +396,16 @@ class ElementChecker(
                         val bestCount = best?.results?.count { it.found } ?: -1
                         if (foundCount > bestCount) best = parsed
                         if (foundCount == targets.size) {
-                            return@withTimeoutOrNull parsed.copy(loadError = errors.toString())
+                            return@withTimeoutOrNull parsed.copy(
+                                loadError = errors.toString(),
+                                certSpki = presentedPin,
+                            )
                         }
                     }
                     attempt++
                 }
                 (best ?: PageResult(results = List(targets.size) { Located(found = false) }))
-                    .copy(loadError = errors.toString())
+                    .copy(loadError = errors.toString(), certSpki = presentedPin)
             }
         } catch (cancellation: CancellationException) {
             // The page is not broken; we were interrupted. Turning this into a

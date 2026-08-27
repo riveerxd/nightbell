@@ -11,7 +11,7 @@ object Validation {
     enum class Field {
         NAME, URL, METHOD, HEADERS, BODY, STATUS, ASSERTION, JSON_PATH,
         INTERVAL, TIMEOUT, ELEMENT, ELEMENT_TEXT, LATENCY_SLO, URGENT, PROXY,
-        REPO, GITHUB, TOKEN,
+        REPO, GITHUB, TOKEN, TLS,
     }
 
     /** Past this many watched elements the settle loop is worth warning about. */
@@ -167,6 +167,27 @@ object Validation {
                 "Only reachable through a SOCKS5 proxy. Set one up in Settings, then route this monitor through it.",
             )
         }
+        // Certificate handling, and the two things worth saying about it.
+        //
+        // A hidden service is the case issue #6 came in on. No CA issues for a
+        // .onion or .i2p name, so SYSTEM cannot ever succeed there, and the failure
+        // it produces reads like a broken service rather than an impossible
+        // request. Said at setup time instead of once per interval afterwards.
+        if (monitor.tlsTrust == TlsTrust.SYSTEM &&
+            ProxyRoute.isHiddenService(monitor.url) &&
+            !monitor.url.trim().startsWith("http://", ignoreCase = true)
+        ) {
+            notes += Note(
+                Field.TLS, Severity.WARNING,
+                "No CA issues certificates for .onion or .i2p addresses, so trust anchors " +
+                    "can never be satisfied here. Use \"Pinned key\" instead.",
+            )
+        }
+        // No note for TlsTrust.ANY. The selector's own summary already says it, in
+        // the danger colour, immediately under the control, and a validation note
+        // repeating it two lines lower reads as a bug rather than as emphasis.
+        // Notes here are for what the control cannot know, which is the case above.
+
         if (monitor.useProxy && monitor.kind == MonitorKind.WEBSITE_ELEMENT) {
             notes += Note(
                 Field.PROXY, Severity.HINT,

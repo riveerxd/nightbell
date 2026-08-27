@@ -138,6 +138,26 @@ class LatencyChartTest {
     }
 
     @Test
+    fun `only answered checks are a population the budget can be measured against`() {
+        // Found on a real screen: a monitor failing every check on a certificate
+        // reported "all 6 inside it" against a 2.5s budget, because none of the six
+        // was a slow success. True, and nonsense. Nothing was inside the budget
+        // because nothing was measured.
+        val allFailed = listOf(sample(7_540, ok = false), sample(7_540, ok = false))
+        assertEquals(0, LatencyChart.answered(allFailed))
+        assertEquals(0, LatencyChart.overBudget(allFailed, sloMs = 2_500))
+
+        val mixed = listOf(
+            sample(1_000),
+            sample(9_000, ok = false),
+            sample(4_000),
+            sample(9_000, ok = false),
+        )
+        assertEquals(2, LatencyChart.answered(mixed))
+        assertEquals(1, LatencyChart.overBudget(mixed, sloMs = 2_500))
+    }
+
+    @Test
     fun `a negative budget is treated as no budget`() {
         // Validation refuses one, but sloMs arrives from two places and a stored
         // snapshot from an older build is not something this can assume about.

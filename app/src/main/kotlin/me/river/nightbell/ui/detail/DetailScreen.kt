@@ -49,6 +49,7 @@ import me.river.nightbell.domain.Health
 import me.river.nightbell.domain.Monitor
 import me.river.nightbell.domain.MonitorKind
 import me.river.nightbell.domain.MonitorRuntime
+import me.river.nightbell.domain.TlsTrust
 import me.river.nightbell.domain.Sample
 import me.river.nightbell.domain.UptimeWindows
 import me.river.nightbell.ui.components.ButtonTone
@@ -279,7 +280,7 @@ fun DetailScreen(
         if (runtime.certExpiresAt > 0L) {
             item(key = "cert") {
                 StaggeredEntrance(index = 3, key = "cert-${monitor.id}", log = entrance) {
-                    CertificateCard(runtime, now)
+                    CertificateCard(monitor, runtime, now, viewModel::repinCertificate)
                 }
             }
         }
@@ -568,7 +569,12 @@ private fun UrgentBanner(repeatMinutes: Int, onAcknowledge: () -> Unit) {
  * gets no empty card claiming nothing.
  */
 @Composable
-private fun CertificateCard(runtime: MonitorRuntime, nowMs: Long) {
+private fun CertificateCard(
+    monitor: Monitor,
+    runtime: MonitorRuntime,
+    nowMs: Long,
+    onRepin: () -> Unit,
+) {
     // Thresholds here are the reporting defaults rather than the user's, because
     // this card describes the certificate rather than the alerting decision — the
     // date and the days remaining are true regardless of when someone chose to be
@@ -613,6 +619,51 @@ private fun CertificateCard(runtime: MonitorRuntime, nowMs: Long) {
                 style = MaterialTheme.typography.bodySmall,
                 color = NightbellColors.TextSecondary,
             )
+        }
+        // What this monitor is actually checking, on every visit rather than only
+        // in the setup flow. A monitor set to accept any certificate looks
+        // identical to a healthy one from the outside, and the whole risk of
+        // offering that mode is someone turning it on to get past a problem and
+        // never thinking about it again.
+        if (monitor.tlsTrust != TlsTrust.SYSTEM) {
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = monitor.tlsTrust.label.uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                color = if (monitor.tlsTrust == TlsTrust.ANY) {
+                    NightbellColors.Rose
+                } else {
+                    NightbellColors.TextTertiary
+                },
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = when {
+                    monitor.tlsTrust == TlsTrust.ANY -> monitor.tlsTrust.summary
+                    runtime.certPin.isNotBlank() ->
+                        "Pinned to ${runtime.certPin}. A different key fails the check."
+                    else -> "The next successful check will record this server's key."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = if (monitor.tlsTrust == TlsTrust.ANY) {
+                    NightbellColors.Rose
+                } else {
+                    NightbellColors.TextSecondary
+                },
+            )
+            // The only way out of a pin, and it has to exist. A mismatch fails the
+            // check rather than adopting the new key, which is right, and would be
+            // a dead end without this: someone who renewed a certificate on
+            // purpose would be left deleting the monitor and building it again.
+            if (monitor.tlsTrust == TlsTrust.PINNED && runtime.certPin.isNotBlank()) {
+                Spacer(Modifier.height(12.dp))
+                NightbellButton(
+                    text = "Trust the new key",
+                    onClick = onRepin,
+                    icon = NightbellIcons.Shield,
+                    tone = ButtonTone.Secondary,
+                )
+            }
         }
     }
 }
@@ -669,6 +720,13 @@ private fun ConfigCard(monitor: Monitor, accent: Color) {
         }
         ConfigRow("Interval", "every ${monitor.intervalMinutes} min")
         ConfigRow("Timeout", "${monitor.timeoutSeconds}s")
+        // Only when it has been changed. The TLS certificate card says more, and
+        // says it better, but it only appears once a certificate has been seen, so
+        // a monitor that has never got past the handshake would otherwise show
+        // nothing anywhere about the setting that is failing it.
+        if (monitor.kind != MonitorKind.GITHUB_REPO && monitor.tlsTrust != TlsTrust.SYSTEM) {
+            ConfigRow("Certificate", monitor.tlsTrust.label)
+        }
         if (monitor.kind != MonitorKind.GITHUB_REPO) {
             ConfigRow(
                 "Latency budget",

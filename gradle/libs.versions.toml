@@ -41,6 +41,10 @@ kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+# Test only. Generates a throwaway self-signed certificate per run, which is what
+# lets the TLS trust tests exist without a keystore checked into the repo that
+# would quietly expire one day and take the suite with it.
+okhttp-tls = { group = "com.squareup.okhttp3", name = "okhttp-tls", version.ref = "okhttp" }
 androidx-webkit = { group = "androidx.webkit", name = "webkit", version.ref = "webkit" }
 
 junit = { group = "junit", name = "junit", version.ref = "junit" }

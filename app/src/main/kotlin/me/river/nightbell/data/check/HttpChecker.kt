@@ -7,6 +7,7 @@ import me.river.nightbell.domain.GlobalSettings
 import me.river.nightbell.domain.HttpMethod
 import me.river.nightbell.domain.Monitor
 import me.river.nightbell.domain.ProxyRoute
+import me.river.nightbell.domain.TlsFailure
 import me.river.nightbell.domain.Validation
 import java.io.ByteArrayOutputStream
 import java.io.IOException
@@ -16,6 +17,8 @@ import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
+import java.security.cert.CertPathValidatorException
+import java.security.cert.CertificateException
 import java.security.cert.X509Certificate
 import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLException
@@ -53,7 +56,12 @@ class HttpChecker(
         .retryOnConnectionFailure(false)
         .build()
 
-    suspend fun check(monitor: Monitor): CheckResult = withContext(Dispatchers.IO) {
+    /**
+     * @param certPin the key this monitor is already pinned to, from
+     *   `MonitorRuntime.certPin`. Empty arms the pin instead of enforcing it, and
+     *   is ignored entirely unless the monitor asked for [TlsTrust.PINNED].
+     */
+    suspend fun check(monitor: Monitor, certPin: String = ""): CheckResult = withContext(Dispatchers.IO) {
         val urlNote = Validation.urlNote(monitor.url)
         if (urlNote?.severity == Validation.Severity.ERROR) {
             return@withContext CheckResult(
@@ -90,7 +98,7 @@ class HttpChecker(
         // rendezvous circuit, which says nothing about the monitored service, and
         // the ordinary 15s reads a perfectly healthy hidden service as down.
         val timeout = monitor.effectiveTimeoutSeconds(settings, proxied = endpoint != null)
-        val client = base.newBuilder()
+        val builder = base.newBuilder()
             .connectTimeout(timeout.toLong(), TimeUnit.SECONDS)
             .readTimeout(timeout.toLong(), TimeUnit.SECONDS)
             .writeTimeout(timeout.toLong(), TimeUnit.SECONDS)
@@ -98,7 +106,10 @@ class HttpChecker(
             .followRedirects(monitor.followRedirects)
             .followSslRedirects(monitor.followRedirects)
             .apply { if (endpoint != null) proxy(socksProxy(endpoint)) }
-            .build()
+        // Returns null under TlsTrust.SYSTEM, where nothing is overridden and the
+        // certificate is read from the response as it always was. See TlsTrustConfig.
+        val tlsSession = TlsTrustConfig.apply(builder, monitor.tlsTrust, certPin)
+        val client = builder.build()
 
         val request = runCatching { buildRequest(monitor) }.getOrElse { error ->
             return@withContext CheckResult(
@@ -111,7 +122,7 @@ class HttpChecker(
             )
         }
 
-        attempt(client, request, monitor, timeout, retriesLeft = 1)
+        attempt(client, request, monitor, timeout, tlsSession, retriesLeft = 1)
     }
 
     /**
@@ -156,6 +167,7 @@ class HttpChecker(
         request: Request,
         monitor: Monitor,
         timeoutSeconds: Int,
+        tlsSession: TlsTrustConfig.Session?,
         retriesLeft: Int,
     ): CheckResult {
         val watcher = ConnectionWatcher()
@@ -168,6 +180,7 @@ class HttpChecker(
             call.execute().use { response ->
                 val body = if (monitor.method == HttpMethod.HEAD) "" else readBoundedBody(response)
                 val latency = elapsedMs(started)
+                val leaf = leafCertificate(response, tlsSession)
                 val verdict = Assertions.evaluateHttp(monitor, response.code, body)
                 CheckResult(
                     ok = verdict.passed,
@@ -185,8 +198,9 @@ class HttpChecker(
                         verdict.detail
                     },
                     bodyPreview = body.take(MAX_PREVIEW),
-                    certExpiresAt = leafCertExpiry(response),
-                    certIssuer = leafCertIssuer(response),
+                    certExpiresAt = leaf?.notAfter?.time ?: 0L,
+                    certIssuer = issuerOf(leaf),
+                    certSpki = TlsTrustConfig.pinOf(leaf),
                     at = nowMs(),
                 )
             }
@@ -204,7 +218,7 @@ class HttpChecker(
                 watcher.diedBeforeAnswering(error) &&
                 latency * 2 < timeoutSeconds * 1_000L
             ) {
-                return attempt(client, request, monitor, timeoutSeconds, retriesLeft - 1)
+                return attempt(client, request, monitor, timeoutSeconds, tlsSession, retriesLeft - 1)
             }
             val kind = classify(error)
             CheckResult(
@@ -212,7 +226,7 @@ class HttpChecker(
                 latencyMs = latency,
                 failureKind = kind,
                 message = describe(error, kind, monitor),
-                detail = "${error::class.java.simpleName}: ${error.message ?: "no message"}",
+                detail = detail(error, kind, monitor, watcher.schemeUpgradedTo),
                 at = nowMs(),
             )
         }
@@ -273,23 +287,33 @@ class HttpChecker(
     }
 
     /**
-     * `notAfter` of the certificate this connection actually presented.
+     * The certificate this connection actually presented, or null.
      *
-     * Reads the *leaf*, `peerCertificates.first()`, not the chain: an
-     * intermediate valid for another five years says nothing about the cert that
-     * is going to stop working. Returns 0 rather than throwing for plain HTTP,
-     * for a cached response with no handshake attached, and for anything that
-     * isn't an X.509 certificate, because a certificate the checker cannot read
-     * must degrade to "no opinion" and never to "expiring".
+     * Reads the *leaf* rather than the chain: an intermediate valid for another
+     * five years says nothing about the certificate that is going to stop working.
+     *
+     * Two sources, because there have to be. Under a custom trust manager OkHttp
+     * reports `handshake.peerCertificates` as empty, since it derives them through
+     * a chain cleaner that has no trusted root to build a path to; the trust
+     * manager itself is handed the real chain, and records it. Under
+     * [me.river.nightbell.domain.TlsTrust.SYSTEM] there is no custom manager and no
+     * session, and the response is the source it has always been.
+     *
+     * Null rather than throwing for plain HTTP, for a cached response with no
+     * handshake attached, and for anything that is not X.509, because a certificate
+     * the checker cannot read has to degrade to "no opinion" and never to
+     * "expiring".
      */
-    private fun leafCertExpiry(response: okhttp3.Response): Long = runCatching {
-        val leaf = response.handshake?.peerCertificates?.firstOrNull() as? X509Certificate
-        leaf?.notAfter?.time ?: 0L
-    }.getOrDefault(0L)
+    private fun leafCertificate(
+        response: okhttp3.Response,
+        tlsSession: TlsTrustConfig.Session?,
+    ): X509Certificate? = runCatching {
+        tlsSession?.leaf
+            ?: response.handshake?.peerCertificates?.firstOrNull() as? X509Certificate
+    }.getOrNull()
 
     /** Issuer common name, for the detail screen. Falls back to the whole DN. */
-    private fun leafCertIssuer(response: okhttp3.Response): String = runCatching {
-        val leaf = response.handshake?.peerCertificates?.firstOrNull() as? X509Certificate
+    private fun issuerOf(leaf: X509Certificate?): String = runCatching {
         val dn = leaf?.issuerX500Principal?.name.orEmpty()
         CN_IN_DN.find(dn)?.groupValues?.get(1)?.trim().orEmpty().ifBlank { dn }
     }.getOrDefault("")
@@ -307,13 +331,51 @@ class HttpChecker(
         else -> FailureKind.UNKNOWN
     }
 
-    private fun describe(error: Throwable, kind: FailureKind, monitor: Monitor): String = when (kind) {
-        FailureKind.DNS -> "Can't resolve ${monitor.prettyHost.substringBefore('/')}"
-        FailureKind.TIMEOUT -> "No response within ${monitor.timeoutSeconds}s"
-        FailureKind.TLS -> "TLS/certificate error"
-        FailureKind.CONNECT -> "Connection refused or dropped"
-        FailureKind.BAD_CONFIG -> "Invalid request: ${error.message ?: "bad configuration"}"
+    private fun describe(error: Throwable, kind: FailureKind, monitor: Monitor): String = when {
+        kind == FailureKind.DNS -> "Can't resolve ${monitor.prettyHost.substringBefore('/')}"
+        kind == FailureKind.TIMEOUT -> "No response within ${monitor.timeoutSeconds}s"
+        kind == FailureKind.TLS -> TlsFailure.headline(
+            cause = tlsCause(error),
+            hiddenService = ProxyRoute.isHiddenService(monitor.url),
+        )
+        kind == FailureKind.CONNECT -> "Connection refused or dropped"
+        kind == FailureKind.BAD_CONFIG -> "Invalid request: ${error.message ?: "bad configuration"}"
         else -> error.message ?: "Unexpected failure"
+    }
+
+    /**
+     * How the TLS layer refused, as far as the copy needs to know.
+     *
+     * The pin case is ours and is recognisable by type. The untrusted-chain case
+     * is not: JSSE gives no distinct exception for it, so it is read off the cause
+     * chain, where a `CertPathValidatorException` sits under the handshake failure
+     * on both Conscrypt and the JVM even though the two print different messages.
+     * Matching on the type rather than the text is the whole point.
+     */
+    private fun tlsCause(error: Throwable): TlsFailure.Cause {
+        TlsTrustConfig.pinMismatch(error)?.let {
+            return TlsFailure.Cause.PinMismatch(it.expected, it.actual)
+        }
+        val untrusted = generateSequence(error as Throwable?) {
+            if (it.cause === it) null else it.cause
+        }.any { it is CertPathValidatorException || it is CertificateException }
+        return if (untrusted) TlsFailure.Cause.UntrustedChain else TlsFailure.Cause.Other
+    }
+
+    private fun detail(
+        error: Throwable,
+        kind: FailureKind,
+        monitor: Monitor,
+        upgradedTo: String?,
+    ): String {
+        val raw = "${error::class.java.simpleName}: ${error.message ?: "no message"}"
+        if (kind != FailureKind.TLS) return raw
+        val explanation = TlsFailure.explanation(
+            cause = tlsCause(error),
+            hiddenService = ProxyRoute.isHiddenService(monitor.url),
+            schemeUpgradedTo = upgradedTo,
+        )
+        return "$explanation\n\n$raw"
     }
 
     /**
@@ -331,6 +393,17 @@ class HttpChecker(
         @Volatile private var acquired = false
 
         @Volatile private var responded = false
+
+        /**
+         * The `https` location an `http` request was sent to, if that happened.
+         *
+         * Not latched off `responseHeadersEnd`'s reset below, because this one is
+         * about the whole call rather than about the exchange that failed. It is
+         * the fact that explains issue #6, and by the time the handshake fails the
+         * hop is two exchanges in the past.
+         */
+        @Volatile var schemeUpgradedTo: String? = null
+            private set
 
         override fun connectStart(call: Call, inetSocketAddress: InetSocketAddress, proxy: Proxy) {
             dialled = true
@@ -357,6 +430,16 @@ class HttpChecker(
             dialled = false
             acquired = false
             responded = false
+
+            // An http request answered with a redirect to https. Recorded here and
+            // not from the failure, because the failure has no idea a hop happened.
+            if (response.isRedirect && !response.request.url.isHttps) {
+                val location = response.header("Location").orEmpty()
+                val target = response.request.url.resolve(location)
+                if (target != null && target.isHttps) {
+                    schemeUpgradedTo = "${target.scheme}://${target.host}"
+                }
+            }
         }
 
         /**

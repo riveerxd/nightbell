@@ -74,6 +74,7 @@ import me.river.nightbell.domain.Monitor
 import me.river.nightbell.domain.MonitorKind
 import me.river.nightbell.domain.ProxyRoute
 import me.river.nightbell.domain.StatusMode
+import me.river.nightbell.domain.TlsTrust
 import me.river.nightbell.domain.Validation
 import me.river.nightbell.ui.SetupViewModel
 import me.river.nightbell.ui.components.AlertPolicyEditor
@@ -208,6 +209,7 @@ fun SetupScreen(
                                 // so the first test anyone ran on a routed monitor
                                 // failed with nothing on screen to explain why.
                                 ProxyRoutingSection(viewModel, draft, report, accent)
+                                CertificateTrustSection(viewModel, draft, report, accent)
                                 TestPanel(
                                     testing = viewModel.testing,
                                     result = viewModel.testResult,
@@ -246,6 +248,7 @@ fun SetupScreen(
             visible = viewModel.pickerOpen,
             url = draft.url.trim(),
             route = viewModel.pickerRoute,
+            tlsTrust = draft.tlsTrust,
             existingSelector = draft.targets.getOrNull(viewModel.pickingIndex)
                 ?.displaySelector.orEmpty(),
             alreadyWatching = draft.targets.size,
@@ -1172,6 +1175,64 @@ private fun SummaryLine(label: String, value: String) {
  * later under Cadence, so a routed monitor's first test failed and nothing on
  * that screen said why.
  */
+/**
+ * How much this monitor's certificate has to prove.
+ *
+ * Hidden for plain http, where there is no certificate to have an opinion about,
+ * and for a repository monitor, which talks to api.github.com and is not the
+ * user's server to make decisions about. Shown for http only when redirects are
+ * on, because that is the case where an http monitor can still end up making a
+ * TLS request, which is how issue #6 happened.
+ */
+@Composable
+private fun CertificateTrustSection(
+    viewModel: SetupViewModel,
+    draft: Monitor,
+    report: Validation.Report,
+    accent: Color,
+) {
+    if (draft.kind == MonitorKind.GITHUB_REPO) return
+    val url = draft.url.trim()
+    val https = url.startsWith("https://", ignoreCase = true)
+    val couldBecomeHttps = url.startsWith("http://", ignoreCase = true) && draft.followRedirects
+    if (!https && !couldBecomeHttps) return
+
+    Spacer(Modifier.height(4.dp))
+    Text(
+        text = "CERTIFICATE",
+        style = MaterialTheme.typography.labelSmall,
+        color = NightbellColors.TextTertiary,
+    )
+    Spacer(Modifier.height(8.dp))
+    ChipSelector(
+        options = TlsTrust.entries.toList(),
+        selected = draft.tlsTrust,
+        onSelect = { mode -> viewModel.update { it.copy(tlsTrust = mode) } },
+        label = { it.label },
+        accent = if (draft.tlsTrust == TlsTrust.ANY) NightbellColors.Rose else accent,
+    )
+    Spacer(Modifier.height(8.dp))
+    Text(
+        text = draft.tlsTrust.summary,
+        style = MaterialTheme.typography.bodySmall,
+        color = if (draft.tlsTrust == TlsTrust.ANY) {
+            NightbellColors.Rose
+        } else {
+            NightbellColors.TextTertiary
+        },
+    )
+    if (couldBecomeHttps) {
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = "This URL is http, and \"Follow redirects\" is on, so the server can send " +
+                "the check to https and its certificate will be judged by this setting.",
+            style = MaterialTheme.typography.bodySmall,
+            color = NightbellColors.TextTertiary,
+        )
+    }
+    FieldNote(report.of(Validation.Field.TLS))
+}
+
 @Composable
 private fun ProxyRoutingSection(
     viewModel: SetupViewModel,

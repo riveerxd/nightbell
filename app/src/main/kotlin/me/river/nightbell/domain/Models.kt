@@ -468,7 +468,18 @@ data class Monitor(
     val github: GitHubWatch = GitHubWatch(),
     val timeoutSeconds: Int = 15,
     val intervalMinutes: Int = 15,
+    /**
+     * Follow 3xx responses.
+     *
+     * On by default, and worth knowing that this is what can change a monitor's
+     * scheme underneath it: an endpoint answering plain HTTP with a redirect to
+     * `https://` turns an http monitor into a TLS check. That is how issue #6
+     * reached a certificate error from a URL with no `https` anywhere in it. See
+     * [tlsTrust], and `SelfSignedCertificateTest` for the shape of it.
+     */
     val followRedirects: Boolean = true,
+    /** How much this monitor's certificate has to prove. See [TlsTrust]. */
+    val tlsTrust: TlsTrust = TlsTrust.SYSTEM,
     /**
      * Send this monitor's requests through the SOCKS5 proxy set up in settings
      * rather than straight out of the device.
@@ -662,6 +673,27 @@ data class MonitorRuntime(
     /** `notAfter` of the leaf certificate last seen, 0 if none. */
     val certExpiresAt: Long = 0L,
     val certIssuer: String = "",
+    /**
+     * The public key this monitor is pinned to, in `sha256/…` form, or empty.
+     *
+     * Recorded on the first successful check under [TlsTrust.PINNED] and required
+     * by every check after it.
+     *
+     * On the runtime rather than on [Monitor] because it is something the app
+     * observed rather than something the user chose. The practical payoff is that
+     * clearing a monitor's history re-arms the pin, which is exactly what you want
+     * after deliberately replacing a certificate, and it needs no separate button
+     * to say so.
+     *
+     * It does travel in a backup, along with the rest of the runtime, and that is
+     * deliberate. The weak moment in trust on first use is the first use: a fresh
+     * install re-pinning whatever answers would trust an impostor without a
+     * murmur if one had appeared in the meantime. Carrying the key across removes
+     * that moment rather than repeating it. Nothing is given away by doing so
+     * either, since a public key hash is not a secret and is visible to anyone who
+     * connects to the server.
+     */
+    val certPin: String = "",
     /**
      * [CertificateWatch.Level.rank] most recently announced.
      *
@@ -900,8 +932,70 @@ data class CheckResult(
     val certExpiresAt: Long = 0L,
     /** Who signed it, for the detail screen. Common name only, not the full DN. */
     val certIssuer: String = "",
+    /**
+     * SHA-256 of the leaf's public key, in OkHttp's `sha256/…` pin format, or
+     * empty when there was no handshake to read one from.
+     *
+     * The public key rather than the whole certificate, so renewing a certificate
+     * with the same key does not read as a different server. That is the ordinary
+     * way a self-signed endpoint gets renewed: same key, new dates.
+     */
+    val certSpki: String = "",
     val at: Long = 0L,
 )
+
+/**
+ * How much a monitor's TLS certificate has to prove.
+ *
+ * Nightbell had no answer here at all, which made a whole class of endpoint
+ * unmonitorable: a NAS with a self-signed certificate, a homelab box behind a
+ * private CA, a Tor hidden service where no CA will ever issue. Issue #6 is one
+ * of those, and the only workaround was to stop using HTTPS.
+ *
+ * Three modes rather than a checkbox, because the interesting answer is the
+ * middle one and a boolean cannot express it.
+ */
+@Serializable
+enum class TlsTrust(val label: String, val summary: String) {
+
+    /** A CA the device trusts has to vouch for it. */
+    SYSTEM(
+        "System CAs",
+        "The certificate must be signed by a CA this phone trusts, including any you installed yourself.",
+    ),
+
+    /**
+     * Trust the key seen on the first successful handshake, and require it after.
+     *
+     * The honest default for a box you own, and stronger than [SYSTEM] rather than
+     * weaker: a CA can be talked into issuing for a name it should not, and no
+     * amount of that produces the key this monitor already recorded. What it gives
+     * up is the ability to change keys without saying so, which for an endpoint
+     * the user administers themselves is a feature.
+     *
+     * The recorded key lives on [MonitorRuntime], not here. It is something the
+     * app observed, not something the user chose, and it must not travel in a
+     * backup looking like a decision.
+     */
+    PINNED(
+        "Pinned key",
+        "Records the key on the next successful check and requires that exact key afterwards. " +
+            "Works with self-signed certificates, and notices if the key ever changes.",
+    ),
+
+    /**
+     * Check nothing. No chain, no hostname, no pin.
+     *
+     * Here because sometimes it is genuinely what someone needs, and because
+     * without it people reach for plain HTTP instead, which is worse. Off by
+     * default, and the detail screen says so on every check rather than letting it
+     * be set once and forgotten.
+     */
+    ANY(
+        "Any certificate",
+        "No checks at all. Anything on the network path can read and change these requests.",
+    ),
+}
 
 /**
  * Which colour scheme to paint in.

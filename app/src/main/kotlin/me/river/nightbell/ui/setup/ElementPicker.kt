@@ -66,6 +66,7 @@ import me.river.nightbell.data.check.ElementChecker
 import me.river.nightbell.data.check.WebViewProxy
 import me.river.nightbell.data.web.PickerScripts
 import me.river.nightbell.domain.ProxyRoute
+import me.river.nightbell.domain.TlsTrust
 import me.river.nightbell.ui.components.ButtonTone
 import me.river.nightbell.ui.components.GlassIconButton
 import me.river.nightbell.ui.components.MicroTag
@@ -185,6 +186,8 @@ fun ElementPickerOverlay(
     visible: Boolean,
     url: String,
     route: ProxyRoute.Route,
+    /** Defaults to the conservative mode, for a caller with no monitor in hand. */
+    tlsTrust: TlsTrust = TlsTrust.SYSTEM,
     existingSelector: String,
     onDismiss: () -> Unit,
     onConfirm: (PickedElement) -> Unit,
@@ -195,7 +198,7 @@ fun ElementPickerOverlay(
         enter = slideInVertically(spring(dampingRatio = 0.85f)) { it } + fadeIn(),
         exit = slideOutVertically(spring(dampingRatio = 0.9f)) { it } + fadeOut(),
     ) {
-        PickerContent(url, route, existingSelector, alreadyWatching, onDismiss, onConfirm)
+        PickerContent(url, route, tlsTrust, existingSelector, alreadyWatching, onDismiss, onConfirm)
     }
 }
 
@@ -203,6 +206,7 @@ fun ElementPickerOverlay(
 private fun PickerContent(
     url: String,
     route: ProxyRoute.Route,
+    tlsTrust: TlsTrust,
     existingSelector: String,
     alreadyWatching: Int,
     onDismiss: () -> Unit,
@@ -446,6 +450,38 @@ private fun PickerContent(
                                                 PickerScripts.setPickMode(pickMode),
                                                 null,
                                             )
+                                        }
+                                    }
+
+                                    /**
+                                     * The preview obeys the monitor's own
+                                     * certificate setting.
+                                     *
+                                     * It has to. The check and the picker load the
+                                     * same URL from the same device, so a picker
+                                     * that refused what the check accepts would
+                                     * make a self-signed host impossible to set up
+                                     * even though monitoring it works. 3.1.0 had
+                                     * the same shape of bug with the proxy.
+                                     *
+                                     * No pin comparison here, only the mode. A
+                                     * monitor being set up has nothing recorded
+                                     * yet, and the check that runs afterwards is
+                                     * what records it.
+                                     */
+                                    override fun onReceivedSslError(
+                                        view: WebView?,
+                                        handler: android.webkit.SslErrorHandler?,
+                                        err: android.net.http.SslError?,
+                                    ) {
+                                        if (tlsTrust == TlsTrust.SYSTEM) {
+                                            loading = false
+                                            error = "The certificate was refused. If this " +
+                                                "server is one you know, set this monitor's " +
+                                                "certificate handling before picking."
+                                            handler?.cancel()
+                                        } else {
+                                            handler?.proceed()
                                         }
                                     }
 

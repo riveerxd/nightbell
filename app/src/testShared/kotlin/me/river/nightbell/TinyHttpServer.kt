@@ -5,6 +5,7 @@ import java.io.InputStreamReader
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.CopyOnWriteArrayList
+import javax.net.ServerSocketFactory
 import kotlin.concurrent.thread
 
 /**
@@ -13,8 +14,18 @@ import kotlin.concurrent.thread
  * Deliberately dependency-free: it gives full control over status codes, bodies,
  * headers and artificial latency without pulling MockWebServer (and its okhttp
  * version coupling) into the build.
+ *
+ * [socketFactory] is how it serves HTTPS. Pass one from [TinyTls] and the same
+ * server speaks TLS with a certificate no CA has ever heard of, which is the whole
+ * subject of issue #6. Left null it is plain HTTP, exactly as before.
  */
-class TinyHttpServer(private val handler: (Request) -> Response) : AutoCloseable {
+class TinyHttpServer(
+    private val socketFactory: ServerSocketFactory? = null,
+    private val handler: (Request) -> Response,
+) : AutoCloseable {
+
+    /** Plain HTTP, which is what almost every caller wants. */
+    constructor(handler: (Request) -> Response) : this(null, handler)
 
     data class Request(
         val method: String,
@@ -39,12 +50,23 @@ class TinyHttpServer(private val handler: (Request) -> Response) : AutoCloseable
         val bytes: ByteArray? = null,
     )
 
-    private val server = ServerSocket(0)
+    private val server: ServerSocket = (socketFactory ?: ServerSocketFactory.getDefault())
+        .createServerSocket(0)
     private val running = java.util.concurrent.atomic.AtomicBoolean(true)
     val received: MutableList<Request> = CopyOnWriteArrayList()
 
     val port: Int get() = server.localPort
-    val baseUrl: String get() = "http://127.0.0.1:$port"
+    val scheme: String get() = if (socketFactory == null) "http" else "https"
+
+    /**
+     * Addressed by name rather than by 127.0.0.1 when serving TLS.
+     *
+     * `localhost` is the name [TinyTls] issues its certificate for, so a test
+     * about trust anchors fails on the anchor rather than on the hostname not
+     * matching, which is a different bug wearing the same exception.
+     */
+    val baseUrl: String
+        get() = if (socketFactory == null) "http://127.0.0.1:$port" else "https://localhost:$port"
 
     fun url(path: String): String = baseUrl + if (path.startsWith("/")) path else "/$path"
 
@@ -56,7 +78,21 @@ class TinyHttpServer(private val handler: (Request) -> Response) : AutoCloseable
                 } catch (_: Throwable) {
                     break
                 }
-                thread(isDaemon = true) { serve(socket) }
+                thread(isDaemon = true) {
+                    // Swallowed on purpose, and it has to be swallowed here.
+                    //
+                    // A client that refuses the certificate aborts the handshake,
+                    // and this thread then throws out of `readLine`. On the JVM
+                    // that quietly kills one thread. On Android an uncaught
+                    // exception in any thread kills the *process*, so the TLS trust
+                    // tests took the whole instrumentation run down with them and
+                    // reported "Process crashed" instead of a result.
+                    //
+                    // There is nothing to report either way: a connection that
+                    // never became a request is the client's verdict, and the test
+                    // is asserting on that verdict from the other side.
+                    runCatching { serve(socket) }
+                }
             }
         }
     }

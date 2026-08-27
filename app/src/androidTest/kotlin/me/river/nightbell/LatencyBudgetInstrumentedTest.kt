@@ -233,7 +233,10 @@ class LatencyBudgetInstrumentedTest {
         // for. 2900 / 3400 / 2600 are over it; the two failures are not counted,
         // because a failed check is a failure and not a slow success.
         assertChartSays("budget 2.50 s", "3 over budget", "2 failed")
-        composeRule.onNodeWithText("Budget 2.50 s · 3 of 8 over").assertExists()
+        // Six of the eight answered, so the legend counts against six. The two
+        // failures have no round trip to compare and are not "inside the budget":
+        // an all-failed monitor reading "all 6 inside it" is how this was noticed.
+        composeRule.onNodeWithText("Budget 2.50 s · 3 of 6 over").assertExists()
         composeRule.captureScreenshot("53-budget-inherited-from-settings")
     }
 

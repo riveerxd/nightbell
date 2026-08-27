@@ -490,6 +490,7 @@ fun LatencyBudgetLegend(
 ) {
     if (sloMs <= 0 || samples.isEmpty()) return
     val over = LatencyChart.overBudget(samples, sloMs)
+    val answered = LatencyChart.answered(samples)
     val capped = LatencyChart.budgetIsCapped(samples, sloMs)
     val swatch = NightbellColors.Amber.copy(alpha = if (capped) 0.34f else 0.72f)
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
@@ -512,10 +513,14 @@ fun LatencyBudgetLegend(
                 if (capped) append(", above this range")
                 append(" · ")
                 append(
-                    when (over) {
-                        0 -> "all ${samples.size} inside it"
-                        samples.size -> "all ${samples.size} over"
-                        else -> "$over of ${samples.size} over"
+                    when {
+                        // Counted against the checks that answered, not against
+                        // every check. A failed check has no round trip to compare
+                        // and must not be reported as being inside the budget.
+                        answered == 0 -> "nothing answered to measure"
+                        over == 0 -> "all $answered inside it"
+                        over == answered -> "all $answered over"
+                        else -> "$over of $answered over"
                     },
                 )
             },
@@ -1030,7 +1035,13 @@ internal fun chartSummary(kind: String, samples: List<Sample>, sloMs: Int = 0): 
         if (sloMs > 0) {
             append(", budget ${formatLatency(sloMs.toLong())}")
             val over = LatencyChart.overBudget(samples, sloMs)
-            append(if (over == 0) ", none over budget" else ", $over over budget")
+            append(
+                when {
+                    ok.isEmpty() -> ", no answered checks to measure against it"
+                    over == 0 -> ", none over budget"
+                    else -> ", $over over budget"
+                },
+            )
         }
     }
 }

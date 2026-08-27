@@ -22,6 +22,7 @@ import me.river.nightbell.domain.MonitorKind
 import me.river.nightbell.domain.MonitorRuntime
 import me.river.nightbell.domain.PauseState
 import me.river.nightbell.domain.NetworkBaseline
+import me.river.nightbell.domain.TlsTrust
 import me.river.nightbell.domain.UrgentAlerts
 import me.river.nightbell.domain.runCatchingCancellable
 import java.util.Calendar
@@ -102,14 +103,21 @@ class CheckEngine(
      */
     var isOnline: () -> Boolean = { true }
 
-    /** Runs the check without touching persisted state — used by "Test now". */
-    suspend fun dryRun(monitor: Monitor): CheckResult = when (monitor.kind) {
-        MonitorKind.WEBSITE_ELEMENT -> element.check(monitor)
+    /**
+     * Runs the check without touching persisted state — used by "Test now".
+     *
+     * @param certPin the key this monitor is already pinned to, if any. Empty from
+     *   "Test now" on a monitor that has never been saved, which is correct: a
+     *   test of a brand new monitor has nothing to compare against and reports
+     *   what the server presented.
+     */
+    suspend fun dryRun(monitor: Monitor, certPin: String = ""): CheckResult = when (monitor.kind) {
+        MonitorKind.WEBSITE_ELEMENT -> element.check(monitor, certPin)
         // A GitHub poll against a blank state: it reads the repository and reports
         // what is there, and because nothing is persisted it cannot seed a
         // baseline or announce anything. Which is exactly what "Test now" means.
         MonitorKind.GITHUB_REPO -> githubDryRun(monitor)
-        else -> http.check(monitor)
+        else -> http.check(monitor, certPin)
     }
 
     private suspend fun githubDryRun(monitor: Monitor): CheckResult {
@@ -235,7 +243,7 @@ class CheckEngine(
                 githubOutcome = outcome
                 outcome.result
             } else {
-                dryRun(monitor)
+                dryRun(monitor, before.certPin)
             }
         } catch (cancellation: CancellationException) {
             // The single most important catch in this app.
@@ -439,7 +447,17 @@ class CheckEngine(
         // carries no expiry date, and the fold above deliberately keeps the last
         // one we saw. Judging from the raw result would silently drop the warning
         // for any monitor that happened to time out.
-        val certLevel = if (settings.certAlertsEnabled) {
+        //
+        // A monitor set to accept any certificate is excluded, and only from the
+        // *alert*. The expiry is still read and still shown on the detail screen,
+        // because knowing when it lapses is free and occasionally useful. What it
+        // must not do is wake anyone: the user has said in as many words that this
+        // certificate is not something they want judged, and nagging them about
+        // next Tuesday's expiry on a cert they told the app to ignore is the app
+        // arguing with a decision it was told about. Pinned monitors keep their
+        // alerts, because a pinned self-signed certificate still expires and
+        // someone still has to go and regenerate it.
+        val certLevel = if (settings.certAlertsEnabled && monitor.tlsTrust != TlsTrust.ANY) {
             CertificateWatch.level(
                 expiresAt = after.certExpiresAt,
                 nowMs = result.at,
@@ -483,6 +501,20 @@ class CheckEngine(
         if (certResolved && before.certAlertedLevel > CertificateWatch.Level.OK.rank) {
             alerts.cancelCert(monitor.id)
         }
+        // Trust on first use, second half. The first successful handshake under
+        // TlsTrust.PINNED is the one that records the key, and every check after it
+        // is compared against what this stores.
+        //
+        // Three conditions, each load-bearing. The check succeeded, so a key seen
+        // during a failure is never armed. The mode asks for a pin, so turning
+        // pinning on later does not inherit a key recorded under some other mode.
+        // And nothing is pinned yet, because re-recording on every success is not
+        // pinning at all: the mismatch that this exists to catch would overwrite
+        // itself and report nothing.
+        val armPin = result.ok &&
+            monitor.tlsTrust == TlsTrust.PINNED &&
+            before.certPin.isBlank() &&
+            result.certSpki.isNotBlank()
         val certMutation: (MonitorRuntime) -> MonitorRuntime = { runtime ->
             runtime.copy(
                 certAlertedLevel = if (certShouldAlert || certResolved) {
@@ -491,6 +523,7 @@ class CheckEngine(
                     runtime.certAlertedLevel
                 },
                 lastCertAlertAt = if (certShouldAlert) result.at else runtime.lastCertAlertAt,
+                certPin = if (armPin) result.certSpki else runtime.certPin,
             )
         }
 
@@ -906,6 +939,22 @@ class CheckEngine(
     suspend fun clearCheckerHealth(reason: String) {
         resetCheckerHealth(reason)
         store.updateCheckerStreak { CheckerStreak.Empty }
+    }
+
+    /**
+     * Forgets a pinned key so the next successful check records the current one.
+     *
+     * The only way out of a pin, and there has to be one. A mismatch deliberately
+     * fails the check instead of adopting the new key, which is correct and would
+     * be a trap on its own: someone who replaced a certificate on purpose would
+     * have no move left but deleting the monitor and building it again.
+     *
+     * Deliberate rather than automatic, and that is the whole design. Re-pinning on
+     * mismatch is indistinguishable from not pinning, so the decision has to be a
+     * person saying "yes, that was me".
+     */
+    suspend fun repinCertificate(monitorId: String) {
+        store.updateRuntime(monitorId) { it.copy(certPin = "") }
     }
 
     /** A monitor was deleted or disabled — it can no longer support a crash claim. */

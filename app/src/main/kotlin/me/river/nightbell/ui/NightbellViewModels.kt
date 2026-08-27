@@ -799,6 +799,14 @@ class DetailViewModel(
         }
     }
 
+    /** Accepts a certificate that was deliberately replaced. See CheckEngine. */
+    fun repinCertificate() {
+        viewModelScope.launch {
+            graph.engine.repinCertificate(monitorId)
+            toast = "The next successful check will record the new key"
+        }
+    }
+
     fun unmute() {
         viewModelScope.launch {
             graph.engine.unmute(monitorId)

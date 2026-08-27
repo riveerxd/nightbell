@@ -90,6 +90,18 @@ object LatencyChart {
     fun isOverBudget(sample: Sample, sloMs: Int): Boolean =
         AlertDecider.isDegraded(sample.ok, sample.latencyMs, sloMs.toLong())
 
+    /**
+     * How many checks answered at all, which is the only population a budget can
+     * be measured against.
+     *
+     * The legend needs this rather than `samples.size`, and the difference is not
+     * cosmetic. A monitor whose every check failed on a handshake reported "all 6
+     * inside it" against a 2.5s budget, because none of the six was a *slow
+     * success*. Every word of that was true and the sentence was nonsense: nothing
+     * was inside the budget, nothing was measured at all.
+     */
+    fun answered(samples: List<Sample>): Int = samples.count { it.ok }
+
     private fun tallest(samples: List<Sample>): Long =
         maxOf(1L, samples.maxOfOrNull { it.latencyMs } ?: 1L)
 }
