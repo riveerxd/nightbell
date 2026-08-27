@@ -80,6 +80,7 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.river.nightbell.domain.Health
+import me.river.nightbell.domain.LatencyChart
 import me.river.nightbell.domain.Sample
 import me.river.nightbell.ui.icons.NightbellIcons
 import me.river.nightbell.ui.theme.LocalNightbellMotion
@@ -383,13 +384,38 @@ fun Sparkline(
     }
 }
 
-/** Bar chart of the last N latencies, used on the detail screen. */
+/**
+ * Bar chart of the last N latencies, used on the detail screen.
+ *
+ * With a [sloMs] the chart also says where the latency budget is, twice over: a
+ * dashed line across it, and every bar that answered slower than the budget drawn
+ * in Amber instead of [accent]. The line says where the bar to beat is, the colour
+ * says which checks missed it, and the second one is what was actually asked for.
+ *
+ * Amber is not a new colour here. [me.river.nightbell.domain.Health.DEGRADED]
+ * already means "answered, but slower than its budget", and the degraded
+ * notification is already this colour, so a slow bar reads the same as the alert
+ * it would have raised.
+ *
+ * It *would have* raised, rather than did. A bar is Amber when the latency this
+ * sample recorded is over budget, while the alert track judges on a latency
+ * [me.river.nightbell.domain.NetworkBaseline] may have adjusted down after
+ * deciding the phone's own connection was the slow part. So an Amber bar can
+ * appear where no degraded alert fired, and that is right for both of them: this
+ * chart is a picture of what was measured, and the alert track is a judgement
+ * about what it meant.
+ *
+ * See [me.river.nightbell.domain.LatencyChart] for why the budget cannot simply
+ * raise the scale whenever it is taller than the samples.
+ */
 @Composable
 fun LatencyBars(
     samples: List<Sample>,
     modifier: Modifier = Modifier,
     /** Green for the same reason as [Sparkline]; a failed bar is drawn in Rose. */
     accent: Color = NightbellColors.Mint,
+    /** Latency budget in millis, from `Monitor.sloMs`. 0 draws no line. */
+    sloMs: Int = 0,
 ) {
     val motion = LocalNightbellMotion.current
     val grow = remember(samples.size) { Animatable(if (motion.enabled) 0f else 1f) }
@@ -400,17 +426,25 @@ fun LatencyBars(
         Box(modifier)
         return
     }
-    val maxLatency = max(1L, samples.maxOf { it.latencyMs })
+    val scaleMax = LatencyChart.scaleMax(samples, sloMs)
+    val budgetFraction = LatencyChart.budgetFraction(samples, sloMs)
+    val budgetIsCapped = LatencyChart.budgetIsCapped(samples, sloMs)
     val fail = NightbellColors.Rose
-    Canvas(modifier.clearAndSetSemantics { contentDescription = chartSummary("Response time history", samples) }) {
+    val slow = NightbellColors.Amber
+    val summary = chartSummary("Response time history", samples, sloMs)
+    Canvas(modifier.clearAndSetSemantics { contentDescription = summary }) {
         val count = samples.size
         val gap = 3.dp.toPx()
         val barWidth = ((size.width - gap * (count - 1)) / count).coerceAtLeast(1.5f)
         samples.forEachIndexed { index, sample ->
-            val ratio = (sample.latencyMs.toFloat() / maxLatency).coerceIn(0.04f, 1f) * grow.value
+            val ratio = (sample.latencyMs.toFloat() / scaleMax).coerceIn(0.04f, 1f) * grow.value
             val barHeight = size.height * ratio
             val x = index * (barWidth + gap)
-            val color = if (sample.ok) accent else fail
+            val color = when {
+                !sample.ok -> fail
+                LatencyChart.isOverBudget(sample, sloMs) -> slow
+                else -> accent
+            }
             drawRoundRect(
                 brush = Brush.verticalGradient(
                     listOf(color.copy(alpha = 0.95f), color.copy(alpha = 0.28f)),
@@ -420,6 +454,74 @@ fun LatencyBars(
                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(barWidth / 2.2f),
             )
         }
+
+        // Drawn after the bars so it reads as a threshold laid over them, and at a
+        // fixed height while the bars grow into it. Animating the line's position
+        // as well made the budget itself look like it was moving.
+        if (budgetFraction > 0f) {
+            val y = size.height - size.height * budgetFraction
+            val dash = 5.dp.toPx()
+            drawLine(
+                color = slow.copy(alpha = if (budgetIsCapped) 0.34f else 0.72f),
+                start = Offset(0f, y),
+                end = Offset(size.width, y),
+                strokeWidth = 1.4.dp.toPx(),
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(dash, dash * 0.8f)),
+                alpha = grow.value,
+            )
+        }
+    }
+}
+
+/**
+ * The budget line's caption, as a row of text under [LatencyBars].
+ *
+ * Outside the Canvas on purpose. Text drawn into the chart would need font
+ * metrics, would fight the bars for contrast wherever the line crosses one, and
+ * would arrive at a screen reader as part of the chart's own description instead
+ * of as something readable on its own. A legend costs a row of small text and says
+ * more: the figure, and how many checks missed it.
+ */
+@Composable
+fun LatencyBudgetLegend(
+    samples: List<Sample>,
+    sloMs: Int,
+    modifier: Modifier = Modifier,
+) {
+    if (sloMs <= 0 || samples.isEmpty()) return
+    val over = LatencyChart.overBudget(samples, sloMs)
+    val capped = LatencyChart.budgetIsCapped(samples, sloMs)
+    val swatch = NightbellColors.Amber.copy(alpha = if (capped) 0.34f else 0.72f)
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        Canvas(Modifier.width(14.dp).height(6.dp)) {
+            val dash = 3.dp.toPx()
+            drawLine(
+                color = swatch,
+                start = Offset(0f, size.height / 2f),
+                end = Offset(size.width, size.height / 2f),
+                strokeWidth = 1.4.dp.toPx(),
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(dash, dash * 0.8f)),
+            )
+        }
+        Spacer(Modifier.width(7.dp))
+        Text(
+            text = buildString {
+                append("Budget ${formatLatency(sloMs.toLong())}")
+                // Said out loud, because a line pinned to the top edge is the one
+                // case where the drawing cannot be read literally.
+                if (capped) append(", above this range")
+                append(" · ")
+                append(
+                    when (over) {
+                        0 -> "all ${samples.size} inside it"
+                        samples.size -> "all ${samples.size} over"
+                        else -> "$over of ${samples.size} over"
+                    },
+                )
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = NightbellColors.TextTertiary,
+        )
     }
 }
 
@@ -910,8 +1012,13 @@ fun formatLatency(ms: Long): String = when {
  * which tells a screen reader that a chart exists and nothing whatsoever about
  * the data in it. The shape of these graphs is the whole content, so the numbers
  * have to be spoken: latest, worst, and how many checks are behind them.
+ *
+ * The budget clause is part of that and not an extra. A sighted user gets the
+ * threshold from a dashed line and the breaches from the bar colour, and both of
+ * those are invisible to TalkBack, so without this the two audiences are reading
+ * different charts.
  */
-internal fun chartSummary(kind: String, samples: List<Sample>): String {
+internal fun chartSummary(kind: String, samples: List<Sample>, sloMs: Int = 0): String {
     if (samples.isEmpty()) return "$kind, no checks yet"
     val ok = samples.filter { it.ok }
     val failed = samples.size - ok.size
@@ -920,6 +1027,11 @@ internal fun chartSummary(kind: String, samples: List<Sample>): String {
         samples.lastOrNull()?.let { append(", latest ${formatLatency(it.latencyMs)}") }
         if (ok.isNotEmpty()) append(", slowest ${formatLatency(ok.maxOf { it.latencyMs })}")
         if (failed > 0) append(", $failed failed")
+        if (sloMs > 0) {
+            append(", budget ${formatLatency(sloMs.toLong())}")
+            val over = LatencyChart.overBudget(samples, sloMs)
+            append(if (over == 0) ", none over budget" else ", $over over budget")
+        }
     }
 }
 

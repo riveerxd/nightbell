@@ -58,6 +58,7 @@ import me.river.nightbell.ui.components.GlassDivider
 import me.river.nightbell.ui.components.GlassIconButton
 import me.river.nightbell.ui.components.IconBadge
 import me.river.nightbell.ui.components.LatencyBars
+import me.river.nightbell.ui.components.LatencyBudgetLegend
 import me.river.nightbell.ui.components.MetricTile
 import me.river.nightbell.ui.components.MicroTag
 import me.river.nightbell.ui.components.NightbellButton
@@ -95,6 +96,7 @@ fun DetailScreen(
 ) {
     val viewModel = rememberDetailViewModel(monitorId)
     val card by viewModel.card.collectAsStateWithLifecycle()
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
     var confirmDelete by remember { mutableStateOf(false) }
     var showAllChecks by remember { mutableStateOf(false) }
     val entrance = rememberEntranceLog()
@@ -234,10 +236,20 @@ fun DetailScreen(
                 StaggeredEntrance(index = 2, key = "chart-${monitor.id}", log = entrance) {
                     GlassCard {
                         SectionHeader("Response time", icon = NightbellIcons.Chart, accent = accentEnd)
+                        // The same 40 checks feed the chart and its legend. Two
+                        // slices of the same list would let the bars and the "3 of
+                        // 28 over" count disagree the moment the depth changed.
+                        val plotted = runtime.samples.takeLast(40)
+                        val budget = monitor.sloMs(settings)
                         LatencyBars(
-                            samples = runtime.samples.takeLast(40),
+                            samples = plotted,
                             modifier = Modifier.fillMaxWidth().height(112.dp),
+                            sloMs = budget,
                         )
+                        if (budget > 0) {
+                            Spacer(Modifier.height(10.dp))
+                            LatencyBudgetLegend(samples = plotted, sloMs = budget)
+                        }
                         Spacer(Modifier.height(12.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             MetricTile(

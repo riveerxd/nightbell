@@ -746,6 +746,19 @@ class DetailViewModel(
     val card: StateFlow<MonitorCard?> = graph.store.monitorFlow(monitorId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    /**
+     * Live settings, because a monitor that sets no latency budget of its own
+     * inherits the global one and the detail screen has to draw the effective
+     * figure rather than the stored zero. See `Monitor.sloMs`.
+     *
+     * A flow rather than a value read at open: the budget can be retyped in
+     * Settings while this screen is behind it in the back stack, and coming back
+     * to a chart drawing the old threshold would be a small lie that is hard to
+     * spot.
+     */
+    val settings: StateFlow<GlobalSettings> = graph.store.settings
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), GlobalSettings())
+
     var busy by mutableStateOf(false)
         private set
 
