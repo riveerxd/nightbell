@@ -317,8 +317,27 @@ android {
         // showing stars, open issues and the latest tag. The detail screen kept a
         // full Response time card plotting the round trip to api.github.com,
         // which is the same figure under a bigger heading, and it is gone now.
-        versionCode = 32
-        versionName = "3.3.0"
+        // 3.4.0 is about the repository monitor, which until now borrowed the
+        // screens a website monitor uses and answered the wrong question on all of
+        // them. Every repository check records what it saw of the repository, so
+        // the detail screen can list what changed rather than sixty rows timing
+        // the round trip to api.github.com: stars with the reading before them,
+        // issues opened and closed, releases, forks, pushes. Runs of checks that
+        // found nothing collapse into one line and a failed poll never does,
+        // because a refused poll is the only reason the counts on screen could be
+        // stale. The poll list is still one tap away.
+        //
+        // The facts also reach the widget, where a repository row showed the API
+        // round trip beside a dot that only meant the poll had worked. It shows
+        // the star count now, keeps it in a narrow column where a latency reading
+        // is dropped, and adds the open issues and the latest tag on a detailed
+        // row.
+        //
+        // The star itself is a filled gold glyph rather than the word or an
+        // outline, with its own colour so it cannot be read as the amber that
+        // means degraded everywhere else in the app.
+        versionCode = 33
+        versionName = "3.4.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

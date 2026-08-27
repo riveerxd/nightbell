@@ -1,0 +1,25 @@
+A GitHub repository monitor now shows the repository rather than the poll.
+
+The history is the part that changed most. It used to be sixty rows of "Healthy,
+304, 487 ms", which is the time api.github.com took to answer and says nothing
+about the repository you are watching. Every check now writes down what it saw,
+and the screen lists what actually happened: 13 stars, was 12. Issue #6 opened.
+Released v3.3.0. One issue closed. A new fork. A push.
+
+Runs of checks that found nothing are collapsed into a single line, so what is
+left is worth reading. A failed poll always keeps its own row: being refused by
+GitHub is the one reason the counts above it could be out of date. "Every check"
+at the bottom brings the old list of polls back for anyone who wants it.
+
+The repository card leads with its three numbers, each centred in its own tile
+with the count first: stars, open issues, forks. The star count is a gold star
+instead of the word.
+
+On the widget, a repository row used to report the API round trip next to a green
+dot that only meant the poll had worked. It reports the star count now, and a
+detailed row adds the open issue count and the latest tag underneath. Two and
+three column widgets keep that number rather than dropping it the way they drop a
+latency reading.
+
+Still no account, no server and nothing leaving the phone except the checks you
+asked for.
