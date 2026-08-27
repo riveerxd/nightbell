@@ -68,3 +68,6 @@ __pycache__/
 
 # Kotlin build daemon session files.
 .kotlin/
+
+# Debug builds handed out during development. Rebuildable, 16 MB each.
+artifacts/dev/
