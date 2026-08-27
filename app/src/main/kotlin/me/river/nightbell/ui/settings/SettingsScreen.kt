@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.river.nightbell.BuildConfig
 import me.river.nightbell.data.Nightbell
+import me.river.nightbell.domain.AppUpdate
 import me.river.nightbell.domain.CheckerHealth
 import me.river.nightbell.domain.CheckerLimit
 import me.river.nightbell.domain.PauseChoice
@@ -717,9 +718,10 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                 GlassCard {
                     SectionHeader("Nightbell updates", icon = NightbellIcons.Import, accent = NightbellColors.Sky)
                     Text(
-                        text = "Nightbell can look for a newer version of itself and say so once. " +
-                            "It never downloads or installs anything: the notification opens a " +
-                            "page, and Android asks before an APK is installed.",
+                        text = "Nightbell can look for a newer version of itself, notify you once " +
+                            "and show a banner on the dashboard until you dismiss it. It never " +
+                            "downloads or installs anything: both of them open a page, and " +
+                            "Android asks before an APK is installed.",
                         style = MaterialTheme.typography.bodySmall,
                         color = NightbellColors.TextTertiary,
                     )
@@ -727,7 +729,11 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                     ToggleRow(
                         title = "Tell me about new versions",
                         subtitle = if (settings.updateChecksEnabled) {
-                            "Checked every six hours, in the background sweep"
+                            // Both paths, because the launch one is what makes this
+                            // work at all for anyone who turned background checks
+                            // off, and the six hours is the cap on both together.
+                            "Checked when you open the app and in the background, " +
+                                "at most once every six hours"
                         } else {
                             "Off, your installer handles it"
                         },
@@ -757,24 +763,48 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                                 style = MaterialTheme.typography.bodySmall,
                                 color = NightbellColors.TextTertiary,
                             )
-                            Spacer(Modifier.height(10.dp))
-                            Text(
-                                text = when {
-                                    appUpdate.lastCheckedAt <= 0L -> "Not checked yet."
+                            Spacer(Modifier.height(12.dp))
+                            // Two labelled numbers rather than one sentence. This
+                            // card exists to answer "am I behind", and "Newest
+                            // seen: 3.2.2" reads as trivia unless you happen to
+                            // remember what you are running. A comparison needs
+                            // both halves of it on screen.
+                            VersionRow("Installed", viewModel.installedVersion)
+                            Spacer(Modifier.height(6.dp))
+                            VersionRow(
+                                label = "Latest",
+                                value = when {
+                                    appUpdate.lastCheckedAt <= 0L -> "not checked yet"
                                     appUpdate.latestVersion.isBlank() ->
-                                        "Last check couldn't reach ${settings.updateSource.label}."
-                                    else -> "Newest seen: ${appUpdate.latestVersion}."
+                                        "couldn't reach ${settings.updateSource.label}"
+                                    else -> appUpdate.latestVersion
                                 },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = NightbellColors.TextSecondary,
+                                highlight = AppUpdate.isNewer(
+                                    appUpdate.latestVersion,
+                                    viewModel.installedVersion,
+                                ),
                             )
                             if (appUpdate.ignoredVersion.isNotBlank()) {
-                                Spacer(Modifier.height(4.dp))
+                                Spacer(Modifier.height(10.dp))
                                 Text(
-                                    text = "Ignoring ${appUpdate.ignoredVersion}. A later version " +
-                                        "will still be announced.",
+                                    text = "Not showing ${appUpdate.ignoredVersion}. A later " +
+                                        "version will still be announced.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = NightbellColors.TextTertiary,
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                // The undo. Dismissing is now one tap on a dashboard
+                                // banner, so a mis-tap can silence a release
+                                // forever, and the place to recover from it is next
+                                // to the line that admits it happened.
+                                NightbellButton(
+                                    text = "Show it again",
+                                    onClick = viewModel::unignoreUpdate,
+                                    icon = NightbellIcons.Bell,
+                                    tone = ButtonTone.Secondary,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("unignore-update"),
                                 )
                             }
                             Spacer(Modifier.height(10.dp))
@@ -1536,4 +1566,27 @@ private fun openLink(context: android.content.Context, url: String) {
     val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     runCatching { context.startActivity(intent) }
+}
+
+/**
+ * One labelled version number, for the update card's Installed and Latest lines.
+ *
+ * [highlight] tints the value when it is a version the user does not have yet,
+ * which is the only state on this card worth drawing the eye to.
+ */
+@Composable
+private fun VersionRow(label: String, value: String, highlight: Boolean = false) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = NightbellColors.TextTertiary,
+            modifier = Modifier.width(88.dp),
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (highlight) NightbellColors.Sky else NightbellColors.TextPrimary,
+        )
+    }
 }

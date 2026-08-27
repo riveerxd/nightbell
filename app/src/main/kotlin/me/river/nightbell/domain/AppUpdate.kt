@@ -97,6 +97,59 @@ object AppUpdate {
         val release: Release? = null,
     )
 
+    /** What the dashboard banner says, when there is one to show. */
+    data class Banner(
+        val latestVersion: String,
+        val installedVersion: String,
+        val url: String,
+    )
+
+    /**
+     * Whether the dashboard should be carrying an update banner, and what it says.
+     *
+     * 3.2.0 shipped the check and gave it one surface: a notification, once per
+     * version, ever. Seven gates stand between a release and the user and six of
+     * them fail silently, the worst being `backgroundChecksEnabled`, which stops
+     * `SweepWorker` and therefore the update check with it. Someone who turned
+     * background checks off was never going to hear about a new version again, and
+     * nothing said so.
+     *
+     * Two gates are deliberately absent here, and they are the whole point:
+     *
+     *  - **[UpdateState.notifiedVersion] is not consulted.** That field is the
+     *    notification's bookkeeping, recording that the shade was written to once.
+     *    Reusing it would make the banner vanish after a single sighting, which is
+     *    the behaviour being fixed rather than a rule to carry forward.
+     *  - **`masterAlertsEnabled` is not consulted.** Alerts off means "do not
+     *    interrupt me", not "never tell me anything". A banner on a screen the
+     *    user chose to open interrupts nothing.
+     *
+     * What is consulted is every answer the user has actually given about this
+     * version: turned the feature off, ignored this one, deferred all of them, or
+     * already installed it.
+     */
+    fun bannerFor(
+        state: UpdateState,
+        installedVersion: String,
+        enabled: Boolean,
+        nowMs: Long,
+    ): Banner? {
+        if (!enabled) return null
+        if (!isNewer(state.latestVersion, installedVersion)) return null
+        if (state.latestVersion == state.ignoredVersion) return null
+        if (nowMs < state.remindAfter) return null
+        return Banner(
+            latestVersion = state.latestVersion,
+            installedVersion = installedVersion,
+            // A release with no page of its own still needs somewhere to send
+            // someone, or the banner's only action is a dead end.
+            url = state.latestUrl.ifBlank { DOWNLOAD_URL },
+        )
+    }
+
+    /** Undoes [ignore], for the Settings card. A mis-tap has to be recoverable. */
+    fun unignore(state: UpdateState): UpdateState = state.copy(ignoredVersion = "")
+
     /**
      * Compares two version names the way a human reads them.
      *

@@ -113,6 +113,56 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
                 spec = spec.copy(sort = stored)
             }
         }
+
+        // Ask about a new version when the app is opened, not only when the sweep
+        // runs. This is what closes the hole: SweepWorker returns early when
+        // background checks are off, so it takes the update check down with it and
+        // a user who turned background work off would never hear about a release
+        // again. Doze does the same thing on most phones for less obvious reasons.
+        //
+        // On appScope rather than viewModelScope, so leaving the dashboard before
+        // the request lands does not cancel it and waste the six-hour window.
+        //
+        // No second throttle. AppUpdate.isDue already caps this at one request
+        // every six hours whatever calls it, and a launch counter on top would be
+        // two mechanisms disagreeing about the same number.
+        graph.appScope.launch { graph.engine.checkForAppUpdate() }
+    }
+
+    // ---- nightbell's own updates -------------------------------------------
+
+    /**
+     * The update banner, or null when there is nothing to say.
+     *
+     * Combined from the two flows rather than read once, because both halves move
+     * while this screen is open: the check writes `update` from a background scope,
+     * and the switch that gates it lives in Settings one navigation away.
+     */
+    val updateBanner: StateFlow<AppUpdate.Banner?> = graph.store.snapshot
+        .map { snapshot ->
+            AppUpdate.bannerFor(
+                state = snapshot.update,
+                installedVersion = BuildConfig.VERSION_NAME,
+                enabled = snapshot.settings.updateChecksEnabled,
+                nowMs = System.currentTimeMillis(),
+            )
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /**
+     * Dismisses the banner for this version and no later one.
+     *
+     * Mapped onto `AppUpdate.ignore`, which already exists for the notification's
+     * own Ignore action and is already tested. One gesture, permanent for this
+     * version, and the next release still speaks. That is what a "do not show this
+     * version again" checkbox would have been reaching for, without a form control
+     * on a banner or a second copy of the state.
+     */
+    fun dismissUpdate() {
+        viewModelScope.launch {
+            val version = graph.store.currentSnapshot().update.latestVersion
+            graph.store.updateAppUpdate { AppUpdate.ignore(it, version) }
+        }
     }
 
     /** True while anything is hidden — drives the "clear" affordance. */
@@ -1100,6 +1150,24 @@ class SettingsViewModel(private val graph: Nightbell.Graph) : ViewModel() {
 
     var checkingForUpdate by mutableStateOf(false)
         private set
+
+    /** The version this build actually is, for the card's Installed line. */
+    val installedVersion: String get() = BuildConfig.VERSION_NAME
+
+    /**
+     * Lifts a refusal, so a version dismissed by mistake can come back.
+     *
+     * New work, and not optional. Dismissal used to take two deliberate taps on a
+     * notification action; it is now one tap on a banner, and a control that can
+     * silence a release forever from a single mis-tap needs an undo sitting next to
+     * where it says what it did.
+     */
+    fun unignoreUpdate() {
+        viewModelScope.launch {
+            graph.store.updateAppUpdate { AppUpdate.unignore(it) }
+            toast = "That version will be announced again"
+        }
+    }
 
     /**
      * The "check now" button.

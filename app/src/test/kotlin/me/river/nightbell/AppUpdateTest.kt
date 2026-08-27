@@ -5,6 +5,7 @@ import me.river.nightbell.domain.UpdateSource
 import me.river.nightbell.domain.UpdateState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -186,6 +187,116 @@ class AppUpdateTest {
         assertEquals(UpdateSource.FDROID, decision.state.latestSource)
         assertEquals("F-Droid", decision.state.latestSource.label)
         assertNull(UpdateState().latestVersion.ifBlank { null })
+    }
+
+    // ---- the dashboard banner ------------------------------------------------
+    //
+    // A separate surface with separate rules, and the two rules it does *not*
+    // share with the notification are the reason this exists at all.
+
+    private fun banner(
+        state: UpdateState,
+        installed: String = "3.2.1",
+        enabled: Boolean = true,
+        nowMs: Long = NOW,
+    ) = AppUpdate.bannerFor(state, installed, enabled, nowMs)
+
+    private fun seen(
+        version: String,
+        ignored: String = "",
+        notified: String = "",
+        remindAfter: Long = 0L,
+        url: String = "https://github.com/riveerxd/nightbell/releases/tag/v3.2.2",
+    ) = UpdateState(
+        latestVersion = version,
+        latestUrl = url,
+        ignoredVersion = ignored,
+        notifiedVersion = notified,
+        remindAfter = remindAfter,
+        lastCheckedAt = NOW,
+    )
+
+    @Test
+    fun `a newer version raises a banner`() {
+        val shown = banner(seen("3.2.2"))
+        assertEquals("3.2.2", shown?.latestVersion)
+        assertEquals("3.2.1", shown?.installedVersion)
+        assertEquals("https://github.com/riveerxd/nightbell/releases/tag/v3.2.2", shown?.url)
+    }
+
+    @Test
+    fun `the banner still shows after the notification has been posted`() {
+        // The whole point of the change, named so it cannot be quietly undone.
+        // `notifiedVersion` means "the shade was written to once", and reusing it
+        // here is exactly what made a new release visible for one glance and then
+        // never again.
+        assertNotNull(banner(seen("3.2.2", notified = "3.2.2")))
+    }
+
+    @Test
+    fun `the version you are running raises nothing`() {
+        assertNull(banner(seen("3.2.1")))
+    }
+
+    @Test
+    fun `an older version raises nothing`() {
+        assertNull(banner(seen("3.1.9")))
+    }
+
+    @Test
+    fun `an unreadable version raises nothing`() {
+        // A check that came back with something that is not a version is not
+        // evidence of a release. Same rule as the notification's.
+        assertNull(banner(seen("nightly")))
+        assertNull(banner(seen("")))
+    }
+
+    @Test
+    fun `an ignored version raises nothing, and the one after it does`() {
+        assertNull(banner(seen("3.2.2", ignored = "3.2.2")))
+        assertNotNull(banner(seen("3.2.3", ignored = "3.2.2")))
+    }
+
+    @Test
+    fun `remind later holds the banner too`() {
+        val deferred = seen("3.2.2", remindAfter = NOW + DAY)
+        assertNull(banner(deferred, nowMs = NOW))
+        assertNull(banner(deferred, nowMs = NOW + DAY - 1))
+        assertNotNull(banner(deferred, nowMs = NOW + DAY))
+    }
+
+    @Test
+    fun `turning update checks off hides the banner`() {
+        assertNull(banner(seen("3.2.2"), enabled = false))
+    }
+
+    @Test
+    fun `a release with no page of its own still has somewhere to send you`() {
+        // Otherwise the banner's only action does nothing, which is worse than
+        // the banner not being there.
+        assertEquals(AppUpdate.DOWNLOAD_URL, banner(seen("3.2.2", url = ""))?.url)
+    }
+
+    @Test
+    fun `a debug build compares as its release version`() {
+        // The installed name on a debug build carries a suffix, and 3.2.1-debug is
+        // the same release as 3.2.1. Without this every debug launch would claim an
+        // update was available.
+        assertNull(banner(seen("3.2.1"), installed = "3.2.1-debug"))
+        assertNotNull(banner(seen("3.2.2"), installed = "3.2.1-debug"))
+    }
+
+    @Test
+    fun `show it again clears the refusal and nothing else`() {
+        val ignored = AppUpdate.ignore(seen("3.2.2"), "3.2.2")
+        assertNull(banner(ignored))
+
+        val restored = AppUpdate.unignore(ignored)
+        assertNotNull(banner(restored))
+        // Only the refusal is lifted. The version it found and when it last looked
+        // are observations, not decisions, and must survive.
+        assertEquals("3.2.2", restored.latestVersion)
+        assertEquals(NOW, restored.lastCheckedAt)
     }
 
     private companion object {

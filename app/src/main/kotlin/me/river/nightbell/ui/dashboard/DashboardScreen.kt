@@ -74,6 +74,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.unit.sp
+import android.content.Intent
+import android.net.Uri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.river.nightbell.domain.CertificateWatch
 import me.river.nightbell.domain.Health
@@ -156,6 +158,8 @@ fun DashboardScreen(
     val offline by viewModel.offline.collectAsStateWithLifecycle()
     val pause by viewModel.pause.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val updateBanner by viewModel.updateBanner.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
     val gridState = rememberLazyGridState()
     val scope = rememberCoroutineScope()
     val entrance = rememberEntranceLog()
@@ -253,6 +257,25 @@ fun DashboardScreen(
                                 promptOpen = viewModel.pausePrompt != null,
                                 onPauseTapped = { viewModel.onPauseTapped() },
                             )
+                        }
+                    }
+
+                    // Under the fleet verdict, above everything else. The order is
+                    // the argument: what is broken right now comes first, and what
+                    // version this app happens to be comes second.
+                    updateBanner?.let { banner ->
+                        item(key = "update", span = { GridItemSpan(maxLineSpan) }) {
+                            StaggeredEntrance(index = 1, key = "update", log = entrance) {
+                                UpdateBanner(
+                                    banner = banner,
+                                    onOpen = { url ->
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        runCatching { context.startActivity(intent) }
+                                    },
+                                    onDismiss = viewModel::dismissUpdate,
+                                )
+                            }
                         }
                     }
 
