@@ -183,6 +183,61 @@ class CertificateTrustUiTest {
     }
 
     @Test
+    fun anExistingMonitorCanBeSwitchedToPinnedByEditingIt() {
+        // The reporter's monitor already exists, made in 3.1.1, and the failure
+        // message tells them to change a setting. If that setting is only reachable
+        // while creating a monitor then the advice is useless and the issue is not
+        // actually fixed. This walks the route the message sends them down.
+        val stored = """{"id":"nas","name":"NAS","kind":"http_status","url":"https://192.168.1.20"}"""
+        val legacy = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+            .decodeFromString(Monitor.serializer(), stored)
+        // Nothing in the stored form mentions certificates, so it comes back on the
+        // mode that matches how 3.1.1 behaved.
+        org.junit.Assert.assertEquals(TlsTrust.SYSTEM, legacy.tlsTrust)
+
+        seed(legacy, MonitorRuntime(health = Health.UNKNOWN))
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("NAS").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithContentDescription("Edit monitor").performClick()
+        composeRule.waitForIdle()
+
+        // Editing opens on the kind step, so one tap reaches Target.
+        composeRule.onNodeWithText("Continue").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("setup-scroll")
+            .performScrollToNode(hasText("Any certificate"))
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("CERTIFICATE").assertExists()
+        composeRule.captureScreenshot("68-edit-existing-certificate")
+
+        composeRule.onNodeWithText("Pinned key").performClick()
+        composeRule.waitForIdle()
+
+        // Save changes replaces Continue only on the last step, so the rest of the
+        // wizard has to be walked. Both live in the sticky footer, so neither is
+        // ever scrolled to.
+        // Two more, not three: the first Continue above already moved off the kind
+        // step, and LAST_STEP is 3.
+        repeat(2) {
+            composeRule.onNodeWithText("Continue").performClick()
+            composeRule.waitForIdle()
+        }
+        composeRule.onNodeWithText("Save changes").performClick()
+        composeRule.waitForIdle()
+
+        NightbellTestSupport.awaitTrue(description = "the monitor was saved as pinned") {
+            runBlocking {
+                Nightbell.install(NightbellTestSupport.appContext)
+                    .store.currentSnapshot().monitors.single().tlsTrust
+            } == TlsTrust.PINNED
+        }
+    }
+
+    @Test
     fun aPinnedMonitorShowsItsKeyAndOffersAWayOut() {
         seed(
             Monitor(

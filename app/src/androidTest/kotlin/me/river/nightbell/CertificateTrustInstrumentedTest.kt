@@ -5,6 +5,7 @@ import me.river.nightbell.NightbellTestSupport.appContext
 import me.river.nightbell.NightbellTestSupport.resetApp
 import me.river.nightbell.data.Nightbell
 import me.river.nightbell.domain.CertificateWatch
+import me.river.nightbell.domain.ElementTarget
 import me.river.nightbell.domain.FailureKind
 import me.river.nightbell.domain.GlobalSettings
 import me.river.nightbell.domain.Health
@@ -214,6 +215,87 @@ class CertificateTrustInstrumentedTest {
         val second = pinOf("tls")
         assertTrue(second.startsWith("sha256/"))
         assertNotEquals(first, second)
+    }
+
+    // ---- page-element monitors ----------------------------------------------
+    //
+    // The status check is what issue #6 reported, and these exist because the fix
+    // claimed to cover page monitors as well. A claim about a WebView is worth
+    // exactly nothing until a WebView has been asked: Chromium hands over an
+    // SslCertificate rather than a chain, decides for itself when to consult
+    // onReceivedSslError, and cancels by default.
+
+    private val page = """
+        <!doctype html>
+        <html><head><title>Self-signed fixture</title></head>
+        <body><main><span id="price">42.00</span></main></body></html>
+    """.trimIndent()
+
+    private fun htmlOver(identity: TinyTls.Identity) = TinyHttpServer(
+        identity.serverSocketFactory(),
+    ) {
+        TinyHttpServer.Response(body = page, contentType = "text/html; charset=utf-8")
+    }
+
+    private fun elementMonitor(url: String, trust: TlsTrust) = Monitor(
+        id = "element-tls",
+        name = "Self-signed page",
+        kind = MonitorKind.WEBSITE_ELEMENT,
+        url = url,
+        element = ElementTarget(elementId = "price"),
+        timeoutSeconds = 30,
+        tlsTrust = trust,
+    )
+
+    @Test
+    fun aPageMonitorOnASelfSignedHostFailsUnderSystemTrustAndSaysWhy() {
+        htmlOver(TinyTls.selfSigned()).use { server ->
+            val graph = graph()
+            runBlocking {
+                graph.store.upsert(elementMonitor(server.url("/shop"), TlsTrust.SYSTEM))
+                val result = graph.engine.run("element-tls")!!
+
+                assertFalse(result.message, result.ok)
+                // Before this, the WebView cancelled and the user got a bare load
+                // error with no mention of a certificate anywhere on the screen.
+                assertTrue(result.detail, result.detail.contains("certificate was refused"))
+            }
+        }
+    }
+
+    @Test
+    fun aPageMonitorLoadsWhenItIsToldToAcceptTheCertificate() {
+        htmlOver(TinyTls.selfSigned()).use { server ->
+            val graph = graph()
+            runBlocking {
+                graph.store.upsert(elementMonitor(server.url("/shop"), TlsTrust.ANY))
+                val result = graph.engine.run("element-tls")!!
+
+                assertTrue(result.message, result.ok)
+                assertEquals("42.00", result.elementText)
+            }
+        }
+    }
+
+    @Test
+    fun aPinnedPageMonitorLoadsAndRecordsTheKey() {
+        htmlOver(TinyTls.selfSigned()).use { server ->
+            val graph = graph()
+            runBlocking {
+                graph.store.upsert(elementMonitor(server.url("/shop"), TlsTrust.PINNED))
+                val result = graph.engine.run("element-tls")!!
+
+                assertTrue(result.message, result.ok)
+                assertEquals("42.00", result.elementText)
+                // Read from the SslError Chromium handed over, which is only
+                // possible on API 29 and up. Skipped rather than asserted below
+                // that, because the code says so too.
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    val pin = pinOf("element-tls")
+                    assertTrue("expected a recorded pin, got <$pin>", pin.startsWith("sha256/"))
+                }
+            }
+        }
     }
 
     @Test
