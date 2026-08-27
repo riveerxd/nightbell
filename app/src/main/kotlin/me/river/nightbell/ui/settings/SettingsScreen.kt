@@ -55,11 +55,15 @@ import me.river.nightbell.domain.CheckerLimit
 import me.river.nightbell.domain.PauseChoice
 import me.river.nightbell.domain.PauseScope
 import me.river.nightbell.domain.ProxyRoute
+import me.river.nightbell.domain.ConnectivityReference
+import me.river.nightbell.domain.GitHubWatch
 import me.river.nightbell.domain.ThemeChoice
+import me.river.nightbell.domain.UpdateSource
 import me.river.nightbell.domain.Validation
 import me.river.nightbell.ui.Transfer
 import me.river.nightbell.ui.components.AlertPolicyEditor
 import me.river.nightbell.ui.components.ButtonTone
+import me.river.nightbell.ui.components.ChipSelector
 import me.river.nightbell.ui.components.GlassCard
 import me.river.nightbell.ui.components.GlassIconButton
 import me.river.nightbell.ui.components.IconBadge
@@ -94,6 +98,8 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
     val checkerHealth by viewModel.checkerHealth.collectAsStateWithLifecycle()
     val checkerLimit by viewModel.checkerLimit.collectAsStateWithLifecycle()
     val batteryOptimised by viewModel.batteryOptimised.collectAsStateWithLifecycle()
+    val githubTokenRedacted by viewModel.githubTokenRedacted.collectAsStateWithLifecycle()
+    val appUpdate by viewModel.appUpdate.collectAsStateWithLifecycle()
     val context = LocalContext.current
     // Read once per composition of this screen rather than observed: widgets are
     // placed and removed on the home screen, so this is only ever right at the
@@ -473,12 +479,37 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                                             viewModel.update { it.copy(latencyReferenceUrl = v.trim()) }
                                         },
                                         label = "Reference endpoint",
-                                        placeholder = "https://www.gstatic.com/generate_204",
+                                        placeholder = ConnectivityReference.DEFAULT_URL,
                                         helper = "Wants to be always up and cheap to answer. If your " +
-                                            "network blocks it, latency is judged raw — nothing breaks.",
+                                            "network blocks it, latency is judged raw and nothing breaks.",
                                         leadingIcon = NightbellIcons.Globe,
                                         accent = NightbellColors.Aqua,
                                         keyboardType = KeyboardType.Uri,
+                                        modifier = Modifier.testTag("reference-endpoint"),
+                                    )
+                                    Spacer(Modifier.height(8.dp))
+                                    ChipSelector(
+                                        options = ConnectivityReference.presets.map { it.url },
+                                        selected = settings.latencyReferenceUrl,
+                                        onSelect = { url ->
+                                            viewModel.update { it.copy(latencyReferenceUrl = url) }
+                                        },
+                                        label = { url ->
+                                            ConnectivityReference.presets
+                                                .first { it.url == url }.label
+                                        },
+                                        accent = NightbellColors.Aqua,
+                                    )
+                                    Spacer(Modifier.height(8.dp))
+                                    Text(
+                                        text = "The default is GrapheneOS's connectivity check " +
+                                            "rather than Google's. It answers the same empty 204, " +
+                                            "and an app that keeps everything on your device had " +
+                                            "no business pinging an advertising company every " +
+                                            "forty-five seconds to time your wifi. Your own " +
+                                            "always-up endpoint is better still.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = NightbellColors.TextTertiary,
                                     )
                                 }
                             }
@@ -671,8 +702,98 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
             }
         }
 
+        item(key = "github") {
+            StaggeredEntrance(index = 8, key = "github", log = entrance) {
+                GitHubTokenCard(
+                    redactedToken = githubTokenRedacted,
+                    onSave = viewModel::setGitHubToken,
+                    onOpenTokenPage = { openLink(context, GitHubWatch.TOKEN_PAGE_URL) },
+                )
+            }
+        }
+
+        item(key = "updates") {
+            StaggeredEntrance(index = 9, key = "updates", log = entrance) {
+                GlassCard {
+                    SectionHeader("Nightbell updates", icon = NightbellIcons.Import, accent = NightbellColors.Sky)
+                    Text(
+                        text = "Nightbell can look for a newer version of itself and say so once. " +
+                            "It never downloads or installs anything: the notification opens a " +
+                            "page, and Android asks before an APK is installed.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = NightbellColors.TextTertiary,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    ToggleRow(
+                        title = "Tell me about new versions",
+                        subtitle = if (settings.updateChecksEnabled) {
+                            "Checked every six hours, in the background sweep"
+                        } else {
+                            "Off, your installer handles it"
+                        },
+                        checked = settings.updateChecksEnabled,
+                        onCheckedChange = { v -> viewModel.update { it.copy(updateChecksEnabled = v) } },
+                        icon = NightbellIcons.Bell,
+                        accent = NightbellColors.Sky,
+                    )
+                    AnimatedVisibility(
+                        visible = settings.updateChecksEnabled,
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically(),
+                    ) {
+                        Column {
+                            Spacer(Modifier.height(8.dp))
+                            SegmentedSelector(
+                                options = UpdateSource.entries.toList(),
+                                selected = settings.updateSource,
+                                onSelect = { choice -> viewModel.update { it.copy(updateSource = choice) } },
+                                label = { it.label },
+                                accent = NightbellColors.Sky,
+                                modifier = Modifier.testTag("update-source"),
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                text = settings.updateSource.blurb,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = NightbellColors.TextTertiary,
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            Text(
+                                text = when {
+                                    appUpdate.lastCheckedAt <= 0L -> "Not checked yet."
+                                    appUpdate.latestVersion.isBlank() ->
+                                        "Last check couldn't reach ${settings.updateSource.label}."
+                                    else -> "Newest seen: ${appUpdate.latestVersion}."
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = NightbellColors.TextSecondary,
+                            )
+                            if (appUpdate.ignoredVersion.isNotBlank()) {
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = "Ignoring ${appUpdate.ignoredVersion}. A later version " +
+                                        "will still be announced.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = NightbellColors.TextTertiary,
+                                )
+                            }
+                            Spacer(Modifier.height(10.dp))
+                            NightbellButton(
+                                text = if (viewModel.checkingForUpdate) "Checking…" else "Check now",
+                                onClick = viewModel::checkForUpdateNow,
+                                icon = NightbellIcons.Refresh,
+                                tone = ButtonTone.Secondary,
+                                loading = viewModel.checkingForUpdate,
+                                modifier = Modifier.fillMaxWidth().testTag("check-for-update"),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         item(key = "widgets") {
-            StaggeredEntrance(index = 8, key = "widgets", log = entrance) {
+            StaggeredEntrance(index = 10, key = "widgets", log = entrance) {
                 WidgetsCard(
                     ids = placedWidgetIds,
                     onConfigure = { id ->
@@ -689,7 +810,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         }
 
         item(key = "certificates") {
-            StaggeredEntrance(index = 9, key = "certificates", log = entrance) {
+            StaggeredEntrance(index = 11, key = "certificates", log = entrance) {
                 GlassCard {
                     SectionHeader(
                         "TLS certificates",
@@ -750,7 +871,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         }
 
         item(key = "favicons") {
-            StaggeredEntrance(index = 10, key = "favicons", log = entrance) {
+            StaggeredEntrance(index = 12, key = "favicons", log = entrance) {
                 GlassCard {
                     SectionHeader("Site icons", icon = NightbellIcons.Globe, accent = NightbellColors.Sky)
                     Text(
@@ -782,7 +903,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         }
 
         item(key = "backup") {
-            StaggeredEntrance(index = 11, key = "backup", log = entrance) {
+            StaggeredEntrance(index = 13, key = "backup", log = entrance) {
                 GlassCard {
                     SectionHeader("Backup and transfer", icon = NightbellIcons.Export, accent = NightbellColors.Violet)
                     Text(
@@ -792,6 +913,36 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                         style = MaterialTheme.typography.bodySmall,
                         color = NightbellColors.TextTertiary,
                     )
+                    Spacer(Modifier.height(10.dp))
+                    ToggleRow(
+                        title = "Include the GitHub token",
+                        subtitle = if (settings.includeSecretsInExport) {
+                            "The file will carry a working credential"
+                        } else {
+                            "Left out, you'll paste it again on the new phone"
+                        },
+                        checked = settings.includeSecretsInExport,
+                        onCheckedChange = { v ->
+                            viewModel.update { it.copy(includeSecretsInExport = v) }
+                        },
+                        icon = NightbellIcons.Shield,
+                        accent = NightbellColors.Rose,
+                    )
+                    AnimatedVisibility(
+                        visible = settings.includeSecretsInExport,
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically(),
+                    ) {
+                        Column {
+                            Spacer(Modifier.height(4.dp))
+                            WarningPanel(
+                                "Anyone who opens the file can use the token as you until you " +
+                                    "revoke it, and that stays true of every copy the file makes " +
+                                    "on the way to the other phone. Off is the right answer " +
+                                    "unless you are moving the file by hand and deleting it after.",
+                            )
+                        }
+                    }
                     Spacer(Modifier.height(10.dp))
                     NightbellButton(
                         text = if (viewModel.transfer == Transfer.EXPORT) {
@@ -891,13 +1042,13 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         }
 
         item(key = "help") {
-            StaggeredEntrance(index = 12, key = "help", log = entrance) {
+            StaggeredEntrance(index = 14, key = "help", log = entrance) {
                 HelpCard()
             }
         }
 
         item(key = "appearance") {
-            StaggeredEntrance(index = 13, key = "appearance", log = entrance) {
+            StaggeredEntrance(index = 15, key = "appearance", log = entrance) {
                 GlassCard {
                     SectionHeader("Appearance", icon = NightbellIcons.Eye, accent = NightbellColors.Aqua)
                     Text(
@@ -921,7 +1072,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         }
 
         item(key = "motion") {
-            StaggeredEntrance(index = 14, key = "motion", log = entrance) {
+            StaggeredEntrance(index = 16, key = "motion", log = entrance) {
                 GlassCard {
                     SectionHeader("Motion", icon = NightbellIcons.Sparkle, accent = NightbellColors.Mint)
                     Text(
@@ -967,7 +1118,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
         }
 
         item(key = "about") {
-            StaggeredEntrance(index = 15, key = "about", log = entrance) {
+            StaggeredEntrance(index = 17, key = "about", log = entrance) {
                 GlassCard {
                     SectionHeader("About", icon = NightbellIcons.Info, accent = NightbellColors.Sky)
                     AboutRow("Version", "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
@@ -1182,4 +1333,207 @@ private fun AboutRow(label: String, value: String) {
             color = NightbellColors.TextSecondary,
         )
     }
+}
+
+/**
+ * The GitHub token, and the case for not bothering.
+ *
+ * Genuinely optional, and the copy says so first: two or three repositories on a
+ * quarter-hour cadence fit inside the anonymous budget with room to spare. The
+ * token is for someone watching eight repos, or sharing an address with a office
+ * full of other GitHub traffic.
+ *
+ * The token itself never reaches this composable. It takes a redacted string to
+ * display and a callback to save, so there is no path from the view layer to the
+ * credential and no later edit to this screen can put it into a screenshot.
+ */
+@Composable
+private fun GitHubTokenCard(
+    redactedToken: String,
+    onSave: (String) -> Unit,
+    onOpenTokenPage: () -> Unit,
+) {
+    // Null when not editing. A saved token is shown redacted and replaced
+    // wholesale rather than edited in place, because there is nothing in a
+    // redacted string to edit.
+    var typed by rememberSaveable { mutableStateOf<String?>(null) }
+    val saved = redactedToken.isNotBlank()
+
+    GlassCard {
+        SectionHeader("GitHub", icon = NightbellIcons.Repo, accent = NightbellColors.Sky)
+        Text(
+            text = "Repository monitors poll GitHub straight from this phone. Without a token " +
+                "that is 60 requests an hour for the whole device, and one check spends up to " +
+                "three of them, which is plenty for a few repositories on a quarter-hour " +
+                "cadence.",
+            style = MaterialTheme.typography.bodySmall,
+            color = NightbellColors.TextTertiary,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = "A token raises that to 5,000 an hour and lets an unchanged check use " +
+                "GitHub's cache for free. Nightbell stores it only on this device.",
+            style = MaterialTheme.typography.bodySmall,
+            color = NightbellColors.TextTertiary,
+        )
+        Spacer(Modifier.height(12.dp))
+
+        if (saved && typed == null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconBadge(NightbellIcons.Shield, NightbellColors.Mint, size = 34.dp)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = "Token saved",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = NightbellColors.TextPrimary,
+                    )
+                    Text(
+                        text = redactedToken,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = NightbellColors.TextTertiary,
+                        modifier = Modifier.testTag("github-token-redacted"),
+                    )
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                NightbellButton(
+                    text = "Replace",
+                    onClick = { typed = "" },
+                    icon = NightbellIcons.Pencil,
+                    tone = ButtonTone.Secondary,
+                    modifier = Modifier.weight(1f),
+                )
+                NightbellButton(
+                    text = "Remove",
+                    onClick = { onSave("") },
+                    icon = NightbellIcons.Trash,
+                    tone = ButtonTone.Danger,
+                    modifier = Modifier.weight(1f).testTag("remove-github-token"),
+                )
+            }
+        } else {
+            GlassField(
+                value = typed.orEmpty(),
+                onValueChange = { typed = it },
+                label = "Personal access token",
+                placeholder = "github_pat_… or ghp_…",
+                helper = "Optional. Pasted here it stays here: never in a backup unless you " +
+                    "ask, never in a notification, never in a log.",
+                leadingIcon = NightbellIcons.Shield,
+                accent = NightbellColors.Sky,
+                modifier = Modifier.testTag("github-token-field"),
+            )
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                NightbellButton(
+                    text = "Save token",
+                    onClick = {
+                        onSave(typed.orEmpty())
+                        typed = null
+                    },
+                    enabled = !typed.isNullOrBlank(),
+                    icon = NightbellIcons.Check,
+                    accent = NightbellColors.Sky,
+                    modifier = Modifier.weight(1f).testTag("save-github-token"),
+                )
+                if (saved) {
+                    NightbellButton(
+                        text = "Cancel",
+                        onClick = { typed = null },
+                        tone = ButtonTone.Secondary,
+                    )
+                }
+            }
+        }
+
+        GlassDivider(Modifier.padding(vertical = 12.dp))
+        Text(
+            text = "Making one",
+            style = MaterialTheme.typography.labelMedium,
+            color = NightbellColors.TextSecondary,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = "Choose a fine-grained token. Under Repository access pick " +
+                "\"Public repositories\", or \"Only select repositories\" and choose the " +
+                "ones you watch.",
+            style = MaterialTheme.typography.bodySmall,
+            color = NightbellColors.TextTertiary,
+        )
+        Spacer(Modifier.height(10.dp))
+        Text(
+            text = "PERMISSIONS TO TICK",
+            style = MaterialTheme.typography.labelSmall,
+            color = NightbellColors.TextTertiary,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = "For a public repository, none. \"Metadata: Read-only\" is ticked for you " +
+                "and that is the whole list: a public repo answers Nightbell without any " +
+                "token at all, so yours is doing nothing but raising the limit.",
+            style = MaterialTheme.typography.bodySmall,
+            color = NightbellColors.TextSecondary,
+            modifier = Modifier.testTag("token-scopes-public"),
+        )
+        Spacer(Modifier.height(10.dp))
+        Text(
+            text = "For a private repository, set these to Read-only:",
+            style = MaterialTheme.typography.bodySmall,
+            color = NightbellColors.TextTertiary,
+        )
+        Spacer(Modifier.height(8.dp))
+        TokenScopeRow("Contents", "the latest release")
+        TokenScopeRow("Issues", "new issues")
+        TokenScopeRow("Pull requests", "only if you watch pull requests")
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = "Nothing else on that list, and never write access to anything. If you " +
+                "are unsure, tick less: a token that cannot read something makes one check " +
+                "fail loudly rather than doing any harm.",
+            style = MaterialTheme.typography.bodySmall,
+            color = NightbellColors.TextTertiary,
+        )
+        Spacer(Modifier.height(12.dp))
+        NightbellButton(
+            text = "Create a GitHub token",
+            onClick = onOpenTokenPage,
+            icon = NightbellIcons.Export,
+            tone = ButtonTone.Secondary,
+            modifier = Modifier.fillMaxWidth().testTag("create-github-token"),
+        )
+    }
+}
+
+/**
+ * One checkbox on GitHub's permissions list, and why Nightbell wants it.
+ *
+ * Named exactly as GitHub labels it, because the value of this block is being
+ * able to read down it with the token page open beside you. "Least privilege"
+ * is advice; "Contents, Issues, Pull requests" is an instruction.
+ */
+@Composable
+private fun TokenScopeRow(permission: String, purpose: String) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.Top) {
+        Text(
+            text = permission,
+            style = MaterialTheme.typography.bodySmall,
+            color = NightbellColors.Sky,
+            modifier = Modifier.width(112.dp),
+        )
+        Text(
+            text = purpose,
+            style = MaterialTheme.typography.bodySmall,
+            color = NightbellColors.TextTertiary,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+/** Hands a URL to whatever the user browses with. */
+private fun openLink(context: android.content.Context, url: String) {
+    val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching { context.startActivity(intent) }
 }

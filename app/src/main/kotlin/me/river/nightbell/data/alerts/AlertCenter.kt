@@ -27,8 +27,10 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import me.river.nightbell.domain.AlertPolicy
+import me.river.nightbell.domain.AppUpdate
 import me.river.nightbell.domain.CertificateWatch
 import me.river.nightbell.domain.CheckResult
+import me.river.nightbell.domain.GitHubEvent
 import me.river.nightbell.domain.LiveTimeline
 import me.river.nightbell.domain.Monitor
 import me.river.nightbell.domain.SoundChoice
@@ -601,6 +603,179 @@ class AlertCenter(private val context: Context) {
         return id
     }
 
+    // ---- GitHub repository news ---------------------------------------------
+
+    /**
+     * One thing that happened on a watched repository.
+     *
+     * Deliberately not an alert. A new star is good news and a new issue is work,
+     * and neither is an outage: this lands on a DEFAULT-importance channel with
+     * CATEGORY_SOCIAL, never bypasses Do Not Disturb, and can be swiped away like
+     * any other piece of news.
+     *
+     * Tagged per monitor and given a per-event id inside that tag, so three new
+     * issues arrive as three rows instead of overwriting one another, while a
+     * second star notice replaces the first rather than stacking. "Mark seen"
+     * clears the lot without having to know what they were.
+     */
+    fun notifyGitHub(
+        monitor: Monitor,
+        event: GitHubEvent,
+        policy: AlertPolicy,
+        silent: Boolean,
+    ): Boolean {
+        val repo = monitor.github.repository
+        val channelId = channelFor(policy, Severity.NEWS, silent)
+        val notification = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(R.drawable.ic_stat_brand)
+            .setContentTitle(event.title(repo.slug))
+            .setContentText(event.body)
+            .setStyle(
+                NotificationCompat.BigTextStyle().bigText(
+                    buildString {
+                        append(event.body)
+                        append("\n\n").append(repo.url)
+                    },
+                ),
+            )
+            .setColor(NEWS_COLOR)
+            .setColorized(true)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setCategory(NotificationCompat.CATEGORY_SOCIAL)
+            .setContentIntent(openLinkIntent(event.url.ifBlank { repo.url }, monitor.id + event.key))
+            .setAutoCancel(true)
+            .setSilent(silent)
+            .setShowWhen(true)
+            .setWhen(System.currentTimeMillis())
+            .setGroup(githubGroupOf(monitor.id))
+            .addAction(
+                R.drawable.ic_stat_brand,
+                "Open repo",
+                openLinkIntent(repo.url, monitor.id + ".repo"),
+            )
+            .addAction(
+                R.drawable.ic_stat_ok,
+                "Mark seen",
+                AlertActionReceiver.pendingIntent(
+                    context,
+                    AlertActionReceiver.ACTION_MARK_SEEN,
+                    monitor.id,
+                ),
+            )
+            .addAction(
+                R.drawable.ic_stat_mute,
+                "Mute 24h",
+                AlertActionReceiver.pendingIntent(
+                    context,
+                    AlertActionReceiver.ACTION_MUTE_24H,
+                    monitor.id,
+                ),
+            )
+            .build()
+        return post(githubTag(monitor.id), event.key.githubEventId(), notification)
+    }
+
+    /**
+     * Clears everything a repository monitor has on screen.
+     *
+     * Enumerates rather than remembers: the ids are derived from what happened,
+     * and "Mark seen" arrives from a notification action in a process that may
+     * never have posted any of them.
+     */
+    fun cancelGitHub(monitorId: String) {
+        val tag = githubTag(monitorId)
+        val active = runCatching {
+            manager.activeNotifications.filter { it.tag == tag }.map { it.id }
+        }.getOrDefault(emptyList())
+        active.forEach { compat.cancel(tag, it) }
+    }
+
+    fun githubTag(monitorId: String): String = GITHUB_TAG_PREFIX + monitorId
+
+    private fun githubGroupOf(monitorId: String) = "$NOTIFICATION_GROUP.github.$monitorId"
+
+    // ---- Nightbell's own updates --------------------------------------------
+
+    /**
+     * "There is a newer Nightbell."
+     *
+     * Quiet by construction and easy to refuse: the three actions are the three
+     * honest answers, and one of them is permanent. Nothing is downloaded by
+     * tapping any of them, and nothing could be. The notification opens a page,
+     * and installing an APK stays a decision Android makes the user confirm.
+     */
+    fun notifyUpdate(release: AppUpdate.Release, installedVersion: String, policy: AlertPolicy) {
+        val channelId = channelFor(policy, Severity.NEWS, silent = true)
+        val notification = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(R.drawable.ic_stat_brand)
+            .setContentTitle("Nightbell update available")
+            .setContentText("Version ${release.version} is ready")
+            .setStyle(
+                NotificationCompat.BigTextStyle().bigText(
+                    buildString {
+                        append("You are on ").append(installedVersion)
+                        append(". Version ").append(release.version)
+                        append(" is available from ").append(release.source.label).append(".")
+                        append("\n\nNightbell never installs anything by itself: this opens the ")
+                        append("download page, and Android asks before anything is installed.")
+                    },
+                ),
+            )
+            .setColor(NEWS_COLOR)
+            .setColorized(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(NotificationCompat.CATEGORY_RECOMMENDATION)
+            .setContentIntent(openLinkIntent(release.url, "update.${release.version}"))
+            .setAutoCancel(true)
+            .setSilent(true)
+            .setOngoing(false)
+            .addAction(
+                R.drawable.ic_stat_brand,
+                "Open download",
+                openLinkIntent(release.url, "update.open.${release.version}"),
+            )
+            .addAction(
+                R.drawable.ic_stat_refresh,
+                "Remind later",
+                AlertActionReceiver.pendingIntent(
+                    context,
+                    AlertActionReceiver.ACTION_UPDATE_REMIND,
+                    release.version,
+                ),
+            )
+            .addAction(
+                R.drawable.ic_stat_mute,
+                "Ignore this version",
+                AlertActionReceiver.pendingIntent(
+                    context,
+                    AlertActionReceiver.ACTION_UPDATE_IGNORE,
+                    release.version,
+                ),
+            )
+            .build()
+        post(UPDATE_NOTIFICATION_ID, notification)
+    }
+
+    fun cancelUpdate() = compat.cancel(UPDATE_NOTIFICATION_ID)
+
+    /**
+     * Hands a link to whatever the user browses with.
+     *
+     * [key] exists only to keep two of these distinct: PendingIntent equality
+     * ignores extras, and varying the request code is cheaper than reasoning
+     * about which parts of an ACTION_VIEW intent are compared.
+     */
+    private fun openLinkIntent(url: String, key: String): PendingIntent {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return PendingIntent.getActivity(
+            context,
+            key.hashCode() and 0x7FFFFFF,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
     fun cancel(monitorId: String) = compat.cancel(monitorId.notificationId())
 
     /** Down, degraded and urgent — everything a monitor can have on screen. */
@@ -608,6 +783,7 @@ class AlertCenter(private val context: Context) {
         cancel(monitorId)
         cancelDegraded(monitorId)
         cancelUrgent(monitorId)
+        cancelGitHub(monitorId)
     }
 
     /**
@@ -705,7 +881,21 @@ class AlertCenter(private val context: Context) {
 
     // ---- channels ----------------------------------------------------------
 
-    enum class Severity { DOWN, DEGRADED, RECOVERY, CERT }
+    enum class Severity {
+        DOWN,
+        DEGRADED,
+        RECOVERY,
+        CERT,
+
+        /**
+         * Something happened that is not about a service being up.
+         *
+         * Its own family so a repository's stars and Nightbell's own updates can
+         * be turned all the way down without touching a single outage alert,
+         * which is the first thing anyone watching a busy repo will want to do.
+         */
+        NEWS,
+    }
 
     private fun ensureGroups() {
         manager.createNotificationChannelGroup(
@@ -719,6 +909,9 @@ class AlertCenter(private val context: Context) {
         )
         manager.createNotificationChannelGroup(
             NotificationChannelGroup(GROUP_CERT, "Certificate alerts"),
+        )
+        manager.createNotificationChannelGroup(
+            NotificationChannelGroup(GROUP_NEWS, "Repository and update news"),
         )
         manager.createNotificationChannelGroup(
             NotificationChannelGroup(GROUP_URGENT, "Urgent"),
@@ -858,6 +1051,7 @@ class AlertCenter(private val context: Context) {
             Severity.DEGRADED -> "nightbell.degraded."
             Severity.RECOVERY -> "nightbell.recovery."
             Severity.CERT -> "nightbell.cert."
+            Severity.NEWS -> "nightbell.news."
         }
         val id = buildString {
             append(prefix)
@@ -874,6 +1068,8 @@ class AlertCenter(private val context: Context) {
             // means it lands in the shade and waits, which is the correct urgency
             // for a deadline rather than an outage.
             severity == Severity.CERT -> NotificationManager.IMPORTANCE_DEFAULT
+            // News, by definition, is never worth a full-screen interruption.
+            severity == Severity.NEWS -> NotificationManager.IMPORTANCE_DEFAULT
             sound == SoundChoice.SILENT && !vibrateOn -> NotificationManager.IMPORTANCE_DEFAULT
             else -> NotificationManager.IMPORTANCE_HIGH
         }
@@ -884,6 +1080,7 @@ class AlertCenter(private val context: Context) {
                     Severity.DEGRADED -> "Slow · "
                     Severity.RECOVERY -> "Recovery · "
                     Severity.CERT -> "Certificate · "
+                    Severity.NEWS -> "News · "
                 },
             )
             append(sound.label)
@@ -896,12 +1093,15 @@ class AlertCenter(private val context: Context) {
                 Severity.DEGRADED -> GROUP_DEGRADED
                 Severity.RECOVERY -> GROUP_RECOVERY
                 Severity.CERT -> GROUP_CERT
+                Severity.NEWS -> GROUP_NEWS
             }
             description = when (severity) {
                 Severity.DOWN -> "Raised when a monitor starts failing (${sound.label.lowercase()})."
                 Severity.DEGRADED -> "Raised when a monitor breaches its latency budget."
                 Severity.RECOVERY -> "Raised when a monitor recovers (${sound.label.lowercase()})."
                 Severity.CERT -> "Raised when a TLS certificate is approaching its expiry date."
+                Severity.NEWS -> "Stars, issues and releases on watched repositories, and " +
+                    "Nightbell's own updates."
             }
             enableVibration(vibrateOn)
             if (vibrateOn) vibrationPattern = style.pattern
@@ -910,6 +1110,7 @@ class AlertCenter(private val context: Context) {
                 Severity.DOWN -> DOWN_COLOR
                 Severity.DEGRADED, Severity.CERT -> DEGRADED_COLOR
                 Severity.RECOVERY -> UP_COLOR
+                Severity.NEWS -> NEWS_COLOR
             }
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             setShowBadge(true)
@@ -975,6 +1176,12 @@ class AlertCenter(private val context: Context) {
         return runCatching { compat.notify(id, notification); true }.getOrDefault(false)
     }
 
+    /** The tagged form, so several rows can share one logical owner. */
+    private fun post(tag: String, id: Int, notification: Notification): Boolean {
+        if (!hasNotificationPermission()) return false
+        return runCatching { compat.notify(tag, id, notification); true }.getOrDefault(false)
+    }
+
     /**
      * Whether a channel is still allowed to interrupt.
      *
@@ -1018,6 +1225,7 @@ class AlertCenter(private val context: Context) {
         private const val GROUP_CERT = "nightbell.group.cert"
         /** Date only: an expiry to the second is precision nobody can act on. */
         private val certDateFormat = SimpleDateFormat("d MMM yyyy", Locale.getDefault())
+        private const val GROUP_NEWS = "nightbell.group.news"
         private const val GROUP_URGENT = "nightbell.group.urgent"
         private const val GROUP_HEALTH = "nightbell.group.health"
         private const val NOTIFICATION_GROUP = "nightbell.alerts"
@@ -1038,6 +1246,17 @@ class AlertCenter(private val context: Context) {
          * sweep never cancels it out from under us.
          */
         const val CHECKER_HEALTH_NOTIFICATION_ID = 4243
+
+        /**
+         * Nightbell's own update notice. One id, so a second version replaces the
+         * first rather than stacking, and outside the alert ranges so the
+         * reconciliation sweep leaves it alone.
+         */
+        const val UPDATE_NOTIFICATION_ID = 4244
+
+        /** Repository news is tagged per monitor. See [notifyGitHub]. */
+        const val GITHUB_TAG_PREFIX = "nightbell.github."
+
         const val PREVIEW_NOTIFICATION_ID = 424242
 
         /** The three alert id spaces below, taken together. */
@@ -1047,6 +1266,7 @@ class AlertCenter(private val context: Context) {
         private const val DOWN_COLOR = 0xFFFF5A7A.toInt()
         private const val DEGRADED_COLOR = 0xFFFFB020.toInt()
         private const val UP_COLOR = 0xFF3DE8B0.toInt()
+        private const val NEWS_COLOR = 0xFF7FA8FF.toInt()
     }
 }
 
@@ -1059,3 +1279,9 @@ internal fun String.urgentNotificationId(): Int = 200_000 + (hashCode() and 0x7F
 internal fun String.degradedNotificationId(): Int = 300_000 + (hashCode() and 0x7FFF)
 
 internal fun String.certNotificationId(): Int = 400_000 + (hashCode() and 0x7FFF)
+
+/**
+ * Repository news lives in its own space and is *tagged* by monitor, so this id
+ * only has to separate two events belonging to the same repository.
+ */
+internal fun String.githubEventId(): Int = 500_000 + (hashCode() and 0x7FFF)

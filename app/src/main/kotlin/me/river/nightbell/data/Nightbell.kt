@@ -5,13 +5,16 @@ import me.river.nightbell.data.alerts.AlertCenter
 import me.river.nightbell.data.alerts.UrgentAlarm
 import me.river.nightbell.data.check.CheckEngine
 import me.river.nightbell.data.check.ElementChecker
+import me.river.nightbell.data.check.GitHubChecker
 import me.river.nightbell.data.check.HttpChecker
 import me.river.nightbell.data.check.LatencyReference
+import me.river.nightbell.data.check.UpdateChecker
 import me.river.nightbell.data.health.SystemLimits
 import me.river.nightbell.data.icons.FaviconStore
 import me.river.nightbell.data.net.NetworkMonitor
 import me.river.nightbell.data.work.MonitorScheduler
 import me.river.nightbell.data.work.NightbellMonitorService
+import me.river.nightbell.BuildConfig
 import me.river.nightbell.domain.Summary
 import me.river.nightbell.domain.runCatchingCancellable
 import me.river.nightbell.widget.NightbellWidgetProvider
@@ -51,7 +54,24 @@ object Nightbell {
         val http = HttpChecker(settingsFor = { store.snapshot.value.settings })
         val element = ElementChecker(context, settingsFor = { store.snapshot.value.settings })
         val reference = LatencyReference()
-        val engine = CheckEngine(store, http, element, alerts, reference)
+
+        /**
+         * Reads the token per call rather than capturing it, for the same reason
+         * [http] reads the proxy per check: a token pasted into Settings has to
+         * apply to the next poll, not to the next launch.
+         */
+        val github = GitHubChecker(settingsFor = { store.snapshot.value.settings })
+        val updates = UpdateChecker()
+        val engine = CheckEngine(
+            store = store,
+            http = http,
+            element = element,
+            alerts = alerts,
+            reference = reference,
+            github = github,
+            updates = updates,
+            installedVersion = { BuildConfig.VERSION_NAME },
+        )
         val scheduler = MonitorScheduler(context)
         val network = NetworkMonitor(context)
         val favicons = FaviconStore(context, isOnline = network::isOnline)

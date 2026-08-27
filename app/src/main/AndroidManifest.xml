@@ -178,7 +178,11 @@
             <intent-filter>
                 <action android:name="me.river.nightbell.action.RECHECK" />
                 <action android:name="me.river.nightbell.action.MUTE_1H" />
+                <action android:name="me.river.nightbell.action.MUTE_24H" />
                 <action android:name="me.river.nightbell.action.ACK_URGENT" />
+                <action android:name="me.river.nightbell.action.MARK_SEEN" />
+                <action android:name="me.river.nightbell.action.UPDATE_REMIND" />
+                <action android:name="me.river.nightbell.action.UPDATE_IGNORE" />
             </intent-filter>
         </receiver>
 

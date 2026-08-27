@@ -11,6 +11,7 @@ object Validation {
     enum class Field {
         NAME, URL, METHOD, HEADERS, BODY, STATUS, ASSERTION, JSON_PATH,
         INTERVAL, TIMEOUT, ELEMENT, ELEMENT_TEXT, LATENCY_SLO, URGENT, PROXY,
+        REPO, GITHUB, TOKEN,
     }
 
     /** Past this many watched elements the settle loop is worth warning about. */
@@ -58,10 +59,33 @@ object Validation {
         return null
     }
 
+    /**
+     * What is wrong with a repository someone has typed, if anything.
+     *
+     * Separate from [urlNote] because the two answer different questions. A
+     * GitHub monitor's URL is derived rather than entered: what the user types is
+     * `owner/repo` or something that contains it, and "start with https://" would
+     * be advice about a field they were never shown.
+     */
+    fun repoNote(raw: String): Note? {
+        val text = raw.trim()
+        if (text.isEmpty()) return Note(Field.REPO, Severity.ERROR, "A repository is required")
+        if (GitHubRepo.parse(text) != null) return null
+        return Note(
+            Field.REPO,
+            Severity.ERROR,
+            "Use owner/repo, or paste any github.com link to the repository",
+        )
+    }
+
     fun report(monitor: Monitor): Report {
         val notes = mutableListOf<Note>()
 
-        urlNote(monitor.url)?.let { notes += it }
+        if (monitor.kind == MonitorKind.GITHUB_REPO) {
+            reportGitHub(monitor, notes)
+        } else {
+            urlNote(monitor.url)?.let { notes += it }
+        }
 
         if (monitor.name.isBlank()) {
             notes += Note(Field.NAME, Severity.HINT, "Optional — we'll use the host name")
@@ -93,7 +117,10 @@ object Validation {
             }
         }
 
-        // Status expectation
+        // Status expectation. A GitHub monitor has no expectation to state: the
+        // API answers 200 or it does not, and what the check is *for* is the
+        // difference between two answers rather than any one of them.
+        if (monitor.kind == MonitorKind.GITHUB_REPO) return Report(notes + cadenceNotes(monitor))
         when (monitor.status.mode) {
             StatusMode.EXACT -> if (monitor.status.code !in 100..599) {
                 notes += Note(Field.STATUS, Severity.ERROR, "Status codes run from 100 to 599")
@@ -223,5 +250,68 @@ object Validation {
         }
 
         return Report(notes)
+    }
+
+    /**
+     * Everything a GitHub monitor can get wrong before a request is sent.
+     *
+     * The rate-limit hint is the one worth being loud about. Each poll is up to
+     * three conditional GETs, and an unauthenticated client gets 60 an hour for
+     * the whole device, so two repositories on a five-minute cadence exhaust the
+     * budget and every check after that learns nothing.
+     */
+    private fun reportGitHub(monitor: Monitor, notes: MutableList<Note>) {
+        val watch = monitor.github
+        repoNote(watch.repository.slug.takeIf { watch.repository.isSet } ?: "")?.let { notes += it }
+
+        if (!watch.notifyOnStars && !watch.notifyOnIssues &&
+            !watch.watchReleases && !watch.watchPullRequests
+        ) {
+            notes += Note(
+                Field.GITHUB, Severity.WARNING,
+                "Nothing is being watched, so this monitor will never have anything to say",
+            )
+        }
+        if (watch.notifyOnStars && !watch.notifyOnEveryStar && !watch.notifyOnStarMilestones) {
+            notes += Note(
+                Field.GITHUB, Severity.HINT,
+                "Star watching is on with neither every-star nor milestones, so nothing " +
+                    "will be announced about stars",
+            )
+        }
+        if (watch.issueAuthors.isNotEmpty() && !watch.notifyOnIssues && !watch.watchPullRequests) {
+            notes += Note(
+                Field.GITHUB, Severity.HINT,
+                "The author filter only applies to issues and pull requests",
+            )
+        }
+        if (monitor.intervalMinutes < 15) {
+            notes += Note(
+                Field.INTERVAL, Severity.WARNING,
+                "GitHub allows 60 requests an hour without a token, and one check spends up " +
+                    "to three. Add a token in Settings, or check less often.",
+            )
+        }
+        if (monitor.useProxy) {
+            notes += Note(
+                Field.PROXY, Severity.HINT,
+                "api.github.com is reached through the proxy as well.",
+            )
+        }
+    }
+
+    /** The cadence rules, shared by every kind including GitHub. */
+    private fun cadenceNotes(monitor: Monitor): List<Note> {
+        val notes = mutableListOf<Note>()
+        if (monitor.intervalMinutes < 1) {
+            notes += Note(Field.INTERVAL, Severity.ERROR, "Interval must be at least 1 minute")
+        }
+        if (monitor.timeoutSeconds < 1 || monitor.timeoutSeconds > 120) {
+            notes += Note(Field.TIMEOUT, Severity.ERROR, "Timeout must be 1 to 120 seconds")
+        }
+        if (monitor.urgent && monitor.urgentRepeatMinutes < 1) {
+            notes += Note(Field.URGENT, Severity.ERROR, "Urgent repeats must be at least a minute apart")
+        }
+        return notes
     }
 }

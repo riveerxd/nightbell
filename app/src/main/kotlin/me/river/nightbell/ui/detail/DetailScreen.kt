@@ -38,7 +38,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.ui.platform.LocalContext
 import me.river.nightbell.domain.CertificateWatch
+import me.river.nightbell.domain.DigestMode
+import me.river.nightbell.domain.GitHubState
+import me.river.nightbell.domain.githubInstantMs
 import me.river.nightbell.domain.Health
 import me.river.nightbell.domain.Monitor
 import me.river.nightbell.domain.MonitorKind
@@ -92,6 +98,7 @@ fun DetailScreen(
     var confirmDelete by remember { mutableStateOf(false) }
     var showAllChecks by remember { mutableStateOf(false) }
     val entrance = rememberEntranceLog()
+    val context = LocalContext.current
 
     val toast = viewModel.toast
     if (toast != null) {
@@ -196,6 +203,26 @@ fun DetailScreen(
                     onMute = { viewModel.mute(1) },
                     onUnmute = viewModel::unmute,
                 )
+            }
+        }
+
+        if (monitor.kind == MonitorKind.GITHUB_REPO) {
+            item(key = "github") {
+                StaggeredEntrance(index = 2, key = "github-${monitor.id}", log = entrance) {
+                    GitHubHealthCard(
+                        monitor = monitor,
+                        state = runtime.github,
+                        nowMs = now,
+                        accent = accent,
+                        onOpen = { url ->
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            runCatching { context.startActivity(intent) }
+                        },
+                        onMarkSeen = viewModel::markGitHubSeen,
+                        onMute = { viewModel.mute(24) },
+                    )
+                }
             }
         }
 
@@ -371,11 +398,7 @@ private fun HeroCard(
                 percent = window?.percent ?: 0f,
                 modifier = Modifier.size(124.dp),
                 accent = healthColor(health),
-                label = when {
-                    window == null -> "no checks yet"
-                    window.complete -> "24h uptime"
-                    else -> "past ${formatSpan(window.spanMs)}"
-                },
+                label = UptimeWindows.ringLabel(window),
                 unknown = window == null,
             )
             Spacer(Modifier.width(18.dp))
@@ -584,7 +607,22 @@ private fun ConfigCard(monitor: Monitor, accent: Color) {
     GlassCard {
         SectionHeader("Configuration", icon = NightbellIcons.Sliders, accent = accent)
         ConfigRow("Type", monitor.kind.label)
-        if (monitor.kind != MonitorKind.WEBSITE_ELEMENT) {
+        if (monitor.kind == MonitorKind.GITHUB_REPO) {
+            ConfigRow("Repository", monitor.github.slug)
+            ConfigRow("Watching", monitor.github.summary)
+            if (monitor.github.digestMode != DigestMode.OFF) {
+                ConfigRow("Star digest", monitor.github.digestMode.label)
+            }
+            if (monitor.github.issueKeywords.isNotEmpty()) {
+                ConfigRow("Only if it mentions", monitor.github.keywordsText)
+            }
+            if (monitor.github.issueAuthors.isNotEmpty()) {
+                ConfigRow("Only from", monitor.github.authorsText)
+            }
+            if (monitor.github.watchReleases && monitor.github.includePrereleases) {
+                ConfigRow("Prereleases", "included")
+            }
+        } else if (monitor.kind != MonitorKind.WEBSITE_ELEMENT) {
             ConfigRow("Method", monitor.method.name)
             ConfigRow("Expected status", monitor.status.summary)
             if (monitor.assertion.isActive) {
@@ -616,10 +654,12 @@ private fun ConfigCard(monitor: Monitor, accent: Color) {
         }
         ConfigRow("Interval", "every ${monitor.intervalMinutes} min")
         ConfigRow("Timeout", "${monitor.timeoutSeconds}s")
-        ConfigRow(
-            "Latency budget",
-            if (monitor.latencySloMs > 0) "${monitor.latencySloMs} ms" else "Global default",
-        )
+        if (monitor.kind != MonitorKind.GITHUB_REPO) {
+            ConfigRow(
+                "Latency budget",
+                if (monitor.latencySloMs > 0) "${monitor.latencySloMs} ms" else "Global default",
+            )
+        }
         if (monitor.urgent) {
             ConfigRow("Urgent", "repeats every ${monitor.urgentRepeatMinutes} min until acknowledged")
         }
@@ -694,5 +734,154 @@ private fun EventRow(sample: Sample) {
             style = MaterialTheme.typography.labelLarge,
             color = NightbellColors.TextSecondary,
         )
+    }
+}
+
+/**
+ * What the repository looks like right now, and how to get to it.
+ *
+ * Everything on this card came back with a request the monitor was making
+ * anyway, which is the argument for showing all of it: the star count is why the
+ * monitor exists, and the open-issue count, the fork count and the last push are
+ * free with the same response.
+ *
+ * The rate-limit line is the one that earns its place on a bad day. Being refused
+ * by GitHub is invisible otherwise: the checks quietly learn nothing, the card
+ * shows a stale count, and nothing anywhere explains why. So it is stated, with
+ * the reset time, and it is never dressed up as an outage.
+ */
+@Composable
+private fun GitHubHealthCard(
+    monitor: Monitor,
+    state: GitHubState,
+    nowMs: Long,
+    accent: Color,
+    onOpen: (String) -> Unit,
+    onMarkSeen: () -> Unit,
+    onMute: () -> Unit,
+) {
+    val repo = monitor.github.repository
+    GlassCard(accent = if (state.rateLimited) NightbellColors.Amber else Color.Transparent) {
+        SectionHeader("Repository", icon = NightbellIcons.Repo, accent = accent)
+        Row(
+            Modifier.testTag("github-metrics"),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            MetricTile(
+                label = "Stars",
+                value = state.lastStarCount.toString(),
+                accent = NightbellColors.Amber,
+                modifier = Modifier.weight(1f),
+            )
+            MetricTile(
+                label = "Open issues",
+                value = state.openIssues.toString(),
+                accent = accent,
+                modifier = Modifier.weight(1f),
+            )
+            MetricTile(
+                label = "Forks",
+                value = state.forks.toString(),
+                accent = NightbellColors.Violet,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+
+        if (!state.seeded) {
+            Text(
+                text = "Nothing recorded yet. The first check writes down where the repository " +
+                    "stands and says nothing, so you are told about what happens next rather " +
+                    "than about everything that already had.",
+                style = MaterialTheme.typography.bodySmall,
+                color = NightbellColors.TextTertiary,
+            )
+        }
+
+        ConfigRow("Watching", monitor.github.summary)
+        if (state.lastReleaseTag.isNotBlank()) {
+            ConfigRow(
+                "Latest release",
+                listOf(state.lastReleaseTag, state.lastReleaseName)
+                    .filter { it.isNotBlank() }
+                    .distinct()
+                    .joinToString(" · "),
+            )
+        }
+        if (state.lastIssueNumber > 0) {
+            ConfigRow("Latest issue", "#${state.lastIssueNumber} ${state.lastIssueTitle}")
+        }
+        val pushed = githubInstantMs(state.pushedAt)
+        if (pushed > 0L) ConfigRow("Last push", formatRelative(pushed, nowMs))
+        if (state.watchers > 0) ConfigRow("Watching it", state.watchers.toString())
+        ConfigRow("GitHub API", state.rateSummary(nowMs))
+        if (state.seenAt > 0L) ConfigRow("Marked seen", formatRelative(state.seenAt, nowMs))
+
+        if (state.rateLimited) {
+            Spacer(Modifier.height(10.dp))
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(NightbellColors.Amber.copy(alpha = 0.10f))
+                    .padding(13.dp),
+            ) {
+                Text(
+                    text = "GitHub is refusing requests until the budget resets. That is a " +
+                        "limit on this device's address, not a problem with the repository, " +
+                        "so nothing was recorded and no alert was raised. A token in Settings " +
+                        "raises the ceiling from 60 an hour to 5,000.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = NightbellColors.TextSecondary,
+                )
+            }
+        }
+
+        Spacer(Modifier.height(14.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            NightbellButton(
+                text = "Open repo",
+                onClick = { onOpen(repo.url) },
+                icon = NightbellIcons.Repo,
+                accent = accent,
+                modifier = Modifier.weight(1f).testTag("github-open-repo"),
+            )
+            if (state.lastIssueUrl.isNotBlank()) {
+                NightbellButton(
+                    text = "Latest issue",
+                    onClick = { onOpen(state.lastIssueUrl) },
+                    icon = NightbellIcons.Warning,
+                    tone = ButtonTone.Secondary,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+        if (state.lastReleaseUrl.isNotBlank()) {
+            Spacer(Modifier.height(8.dp))
+            NightbellButton(
+                text = "Latest release",
+                onClick = { onOpen(state.lastReleaseUrl) },
+                icon = NightbellIcons.Import,
+                tone = ButtonTone.Secondary,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            NightbellButton(
+                text = "Mark seen",
+                onClick = onMarkSeen,
+                icon = NightbellIcons.Check,
+                tone = ButtonTone.Secondary,
+                modifier = Modifier.weight(1f).testTag("github-mark-seen"),
+            )
+            NightbellButton(
+                text = "Mute 24h",
+                onClick = onMute,
+                icon = NightbellIcons.BellOff,
+                tone = ButtonTone.Secondary,
+                modifier = Modifier.weight(1f).testTag("github-mute-24h"),
+            )
+        }
     }
 }

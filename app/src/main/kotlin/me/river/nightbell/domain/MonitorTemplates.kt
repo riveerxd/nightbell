@@ -89,6 +89,27 @@ object MonitorTemplates {
             },
         ),
         Template(
+            id = "github-repo",
+            title = "A GitHub repository",
+            blurb = "Every new star, every new issue, every release. Checked every 15 minutes.",
+            apply = { draft ->
+                draft.copy(
+                    kind = MonitorKind.GITHUB_REPO,
+                    method = HttpMethod.GET,
+                    status = StatusExpectation(mode = StatusMode.ANY_SUCCESS),
+                    assertion = BodyAssertion(),
+                    // The floor rather than a preference. GitHub allows 60 requests
+                    // an hour without a token and one poll spends up to three, so
+                    // anything tighter runs the device out of budget mid-hour.
+                    intervalMinutes = 15,
+                    latencySloMs = 0,
+                    // A new star is not an outage and must never page anyone.
+                    urgent = false,
+                    github = GitHubWatch(),
+                ).withTargets(emptyList())
+            },
+        ),
+        Template(
             id = "page-element",
             title = "Something on a page",
             blurb = "Loads the real page so you can tap the element to watch.",

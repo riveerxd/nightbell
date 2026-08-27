@@ -190,6 +190,26 @@ object NightbellIcons {
         "M4 4.4 L20 4.4 L20 9.6 L4 9.6 Z M4 14.4 L20 14.4 L20 19.6 L4 19.6 Z " +
             "M7.4 7 L7.5 7 M7.4 17 L7.5 17",
     )
+    /**
+     * A git branch: trunk, and one line leaving it and coming back.
+     *
+     * Not a GitHub logo. A vendor mark inside a hand-drawn stroke set would be the
+     * one glyph in the app with a different optical weight, and the thing being
+     * named here is a repository rather than the company hosting it.
+     */
+    val Repo = stroke(
+        "Repo",
+        circle(7f, 5.4f, 2.3f) + " " + circle(7f, 18.6f, 2.3f) + " " + circle(17f, 5.4f, 2.3f) +
+            " M7 7.7 L7 16.3 M17 7.7 C17 12.2 12.6 12.4 7 12.4",
+    )
+
+    /** The star count on a repository card, and nothing else. */
+    val Star = stroke(
+        "Star",
+        "M12 3.4 L14.3 8.8 L20.2 9.3 L15.7 13.2 L17.1 19 L12 15.9 L6.9 19 L8.3 13.2 " +
+            "L3.8 9.3 L9.7 8.8 Z",
+    )
+
     val Layers = stroke(
         "Layers",
         "M12 3.2 L20.8 8 L12 12.8 L3.2 8 Z M3.2 12.4 L12 17.2 L20.8 12.4 M3.2 16.4 L12 21.2 L20.8 16.4",

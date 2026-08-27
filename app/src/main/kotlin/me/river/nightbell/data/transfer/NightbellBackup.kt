@@ -93,12 +93,23 @@ object BackupCodec {
     /** Strict on the way in: a half-decoded backup is worse than a rejected one. */
     private val strict = Json { ignoreUnknownKeys = true }
 
+    /**
+     * @param includeSecrets write the GitHub token into the file as well.
+     *
+     * Off by default, and the default is the whole point. An export is a file the
+     * user then moves somewhere: a cloud provider, a chat with themselves, a
+     * download folder that another app can read. A bearer credential riding along
+     * inside it is a leak nobody agreed to, and one that survives every later copy
+     * of the file. On is a deliberate answer to a warning, for someone moving to a
+     * new phone who would rather not re-issue the token.
+     */
     fun encode(
         snapshot: NightbellSnapshot,
         applicationId: String,
         versionName: String,
         versionCode: Int,
         nowMs: Long,
+        includeSecrets: Boolean = false,
     ): String = json.encodeToString(
         NightbellBackup(
             app = applicationId,
@@ -106,9 +117,10 @@ object BackupCodec {
             versionCode = versionCode,
             exportedAt = nowMs,
             monitorCount = snapshot.monitors.size,
-            snapshot = snapshot,
+            snapshot = if (includeSecrets) snapshot else snapshot.withoutSecrets(),
         ),
     )
+
 
     /**
      * Parses a backup, or says why it could not.
@@ -135,6 +147,16 @@ object BackupCodec {
     /** Carries a [BackupError] out through [Result]. */
     class BackupFailure(val error: BackupError) : Exception(error.message)
 }
+
+/**
+ * The snapshot with every stored credential removed.
+ *
+ * Top level so a test can state the rule directly rather than by inspecting a
+ * serialised blob, and so anything else that ever writes the store out has one
+ * obvious thing to call.
+ */
+fun NightbellSnapshot.withoutSecrets(): NightbellSnapshot =
+    copy(settings = settings.copy(githubToken = ""))
 
 /**
  * The snapshot as it should land in a fresh install.

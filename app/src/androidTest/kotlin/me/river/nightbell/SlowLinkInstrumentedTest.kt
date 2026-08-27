@@ -7,6 +7,7 @@ import me.river.nightbell.NightbellTestSupport.appContext
 import me.river.nightbell.NightbellTestSupport.resetApp
 import me.river.nightbell.data.Nightbell
 import me.river.nightbell.domain.GlobalSettings
+import me.river.nightbell.domain.ConnectivityReference
 import me.river.nightbell.domain.Monitor
 import me.river.nightbell.domain.MonitorKind
 import me.river.nightbell.domain.StatusExpectation
@@ -139,7 +140,7 @@ class SlowLinkInstrumentedTest {
 
         /** Something small, always up, and not owned by this project. */
         val PUBLIC_URL: String = InstrumentationRegistry.getArguments().getString("publicUrl")
-            ?: "https://www.gstatic.com/generate_204"
+            ?: ConnectivityReference.DEFAULT_URL
 
         /** Well above anything loopback or NAT can produce. */
         const val MIN_SHAPED_MS = 400L

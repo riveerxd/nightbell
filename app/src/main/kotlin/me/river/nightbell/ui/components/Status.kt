@@ -72,6 +72,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -478,11 +479,22 @@ fun UptimeRing(
                 style = Stroke(width = stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round),
             )
         }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        // Held inside the arc, not merely ellipsised.
+        //
+        // `softWrap = false` truncates the string but does not stop the Text from
+        // measuring wider than the ring: a long label spilled past the stroke and
+        // sat on top of the percentage above it. Bounding the column is what keeps
+        // an over-long label a truncation rather than a collision. The fraction is
+        // the widest chord that clears a 9 dp stroke at this radius.
+        Column(
+            modifier = Modifier.fillMaxWidth(RING_TEXT_WIDTH),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
             Text(
                 text = if (unknown) "—" else "${animated.roundToInt()}%",
                 style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold),
                 color = if (unknown) NightbellColors.TextTertiary else NightbellColors.TextPrimary,
+                maxLines = 1,
             )
             Text(
                 text = label.uppercase(),
@@ -491,10 +503,14 @@ fun UptimeRing(
                 maxLines = 1,
                 softWrap = false,
                 overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
             )
         }
     }
 }
+
+/** Share of the ring's width the text inside it may occupy. */
+private const val RING_TEXT_WIDTH = 0.68f
 
 /** Slim horizontal strip of pass/fail ticks — a compact outage history. */
 @Composable

@@ -52,6 +52,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -61,6 +64,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.river.nightbell.domain.AssertionMode
+import me.river.nightbell.domain.DigestMode
+import me.river.nightbell.domain.GitHubWatch
 import me.river.nightbell.domain.CheckResult
 import me.river.nightbell.domain.ElementMode
 import me.river.nightbell.domain.HeaderPair
@@ -346,6 +351,7 @@ private fun canLeaveStep(step: Int, draft: Monitor, report: Validation.Report): 
     0 -> true
     1 -> report.of(Validation.Field.URL)?.severity != Validation.Severity.ERROR &&
         report.of(Validation.Field.HEADERS)?.severity != Validation.Severity.ERROR &&
+        report.of(Validation.Field.REPO)?.severity != Validation.Severity.ERROR &&
         (draft.kind != MonitorKind.WEBSITE_ELEMENT || draft.element?.isCaptured == true)
     2 -> report.of(Validation.Field.ASSERTION)?.severity != Validation.Severity.ERROR &&
         report.of(Validation.Field.JSON_PATH)?.severity != Validation.Severity.ERROR &&
@@ -541,19 +547,23 @@ private fun StepTarget(
         leadingIcon = NightbellIcons.Sparkle,
         accent = accent,
     )
-    GlassField(
-        value = draft.url,
-        onValueChange = { value -> viewModel.update { it.copy(url = value.trim()) } },
-        label = "URL",
-        // With a port, deliberately. Without one it read as "ports are not a
-        // thing here", and the first report against the routing feature was a
-        // Monero RPC on 18089 that returned nothing until the port was added.
-        placeholder = "https://example.com:8443/health",
-        note = report.of(Validation.Field.URL),
-        leadingIcon = NightbellIcons.Link,
-        accent = accent,
-        keyboardType = KeyboardType.Uri,
-    )
+    if (draft.kind == MonitorKind.GITHUB_REPO) {
+        GitHubTargetCard(viewModel, draft, report, accent)
+    } else {
+        GlassField(
+            value = draft.url,
+            onValueChange = { value -> viewModel.update { it.copy(url = value.trim()) } },
+            label = "URL",
+            // With a port, deliberately. Without one it read as "ports are not a
+            // thing here", and the first report against the routing feature was a
+            // Monero RPC on 18089 that returned nothing until the port was added.
+            placeholder = "https://example.com:8443/health",
+            note = report.of(Validation.Field.URL),
+            leadingIcon = NightbellIcons.Link,
+            accent = accent,
+            keyboardType = KeyboardType.Uri,
+        )
+    }
 
     if (draft.kind == MonitorKind.WEBSITE_ELEMENT) {
         ElementCaptureCard(viewModel, draft, report, accent)
@@ -874,6 +884,11 @@ private fun StepExpectations(
     report: Validation.Report,
     accent: Color,
 ) {
+    if (draft.kind == MonitorKind.GITHUB_REPO) {
+        GitHubWatchCard(viewModel, draft, report, accent)
+        return
+    }
+
     if (draft.kind == MonitorKind.WEBSITE_ELEMENT) {
         val elements = draft.targets
         if (elements.isEmpty()) {
@@ -1315,7 +1330,7 @@ private fun StepSchedule(
         accent = accent,
         note = report.of(Validation.Field.TIMEOUT),
     )
-    if (draft.kind != MonitorKind.WEBSITE_ELEMENT) {
+    if (draft.kind != MonitorKind.WEBSITE_ELEMENT && draft.kind != MonitorKind.GITHUB_REPO) {
         ToggleRow(
             title = "Follow redirects",
             subtitle = if (draft.followRedirects) "3xx responses are followed" else "3xx is reported as-is",
@@ -1334,12 +1349,17 @@ private fun StepSchedule(
         accent = accent,
     )
 
-    Spacer(Modifier.height(12.dp))
-    SectionHeader("Latency budget", icon = NightbellIcons.Gauge, accent = NightbellColors.Amber)
-    LatencySloEditor(
-        value = draft.latencySloMs,
-        onChange = { v -> viewModel.update { it.copy(latencySloMs = v) } },
-    )
+    // No latency budget for a repository monitor. "GitHub answered slowly" is a
+    // fact about GitHub, and calling the monitor degraded over it would put an
+    // amber card on the dashboard about somebody else's CDN.
+    if (draft.kind != MonitorKind.GITHUB_REPO) {
+        Spacer(Modifier.height(12.dp))
+        SectionHeader("Latency budget", icon = NightbellIcons.Gauge, accent = NightbellColors.Amber)
+        LatencySloEditor(
+            value = draft.latencySloMs,
+            onChange = { v -> viewModel.update { it.copy(latencySloMs = v) } },
+        )
+    }
 
     Spacer(Modifier.height(12.dp))
     SectionHeader("Urgent", icon = NightbellIcons.Zap, accent = NightbellColors.Rose)
@@ -1614,4 +1634,370 @@ private fun TestResultCard(result: CheckResult, accent: Color) {
             }
         }
     }
+}
+
+// -------------------------------------------------------------- github repo
+
+/**
+ * The repository field.
+ *
+ * One field, because a repository has one name. Anything that contains
+ * `owner/repo` is accepted (the slug, the page you are looking at, the clone
+ * line) and what is stored is the parsed pair, so the rest of the app never has
+ * to wonder which shape it got. See [me.river.nightbell.domain.GitHubRepo.parse].
+ */
+@Composable
+private fun GitHubTargetCard(
+    viewModel: SetupViewModel,
+    draft: Monitor,
+    report: Validation.Report,
+    accent: Color,
+) {
+    GlassField(
+        value = viewModel.repoInput,
+        onValueChange = viewModel::setRepo,
+        label = "Repository",
+        placeholder = "owner/repo",
+        note = report.of(Validation.Field.REPO),
+        helper = "A github.com link works too, including one pointing at an issue.",
+        leadingIcon = NightbellIcons.Repo,
+        accent = accent,
+        keyboardType = KeyboardType.Uri,
+        modifier = Modifier.testTag("github-repo-field"),
+    )
+    AnimatedVisibility(
+        visible = draft.github.repository.isSet,
+        enter = fadeIn() + expandVertically(),
+        exit = fadeOut() + shrinkVertically(),
+    ) {
+        Column {
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconBadge(NightbellIcons.Check, NightbellColors.Mint, size = 34.dp)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = draft.github.slug,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = NightbellColors.TextPrimary,
+                        modifier = Modifier.testTag("github-repo-parsed"),
+                    )
+                    Text(
+                        text = draft.github.repository.url,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = NightbellColors.TextTertiary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+    }
+    Spacer(Modifier.height(4.dp))
+    GitHubTokenHint(viewModel, accent)
+}
+
+/**
+ * The rate limit, said once, where it matters.
+ *
+ * Setup is where someone decides how often to check, so it is where the sixty an
+ * hour is worth knowing. The full explanation and the link live in Settings; this
+ * is a status line and a way to get there.
+ */
+@Composable
+private fun GitHubTokenHint(viewModel: SetupViewModel, accent: Color) {
+    val context = LocalContext.current
+    var typed by remember { mutableStateOf<String?>(null) }
+    GlassCard(contentPadding = 15.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconBadge(
+                icon = NightbellIcons.Shield,
+                accent = if (viewModel.hasGitHubToken) NightbellColors.Mint else accent,
+                size = 34.dp,
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = if (viewModel.hasGitHubToken) "GitHub token saved" else "No GitHub token",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = NightbellColors.TextPrimary,
+                )
+                Text(
+                    text = if (viewModel.hasGitHubToken) {
+                        "${viewModel.githubTokenRedacted} · 5,000 API calls an hour"
+                    } else {
+                        "60 API calls an hour for this device, shared by every repo you watch"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = NightbellColors.TextTertiary,
+                )
+            }
+        }
+        AnimatedVisibility(
+            visible = typed != null,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically(),
+        ) {
+            Column {
+                Spacer(Modifier.height(10.dp))
+                GlassField(
+                    value = typed.orEmpty(),
+                    onValueChange = { typed = it },
+                    label = "Personal access token",
+                    placeholder = "github_pat_… or ghp_…",
+                    helper = "A fine-grained token with no permissions ticked is enough for a " +
+                        "public repo. Stored on this device only.",
+                    leadingIcon = NightbellIcons.Shield,
+                    accent = accent,
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    NightbellButton(
+                        text = "Save token",
+                        onClick = {
+                            viewModel.setGitHubToken(typed.orEmpty())
+                            typed = null
+                        },
+                        enabled = !typed.isNullOrBlank(),
+                        icon = NightbellIcons.Check,
+                        accent = accent,
+                        modifier = Modifier.weight(1f),
+                    )
+                    NightbellButton(
+                        text = "Cancel",
+                        onClick = { typed = null },
+                        tone = ButtonTone.Secondary,
+                    )
+                }
+            }
+        }
+        if (typed == null) {
+            Spacer(Modifier.height(11.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                NightbellButton(
+                    text = if (viewModel.hasGitHubToken) "Replace token" else "Paste a token",
+                    onClick = { typed = "" },
+                    icon = NightbellIcons.Shield,
+                    tone = ButtonTone.Secondary,
+                    modifier = Modifier.weight(1f),
+                )
+                NightbellButton(
+                    text = "Create a GitHub token",
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(GitHubWatch.TOKEN_PAGE_URL))
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        runCatching { context.startActivity(intent) }
+                    },
+                    icon = NightbellIcons.Export,
+                    tone = ButtonTone.Secondary,
+                    modifier = Modifier.weight(1f).testTag("setup-create-github-token"),
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            // The question everyone actually has in front of that page, which is a
+            // list of thirty checkboxes with no hint which ones matter.
+            Text(
+                text = "On GitHub's page, pick a fine-grained token and tick nothing under " +
+                    "Permissions: a public repository answers without a token at all. A " +
+                    "private one needs Contents, Issues and Pull requests set to Read-only. " +
+                    "Settings has the full version.",
+                style = MaterialTheme.typography.bodySmall,
+                color = NightbellColors.TextTertiary,
+            )
+        }
+    }
+}
+
+/**
+ * What to be told about, and how loudly.
+ *
+ * Every star by default, because that is the thing this was asked for, and the
+ * two noise controls sit under it as options rather than replacing it. A repo
+ * with eleven stars gets a notification a week; turning that into a daily digest
+ * would be turning the feature off and calling it a setting.
+ */
+@Composable
+private fun GitHubWatchCard(
+    viewModel: SetupViewModel,
+    draft: Monitor,
+    report: Validation.Report,
+    accent: Color,
+) {
+    val watch = draft.github
+
+    SectionHeader("Stars", icon = NightbellIcons.Star, accent = NightbellColors.Amber)
+    ToggleRow(
+        title = "Watch the star count",
+        subtitle = if (watch.notifyOnStars) {
+            "Checked every time, against the count from last time"
+        } else {
+            "Star changes are ignored"
+        },
+        checked = watch.notifyOnStars,
+        onCheckedChange = { v -> viewModel.updateGitHub { it.copy(notifyOnStars = v) } },
+        icon = NightbellIcons.Star,
+        accent = NightbellColors.Amber,
+        modifier = Modifier.testTag("github-watch-stars"),
+    )
+    AnimatedVisibility(
+        visible = watch.notifyOnStars,
+        enter = fadeIn() + expandVertically(),
+        exit = fadeOut() + shrinkVertically(),
+    ) {
+        Column {
+            ToggleRow(
+                title = "Every new star",
+                subtitle = if (watch.notifyOnEveryStar) {
+                    "One notification per increase, including a single star"
+                } else {
+                    "Only milestones or the digest below"
+                },
+                checked = watch.notifyOnEveryStar,
+                onCheckedChange = { v -> viewModel.updateGitHub { it.copy(notifyOnEveryStar = v) } },
+                icon = NightbellIcons.Bell,
+                accent = NightbellColors.Amber,
+            )
+            ToggleRow(
+                title = "Milestones",
+                subtitle = if (watch.notifyOnStarMilestones) {
+                    "10, 25, 50, 100, 250, 500, 1k and up"
+                } else {
+                    "No special notice for round numbers"
+                },
+                checked = watch.notifyOnStarMilestones,
+                onCheckedChange = { v ->
+                    viewModel.updateGitHub { it.copy(notifyOnStarMilestones = v) }
+                },
+                icon = NightbellIcons.Target,
+                accent = NightbellColors.Amber,
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "A milestone replaces the plain notice for the same stars rather than " +
+                    "arriving beside it, so crossing 100 is one buzz and not two.",
+                style = MaterialTheme.typography.bodySmall,
+                color = NightbellColors.TextTertiary,
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = "SUMMARISE INSTEAD",
+                style = MaterialTheme.typography.labelSmall,
+                color = NightbellColors.TextTertiary,
+            )
+            Spacer(Modifier.height(6.dp))
+            SegmentedSelector(
+                options = DigestMode.entries.toList(),
+                selected = watch.digestMode,
+                onSelect = { mode -> viewModel.updateGitHub { it.copy(digestMode = mode) } },
+                label = { it.label },
+                accent = NightbellColors.Amber,
+                modifier = Modifier.testTag("github-digest-mode"),
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = when (watch.digestMode) {
+                    DigestMode.OFF -> "Each increase is announced as it is found."
+                    DigestMode.HOURLY -> "Star changes are held and sent as one line each hour."
+                    DigestMode.DAILY -> "Star changes are held and sent as one line each day."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = NightbellColors.TextTertiary,
+            )
+        }
+    }
+
+    Spacer(Modifier.height(14.dp))
+    SectionHeader("Issues", icon = NightbellIcons.Warning, accent = accent)
+    ToggleRow(
+        title = "New issues",
+        subtitle = if (watch.notifyOnIssues) {
+            "Announced as they are opened"
+        } else {
+            "Issues are ignored"
+        },
+        checked = watch.notifyOnIssues,
+        onCheckedChange = { v -> viewModel.updateGitHub { it.copy(notifyOnIssues = v) } },
+        icon = NightbellIcons.Warning,
+        accent = accent,
+        modifier = Modifier.testTag("github-watch-issues"),
+    )
+    ToggleRow(
+        title = "Pull requests",
+        subtitle = if (watch.watchPullRequests) {
+            "A separate notice when one is opened"
+        } else {
+            "Off. GitHub returns pull requests from the issues endpoint and " +
+                "Nightbell filters them out."
+        },
+        checked = watch.watchPullRequests,
+        onCheckedChange = { v -> viewModel.updateGitHub { it.copy(watchPullRequests = v) } },
+        icon = NightbellIcons.Repo,
+        accent = accent,
+        modifier = Modifier.testTag("github-watch-pulls"),
+    )
+    AnimatedVisibility(
+        visible = watch.notifyOnIssues || watch.watchPullRequests,
+        enter = fadeIn() + expandVertically(),
+        exit = fadeOut() + shrinkVertically(),
+    ) {
+        Column {
+            Spacer(Modifier.height(8.dp))
+            GlassField(
+                value = watch.keywordsText,
+                onValueChange = { v -> viewModel.updateGitHub { it.withKeywordsText(v) } },
+                label = "Only if it mentions (optional)",
+                placeholder = "crash, security, android",
+                helper = "Comma separated, matched against the title and body, case insensitive. " +
+                    "Empty means everything gets through.",
+                leadingIcon = NightbellIcons.Search,
+                accent = accent,
+                modifier = Modifier.testTag("github-keywords"),
+            )
+            Spacer(Modifier.height(10.dp))
+            GlassField(
+                value = watch.authorsText,
+                onValueChange = { v -> viewModel.updateGitHub { it.withAuthorsText(v) } },
+                label = "Only from (optional)",
+                placeholder = "octocat, riveerxd",
+                helper = "GitHub logins, comma separated. Empty means anyone.",
+                leadingIcon = NightbellIcons.Filter,
+                accent = accent,
+                modifier = Modifier.testTag("github-authors"),
+            )
+        }
+    }
+
+    Spacer(Modifier.height(14.dp))
+    SectionHeader("Releases", icon = NightbellIcons.Import, accent = NightbellColors.Mint)
+    ToggleRow(
+        title = "New releases",
+        subtitle = if (watch.watchReleases) "Announced once, with the tag" else "Releases are ignored",
+        checked = watch.watchReleases,
+        onCheckedChange = { v -> viewModel.updateGitHub { it.copy(watchReleases = v) } },
+        icon = NightbellIcons.Import,
+        accent = NightbellColors.Mint,
+        modifier = Modifier.testTag("github-watch-releases"),
+    )
+    AnimatedVisibility(
+        visible = watch.watchReleases,
+        enter = fadeIn() + expandVertically(),
+        exit = fadeOut() + shrinkVertically(),
+    ) {
+        Column {
+            ToggleRow(
+                title = "Include prereleases",
+                subtitle = if (watch.includePrereleases) {
+                    "Betas and release candidates count"
+                } else {
+                    "Only full releases, which is what GitHub calls latest"
+                },
+                checked = watch.includePrereleases,
+                onCheckedChange = { v -> viewModel.updateGitHub { it.copy(includePrereleases = v) } },
+                icon = NightbellIcons.Layers,
+                accent = NightbellColors.Mint,
+            )
+        }
+    }
+
+    FieldNote(report.of(Validation.Field.GITHUB))
 }

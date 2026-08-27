@@ -33,11 +33,21 @@
 
   ## What is pinned
 
-  The one host this app contacts on its own behalf is www.gstatic.com, for the
-  204 connectivity probe that distinguishes "the monitored service is down" from
-  "this phone has no working network". That is the app's own traffic rather than
-  the user's, so it is nailed to HTTPS here and cannot be downgraded even though
-  the base config is permissive.
+  Every host this app contacts on its own behalf, rather than because a user typed
+  it, is nailed to HTTPS below and cannot be downgraded even though the base config
+  is permissive:
+
+    - connectivitycheck.grapheneos.network, for the 204 probe that tells "the
+      monitored service is down" apart from "this phone has no working network".
+      This replaced www.gstatic.com in 3.2.0. The probe works identically either
+      way; what changed is that an app whose pitch is no server, no account and no
+      third party is no longer telling Google's edge where the phone is once every
+      forty-five seconds for a measurement nobody asked Google to be part of. The
+      endpoint is user-editable, so gstatic remains reachable for anyone who wants
+      it, and is simply no longer where the app goes by default.
+    - api.github.com, for repository monitors and the version check. A fixed host
+      this app chose rather than one the user typed, so it belongs here.
+    - f-droid.org, for the version check when that is the chosen source.
 
   If a future release adds any other endpoint of its own, add it here the same way
   rather than letting it inherit the permissive base.
@@ -50,6 +60,8 @@
     </base-config>
 
     <domain-config cleartextTrafficPermitted="false">
-        <domain includeSubdomains="false">www.gstatic.com</domain>
+        <domain includeSubdomains="false">connectivitycheck.grapheneos.network</domain>
+        <domain includeSubdomains="false">api.github.com</domain>
+        <domain includeSubdomains="false">f-droid.org</domain>
     </domain-config>
 </network-security-config>

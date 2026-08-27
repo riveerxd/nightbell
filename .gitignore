@@ -65,3 +65,6 @@ docs/video/pulse-promo-extended.mp4
 __pycache__/
 *.pyc
 .hermes/
+
+# Kotlin build daemon session files.
+.kotlin/

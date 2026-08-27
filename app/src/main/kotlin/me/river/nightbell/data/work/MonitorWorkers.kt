@@ -138,6 +138,15 @@ class SweepWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
             // the phone being in a pocket.
             val paged = graph.engine.tickUrgent()
             if (paged > 0) Log.i(TAG, "Sweep re-paged $paged monitor(s)")
+
+            // Nightbell's own version, at most once every six hours and gated on
+            // its own setting. Here rather than on a schedule of its own: this is
+            // already the periodic wake-up the app is allowed, and adding a second
+            // one to ask a question this slow would be spending the user's battery
+            // to save nothing.
+            runCatchingCancellable { graph.engine.checkForAppUpdate() }
+                .onFailure { Log.i(TAG, "Update check skipped: ${it::class.java.simpleName}") }
+
             Log.i(TAG, "Sweep ran $ran monitor(s)")
             Result.success()
         } catch (cancellation: CancellationException) {

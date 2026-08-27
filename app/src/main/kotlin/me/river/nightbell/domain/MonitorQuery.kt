@@ -70,6 +70,20 @@ object MonitorQuery {
         /** Oldest check first, which is the same list read as "what is overdue". */
         @kotlinx.serialization.SerialName("stalest")
         STALEST,
+
+        /**
+         * Repository monitors first, then everything else, worst first inside both.
+         *
+         * A grouping rather than a ranking, and the one sort here that admits the
+         * dashboard holds two different kinds of question. "Is anything broken"
+         * is what [WORST_FIRST] answers and it is still the default; "what has
+         * happened on my repos" is a different thing to open the app for, and a
+         * healthy repo sorted below eleven healthy websites is not an answer to
+         * it. Worst-first still applies within each group, so an outage never
+         * gets buried by this.
+         */
+        @kotlinx.serialization.SerialName("repos_first")
+        REPOS_FIRST,
         ;
 
         val label: String
@@ -80,6 +94,7 @@ object MonitorQuery {
                 SLOWEST -> "Slowest"
                 RECENT -> "Just checked"
                 STALEST -> "Least recent"
+                REPOS_FIRST -> "Repos first"
             }
     }
 
@@ -175,6 +190,12 @@ object MonitorQuery {
             // Never-checked first: those are the stalest thing there is.
             Sort.STALEST -> kept.sortedWith(
                 compareBy<MonitorCard> { it.runtime.lastCheckedAt }.then(byName),
+            )
+            Sort.REPOS_FIRST -> kept.sortedWith(
+                compareBy<MonitorCard> { it.monitor.kind != MonitorKind.GITHUB_REPO }
+                    .thenBy { Summary.severity(effectiveHealth(it)) }
+                    .thenBy { !(it.monitor.urgent && it.runtime.urgentState.nagging) }
+                    .then(byName),
             )
         }
     }

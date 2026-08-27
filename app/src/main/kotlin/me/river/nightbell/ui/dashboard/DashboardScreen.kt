@@ -77,9 +77,11 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.river.nightbell.domain.CertificateWatch
 import me.river.nightbell.domain.Health
+import me.river.nightbell.domain.Monitor
 import me.river.nightbell.domain.MonitorCard
 import me.river.nightbell.domain.MonitorKind
 import me.river.nightbell.domain.MonitorQuery
+import me.river.nightbell.domain.MonitorRuntime
 import me.river.nightbell.domain.MonitorTemplates
 import me.river.nightbell.ui.components.AnimatedCounter
 import me.river.nightbell.ui.components.ButtonTone
@@ -138,6 +140,7 @@ fun kindIcon(kind: MonitorKind) = when (kind) {
     MonitorKind.HTTP_STATUS -> NightbellIcons.Server
     MonitorKind.ADVANCED_REQUEST -> NightbellIcons.Braces
     MonitorKind.WEBSITE_ELEMENT -> NightbellIcons.Pointer
+    MonitorKind.GITHUB_REPO -> NightbellIcons.Repo
 }
 
 @Composable
@@ -764,6 +767,7 @@ private fun TunePanel(
                     MonitorQuery.Sort.SLOWEST -> NightbellIcons.Gauge
                     MonitorQuery.Sort.RECENT -> NightbellIcons.Refresh
                     MonitorQuery.Sort.STALEST -> NightbellIcons.History
+                    MonitorQuery.Sort.REPOS_FIRST -> NightbellIcons.Repo
                 }
             },
         )
@@ -1116,6 +1120,16 @@ private fun MonitorRowCard(
 
         Spacer(Modifier.height(13.dp))
 
+        if (monitor.kind == MonitorKind.GITHUB_REPO) {
+            GitHubFactsRow(
+                monitor = monitor,
+                runtime = runtime,
+                health = health,
+                checking = card.checking,
+                muted = muted,
+                now = now,
+            )
+        } else {
         Row(verticalAlignment = Alignment.CenterVertically) {
             StatusPill(health = health, checking = card.checking)
             Spacer(Modifier.width(8.dp))
@@ -1198,8 +1212,12 @@ private fun MonitorRowCard(
                 color = NightbellColors.TextTertiary,
             )
         }
+        }
 
-        if (runtime.samples.isNotEmpty()) {
+        // No uptime chart for a repository. The line would be the availability of
+        // api.github.com, which is not the thing being watched and is not the
+        // user's problem either way.
+        if (runtime.samples.isNotEmpty() && monitor.kind != MonitorKind.GITHUB_REPO) {
             // One list, both charts. They are stacked and read as a single
             // figure, so a failure has to appear at the same x in each; windowing
             // them separately is what put a red tick under a blue line.
@@ -1290,7 +1308,9 @@ private fun MonitorRowCard(
                     icon = NightbellIcons.Target,
                 )
             }
-            if (monitor.kind != MonitorKind.WEBSITE_ELEMENT) {
+            if (monitor.kind != MonitorKind.WEBSITE_ELEMENT &&
+                monitor.kind != MonitorKind.GITHUB_REPO
+            ) {
                 MicroTag(text = monitor.method.name, color = NightbellColors.TextTertiary)
             }
             MicroTag(text = "${monitor.intervalMinutes}m", color = NightbellColors.TextTertiary, icon = NightbellIcons.Clock)
@@ -1319,6 +1339,95 @@ private fun MonitorRowCard(
     }
 }
 
+/**
+ * What a repository card says instead of an uptime reading.
+ *
+ * Nobody added a GitHub monitor to find out whether GitHub is up. The facts that
+ * belong here are the ones the user chose to watch, so the row is built from the
+ * watch config: stars if they are watching stars, open issues if they are
+ * watching issues, the latest tag if they are watching releases. A monitor set
+ * to releases only does not get a star count it never asked for.
+ *
+ * The status pill only appears when it is carrying information. "Operational" on
+ * a repository card is noise; a failing poll is not, because it means Nightbell
+ * is learning nothing about the repository, and being rate limited is the one
+ * state that looks like nothing happening while nothing is in fact being checked.
+ */
+@Composable
+private fun GitHubFactsRow(
+    monitor: Monitor,
+    runtime: MonitorRuntime,
+    health: Health,
+    checking: Boolean,
+    muted: Boolean,
+    now: Long,
+) {
+    val state = runtime.github
+    val watch = monitor.github
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        if (checking || health == Health.DOWN || health == Health.PAUSED) {
+            StatusPill(health = health, checking = checking)
+            Spacer(Modifier.width(8.dp))
+        }
+        if (state.rateLimited) {
+            MicroTag(
+                text = "Rate limited",
+                color = NightbellColors.Amber,
+                background = NightbellColors.Amber.copy(alpha = 0.14f),
+                icon = NightbellIcons.Clock,
+            )
+            Spacer(Modifier.width(6.dp))
+        }
+        if (muted) {
+            MicroTag(
+                text = "Muted",
+                color = NightbellColors.Amber,
+                background = NightbellColors.Amber.copy(alpha = 0.14f),
+                icon = NightbellIcons.BellOff,
+            )
+            Spacer(Modifier.width(6.dp))
+        }
+        if (!state.seeded) {
+            // Zeros here would be a claim. Nothing has been read yet.
+            MicroTag(text = "Not checked yet", color = NightbellColors.TextTertiary)
+        } else {
+            if (watch.notifyOnStars) {
+                MicroTag(
+                    text = state.lastStarCount.toString(),
+                    color = NightbellColors.Amber,
+                    icon = NightbellIcons.Star,
+                )
+                Spacer(Modifier.width(6.dp))
+            }
+            if (watch.notifyOnIssues || watch.watchPullRequests) {
+                MicroTag(
+                    text = "${state.openIssues} open",
+                    color = if (state.openIssues > 0) {
+                        NightbellColors.TextSecondary
+                    } else {
+                        NightbellColors.TextTertiary
+                    },
+                    icon = NightbellIcons.Warning,
+                )
+                Spacer(Modifier.width(6.dp))
+            }
+            if (watch.watchReleases && state.lastReleaseTag.isNotBlank()) {
+                MicroTag(
+                    text = state.lastReleaseTag,
+                    color = NightbellColors.Mint,
+                    icon = NightbellIcons.Import,
+                )
+            }
+        }
+        Spacer(Modifier.weight(1f))
+        Text(
+            text = formatRelative(runtime.lastCheckedAt, now),
+            style = MaterialTheme.typography.bodySmall,
+            color = NightbellColors.TextTertiary,
+        )
+    }
+}
+
 /** Checkbox in the orb's slot, so nothing on the card moves when the mode flips. */
 @Composable
 private fun SelectionTick(selected: Boolean) {
@@ -1342,7 +1451,7 @@ private fun SelectionTick(selected: Boolean) {
     }
 }
 
-private fun me.river.nightbell.domain.MonitorRuntime.ok(enabled: Boolean): Boolean =
+private fun MonitorRuntime.ok(enabled: Boolean): Boolean =
     !enabled || health == Health.UP || health == Health.UNKNOWN || health == Health.DEGRADED
 
 // ------------------------------------------------------------------------ fab

@@ -92,7 +92,11 @@ data class FleetStats(
         get() = when {
             !uptimeKnown -> "NO CHECKS YET"
             uptimeComplete -> "24H UPTIME"
-            else -> "UPTIME, PAST ${formatSpan(uptimeSpanMs).uppercase()}"
+            // "PAST UNDER A MINUTE" is both long and awkward. Under a minute the
+            // span is barely a fact, so it is stated as a bound rather than a
+            // duration.
+            uptimeSpanMs < 60_000 -> "UPTIME, UNDER 1M"
+            else -> "UPTIME, PAST ${UptimeWindows.shortSpan(uptimeSpanMs).uppercase()}"
         }
 }
 

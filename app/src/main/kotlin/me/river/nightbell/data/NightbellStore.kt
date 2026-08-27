@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import me.river.nightbell.domain.CheckerHealth
 import me.river.nightbell.domain.CheckerStreak
+import me.river.nightbell.domain.ConnectivityReference
 import me.river.nightbell.domain.GlobalSettings
 import me.river.nightbell.domain.Health
 import me.river.nightbell.domain.UrgentAlerts
@@ -18,6 +19,7 @@ import me.river.nightbell.domain.MonitorCard
 import me.river.nightbell.domain.MonitorRuntime
 import me.river.nightbell.domain.PauseState
 import me.river.nightbell.domain.ReferenceSample
+import me.river.nightbell.domain.UpdateState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -61,6 +63,15 @@ data class NightbellSnapshot(
      * says what it did.
      */
     val pause: PauseState = PauseState(),
+    /**
+     * What Nightbell knows about newer versions of itself, and what the user has
+     * already answered about them.
+     *
+     * Top level rather than inside [GlobalSettings] for the same reason [pause]
+     * is: the preference is [GlobalSettings.updateChecksEnabled], and this is
+     * state with an expiry ("remind me tomorrow", "never this version").
+     */
+    val update: UpdateState = UpdateState(),
     /**
      * Monotonic write counter, bumped by every [NightbellStore.mutate].
      *
@@ -293,6 +304,9 @@ class NightbellStore(
 
     suspend fun setPause(state: PauseState) = mutate { snap -> snap.copy(pause = state) }
 
+    suspend fun updateAppUpdate(transform: (UpdateState) -> UpdateState) =
+        mutate { snap -> snap.copy(update = transform(snap.update)) }
+
     suspend fun replaceAll(snapshot: NightbellSnapshot) = mutate { snapshot }
 
     fun markChecking(id: String, checking: Boolean) {
@@ -342,15 +356,39 @@ class NightbellStore(
     private fun migrate(snapshot: NightbellSnapshot): NightbellSnapshot {
         val monitors = snapshot.monitors.map { it.migrated }
         val runtimes = scrubFakeCrashState(snapshot.runtimes)
-        return if (monitors == snapshot.monitors && runtimes == snapshot.runtimes) {
+        val settings = retireGoogleReference(snapshot.settings)
+        return if (monitors == snapshot.monitors &&
+            runtimes == snapshot.runtimes &&
+            settings == snapshot.settings
+        ) {
             snapshot
         } else {
             snapshot.copy(
                 schema = NightbellSnapshot.SCHEMA_VERSION,
                 monitors = monitors,
                 runtimes = runtimes,
+                settings = settings,
             )
         }
+    }
+
+    /**
+     * Moves an install that never chose a latency reference off Google's.
+     *
+     * Changing the default alone would have fixed this for new installs and for
+     * nobody else: a stored value equal to the old default is on disk because a
+     * default was written there, not because anyone picked it. Anything the user
+     * actually typed is left alone, gstatic included, because the field is theirs.
+     *
+     * Applied on read, like [scrubFakeCrashState], so it is in force from the
+     * first check of the new build rather than after a startup task that a
+     * background worker could beat to the punch.
+     */
+    private fun retireGoogleReference(settings: GlobalSettings): GlobalSettings {
+        val migrated = ConnectivityReference.migrate(settings.latencyReferenceUrl)
+        if (migrated == settings.latencyReferenceUrl) return settings
+        Log.i(TAG, "Moving the latency reference off the Google endpoint it defaulted to")
+        return settings.copy(latencyReferenceUrl = migrated)
     }
 
     /**

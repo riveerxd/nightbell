@@ -1,0 +1,37 @@
+Nightbell can watch a GitHub repository now. Add owner/repo, or paste any link to
+it, and you get told about every new star, every new issue and every new release.
+Stars can be quietened to milestones only, or to a daily summary. Issues can be
+filtered by keyword or by author. Pull requests are watched separately and are
+off unless you turn them on.
+
+The polling is your phone talking to GitHub's API, with no server in between.
+GitHub allows 60 requests an hour to an address that has not identified itself,
+and one check spends up to three, so every request carries a cache validator and
+a check that finds nothing new costs nothing at all. Being turned away for going
+over that limit is shown as a rate limit rather than reported as an outage,
+because it says nothing about the repository. An optional read-only token raises
+the ceiling to 5,000 an hour. It is stored on the device and nowhere else, it is
+never written into a log or a notification, and it stays out of an exported
+backup unless you ask for it.
+
+A repository card shows what you asked to watch: the star count, the open issue
+count and the latest tag, instead of an uptime figure for GitHub. There is a new
+Repos first order that groups them above everything else, with worst first still
+applying inside each group.
+
+Nightbell also looks for its own updates now, from GitHub releases, at most once
+every six hours. It says so once per version and offers open, remind me tomorrow,
+and ignore this one. Nothing is downloaded and nothing is installed: the
+notification opens a page, and Android still asks before any APK is installed.
+Switch it off in Settings if your installer already handles this.
+
+The latency probe has moved off Google. It times a known-good endpoint so a slow
+phone is not reported as a slow website, and it pointed at a Google address by
+default, which had an app that keeps everything on your device pinging one every
+forty-five seconds. It now uses the GrapheneOS connectivity check. Installs that
+never picked an endpoint are moved across on upgrade, anything you typed yourself
+is left alone, and the field still takes whatever you want. Thanks to
+shortwavesurfer2009 for raising it.
+
+Smaller: the uptime ring on a monitor checked once says 1 check rather than
+overflowing its own circle with "past under a minute".

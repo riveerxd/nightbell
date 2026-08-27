@@ -5,12 +5,16 @@ import me.river.nightbell.data.NightbellStore
 import me.river.nightbell.data.alerts.AlertCenter
 import me.river.nightbell.domain.AlertDecider
 import me.river.nightbell.domain.AlertPolicy
+import me.river.nightbell.domain.AppUpdate
 import me.river.nightbell.domain.CertificateWatch
 import me.river.nightbell.domain.CheckResult
 import me.river.nightbell.domain.CheckerHealth
 import me.river.nightbell.domain.CheckerStreak
 import me.river.nightbell.domain.DueCheck
 import me.river.nightbell.domain.FailureKind
+import me.river.nightbell.domain.GitHubEvent
+import me.river.nightbell.domain.GitHubEvents
+import me.river.nightbell.domain.GitHubState
 import me.river.nightbell.domain.GlobalSettings
 import me.river.nightbell.domain.Health
 import me.river.nightbell.domain.Monitor
@@ -58,6 +62,19 @@ class CheckEngine(
      * unit-level tests want.
      */
     private val reference: LatencyReference? = null,
+    /**
+     * Polls GitHub for the repository monitors. Null leaves that kind
+     * unsupported, which is what the unit-level tests want.
+     */
+    private val github: GitHubChecker? = null,
+    /** Looks for a newer Nightbell. Null switches the whole track off. */
+    private val updates: UpdateChecker? = null,
+    /**
+     * The version this build reports, for the update comparison. A lambda so the
+     * engine never has to reach for `BuildConfig` and stays testable with an
+     * arbitrary "installed" version.
+     */
+    private val installedVersion: () -> String = { "" },
     private val nowMs: () -> Long = System::currentTimeMillis,
     private val minuteOfDay: () -> Int = {
         Calendar.getInstance().let { it.get(Calendar.HOUR_OF_DAY) * 60 + it.get(Calendar.MINUTE) }
@@ -88,7 +105,31 @@ class CheckEngine(
     /** Runs the check without touching persisted state — used by "Test now". */
     suspend fun dryRun(monitor: Monitor): CheckResult = when (monitor.kind) {
         MonitorKind.WEBSITE_ELEMENT -> element.check(monitor)
+        // A GitHub poll against a blank state: it reads the repository and reports
+        // what is there, and because nothing is persisted it cannot seed a
+        // baseline or announce anything. Which is exactly what "Test now" means.
+        MonitorKind.GITHUB_REPO -> githubDryRun(monitor)
         else -> http.check(monitor)
+    }
+
+    private suspend fun githubDryRun(monitor: Monitor): CheckResult {
+        val checker = github ?: return CheckResult(
+            ok = false,
+            latencyMs = 0,
+            failureKind = FailureKind.BAD_CONFIG,
+            message = "GitHub checks are not available in this build",
+            at = nowMs(),
+        )
+        val outcome = checker.poll(monitor, GitHubState())
+        return outcome.result ?: CheckResult(
+            ok = false,
+            latencyMs = 0,
+            failureKind = FailureKind.BAD_CONFIG,
+            message = "GitHub is rate limiting this device",
+            detail = "No repository data was returned. A token in Settings raises the limit " +
+                "from 60 requests an hour to 5,000.",
+            at = nowMs(),
+        )
     }
 
     /**
@@ -183,8 +224,19 @@ class CheckEngine(
         }
 
         store.markChecking(monitorId, true)
+        var githubOutcome: GitHubChecker.Outcome? = null
         val result = try {
-            dryRun(monitor)
+            if (monitor.kind == MonitorKind.GITHUB_REPO && github != null) {
+                // Polled here rather than through `dryRun`, because the interesting
+                // half of a repository check is not the verdict: it is the ETags,
+                // the rate-limit headers and the diff against last time, none of
+                // which fit in a CheckResult.
+                val outcome = github.poll(monitor, before.github)
+                githubOutcome = outcome
+                outcome.result
+            } else {
+                dryRun(monitor)
+            }
         } catch (cancellation: CancellationException) {
             // The single most important catch in this app.
             //
@@ -229,7 +281,22 @@ class CheckEngine(
             // throws every time would be retried every 15 seconds forever. The old
             // code got interval back-off for free because it fabricated a full
             // verdict; not fabricating one means paying for the back-off honestly.
-            store.updateRuntime(monitorId) { it.copy(lastCheckedAt = nowMs()) }
+            //
+            // A rate-limited GitHub poll lands here too, and deliberately: being
+            // refused a request is not evidence about the repository, so it must
+            // not touch health, samples or any alert track. What it *is* evidence
+            // of is the budget, so that much is written down and shown on the card.
+            val rateState = githubOutcome?.takeIf { it.rateLimited }?.state
+            store.updateRuntime(monitorId) {
+                it.copy(
+                    lastCheckedAt = nowMs(),
+                    github = rateState ?: it.github,
+                )
+            }
+            if (rateState != null) {
+                Log.i(TAG, "${monitor.displayName}: GitHub is rate limiting, nothing recorded")
+                onStateChanged?.invoke()
+            }
             return null
         }
 
@@ -438,6 +505,11 @@ class CheckEngine(
         val urgentMutation =
             applyUrgent(monitor, urgentOutcome, result, policy, after, settings.urgentRespectsRingerMode)
 
+        // ---- github track ----------------------------------------------------
+        val githubMutation = githubOutcome?.let {
+            applyGitHub(monitor, it, before, policy, settings, muted, minute)
+        } ?: { runtime: MonitorRuntime -> runtime }
+
         // NonCancellable, and this is load-bearing.
         //
         // Every alert side effect above — notifyDown, notifyRecovery, cancel,
@@ -472,6 +544,7 @@ class CheckEngine(
                     .withUrgentState(urgentOutcome.state)
                     .let(urgentMutation)
                     .let(certMutation)
+                    .let(githubMutation)
             }
         }
         onStateChanged?.invoke()
@@ -599,6 +672,102 @@ class CheckEngine(
 
             UrgentAlerts.Action.NONE -> return { it }
         }
+    }
+
+    // ---- github track --------------------------------------------------------
+
+    /**
+     * Turns one repository poll into notifications, and returns the state to keep.
+     *
+     * The decision about *what happened* is [GitHubEvents], which is pure and
+     * tested. What is decided here is the only part that needs the world: whether
+     * the user wants to hear about it right now.
+     *
+     * Repository news honours the master switch, the monitor's alert switch and
+     * mute, and goes silent (rather than quiet) during quiet hours. It has no
+     * bypass of any kind, because nothing about a star is worth waking anyone.
+     *
+     * The state advances whether or not anything is announced. A mute is "stop
+     * shouting", not "save it all up for me": replaying a muted day's worth of
+     * stars the moment the mute lifts would be the opposite of what was asked.
+     */
+    private fun applyGitHub(
+        monitor: Monitor,
+        outcome: GitHubChecker.Outcome,
+        before: MonitorRuntime,
+        policy: AlertPolicy,
+        settings: GlobalSettings,
+        muted: Boolean,
+        minute: Int,
+    ): (MonitorRuntime) -> MonitorRuntime {
+        val snapshot = outcome.snapshot ?: return { it }
+        val evaluation = GitHubEvents.evaluate(
+            watch = monitor.github,
+            previous = before.github,
+            snapshot = snapshot,
+            nowMs = nowMs(),
+        )
+        val quiet = policy.quietHoursEnabled &&
+            AlertDecider.inQuietHours(minute, policy.quietStartMinute, policy.quietEndMinute)
+        val allowed = !muted && settings.masterAlertsEnabled && policy.enabled
+        if (allowed) {
+            evaluation.events.forEach { event ->
+                Log.i(TAG, "${monitor.displayName}: ${event.title(monitor.github.slug)}")
+                alerts.notifyGitHub(monitor, event, policy, silent = quiet)
+            }
+        } else if (evaluation.events.isNotEmpty()) {
+            Log.i(TAG, "${monitor.displayName}: ${evaluation.events.size} repo event(s), alerts are off")
+        }
+        val state = evaluation.state
+        return { runtime -> runtime.copy(github = state) }
+    }
+
+    // ---- nightbell's own updates ---------------------------------------------
+
+    /**
+     * Asks whether a newer Nightbell exists, at most once every six hours.
+     *
+     * Driven from the sweep and the service loop rather than from a check, because
+     * it has nothing to do with any one monitor and a device with no monitors at
+     * all should still be told. Everything about *whether to speak* is
+     * [AppUpdate.decide]; everything here is plumbing and the master switch.
+     *
+     * @return whether a notification was posted.
+     */
+    suspend fun checkForAppUpdate(force: Boolean = false): Boolean {
+        val checker = updates ?: return false
+        if (!isOnline()) return false
+        val snapshot = store.currentSnapshot()
+        val settings = snapshot.settings
+        if (!settings.updateChecksEnabled) return false
+        // A pause is the user saying they do not want to hear from this app.
+        if (snapshot.pause.isActive(nowMs())) return false
+        if (!force && !AppUpdate.isDue(snapshot.update, nowMs())) return false
+
+        val installed = installedVersion()
+        val release = runCatchingCancellable { checker.latest(settings.updateSource) }.getOrNull()
+        val decision = AppUpdate.decide(release, installed, snapshot.update, nowMs())
+        val speaking = decision.action == AppUpdate.Action.NOTIFY &&
+            decision.release != null &&
+            settings.masterAlertsEnabled
+
+        // `notifiedVersion` records that the user *was told*. Writing it while the
+        // master switch is off would mean the one notification this version ever
+        // gets was spent on a shade nothing reached, and turning alerts back on
+        // would never produce it.
+        val state = if (decision.action == AppUpdate.Action.NOTIFY && !speaking) {
+            decision.state.copy(notifiedVersion = snapshot.update.notifiedVersion)
+        } else {
+            decision.state
+        }
+        withContext(NonCancellable) { store.updateAppUpdate { state } }
+
+        if (!speaking) return false
+        val notice = decision.release ?: return false
+        Log.i(TAG, "Nightbell $installed is behind ${notice.version} on ${notice.source.label}")
+        alerts.notifyUpdate(notice, installed, settings.defaultAlert)
+        onStateChanged?.invoke()
+        return true
     }
 
     /**

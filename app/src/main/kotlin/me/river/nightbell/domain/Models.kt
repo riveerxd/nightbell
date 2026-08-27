@@ -17,6 +17,18 @@ enum class MonitorKind {
     /** Loads a real page and inspects one DOM element the user picked. */
     @SerialName("website_element")
     WEBSITE_ELEMENT,
+
+    /**
+     * Polls one GitHub repository and reports what changed about it.
+     *
+     * The odd one out, and worth saying why it belongs here anyway. Every other
+     * kind answers "is this up"; this one answers "what happened". They share the
+     * cadence, the store, the alert policy and the notification plumbing, which is
+     * most of a monitor, so the alternative was a second app with a second copy of
+     * all of it.
+     */
+    @SerialName("github_repo")
+    GITHUB_REPO,
     ;
 
     val label: String
@@ -24,6 +36,7 @@ enum class MonitorKind {
             HTTP_STATUS -> "Status check"
             ADVANCED_REQUEST -> "Request & response"
             WEBSITE_ELEMENT -> "Page element"
+            GITHUB_REPO -> "GitHub repo"
         }
 
     val blurb: String
@@ -31,6 +44,7 @@ enum class MonitorKind {
             HTTP_STATUS -> "Ping a URL and expect a status code."
             ADVANCED_REQUEST -> "Send a crafted request, assert on what comes back."
             WEBSITE_ELEMENT -> "Watch one element on a real rendered page."
+            GITHUB_REPO -> "Stars, issues and releases on one repository."
         }
 }
 
@@ -447,6 +461,11 @@ data class Monitor(
     val element: ElementTarget? = null,
     /** Every element watched on one page load. See [targets]. */
     val elements: List<ElementTarget> = emptyList(),
+    /**
+     * What a [MonitorKind.GITHUB_REPO] monitor watches. Ignored by every other
+     * kind, and defaulted so a store written before this existed still decodes.
+     */
+    val github: GitHubWatch = GitHubWatch(),
     val timeoutSeconds: Int = 15,
     val intervalMinutes: Int = 15,
     val followRedirects: Boolean = true,
@@ -507,7 +526,17 @@ data class Monitor(
     val accent: Int = 0,
     val createdAt: Long = 0L,
 ) {
-    val displayName: String get() = name.ifBlank { prettyHost }
+    val displayName: String
+        get() = name.ifBlank {
+            // A repository is named `owner/repo` everywhere else in the world, so
+            // falling back to `github.com/owner/repo` would be the one place it
+            // isn't.
+            if (kind == MonitorKind.GITHUB_REPO && github.repository.isSet) {
+                github.slug
+            } else {
+                prettyHost
+            }
+        }
 
     val prettyHost: String
         get() = url
@@ -607,6 +636,15 @@ data class MonitorRuntime(
     val lastElementText: String = "",
     /** One entry per watched element, aligned with [Monitor.targets]. */
     val lastElementTexts: List<String> = emptyList(),
+
+    /**
+     * Last-seen counts, ids and ETags for a [MonitorKind.GITHUB_REPO] monitor.
+     *
+     * Per monitor rather than global, because two monitors on two repositories
+     * share nothing: a single last-seen issue id would have the second monitor
+     * announce the first one's issues and then go permanently quiet.
+     */
+    val github: GitHubState = GitHubState(),
 
     // ---- degraded track -----------------------------------------------------
     /**
@@ -749,6 +787,40 @@ data class UptimeWindow(
 /** Windows the UI reports uptime over. */
 object UptimeWindows {
     const val DAY_MS = 24L * 60 * 60 * 1000
+
+    /**
+     * A span in as few characters as it can honestly be put.
+     *
+     * Distinct from the UI's `formatSpan`, which is allowed prose ("under a
+     * minute") because it lands mid-sentence. This one is read in places with a
+     * hard width, so it never returns a phrase.
+     */
+    fun shortSpan(ms: Long): String = when {
+        ms < 60_000 -> "under 1m"
+        ms < 3_600_000 -> "${ms / 60_000}m"
+        ms < 86_400_000 -> "${ms / 3_600_000}h"
+        else -> "${ms / 86_400_000}d"
+    }
+
+    /**
+     * What the uptime ring calls the figure inside it.
+     *
+     * Constrained by the arc it sits in, which is about thirteen characters wide,
+     * and "past under a minute" is nineteen: it truncated to "PAST UNDER A MINU…"
+     * and pushed itself over the percentage above it.
+     *
+     * Under a minute of history the span is not the useful fact anyway. A 100%
+     * that rests on a single check is worth labelling as a single check, which is
+     * both shorter and a better warning against reading anything into it.
+     */
+    fun ringLabel(window: UptimeWindow?): String {
+        if (window == null) return "no checks yet"
+        if (window.complete) return "24h uptime"
+        if (window.spanMs < 60_000) {
+            return if (window.checks == 1) "1 check" else "${window.checks} checks"
+        }
+        return "past ${shortSpan(window.spanMs)}"
+    }
 }
 
 /** A monitor plus everything we know about how it has been behaving. */
@@ -907,8 +979,11 @@ data class GlobalSettings(
      *
      * If a network blocks it the probe simply fails, no readings accumulate, and
      * latency is judged raw exactly as it was before this existed.
+     *
+     * The default is GrapheneOS's connectivity check rather than Google's. See
+     * [ConnectivityReference] for the argument and for the other presets.
      */
-    val latencyReferenceUrl: String = "https://www.gstatic.com/generate_204",
+    val latencyReferenceUrl: String = ConnectivityReference.DEFAULT_URL,
     /**
      * Let the phone's ringer switch decide whether an URGENT page makes noise.
      *
@@ -1000,7 +1075,94 @@ data class GlobalSettings(
     val certWarnDays: Int = 14,
     /** Days before expiry at which it stops being merely advisory. */
     val certCriticalDays: Int = 2,
+
+    // ---- GitHub -------------------------------------------------------------
+    /**
+     * Optional GitHub personal access token, stored on this device and nowhere
+     * else.
+     *
+     * Raises the REST limit from 60 requests an hour per IP to 5,000, and lets an
+     * unchanged check answer 304 without spending any of that budget at all.
+     * Entirely optional: a couple of repositories on a fifteen-minute cadence fit
+     * inside 60 comfortably.
+     *
+     * Never logged, never put in a notification, never written into a check's
+     * detail line, and left out of an export unless
+     * [includeSecretsInExport] says otherwise. See
+     * [me.river.nightbell.domain.Secrets].
+     */
+    val githubToken: String = "",
+    /**
+     * Write the token into an exported backup.
+     *
+     * Off, and it has to be: an export is a file the user then moves through a
+     * cloud provider or a chat app, and a bearer credential riding along inside it
+     * is a leak the user never agreed to. On is a deliberate answer to a warning,
+     * for someone moving to a new phone who would rather not re-issue the token.
+     */
+    val includeSecretsInExport: Boolean = false,
+
+    // ---- Nightbell's own updates --------------------------------------------
+    /**
+     * Look for a newer Nightbell and say so once.
+     *
+     * On by default and cheap (one request every six hours), but easy to turn off
+     * for anyone whose F-Droid client already handles this. Nothing is downloaded
+     * and nothing is installed: the notification opens a page.
+     */
+    val updateChecksEnabled: Boolean = true,
+    val updateSource: UpdateSource = UpdateSource.GITHUB,
 )
+
+/**
+ * Where the latency probe times its round trip, and why it is not Google's.
+ *
+ * The probe needs an endpoint that is up, close to every network and cheap to
+ * answer. `www.gstatic.com/generate_204` fits, which is why it shipped, and it
+ * carries a cost that was never argued for: an app whose pitch is no server, no
+ * account and no third party was quietly telling Google's edge where the phone
+ * was, once every forty-five seconds, for a measurement the user never asked
+ * Google to be part of.
+ *
+ * GrapheneOS runs the same 204 for the same purpose and answers to nobody with an
+ * advertising business, so it is the default now. The field stays free text: a
+ * homelab with its own always-up endpoint is a better reference than any of these,
+ * and a network that blocks all of them simply produces no readings, which the
+ * baseline maths already treats as "judge the latency raw".
+ */
+object ConnectivityReference {
+
+    const val DEFAULT_URL = "https://connectivitycheck.grapheneos.network/generate_204"
+
+    /** What shipped up to 3.1.1, kept only so the migration can recognise it. */
+    const val LEGACY_GOOGLE_URL = "https://www.gstatic.com/generate_204"
+
+    data class Preset(val label: String, val url: String, val blurb: String)
+
+    val presets: List<Preset> = listOf(
+        Preset(
+            label = "GrapheneOS",
+            url = DEFAULT_URL,
+            blurb = "The default. Same 204, run by a project with no advertising business.",
+        ),
+        Preset(
+            label = "Ubuntu",
+            url = "https://connectivity-check.ubuntu.com/",
+            blurb = "Canonical's connectivity check. A second opinion if the first is blocked.",
+        ),
+    )
+
+    /**
+     * Rewrites a stored endpoint that is only there because it used to be the
+     * default.
+     *
+     * A value equal to the old default was never a choice, it was an absence of
+     * one, so leaving it in place would mean the fix reached new installs only.
+     * Anything else the user has typed is left exactly as typed, including
+     * gstatic typed deliberately.
+     */
+    fun migrate(url: String): String = if (url.trim() == LEGACY_GOOGLE_URL) DEFAULT_URL else url
+}
 
 /**
  * One timing of [GlobalSettings.latencyReferenceUrl].

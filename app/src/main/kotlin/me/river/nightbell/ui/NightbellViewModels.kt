@@ -27,8 +27,15 @@ import me.river.nightbell.domain.MonitorQuery
 import me.river.nightbell.domain.MonitorTemplates
 import me.river.nightbell.domain.PauseScope
 import me.river.nightbell.domain.PauseState
+import me.river.nightbell.domain.AppUpdate
+import me.river.nightbell.domain.GitHubRepo
+import me.river.nightbell.domain.GitHubWatch
 import me.river.nightbell.domain.MonitorKind
+import me.river.nightbell.domain.Secrets
+import me.river.nightbell.domain.UpdateState
 import me.river.nightbell.domain.ProxyRoute
+import me.river.nightbell.domain.StatusExpectation
+import me.river.nightbell.domain.StatusMode
 import me.river.nightbell.domain.Validation
 import me.river.nightbell.domain.isCancellation
 import me.river.nightbell.domain.runCatchingCancellable
@@ -503,6 +510,7 @@ class SetupViewModel(
             settings = snapshot.settings
             if (editingId != null) {
                 snapshot.monitors.firstOrNull { it.id == editingId }?.let { draft = it.migrated }
+                if (draft.github.repository.isSet) repoInput = draft.github.slug
             } else {
                 draft = draft.copy(
                     intervalMinutes = snapshot.settings.defaultIntervalMinutes,
@@ -543,8 +551,75 @@ class SetupViewModel(
                 kind = kind,
                 method = me.river.nightbell.domain.HttpMethod.GET,
             )
+
+            MonitorKind.GITHUB_REPO -> draft.copy(
+                kind = kind,
+                method = me.river.nightbell.domain.HttpMethod.GET,
+                status = StatusExpectation(mode = StatusMode.ANY_SUCCESS),
+                assertion = draft.assertion.copy(mode = AssertionMode.NONE),
+                // GitHub allows 60 requests an hour without a token and one poll
+                // spends up to three of them, so anything tighter than a quarter
+                // of an hour runs the device out of budget before the hour is up.
+                intervalMinutes = maxOf(draft.intervalMinutes, MIN_GITHUB_INTERVAL),
+            ).withTargets(emptyList())
         }
         testResult = null
+    }
+
+    // ---- github ------------------------------------------------------------
+
+    /**
+     * What the user has typed into the repository field.
+     *
+     * Held separately from the draft because the two are not the same string: the
+     * field takes anything that names a repository and the draft stores the parsed
+     * `owner/repo`, so binding the field to the draft would rewrite a
+     * half-pasted URL under the cursor on every keystroke.
+     */
+    var repoInput by mutableStateOf("")
+        private set
+
+    /** The repository field, and everything it derives. */
+    fun setRepo(raw: String) {
+        repoInput = raw
+        val parsed = GitHubRepo.parse(raw)
+        draft = if (parsed == null) {
+            // Cleared rather than left stale: a URL that no longer parses must not
+            // leave the previous repository quietly saved behind it.
+            draft.copy(url = "", github = draft.github.copy(owner = "", repo = ""))
+        } else {
+            draft.copy(
+                // The canonical page, so every screen that shows a monitor's URL,
+                // and every "open this" the app offers, lands somewhere useful.
+                url = parsed.url,
+                github = draft.github.copy(owner = parsed.owner, repo = parsed.name),
+            )
+        }
+        testResult = null
+    }
+
+    fun updateGitHub(transform: (GitHubWatch) -> GitHubWatch) {
+        draft = draft.copy(github = transform(draft.github))
+        testResult = null
+    }
+
+    /** The saved token, redacted. Never the token itself. See [Validation]. */
+    val githubTokenRedacted: String
+        get() = Secrets.redact(settings.githubToken)
+
+    val hasGitHubToken: Boolean get() = settings.githubToken.isNotBlank()
+
+    /**
+     * Saves a token from the setup flow.
+     *
+     * Global rather than per monitor: the rate limit is per device, so a token is
+     * a property of the phone rather than of one repository, and asking for it
+     * again per monitor would be asking the user to paste a credential twice.
+     */
+    fun setGitHubToken(value: String) {
+        val cleaned = value.trim()
+        settings = settings.copy(githubToken = cleaned)
+        viewModelScope.launch { graph.store.updateSettings { it.copy(githubToken = cleaned) } }
     }
 
     // ---- multi-element editing ---------------------------------------------
@@ -655,6 +730,9 @@ class SetupViewModel(
 
     companion object {
         const val LAST_STEP = 3
+
+        /** Below this, an unauthenticated device runs out of GitHub budget. */
+        const val MIN_GITHUB_INTERVAL = 15
     }
 }
 
@@ -723,6 +801,24 @@ class DetailViewModel(
         viewModelScope.launch {
             graph.engine.acknowledgeUrgent(monitorId)
             toast = "Acknowledged — no more urgent alerts for this outage"
+        }
+    }
+
+    /**
+     * "I have read this repository's news."
+     *
+     * Takes down what is on screen and records when, and deliberately does not
+     * touch the last-seen ids: those advanced when the poll found the news, and
+     * rewinding them would announce all of it again on the next check. Same path
+     * as the notification action, so the two cannot drift.
+     */
+    fun markGitHubSeen() {
+        viewModelScope.launch {
+            graph.alerts.cancelGitHub(monitorId)
+            graph.store.updateRuntime(monitorId) {
+                it.copy(github = it.github.copy(seenAt = System.currentTimeMillis()))
+            }
+            toast = "Marked as seen"
         }
     }
 
@@ -837,10 +933,14 @@ class SettingsViewModel(private val graph: Nightbell.Graph) : ViewModel() {
                     versionName = BuildConfig.VERSION_NAME,
                     versionCode = BuildConfig.VERSION_CODE,
                     nowMs = System.currentTimeMillis(),
+                    includeSecrets = snapshot.settings.includeSecretsInExport,
                 )
                 sink(document)
                 val count = snapshot.monitors.size
-                toast = "Exported $count monitor" + if (count == 1) "" else "s"
+                val secrets = snapshot.settings.includeSecretsInExport &&
+                    snapshot.settings.githubToken.isNotBlank()
+                toast = "Exported $count monitor" + (if (count == 1) "" else "s") +
+                    if (secrets) ", token included" else ""
             } catch (error: Throwable) {
                 if (isCancellation(error)) throw error
                 Log.w(TAG, "Export failed", error)
@@ -948,6 +1048,66 @@ class SettingsViewModel(private val graph: Nightbell.Graph) : ViewModel() {
                 }
             } finally {
                 refetchingFavicons = false
+            }
+        }
+    }
+
+    // ---- GitHub token ------------------------------------------------------
+
+    /**
+     * The saved token, redacted.
+     *
+     * The screen never has access to the token itself, which is the point: there
+     * is no path from a composable to the credential, so no future edit to that
+     * screen can put it on the display or into a screenshot by accident.
+     */
+    val githubTokenRedacted: StateFlow<String> = graph.store.snapshot
+        .map { Secrets.redact(it.settings.githubToken) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+
+    fun setGitHubToken(raw: String) {
+        val cleaned = raw.trim()
+        update { it.copy(githubToken = cleaned) }
+        toast = if (cleaned.isBlank()) "Token removed" else "Token saved on this device"
+    }
+
+    // ---- Nightbell's own updates --------------------------------------------
+
+    val appUpdate: StateFlow<UpdateState> = graph.store.snapshot
+        .map { it.update }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UpdateState())
+
+    var checkingForUpdate by mutableStateOf(false)
+        private set
+
+    /**
+     * The "check now" button.
+     *
+     * Forces past the six-hour throttle, because a human asking is a better
+     * reason than a timer, and past `notifiedVersion` would be a step too far:
+     * being told again about a version already refused is not what the button
+     * offers. The result is reported either way, so a tap always answers.
+     */
+    fun checkForUpdateNow() {
+        if (checkingForUpdate) return
+        if (!graph.network.isOnline()) {
+            toast = OFFLINE_TOAST
+            return
+        }
+        checkingForUpdate = true
+        viewModelScope.launch {
+            try {
+                graph.engine.checkForAppUpdate(force = true)
+                val state = graph.store.currentSnapshot().update
+                val latest = state.latestVersion
+                toast = when {
+                    latest.isBlank() -> "Couldn't reach ${settings.value.updateSource.label}"
+                    AppUpdate.isNewer(latest, BuildConfig.VERSION_NAME) ->
+                        "Version $latest is available"
+                    else -> "You're on the newest version"
+                }
+            } finally {
+                checkingForUpdate = false
             }
         }
     }

@@ -271,8 +271,49 @@ android {
         // claimed the opposite of all of it and no longer does, and the routing
         // switch renders on every setup screen that offers Test rather than two
         // screens past the first one that does.
-        versionCode = 29
-        versionName = "3.1.1"
+        // 3.2.0 adds a fourth monitor kind and answers issue #4.
+        //
+        // A GitHub repository monitor. The field takes `owner/repo` or any link
+        // to the repository, and the poll is three conditional GETs against the
+        // REST API from the phone, with no server and no account, like every
+        // other check this app makes. It reports new stars (every one of them by
+        // default, which is what was asked for), new issues, and new releases,
+        // with milestone and digest modes as optional noise controls and optional
+        // keyword and author filters on issues. Pull requests are watched
+        // separately and are off by default, because GitHub serves them through
+        // the issues endpoint and letting them through is the single most common
+        // way a repository monitor cries wolf.
+        //
+        // The whole design is shaped by a budget of sixty requests an hour per
+        // address. Every endpoint carries an ETag, a 304 is the expected answer,
+        // calls are queued one at a time across every monitor, and being refused
+        // is recorded as rate-limit state rather than reported as an outage: a
+        // 403 with no budget left says nothing whatsoever about the repository,
+        // so it produces no sample, no health change and no alert. An optional
+        // fine-grained token raises the ceiling to 5,000 an hour. It is stored on
+        // this device only, never logged, never put in a notification, redacted
+        // wherever it is shown, and left out of an export unless the user turns
+        // that on against a warning.
+        //
+        // Nightbell also checks for its own updates now, through GitHub releases
+        // or the F-Droid index, at most once every six hours and easy to switch
+        // off. It notifies once per version, with Open download, Remind later and
+        // Ignore this version. Nothing is downloaded and nothing is installed:
+        // there is no code path in this app that could, and an uptime monitor
+        // quietly replacing its own APK would be indistinguishable from the thing
+        // every user is told to be afraid of.
+        //
+        // Issue #4: the latency probe no longer defaults to Google's endpoint.
+        // The probe times something always-up so a slow phone is not reported as
+        // a slow website, and any 204 does that equally well, so the default is
+        // GrapheneOS's connectivity check. Installs that never chose one are
+        // migrated on read, because a stored value equal to the old default was
+        // never a choice; anything typed by hand is left alone, gstatic included.
+        // The endpoint stays user-editable with presets, and the network security
+        // config now pins connectivitycheck.grapheneos.network, api.github.com and
+        // f-droid.org instead of www.gstatic.com.
+        versionCode = 30
+        versionName = "3.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
