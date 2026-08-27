@@ -1,0 +1,23 @@
+Nightbell can now watch a server with a self-signed certificate, which it could
+not do before. Choose "Pinned key" and it records that server's key on the first
+successful check, then requires exactly that key every time after. This covers a
+NAS, a homelab box behind a private CA, and a Tor hidden service, where no
+certificate authority issues at all. Certificates from CAs you installed on the
+phone yourself are trusted as well.
+
+The response time chart draws your latency budget across it now.
+
+Every check that answered slower than the budget is drawn in amber, so one glance
+says how many were over and how many were inside.
+
+When a certificate is refused, the app says which of the three usual reasons it
+was instead of listing all of them, and when a redirect from http to https is what
+caused the handshake, it says that as well. That was the confusing half of the
+report this came from: a monitor set up as plain http failing on a certificate.
+
+A newer version of Nightbell now shows a banner on the dashboard until you dismiss
+it, rather than one notification that could be missed once and never come back.
+Dismissing it hides that version for good, and Settings can undo that.
+
+Nothing is downloaded or installed for you, and there is still no account, no
+server and no third party.

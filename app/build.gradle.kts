@@ -317,8 +317,8 @@ android {
         // showing stars, open issues and the latest tag. The detail screen kept a
         // full Response time card plotting the round trip to api.github.com,
         // which is the same figure under a bigger heading, and it is gone now.
-        versionCode = 31
-        versionName = "3.2.1"
+        versionCode = 32
+        versionName = "3.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
