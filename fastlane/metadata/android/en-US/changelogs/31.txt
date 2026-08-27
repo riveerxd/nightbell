@@ -1,0 +1,8 @@
+A repository monitor's own screen no longer charts how fast GitHub answered.
+3.2.0 took that off the dashboard card and put the star count, the open issue
+count and the latest tag there instead, but left a full Response time card
+standing one screen further in, plotting the same round trip under a bigger
+heading. It is gone from both places now.
+
+Every other kind of monitor keeps its response-time chart, because for those it
+is the measurement the monitor exists to make. Nothing else changed.

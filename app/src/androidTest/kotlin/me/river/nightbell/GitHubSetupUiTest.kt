@@ -10,6 +10,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.performScrollToNode
 import androidx.test.espresso.Espresso
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -223,6 +224,12 @@ class GitHubSetupUiTest {
         composeRule.onNodeWithTag("github-mark-seen").assertIsDisplayed()
         composeRule.onNodeWithTag("github-mute-24h").assertIsDisplayed()
         composeRule.captureScreenshot("gh-06b-detail-actions")
+
+        // And no response-time chart anywhere on the screen. It plots the round
+        // trip to api.github.com, which is not what this monitor is about. 3.2.0
+        // took it off the dashboard card and left it standing here, which is the
+        // whole of what 3.2.1 fixes.
+        composeRule.onAllNodesWithContentDescription("Response time").assertCountEquals(0)
     }
 
     @Test

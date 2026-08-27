@@ -226,7 +226,10 @@ fun DetailScreen(
             }
         }
 
-        if (runtime.samples.isNotEmpty()) {
+        // No response-time chart for a repository. It plots the round trip to
+        // api.github.com, which is not the thing being watched, and 3.2.0 removed
+        // exactly that from the dashboard card while leaving it standing here.
+        if (monitor.kind != MonitorKind.GITHUB_REPO && runtime.samples.isNotEmpty()) {
             item(key = "chart") {
                 StaggeredEntrance(index = 2, key = "chart-${monitor.id}", log = entrance) {
                     GlassCard {

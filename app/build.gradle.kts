@@ -312,8 +312,13 @@ android {
         // The endpoint stays user-editable with presets, and the network security
         // config now pins connectivitycheck.grapheneos.network, api.github.com and
         // f-droid.org instead of www.gstatic.com.
-        versionCode = 30
-        versionName = "3.2.0"
+        // 3.2.1 finishes what 3.2.0 started on the repository screens. The
+        // dashboard card stopped reporting GitHub's own uptime and started
+        // showing stars, open issues and the latest tag. The detail screen kept a
+        // full Response time card plotting the round trip to api.github.com,
+        // which is the same figure under a bigger heading, and it is gone now.
+        versionCode = 31
+        versionName = "3.2.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
