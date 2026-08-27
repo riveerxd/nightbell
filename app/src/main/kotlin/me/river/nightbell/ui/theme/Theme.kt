@@ -76,6 +76,16 @@ class NightbellColorScheme(
      */
     val Mint: Color,
     val Amber: Color,
+
+    /**
+     * Stars, and nothing else.
+     *
+     * Its own colour rather than [Amber] because amber means *degraded* everywhere
+     * else in this app, and a repository's star count is not a warning about
+     * anything. Keeping them apart is what lets the star glyph be gold without a
+     * repo card reading as a monitor in trouble.
+     */
+    val Gold: Color,
     val Rose: Color,
     val Sky: Color,
     val Coral: Color,
@@ -143,6 +153,7 @@ val NightbellDarkColors = NightbellColorScheme(
     Indigo = Color(0xFF1647C7),
     Mint = Color(0xFF2FD98A),
     Amber = Color(0xFFFFB020),
+    Gold = Color(0xFFFFC53D),
     Rose = Color(0xFFFF4D57),
     Sky = Color(0xFF6AA8FF),
     Coral = Color(0xFFFF7A59),
@@ -184,6 +195,10 @@ val NightbellLightColors = NightbellColorScheme(
     // Hue preserved, luminance dropped to clear 4.5:1 against Void and Ink.
     Mint = Color(0xFF07834B),
     Amber = Color(0xFF8A5200),
+    // Same treatment as the rest of the light scheme: hue kept, luminance dropped
+    // until it clears 4.5:1 on white. A gold that stays gold on paper does not
+    // exist, and an unreadable glyph is worse than a dark one.
+    Gold = Color(0xFF7A5600),
     Rose = Color(0xFFC4111F),
     Sky = Color(0xFF1D4FD8),
     Coral = Color(0xFFB63A18),

@@ -293,6 +293,21 @@ fun MicroTag(
     color: Color = NightbellColors.TextSecondary,
     background: Color = NightbellColors.sheen(0.07f),
     icon: ImageVector? = null,
+    /**
+     * Spoken name for [icon].
+     *
+     * Worth having on a tag whose text is a bare number: "13" on its own tells a
+     * screen reader nothing, and the star saying "stars" fixes it.
+     */
+    iconDescription: String? = null,
+    /**
+     * Draw [icon] after the text instead of before it.
+     *
+     * For a tag where the glyph is the *unit* rather than the category: "13 ★"
+     * reads the way "491 ms" does, while "★ 13" reads as a label in front of a
+     * number. Every other tag on the card is icon-then-word and stays that way.
+     */
+    iconAtEnd: Boolean = false,
 ) {
     // Metadata only, deliberately not interactive.
     //
@@ -308,14 +323,17 @@ fun MicroTag(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
-        if (icon != null) {
-            Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(11.dp))
+        if (icon != null && !iconAtEnd) {
+            Icon(icon, contentDescription = iconDescription, tint = color, modifier = Modifier.size(11.dp))
         }
         Text(
             text = text,
             style = MaterialTheme.typography.labelSmall,
             color = color,
         )
+        if (icon != null && iconAtEnd) {
+            Icon(icon, contentDescription = iconDescription, tint = color, modifier = Modifier.size(11.dp))
+        }
     }
 }
 

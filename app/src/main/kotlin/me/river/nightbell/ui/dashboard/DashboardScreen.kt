@@ -1417,8 +1417,12 @@ private fun GitHubFactsRow(
             if (watch.notifyOnStars) {
                 MicroTag(
                     text = state.lastStarCount.toString(),
-                    color = NightbellColors.Amber,
+                    color = NightbellColors.Gold,
                     icon = NightbellIcons.Star,
+                    iconDescription = "stars",
+                    // "13 ★", not "★ 13": the number is the fact and the star is
+                    // its unit. Same order as the detail card and the widget.
+                    iconAtEnd = true,
                 )
                 Spacer(Modifier.width(6.dp))
             }

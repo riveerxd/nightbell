@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +24,8 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -43,6 +47,7 @@ import android.net.Uri
 import androidx.compose.ui.platform.LocalContext
 import me.river.nightbell.domain.CertificateWatch
 import me.river.nightbell.domain.DigestMode
+import me.river.nightbell.domain.GitHubActivity
 import me.river.nightbell.domain.GitHubState
 import me.river.nightbell.domain.githubInstantMs
 import me.river.nightbell.domain.Health
@@ -100,6 +105,8 @@ fun DetailScreen(
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     var confirmDelete by remember { mutableStateOf(false) }
     var showAllChecks by remember { mutableStateOf(false) }
+    /** Repository monitors show activity; this is the way back to the poll list. */
+    var showRawChecks by remember { mutableStateOf(false) }
     val entrance = rememberEntranceLog()
     val context = LocalContext.current
 
@@ -133,6 +140,20 @@ fun DetailScreen(
     val (accent, accentEnd) = accentFor(monitor.accent)
     val health = if (!monitor.enabled) Health.PAUSED else runtime.health
     val now = LocalNowMs.current
+
+    // A repository monitor's history is the repository's history, not the poll's.
+    // Nobody watches a repo to find out how api.github.com is feeling, and the
+    // fact they *are* watching for, the stars going 11 to 13, was in the sample
+    // series all along with nothing reading it out.
+    //
+    // Derived here rather than inside the list below: a `LazyColumn` content
+    // lambda is not a composable, so a toggle read only in there does not
+    // reliably recompose, and differencing sixty samples belongs behind a
+    // `remember` either way.
+    val repoHistory = monitor.kind == MonitorKind.GITHUB_REPO && !showRawChecks
+    val activity = remember(runtime.samples, repoHistory) {
+        if (repoHistory) GitHubActivity.of(runtime.samples) else emptyList()
+    }
 
     LazyColumn(
         Modifier.fillMaxSize().testTag("detail-list"),
@@ -292,7 +313,11 @@ fun DetailScreen(
         }
 
         item(key = "events-header") {
-            SectionHeader("Recent checks", icon = NightbellIcons.History, accent = accent)
+            SectionHeader(
+                if (repoHistory) "Repository activity" else "Recent checks",
+                icon = NightbellIcons.History,
+                accent = accent,
+            )
         }
 
         if (runtime.samples.isEmpty()) {
@@ -302,6 +327,42 @@ fun DetailScreen(
                         text = "No checks recorded yet. Run one now to start the history.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = NightbellColors.TextTertiary,
+                    )
+                }
+            }
+        } else if (repoHistory) {
+            val shown = if (showAllChecks) activity else activity.take(EVENT_PREVIEW)
+            item(key = "activity") {
+                GlassCard(Modifier.testTag("activity-card"), contentPadding = 6.dp) {
+                    shown.forEachIndexed { index, row ->
+                        ActivityRow(row, now)
+                        if (index < shown.lastIndex) {
+                            GlassDivider(Modifier.padding(horizontal = 12.dp), alpha = 0.06f)
+                        }
+                    }
+                }
+            }
+            item(key = "activity-more") {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (activity.size > EVENT_PREVIEW) {
+                        NightbellButton(
+                            text = if (showAllChecks) "Show fewer" else "Show all ${activity.size}",
+                            onClick = { showAllChecks = !showAllChecks },
+                            icon = if (showAllChecks) NightbellIcons.ChevronUp else NightbellIcons.History,
+                            tone = ButtonTone.Secondary,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    // The poll list is still there for anyone debugging a monitor
+                    // that has gone quiet: it is the answer to "is it even
+                    // running", which the activity list deliberately does not
+                    // spell out check by check.
+                    NightbellButton(
+                        text = "Every check",
+                        onClick = { showRawChecks = true },
+                        icon = NightbellIcons.Sliders,
+                        tone = ButtonTone.Secondary,
+                        modifier = Modifier.weight(1f),
                     )
                 }
             }
@@ -321,19 +382,32 @@ fun DetailScreen(
                     }
                 }
             }
-            if (all.size > EVENT_PREVIEW) {
+            if (all.size > EVENT_PREVIEW || showRawChecks) {
                 item(key = "events-more") {
-                    NightbellButton(
-                        text = if (showAllChecks) {
-                            "Show fewer"
-                        } else {
-                            "Show all ${all.size} checks"
-                        },
-                        onClick = { showAllChecks = !showAllChecks },
-                        icon = if (showAllChecks) NightbellIcons.ChevronUp else NightbellIcons.History,
-                        tone = ButtonTone.Secondary,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        if (all.size > EVENT_PREVIEW) {
+                            NightbellButton(
+                                text = if (showAllChecks) {
+                                    "Show fewer"
+                                } else {
+                                    "Show all ${all.size} checks"
+                                },
+                                onClick = { showAllChecks = !showAllChecks },
+                                icon = if (showAllChecks) NightbellIcons.ChevronUp else NightbellIcons.History,
+                                tone = ButtonTone.Secondary,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        if (showRawChecks) {
+                            NightbellButton(
+                                text = "Activity",
+                                onClick = { showRawChecks = false },
+                                icon = NightbellIcons.Repo,
+                                tone = ButtonTone.Secondary,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -427,23 +501,34 @@ private fun HeroCard(
                         color = healthColor(health),
                     )
                 }
-                Text(
-                    text = runtime.lastMessage.ifBlank {
-                        when {
-                            runtime.lastCheckedAt <= 0 -> "Not checked yet"
-                            // DEGRADED is a pass, so lastMessage is empty — spell
-                            // out why the card is amber rather than green.
-                            health == Health.DEGRADED ->
-                                "Responded in ${formatLatency(runtime.lastLatencyMs)} — " +
-                                    "over its latency budget"
-                            else -> "Last response ${formatLatency(runtime.lastLatencyMs)}"
-                        }
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = NightbellColors.TextSecondary,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                // A repository says its headline fact with a gold star and a
+                // number. The checker's own "13 stars · 0 open issues" is still
+                // what a widget and a log line get, but on screen the word is
+                // doing nothing the glyph does not do faster.
+                val repoFacts = monitor.kind == MonitorKind.GITHUB_REPO &&
+                    runtime.github.seeded &&
+                    (monitor.github.notifyOnStars || monitor.github.notifyOnIssues || monitor.github.watchPullRequests)
+                if (repoFacts) {
+                    RepoHeroFacts(monitor, runtime)
+                } else {
+                    Text(
+                        text = runtime.lastMessage.ifBlank {
+                            when {
+                                runtime.lastCheckedAt <= 0 -> "Not checked yet"
+                                // DEGRADED is a pass, so lastMessage is empty — spell
+                                // out why the card is amber rather than green.
+                                health == Health.DEGRADED ->
+                                    "Responded in ${formatLatency(runtime.lastLatencyMs)} — " +
+                                        "over its latency budget"
+                                else -> "Last response ${formatLatency(runtime.lastLatencyMs)}"
+                            }
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = NightbellColors.TextSecondary,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     MicroTag(monitor.kind.label, color = accent, icon = kindIcon(monitor.kind))
                     if (runtime.lastCode > 0) {
@@ -474,6 +559,45 @@ private fun HeroCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+        }
+    }
+}
+
+/**
+ * The star count and the open-issue count, in the hero's message slot.
+ *
+ * Only the tracks the monitor is actually watching: a repository monitor set to
+ * releases only does not get a star count it never asked for, which is the same
+ * rule the dashboard card follows.
+ */
+@Composable
+private fun RepoHeroFacts(monitor: Monitor, runtime: MonitorRuntime) {
+    val state = runtime.github
+    val watch = monitor.github
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        if (watch.notifyOnStars) {
+            Text(
+                text = state.lastStarCount.toString(),
+                style = MaterialTheme.typography.bodySmall,
+                color = NightbellColors.TextSecondary,
+            )
+            Icon(
+                NightbellIcons.Star,
+                contentDescription = "stars",
+                tint = NightbellColors.Gold,
+                modifier = Modifier.size(13.dp),
+            )
+        }
+        if (watch.notifyOnIssues || watch.watchPullRequests) {
+            Text(
+                text = (if (watch.notifyOnStars) "· " else "") +
+                    if (state.openIssues == 1) "1 open issue" else "${state.openIssues} open issues",
+                style = MaterialTheme.typography.bodySmall,
+                color = NightbellColors.TextSecondary,
+            )
         }
     }
 }
@@ -811,6 +935,209 @@ private fun EventRow(sample: Sample) {
 }
 
 /**
+ * One repository number and what it counts, centred in its own tile.
+ *
+ * Number first, unit after: the same shape as "491 ms", and the same shape the
+ * dashboard card and the widget use for these three facts. The star is the only
+ * unit drawn as a glyph, because it is the only one everybody already reads as a
+ * picture. The other two would be guesswork as icons.
+ *
+ * The label is allowed to shrink rather than ellipsise: "open issues" at a third
+ * of a narrow card is the tightest of the three, and a tile reading "open iss…"
+ * is worse than one reading it a point smaller.
+ */
+@Composable
+private fun RepoStatTile(
+    value: String,
+    label: String,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    iconTint: Color = NightbellColors.TextTertiary,
+) {
+    val shape = RoundedCornerShape(16.dp)
+    Row(
+        modifier
+            .clip(shape)
+            .background(NightbellColors.sheen(0.05f))
+            .border(1.dp, NightbellColors.sheen(0.07f), shape)
+            .padding(horizontal = 10.dp, vertical = 14.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp),
+            color = NightbellColors.TextPrimary,
+            maxLines = 1,
+        )
+        Spacer(Modifier.width(6.dp))
+        if (icon != null) {
+            Icon(
+                icon,
+                contentDescription = label,
+                tint = iconTint,
+                modifier = Modifier.size(16.dp),
+            )
+        } else {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodySmall,
+                color = NightbellColors.TextTertiary,
+                maxLines = 1,
+                softWrap = false,
+                autoSize = TextAutoSize.StepBased(
+                    minFontSize = 9.sp,
+                    maxFontSize = MaterialTheme.typography.bodySmall.fontSize,
+                ),
+            )
+        }
+    }
+}
+
+/**
+ * One thing that happened to the repository.
+ *
+ * Quiet runs and the baseline are drawn flat rather than as rows with badges:
+ * they are punctuation between the rows that matter, and giving them the same
+ * weight as a release would undo the point of collapsing them.
+ */
+@Composable
+private fun ActivityRow(row: GitHubActivity.Row, nowMs: Long) {
+    if (row is GitHubActivity.Quiet || row is GitHubActivity.Baseline) {
+        val text = when (row) {
+            is GitHubActivity.Quiet ->
+                if (row.checks == 1) "1 check · nothing changed" else "${row.checks} checks · nothing changed"
+            is GitHubActivity.Baseline -> "History starts here · ${row.facts.stars} stars, " +
+                "${row.facts.openIssues} open"
+            else -> ""
+        }
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodySmall,
+                color = NightbellColors.TextTertiary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                text = formatRelative(row.at, nowMs),
+                style = MaterialTheme.typography.bodySmall,
+                color = NightbellColors.TextTertiary,
+            )
+        }
+        return
+    }
+
+    val icon: ImageVector
+    val accent: Color
+    val title: String
+    val subtitle: String
+    val trailing: String
+    when (row) {
+        is GitHubActivity.Stars -> {
+            icon = NightbellIcons.Star
+            accent = NightbellColors.Gold
+            title = if (row.to == 1) "1 star" else "${row.to} stars"
+            subtitle = "was ${row.from}"
+            trailing = if (row.delta > 0) "+${row.delta}" else row.delta.toString()
+        }
+
+        is GitHubActivity.Issue -> {
+            icon = NightbellIcons.Warning
+            accent = NightbellColors.Sky
+            title = "#${row.number} ${row.title}".trim()
+            subtitle = "Issue opened"
+            trailing = ""
+        }
+
+        is GitHubActivity.IssueCount -> {
+            icon = NightbellIcons.Check
+            accent = if (row.closed > 0) NightbellColors.Mint else NightbellColors.Amber
+            val moved = kotlin.math.abs(row.closed)
+            title = if (row.closed > 0) {
+                if (moved == 1) "1 issue closed" else "$moved issues closed"
+            } else {
+                if (moved == 1) "1 issue reopened" else "$moved issues reopened"
+            }
+            subtitle = "${row.to} open now"
+            trailing = ""
+        }
+
+        is GitHubActivity.Release -> {
+            icon = NightbellIcons.Import
+            accent = NightbellColors.Mint
+            title = "Released ${row.tag}"
+            subtitle = "New release published"
+            trailing = ""
+        }
+
+        is GitHubActivity.Forks -> {
+            icon = NightbellIcons.Layers
+            accent = NightbellColors.Violet
+            title = if (row.to == 1) "1 fork" else "${row.to} forks"
+            subtitle = "was ${row.from}"
+            trailing = if (row.to > row.from) "+${row.to - row.from}" else "${row.to - row.from}"
+        }
+
+        is GitHubActivity.Push -> {
+            icon = NightbellIcons.Repo
+            accent = NightbellColors.TextSecondary
+            title = "Pushed to the repository"
+            subtitle = "Code changed"
+            trailing = ""
+        }
+
+        is GitHubActivity.Failed -> {
+            icon = NightbellIcons.Warning
+            accent = NightbellColors.Rose
+            title = row.note.ifBlank { "Check failed" }
+            // The point of the row: while this was happening the counts above were
+            // not being verified by anything.
+            subtitle = "Nothing learned about the repository"
+            trailing = if (row.code > 0) row.code.toString() else ""
+        }
+
+        else -> return
+    }
+
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconBadge(icon = icon, accent = accent, size = 28.dp)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (row is GitHubActivity.Failed) NightbellColors.Rose else NightbellColors.TextPrimary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = "$subtitle · ${dateFormat.format(Date(row.at))} ${timeFormat.format(Date(row.at))}",
+                style = MaterialTheme.typography.bodySmall,
+                color = NightbellColors.TextTertiary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (trailing.isNotBlank()) {
+            Spacer(Modifier.width(10.dp))
+            Text(
+                text = trailing,
+                style = MaterialTheme.typography.labelLarge,
+                color = accent,
+            )
+        }
+    }
+}
+
+/**
  * What the repository looks like right now, and how to get to it.
  *
  * Everything on this card came back with a request the monitor was making
@@ -836,30 +1163,35 @@ private fun GitHubHealthCard(
     val repo = monitor.github.repository
     GlassCard(accent = if (state.rateLimited) NightbellColors.Amber else Color.Transparent) {
         SectionHeader("Repository", icon = NightbellIcons.Repo, accent = accent)
+        // The headline of this monitor type, so it gets the card's full width: three
+        // equal tiles, each number centred over the width it owns, each reading
+        // number-then-unit the way "491 ms" does. Equal weights rather than
+        // wrap-content, because three stats of unequal name length would otherwise
+        // sit at three arbitrary positions and the row would shuffle sideways every
+        // time a count gained a digit.
         Row(
-            Modifier.testTag("github-metrics"),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            Modifier.fillMaxWidth().testTag("github-metrics"),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            MetricTile(
-                label = "Stars",
+            RepoStatTile(
                 value = state.lastStarCount.toString(),
-                accent = NightbellColors.Amber,
+                label = "stars",
+                icon = NightbellIcons.Star,
+                iconTint = NightbellColors.Gold,
                 modifier = Modifier.weight(1f),
             )
-            MetricTile(
-                label = "Open issues",
+            RepoStatTile(
                 value = state.openIssues.toString(),
-                accent = accent,
+                label = if (state.openIssues == 1) "open issue" else "open issues",
                 modifier = Modifier.weight(1f),
             )
-            MetricTile(
-                label = "Forks",
+            RepoStatTile(
                 value = state.forks.toString(),
-                accent = NightbellColors.Violet,
+                label = if (state.forks == 1) "fork" else "forks",
                 modifier = Modifier.weight(1f),
             )
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(16.dp))
 
         if (!state.seeded) {
             Text(

@@ -1886,7 +1886,7 @@ private fun GitHubWatchCard(
 ) {
     val watch = draft.github
 
-    SectionHeader("Stars", icon = NightbellIcons.Star, accent = NightbellColors.Amber)
+    SectionHeader("Stars", icon = NightbellIcons.Star, accent = NightbellColors.Gold)
     ToggleRow(
         title = "Watch the star count",
         subtitle = if (watch.notifyOnStars) {
@@ -1897,7 +1897,7 @@ private fun GitHubWatchCard(
         checked = watch.notifyOnStars,
         onCheckedChange = { v -> viewModel.updateGitHub { it.copy(notifyOnStars = v) } },
         icon = NightbellIcons.Star,
-        accent = NightbellColors.Amber,
+        accent = NightbellColors.Gold,
         modifier = Modifier.testTag("github-watch-stars"),
     )
     AnimatedVisibility(
@@ -1916,7 +1916,7 @@ private fun GitHubWatchCard(
                 checked = watch.notifyOnEveryStar,
                 onCheckedChange = { v -> viewModel.updateGitHub { it.copy(notifyOnEveryStar = v) } },
                 icon = NightbellIcons.Bell,
-                accent = NightbellColors.Amber,
+                accent = NightbellColors.Gold,
             )
             ToggleRow(
                 title = "Milestones",
@@ -1930,7 +1930,7 @@ private fun GitHubWatchCard(
                     viewModel.updateGitHub { it.copy(notifyOnStarMilestones = v) }
                 },
                 icon = NightbellIcons.Target,
-                accent = NightbellColors.Amber,
+                accent = NightbellColors.Gold,
             )
             Spacer(Modifier.height(6.dp))
             Text(

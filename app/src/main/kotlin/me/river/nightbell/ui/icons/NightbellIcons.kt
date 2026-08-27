@@ -203,11 +203,18 @@ object NightbellIcons {
             " M7 7.7 L7 16.3 M17 7.7 C17 12.2 12.6 12.4 7 12.4",
     )
 
-    /** The star count on a repository card, and nothing else. */
-    val Star = stroke(
+    /**
+     * The star count, wherever it is shown. Filled, unlike the rest of this set.
+     *
+     * Two reasons it earns the exception. A hollow star is the *not starred yet*
+     * glyph on every site that has one, so an outline says the opposite of what a
+     * count of 13 means. And at the 11 dp a card tag draws it at, a 1.7 px outline
+     * closes up into a smudge: the shape only survives filled.
+     */
+    val Star = filled(
         "Star",
-        "M12 3.4 L14.3 8.8 L20.2 9.3 L15.7 13.2 L17.1 19 L12 15.9 L6.9 19 L8.3 13.2 " +
-            "L3.8 9.3 L9.7 8.8 Z",
+        "M12 3.4 L14.5 9.16 L20.75 9.76 L16.04 13.91 L17.41 20.04 L12 16.85 " +
+            "L6.59 20.04 L7.96 13.91 L3.25 9.76 L9.5 9.16 Z",
     )
 
     val Layers = stroke(

@@ -209,10 +209,20 @@ class GitHubSetupUiTest {
         composeRule.waitForIdle()
         composeRule.onNodeWithContentDescription("Repository").assertIsDisplayed()
         composeRule.onNodeWithTag("github-metrics").assertIsDisplayed()
-        // MetricTile renders its label in caps, which is what is on the screen.
-        composeRule.onNodeWithText("STARS", useUnmergedTree = true).assertIsDisplayed()
-        composeRule.onNodeWithText("OPEN ISSUES", useUnmergedTree = true).assertIsDisplayed()
-        composeRule.onNodeWithText("FORKS", useUnmergedTree = true).assertIsDisplayed()
+        // The strip is number-then-unit on one line, and the star count's unit is
+        // the gold glyph, which carries the name as its content description.
+        // Two of them on this screen: the hero line and the strip. Either proves it.
+        composeRule.onAllNodesWithContentDescription("stars", useUnmergedTree = true)
+            .onFirst()
+            .assertIsDisplayed()
+        // Substring, because the label is singular at a count of one, and "first"
+        // because the hero line says the same thing further up the screen.
+        composeRule.onAllNodesWithText("open issue", substring = true, useUnmergedTree = true)
+            .onFirst()
+            .assertIsDisplayed()
+        composeRule.onAllNodesWithText("fork", substring = true, useUnmergedTree = true)
+            .onFirst()
+            .assertIsDisplayed()
         composeRule.captureScreenshot("gh-06-detail")
 
         list.performScrollToNode(hasTestTag("github-open-repo"))
