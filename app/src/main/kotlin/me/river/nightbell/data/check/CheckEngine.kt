@@ -104,7 +104,7 @@ class CheckEngine(
     var isOnline: () -> Boolean = { true }
 
     /**
-     * Runs the check without touching persisted state — used by "Test now".
+     * Runs the check without touching persisted state, for "Test now".
      *
      * @param certPin the key this monitor is already pinned to, if any. Empty from
      *   "Test now" on a monitor that has never been saved, which is correct: a
