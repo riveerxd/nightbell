@@ -11,7 +11,9 @@ import me.river.nightbell.domain.GitHubState
 import me.river.nightbell.domain.GlobalSettings
 import me.river.nightbell.domain.Monitor
 import me.river.nightbell.domain.ProxyRoute
+import me.river.nightbell.domain.RepoFacts
 import me.river.nightbell.domain.Secrets
+import me.river.nightbell.domain.githubInstantMs
 import java.io.IOException
 import java.io.InterruptedIOException
 import java.net.ConnectException
@@ -260,12 +262,35 @@ class GitHubChecker(
                 rate = rate,
             )
 
+            // What this check saw, for the history to difference later.
+            //
+            // Carried forward from [previous] wherever the endpoint answered 304 or
+            // was not asked at all, because a sample that recorded "unknown" for a
+            // count that simply had not changed would read as the repository losing
+            // its stars and getting them back.
+            val newestIssue = issues.filter { !it.isPullRequest }.maxByOrNull { it.number }
+            val facts = RepoFacts(
+                stars = stars,
+                openIssues = openIssues,
+                forks = forks,
+                releaseTag = release?.tag ?: previous.lastReleaseTag,
+                issueNumber = newestIssue?.number?.coerceAtLeast(previous.lastIssueNumber)
+                    ?: previous.lastIssueNumber,
+                issueTitle = if (newestIssue != null && newestIssue.number >= previous.lastIssueNumber) {
+                    newestIssue.title
+                } else {
+                    previous.lastIssueTitle
+                },
+                pushedAt = githubInstantMs(pushedAt),
+            )
+
             Outcome(
                 result = CheckResult(
                     ok = true,
                     latencyMs = latency,
                     statusCode = if (repoChanged) 200 else 304,
                     message = summary(stars, openIssues, repoChanged),
+                    repo = facts,
                     detail = buildString {
                         append(repo.slug)
                         if (pushedAt.isNotBlank()) append(" · pushed ").append(pushedAt)

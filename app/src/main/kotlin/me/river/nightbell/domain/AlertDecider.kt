@@ -216,6 +216,7 @@ object AlertDecider {
             latencyMs = result.latencyMs,
             code = result.statusCode,
             note = if (result.ok) "" else result.message,
+            repo = result.repo,
         )
         val history = (previous.samples + sample).takeLast(historyDepth.coerceAtLeast(1))
         val failures = if (result.ok) 0 else previous.consecutiveFailures + 1

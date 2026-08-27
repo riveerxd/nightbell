@@ -621,6 +621,34 @@ enum class Health {
         }
 }
 
+/**
+ * What one check saw of a repository.
+ *
+ * Recorded per check rather than only on the runtime, because the runtime holds
+ * *now* and the interesting question on a repository monitor is *when*: the star
+ * count went from 11 to 13 at some point, and a single current value cannot say
+ * when or in what steps. [GitHubActivity] reads the difference between
+ * consecutive samples, which is why nothing here is a delta: a stored delta
+ * cannot survive a history trim, and a stored value can.
+ *
+ * `-1` means not measured, so that a repository with genuinely zero stars is not
+ * indistinguishable from one this check learned nothing about. Present on every
+ * sample a repository monitor writes, absent on every other kind.
+ */
+@Serializable
+data class RepoFacts(
+    val stars: Int = -1,
+    val openIssues: Int = -1,
+    val forks: Int = -1,
+    val releaseTag: String = "",
+    val issueNumber: Int = 0,
+    val issueTitle: String = "",
+    /** `pushed_at` as epoch millis, or 0 when GitHub did not say. */
+    val pushedAt: Long = 0L,
+) {
+    val measured: Boolean get() = stars >= 0
+}
+
 @Serializable
 data class Sample(
     val at: Long,
@@ -628,6 +656,13 @@ data class Sample(
     val latencyMs: Long,
     val code: Int = 0,
     val note: String = "",
+    /**
+     * Repository facts, for a [MonitorKind.GITHUB_REPO] monitor only.
+     *
+     * Null on every other kind, and null on samples written before this existed.
+     * [GitHubActivity] treats those as "nothing known", not as a change.
+     */
+    val repo: RepoFacts? = null,
 )
 
 @Serializable
@@ -941,6 +976,8 @@ data class CheckResult(
      * way a self-signed endpoint gets renewed: same key, new dates.
      */
     val certSpki: String = "",
+    /** See [RepoFacts]. Set by the GitHub checker, null everywhere else. */
+    val repo: RepoFacts? = null,
     val at: Long = 0L,
 )
 
