@@ -432,10 +432,34 @@ fun LatencyBars(
     val fail = NightbellColors.Rose
     val slow = NightbellColors.Amber
     val summary = chartSummary("Response time history", samples, sloMs)
+    val empty = NightbellColors.sheen(0.13f)
     Canvas(modifier.clearAndSetSemantics { contentDescription = summary }) {
-        val count = samples.size
+        // Slots, not samples. One check used to be drawn as a bar the full width
+        // of the card, which is a shape nobody reads as "one measurement out of
+        // forty": it reads as a broken chart, and it was the first thing a new
+        // monitor showed. Reserving a floor of MIN_SLOTS means a fresh monitor
+        // fills the row from the left one check at a time, and once there are
+        // more checks than slots the chart widens the way it always did.
+        val count = maxOf(samples.size, MIN_LATENCY_SLOTS)
         val gap = 3.dp.toPx()
         val barWidth = ((size.width - gap * (count - 1)) / count).coerceAtLeast(1.5f)
+        val corner = androidx.compose.ui.geometry.CornerRadius(barWidth / 2.2f)
+
+        // The slots still waiting for a check, drawn as the stub a bar starts from
+        // rather than left blank, so a new monitor reads as a track filling up
+        // rather than as a chart with one thing in it. Its own corner radius: the
+        // bars' radius is half their width, and on something this short that
+        // rounds the whole shape away to nothing.
+        val stub = (size.height * 0.045f).coerceAtLeast(2.dp.toPx())
+        for (index in samples.size until count) {
+            drawRoundRect(
+                color = empty,
+                topLeft = Offset(index * (barWidth + gap), size.height - stub),
+                size = Size(barWidth, stub),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(stub / 2f),
+            )
+        }
+
         samples.forEachIndexed { index, sample ->
             val ratio = (sample.latencyMs.toFloat() / scaleMax).coerceIn(0.04f, 1f) * grow.value
             val barHeight = size.height * ratio
@@ -451,7 +475,7 @@ fun LatencyBars(
                 ),
                 topLeft = Offset(x, size.height - barHeight),
                 size = Size(barWidth, barHeight),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(barWidth / 2.2f),
+                cornerRadius = corner,
             )
         }
 
@@ -1091,9 +1115,9 @@ fun MetricTile(
 ) {
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(NightbellRadii.inCard))
             .background(NightbellColors.sheen(0.05f))
-            .border(1.dp, NightbellColors.sheen(0.07f), RoundedCornerShape(18.dp))
+            .border(1.dp, NightbellColors.sheen(0.07f), RoundedCornerShape(NightbellRadii.inCard))
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -1143,3 +1167,10 @@ fun ProgressPips(total: Int, current: Int, modifier: Modifier = Modifier, accent
         }
     }
 }
+
+/**
+ * How many checks the response-time chart makes room for before it starts to
+ * widen. Ten, because that is roughly where a row of bars stops reading as a
+ * single shape and starts reading as a series.
+ */
+private const val MIN_LATENCY_SLOTS = 10

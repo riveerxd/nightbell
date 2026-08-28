@@ -89,6 +89,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import androidx.compose.ui.platform.testTag
+import me.river.nightbell.ui.theme.NightbellRadii
 
 /** How many checks the history shows before it asks whether you want the rest. */
 private const val EVENT_PREVIEW = 24
@@ -547,7 +548,8 @@ private fun HeroCard(
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
+                    // The hero card pads by 20 rather than the usual 18.
+                    .clip(RoundedCornerShape(NightbellRadii.inside(NightbellRadii.card, 20.dp)))
                     .background(NightbellColors.Rose.copy(alpha = 0.09f))
                     .padding(13.dp),
             ) {
@@ -619,11 +621,13 @@ private fun ActionsRow(
     ) {
         NightbellButton(
             text = if (busy) "Checking…" else "Check now",
+            // This is the widest of the three and the only one with room to give.
+            shortText = if (busy) "Checking" else "Check",
             onClick = onCheck,
             loading = busy,
             icon = NightbellIcons.Refresh,
             accent = accent,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).testTag("detail-check"),
         )
         NightbellButton(
             text = if (enabled) "Pause" else "Resume",
@@ -954,7 +958,7 @@ private fun RepoStatTile(
     icon: ImageVector? = null,
     iconTint: Color = NightbellColors.TextTertiary,
 ) {
-    val shape = RoundedCornerShape(16.dp)
+    val shape = RoundedCornerShape(NightbellRadii.inCard)
     Row(
         modifier
             .clip(shape)
@@ -1227,7 +1231,7 @@ private fun GitHubHealthCard(
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
+                    .clip(RoundedCornerShape(NightbellRadii.inCard))
                     .background(NightbellColors.Amber.copy(alpha = 0.10f))
                     .padding(13.dp),
             ) {

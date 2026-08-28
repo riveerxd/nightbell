@@ -72,6 +72,24 @@ object NightbellTestSupport {
     }
 
     /**
+     * The whole screen, as the device composited it.
+     *
+     * [captureScreenshot] renders one Compose window, which is the right tool
+     * until a dialog is open. Then there are two roots and `onRoot` cannot say
+     * which is meant; and even resolved, it would draw the modal on a
+     * transparent ground with none of the dimmed, blurred dashboard behind it,
+     * which is the half worth looking at. This asks the system for the composited
+     * frame instead, so a screenshot of a modal shows what a person would see.
+     */
+    fun ComposeTestRule.captureDeviceScreenshot(name: String) {
+        waitForIdle()
+        val bitmap = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+        File(screenshotDir(), "$name.png").outputStream().use { stream ->
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+        }
+    }
+
+    /**
      * Switches Settings to one of its tabs.
      *
      * Settings is four pages behind a tab bar, so "scroll the settings list to X"

@@ -23,8 +23,9 @@ import okhttp3.Request
  * usually a release or two behind, which for someone who installed from there is
  * not a lag but the truth: it is the newest version their client can hand them.
  *
- * Nothing here downloads or installs anything, and there is no code path in this
- * app that could. An update is a notification with a link.
+ * Nothing here downloads anything: this reads two version strings and, when the
+ * source publishes one, the address of the APK that carries them. Fetching that
+ * APK is `data.update.UpdateInstaller`, and it only runs on a tap.
  */
 class UpdateChecker(
     baseClient: OkHttpClient? = null,
@@ -69,11 +70,20 @@ class UpdateChecker(
         val tag = obj.text("tag_name") ?: return null
         val version = tag.removePrefix("v")
         if (version.isBlank()) return null
+        // The signed APK attached to the tag, so the release can be installed
+        // from inside the app instead of through a browser and a file manager.
+        // First .apk wins: a release carries one, plus checksums and a mapping
+        // file that are not it.
+        val apk = (obj["assets"] as? JsonArray)
+            ?.filterIsInstance<JsonObject>()
+            ?.firstOrNull { it.text("name")?.endsWith(".apk", ignoreCase = true) == true }
         return AppUpdate.Release(
             version = version,
             url = obj.text("html_url").orEmpty().ifBlank { AppUpdate.DOWNLOAD_URL },
             source = UpdateSource.GITHUB,
             notes = obj.text("name").orEmpty(),
+            apkUrl = apk?.text("browser_download_url").orEmpty(),
+            apkSize = (apk?.get("size") as? JsonPrimitive)?.content?.toLongOrNull() ?: 0L,
         )
     }
 
@@ -91,10 +101,18 @@ class UpdateChecker(
                     ?: list.maxByOrNull { (it["versionCode"] as? JsonPrimitive)?.content?.toIntOrNull() ?: 0 }
             } ?: return null
         val version = entry.text("versionName")?.takeIf { it.isNotBlank() } ?: return null
+        // f-droid.org/repo/<package>_<versionCode>.apk is how every F-Droid client
+        // addresses a build, and it is the only APK that will install over an
+        // F-Droid installation: their signature is theirs, not the maintainer's,
+        // so handing this user the GitHub asset would be handing them a refusal.
+        val code = (entry["versionCode"] as? JsonPrimitive)?.content?.toIntOrNull()
+        val apkUrl = code?.let { "$fdroidBase/repo/${AppUpdate.FDROID_PACKAGE}_$it.apk" }.orEmpty()
         return AppUpdate.Release(
             version = version,
             url = AppUpdate.FDROID_URL,
             source = UpdateSource.FDROID,
+            apkUrl = apkUrl,
+            apkSize = (entry["size"] as? JsonPrimitive)?.content?.toLongOrNull() ?: 0L,
         )
     }
 

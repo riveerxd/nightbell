@@ -9,6 +9,14 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!--
+        Lets Settings and the dashboard banner hand a downloaded release to
+        Android's installer instead of sending the user out to a browser, a file
+        manager and back. This is the "may ask" permission, not INSTALL_PACKAGES:
+        the system prompt still appears and Nightbell cannot answer it.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!--
         The URGENT page. CallStyle is demoted to an ordinary notification unless
         the notification is tied to a foreground service or carries a full-screen
         intent, and a page arriving on a locked phone should wake the screen.

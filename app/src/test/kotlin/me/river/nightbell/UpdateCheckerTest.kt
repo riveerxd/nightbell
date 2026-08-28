@@ -24,7 +24,19 @@ class UpdateCheckerTest {
           "name": "Nightbell 3.1.1",
           "prerelease": false,
           "draft": false,
-          "html_url": "https://github.com/riveerxd/nightbell/releases/tag/v3.1.1"
+          "html_url": "https://github.com/riveerxd/nightbell/releases/tag/v3.1.1",
+          "assets": [
+            {
+              "name": "nightbell-3.1.1.apk.sha256",
+              "size": 96,
+              "browser_download_url": "https://github.com/riveerxd/nightbell/releases/download/v3.1.1/nightbell-3.1.1.apk.sha256"
+            },
+            {
+              "name": "nightbell-3.1.1.apk",
+              "size": 9123456,
+              "browser_download_url": "https://github.com/riveerxd/nightbell/releases/download/v3.1.1/nightbell-3.1.1.apk"
+            }
+          ]
         }
     """.trimIndent()
 
@@ -33,8 +45,8 @@ class UpdateCheckerTest {
           "packageName": "me.river.nightbell",
           "suggestedVersionCode": 27,
           "packages": [
-            { "versionName": "3.0.5", "versionCode": 27 },
-            { "versionName": "3.0.4", "versionCode": 26 }
+            { "versionName": "3.0.5", "versionCode": 27, "size": 8123456 },
+            { "versionName": "3.0.4", "versionCode": 26, "size": 8000000 }
           ]
         }
     """.trimIndent()
@@ -52,6 +64,48 @@ class UpdateCheckerTest {
                 // The tag carries a `v`; the version does not, so it can be
                 // compared against BuildConfig.VERSION_NAME without ceremony.
                 assertTrue(AppUpdate.isNewer(release!!.version, "3.1.0"))
+            }
+    }
+
+    @Test
+    fun `the apk attached to the release is what the install button fetches`() {
+        TinyHttpServer { TinyHttpServer.Response(body = githubRelease, contentType = "application/json") }
+            .use { server ->
+                val release = runBlocking {
+                    UpdateChecker(githubBase = server.baseUrl).latest(UpdateSource.GITHUB)
+                }
+                // The .apk, not the .sha256 sitting in front of it in the list.
+                assertEquals(
+                    "https://github.com/riveerxd/nightbell/releases/download/v3.1.1/nightbell-3.1.1.apk",
+                    release?.apkUrl,
+                )
+                assertEquals(9123456L, release?.apkSize)
+            }
+    }
+
+    @Test
+    fun `a release with nothing attached offers no apk rather than a guess`() {
+        val bare = """{ "tag_name": "v3.1.1", "html_url": "https://example.com/r" }"""
+        TinyHttpServer { TinyHttpServer.Response(body = bare, contentType = "application/json") }
+            .use { server ->
+                val release = runBlocking {
+                    UpdateChecker(githubBase = server.baseUrl).latest(UpdateSource.GITHUB)
+                }
+                assertEquals("3.1.1", release?.version)
+                assertEquals("", release?.apkUrl)
+            }
+    }
+
+    @Test
+    fun `the f-droid apk is the one f-droid signed, addressed by version code`() {
+        TinyHttpServer { TinyHttpServer.Response(body = fdroidPackage, contentType = "application/json") }
+            .use { server ->
+                val release = runBlocking {
+                    UpdateChecker(fdroidBase = server.baseUrl).latest(UpdateSource.FDROID)
+                }
+                // Their build, not the GitHub asset: the two are signed by
+                // different keys and Android refuses to install one over the other.
+                assertEquals(server.baseUrl + "/repo/me.river.nightbell_27.apk", release?.apkUrl)
             }
     }
 

@@ -255,4 +255,10 @@ object NightbellIcons {
     private const val TRAY = "M4.4 15.4 L4.4 19.4 L19.6 19.4 L19.6 15.4"
     val Export = stroke("Export", "$TRAY M12 3.6 L12 14.2 M7.8 9.8 L12 14.2 L16.2 9.8")
     val Import = stroke("Import", "$TRAY M12 14.2 L12 3.6 M7.8 8 L12 3.6 L16.2 8")
+
+    // Not Export with a different name. Export is a tray you put a file into, and
+    // it labels Backup and transfer one card below the update card in Settings;
+    // two adjacent controls wearing the same mark read as the same operation.
+    // This is an arrow arriving on a floor: something lands on this device.
+    val Download = stroke("Download", "M12 3.4 L12 14.6 M7.4 10 L12 14.6 L16.6 10 M5 19.4 L19 19.4")
 }

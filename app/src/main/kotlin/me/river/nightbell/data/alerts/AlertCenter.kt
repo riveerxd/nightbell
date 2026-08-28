@@ -1156,11 +1156,27 @@ class AlertCenter(private val context: Context) {
             .setShowWhen(true)
             .setGroup(NOTIFICATION_GROUP)
 
+    /**
+     * The tap target on a page: open that monitor.
+     *
+     * The `nightbell://monitor/<id>` data is not decoration and not a copy of the
+     * extra for tidiness. `Intent.filterEquals` ignores extras, and the activity
+     * manager uses it to decide whether a start is a new request or the same one
+     * again: two pages that differ only in an extra look identical to it, so the
+     * second one brought the task to the front without ever calling
+     * `onNewIntent`, and the app stayed on whatever screen it had been left on.
+     * Distinct data makes each monitor its own request. The widget rows have
+     * carried this URI since 1.5 for the neighbouring reason, and
+     * `MainActivity.monitorIdFrom` already reads both forms.
+     */
     private fun openMonitorIntent(monitorId: String): PendingIntent {
         val intent = Intent(context, MainActivity::class.java).apply {
             action = Intent.ACTION_VIEW
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            if (monitorId.isNotBlank()) putExtra(MainActivity.EXTRA_MONITOR_ID, monitorId)
+            if (monitorId.isNotBlank()) {
+                data = Uri.parse("nightbell://monitor/$monitorId")
+                putExtra(MainActivity.EXTRA_MONITOR_ID, monitorId)
+            }
         }
         return PendingIntent.getActivity(
             context,

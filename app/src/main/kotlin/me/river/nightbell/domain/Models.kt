@@ -1102,6 +1102,16 @@ data class GlobalSettings(
      * On by default: without it, bad wifi makes every monitor breach its SLO at
      * once, and every one of those alerts is wrong. See [NetworkBaseline].
      */
+    /**
+     * Whether a failure that reached nothing is confirmed before it pages.
+     *
+     * On by default. It only ever suppresses on proof that this phone could not
+     * reach the reference endpoint either, so the cost of being wrong about it is
+     * one delayed page rather than a missed outage, and the thing it prevents is
+     * every monitor paging at once from an underground car park.
+     * [Reachability] holds the rules.
+     */
+    val confirmOutagesEnabled: Boolean = true,
     val latencyBaselineEnabled: Boolean = true,
     /**
      * The control endpoint. Wants to be something always up, close to every
@@ -1238,11 +1248,27 @@ data class GlobalSettings(
      * Look for a newer Nightbell and say so once.
      *
      * On by default and cheap (one request every six hours), but easy to turn off
-     * for anyone whose F-Droid client already handles this. Nothing is downloaded
-     * and nothing is installed: the notification opens a page.
+     * for anyone whose F-Droid client already handles this. Nothing is fetched
+     * until the user taps Install, and Android still asks before it replaces the
+     * app.
      */
     val updateChecksEnabled: Boolean = true,
     val updateSource: UpdateSource = UpdateSource.GITHUB,
+
+    /**
+     * Whether [updateSource] is the user's answer or still Nightbell's guess.
+     *
+     * The guess is made once, from whichever app installed this one, because the
+     * default of GitHub was wrong for everyone who came from F-Droid: they were
+     * checked against tags their client cannot hand them yet, and told about a
+     * version they had no way to install. Nobody knew there was a switch.
+     *
+     * False on an existing install too, so those get the same one-time
+     * correction. That moves someone who installed from F-Droid and had
+     * deliberately left this on GitHub, which is the one case this gets wrong;
+     * their next visit to the switch settles it for good.
+     */
+    val updateSourceChosen: Boolean = false,
 )
 
 /**

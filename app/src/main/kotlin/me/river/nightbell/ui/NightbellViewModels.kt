@@ -160,18 +160,20 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /**
-     * Dismisses the banner for this version and no later one.
+     * "Not now": the modal's close, its scrim and the back gesture.
      *
-     * Mapped onto `AppUpdate.ignore`, which already exists for the notification's
-     * own Ignore action and is already tested. One gesture, permanent for this
-     * version, and the next release still speaks. That is what a "do not show this
-     * version again" checkbox would have been reaching for, without a form control
-     * on a banner or a second copy of the state.
+     * `remindLater` rather than `ignore`, and the difference is the whole reason
+     * the notice could become a modal at all. A dialog that can only be left by
+     * silencing a release forever is a trap, and it was one even as a banner: the
+     * close sat a few dp from the Settings gear. Deferring for a day asks again
+     * on its own, so nothing needs an undo and no gesture can cost anything.
+     *
+     * Refusing a version outright still exists, on the notification's own Ignore
+     * action, where it is a labelled choice made deliberately.
      */
     fun dismissUpdate() {
         viewModelScope.launch {
-            val version = graph.store.currentSnapshot().update.latestVersion
-            graph.store.updateAppUpdate { AppUpdate.ignore(it, version) }
+            graph.store.updateAppUpdate { AppUpdate.remindLater(it, System.currentTimeMillis()) }
         }
     }
 

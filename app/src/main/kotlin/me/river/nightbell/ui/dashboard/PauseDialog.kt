@@ -173,7 +173,7 @@ private fun PauseOption(
     icon: ImageVector,
     onClick: () -> Unit,
 ) {
-    val shape = RoundedCornerShape(NightbellRadii.field)
+    val shape = RoundedCornerShape(NightbellRadii.inSheet)
     Row(
         modifier = Modifier
             .fillMaxWidth()

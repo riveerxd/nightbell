@@ -3,6 +3,7 @@ package me.river.nightbell.ui.settings
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Intent
+import androidx.core.net.toUri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -81,6 +82,8 @@ import me.river.nightbell.domain.ConnectivityReference
 import me.river.nightbell.domain.GitHubWatch
 import me.river.nightbell.domain.ThemeChoice
 import me.river.nightbell.domain.UpdateSource
+import me.river.nightbell.ui.update.UpdateActions
+import me.river.nightbell.ui.update.rememberUpdateInstall
 import me.river.nightbell.domain.Validation
 import me.river.nightbell.ui.Transfer
 import me.river.nightbell.ui.components.AlertPolicyEditor
@@ -113,6 +116,7 @@ import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import me.river.nightbell.ui.theme.NightbellRadii
 
 @Composable
 fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
@@ -123,6 +127,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
     val batteryOptimised by viewModel.batteryOptimised.collectAsStateWithLifecycle()
     val githubTokenRedacted by viewModel.githubTokenRedacted.collectAsStateWithLifecycle()
     val appUpdate by viewModel.appUpdate.collectAsStateWithLifecycle()
+    val updateInstall = rememberUpdateInstall()
     val context = LocalContext.current
     // Read once per composition of this screen rather than observed: widgets are
     // placed and removed on the home screen, so this is only ever right at the
@@ -219,8 +224,54 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                 }
             }
 
+            item(key = "confirm-outages") {
+                StaggeredEntrance(index = 1, key = "confirm-outages", log = entrance) {
+                    GlassCard {
+                        ToggleRow(
+                            title = "Check my connection first",
+                            subtitle = when {
+                                // Named, not silently ignored. The switch that
+                                // governs whether this app talks to the reference
+                                // host at all lives on another tab, and a control
+                                // that quietly does nothing is worse than one that
+                                // says why it cannot.
+                                !settings.latencyBaselineEnabled ->
+                                    "Needs the reference endpoint, which is off " +
+                                        "under Checks, discount my connection"
+
+                                settings.confirmOutagesEnabled ->
+                                    "A monitor that cannot be reached at all is only " +
+                                        "paged once the reference endpoint answers"
+
+                                else -> "Off, a lost signal pages for every monitor at once"
+                            },
+                            enabled = settings.latencyBaselineEnabled,
+                            checked = settings.confirmOutagesEnabled && settings.latencyBaselineEnabled,
+                            onCheckedChange = { value ->
+                                viewModel.update { it.copy(confirmOutagesEnabled = value) }
+                            },
+                            icon = NightbellIcons.Wifi,
+                            accent = NightbellColors.Aqua,
+                            modifier = Modifier.testTag("confirm-outages"),
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            // Says what it will not do, because that is the part
+                            // worth trusting: a feature that can mute an outage
+                            // has to explain where its limits are.
+                            text = "For a failure that never reached anything: no DNS, no route, " +
+                                "no reply. A server that answers badly still pages, and so does " +
+                                "everything else if the reference cannot be checked. The endpoint " +
+                                "is the one under Checks, latency baseline.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NightbellColors.TextTertiary,
+                        )
+                    }
+                }
+            }
+
             item(key = "defaults") {
-                StaggeredEntrance(index = 1, key = "defaults", log = entrance) {
+                StaggeredEntrance(index = 2, key = "defaults", log = entrance) {
                     GlassCard {
                         SectionHeader("Default alert policy", icon = NightbellIcons.Shield, accent = NightbellColors.Aqua)
                         Text(
@@ -244,7 +295,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
             }
 
             item(key = "pause") {
-                StaggeredEntrance(index = 2, key = "pause", log = entrance) {
+                StaggeredEntrance(index = 3, key = "pause", log = entrance) {
                     GlassCard {
                         SectionHeader("Pause button", icon = NightbellIcons.Pause, accent = NightbellColors.Amber)
                         Text(
@@ -286,7 +337,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
             }
 
             item(key = "certificates") {
-                StaggeredEntrance(index = 3, key = "certificates", log = entrance) {
+                StaggeredEntrance(index = 4, key = "certificates", log = entrance) {
                     GlassCard {
                         SectionHeader(
                             "TLS certificates",
@@ -559,6 +610,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                                             accent = NightbellColors.Aqua,
                                             keyboardType = KeyboardType.Uri,
                                             modifier = Modifier.testTag("reference-endpoint"),
+                                            corner = NightbellRadii.inCard,
                                         )
                                         Spacer(Modifier.height(8.dp))
                                         ChipSelector(
@@ -663,6 +715,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                                     } else {
                                         null
                                     },
+                                    corner = NightbellRadii.inCard,
                                 )
                                 Spacer(Modifier.height(8.dp))
                                 GlassField(
@@ -692,6 +745,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                                     } else {
                                         null
                                     },
+                                    corner = NightbellRadii.inCard,
                                 )
                                 Spacer(Modifier.height(8.dp))
                                 StepperRow(
@@ -871,9 +925,9 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                         SectionHeader("Nightbell updates", icon = NightbellIcons.Import, accent = NightbellColors.Sky)
                         Text(
                             text = "Nightbell can look for a newer version of itself, notify you once " +
-                                "and show a banner on the dashboard until you dismiss it. It never " +
-                                "downloads or installs anything: both of them open a page, and " +
-                                "Android asks before an APK is installed.",
+                                "and show a notice on the dashboard until you dismiss it. Nothing is " +
+                                "fetched until you tap Install, and Android still asks before it " +
+                                "replaces the app.",
                             style = MaterialTheme.typography.bodySmall,
                             color = NightbellColors.TextTertiary,
                         )
@@ -904,7 +958,12 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                                 SegmentedSelector(
                                     options = UpdateSource.entries.toList(),
                                     selected = settings.updateSource,
-                                    onSelect = { choice -> viewModel.update { it.copy(updateSource = choice) } },
+                                    onSelect = { choice ->
+                                        viewModel.update {
+                                            // Chosen, so the guess never runs again.
+                                            it.copy(updateSource = choice, updateSourceChosen = true)
+                                        }
+                                    },
                                     label = { it.label },
                                     accent = NightbellColors.Sky,
                                     modifier = Modifier.testTag("update-source"),
@@ -957,6 +1016,34 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .testTag("unignore-update"),
+                                    )
+                                }
+                                // The same offer the dashboard notice makes, in
+                                // the place someone goes when they came looking for
+                                // it rather than when it came looking for them. One
+                                // composable behind both, so the two cannot drift.
+                                if (AppUpdate.isNewer(appUpdate.latestVersion, viewModel.installedVersion)) {
+                                    Spacer(Modifier.height(12.dp))
+                                    UpdateActions(
+                                        version = appUpdate.latestVersion,
+                                        releaseUrl = appUpdate.latestUrl.ifBlank { AppUpdate.DOWNLOAD_URL },
+                                        apkUrl = appUpdate.latestApkUrl,
+                                        stage = updateInstall.stage,
+                                        canRequestInstall = updateInstall.canRequestInstall,
+                                        onWhatsNew = { url ->
+                                            val intent = Intent(Intent.ACTION_VIEW, url.toUri())
+                                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                            runCatching { context.startActivity(intent) }
+                                        },
+                                        onInstall = {
+                                            updateInstall.start(
+                                                appUpdate.latestApkUrl,
+                                                appUpdate.latestVersion,
+                                                appUpdate.latestApkSize,
+                                            )
+                                        },
+                                        onOpenInstallSettings = updateInstall::openSettings,
+                                        modifier = Modifier.fillMaxWidth(),
                                     )
                                 }
                                 Spacer(Modifier.height(10.dp))
@@ -1574,7 +1661,7 @@ private fun WarningPanel(text: String) {
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(NightbellRadii.inCard))
             .background(NightbellColors.Amber.copy(alpha = 0.10f))
             .padding(13.dp),
         verticalAlignment = Alignment.Top,
@@ -1700,6 +1787,7 @@ private fun GitHubTokenCard(
                 leadingIcon = NightbellIcons.Shield,
                 accent = NightbellColors.Sky,
                 modifier = Modifier.testTag("github-token-field"),
+                corner = NightbellRadii.inCard,
             )
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

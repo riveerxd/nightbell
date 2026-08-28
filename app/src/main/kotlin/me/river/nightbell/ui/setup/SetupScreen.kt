@@ -723,9 +723,9 @@ private fun CapturedElementRow(
     Column(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(15.dp))
+            .clip(RoundedCornerShape(NightbellRadii.inCard))
             .background(NightbellColors.sheen(0.05f))
-            .border(1.dp, NightbellColors.sheen(0.08f), RoundedCornerShape(15.dp))
+            .border(1.dp, NightbellColors.sheen(0.08f), RoundedCornerShape(NightbellRadii.inCard))
             .padding(12.dp)
             .semantics { contentDescription = "Element ${index + 1}: ${element.displayLabel}" },
     ) {
@@ -1080,6 +1080,7 @@ private fun ElementExpectationCard(
                 helper = "Shown in alerts so you know which element broke.",
                 leadingIcon = NightbellIcons.Sparkle,
                 accent = accent,
+                corner = NightbellRadii.inside(NightbellRadii.card, 16.dp),
             )
             Spacer(Modifier.height(12.dp))
         }
@@ -1108,6 +1109,7 @@ private fun ElementExpectationCard(
                     accent = accent,
                     singleLine = false,
                     minLines = 2,
+                    corner = NightbellRadii.inside(NightbellRadii.card, 16.dp),
                 )
             }
         }
@@ -1120,6 +1122,7 @@ private fun ElementExpectationCard(
             helper = "Leave empty to compare the element's visible text.",
             leadingIcon = NightbellIcons.Braces,
             accent = accent,
+            corner = NightbellRadii.inside(NightbellRadii.card, 16.dp),
         )
         Spacer(Modifier.height(8.dp))
         SelectorSummary(element, accent)
@@ -1681,7 +1684,8 @@ private fun TestResultCard(result: CheckResult, accent: Color) {
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
+                    // That card pads by 16, not the default 18.
+                    .clip(RoundedCornerShape(NightbellRadii.inside(NightbellRadii.card, 16.dp)))
                     .background(Color.Black.copy(alpha = 0.28f))
                     .padding(11.dp),
             ) {
@@ -1810,6 +1814,7 @@ private fun GitHubTokenHint(viewModel: SetupViewModel, accent: Color) {
                         "public repo. Stored on this device only.",
                     leadingIcon = NightbellIcons.Shield,
                     accent = accent,
+                    corner = NightbellRadii.inside(NightbellRadii.card, 15.dp),
                 )
                 Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

@@ -15,6 +15,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.river.nightbell.domain.Health
@@ -380,6 +381,28 @@ object NightbellRadii {
     val field = 16.dp
     val chip = 100.dp
     val sheet = 32.dp
+
+    /**
+     * The radius a shape needs when it sits [gap] inside a shape of radius
+     * [outer], so the two curves stay parallel.
+     *
+     * Two nested rounded shapes read as one object inside another only when the
+     * inner radius is the outer radius minus the distance between them. Get it
+     * wrong and the corners pinch or splay: the inner shape looks like it was
+     * dropped in rather than fitted, which is what every panel in this app looked
+     * like until 3.6, because they all carried a radius picked by eye.
+     *
+     * A capsule gets this for free, since its radius is half its height and a
+     * uniform gap therefore subtracts itself. Everything with a chosen radius has
+     * to be told.
+     */
+    fun inside(outer: Dp, gap: Dp): Dp = (outer - gap).coerceAtLeast(4.dp)
+
+    /** A panel inside a [card] at GlassCard's default 18 dp padding. */
+    val inCard = 8.dp
+
+    /** A panel inside a dialog [sheet] at its 20 dp padding. */
+    val inSheet = 12.dp
 }
 
 @Composable

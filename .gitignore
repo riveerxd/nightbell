@@ -71,3 +71,7 @@ __pycache__/
 
 # Debug builds handed out during development. Rebuildable, 16 MB each.
 artifacts/dev/
+
+# Local credentials. Never committed: the key in here is live, and a secret that
+# reaches a public history is burned whether or not it is removed afterwards.
+.env

@@ -225,6 +225,63 @@ class AppUpdateTest {
     }
 
     @Test
+    fun `an f-droid install watches f-droid`() {
+        // The default of GitHub told these users about tags their client cannot
+        // hand them for another week, and nobody knew there was a switch.
+        assertEquals(UpdateSource.FDROID, AppUpdate.sourceForInstaller("org.fdroid.fdroid"))
+        assertEquals(UpdateSource.FDROID, AppUpdate.sourceForInstaller("org.fdroid.basic"))
+        assertEquals(UpdateSource.FDROID, AppUpdate.sourceForInstaller("com.looker.droidify"))
+        assertEquals(UpdateSource.FDROID, AppUpdate.sourceForInstaller("com.machiav3lli.fdroid"))
+    }
+
+    @Test
+    fun `a sideload watches github, because that is where a sideload came from`() {
+        assertEquals(UpdateSource.GITHUB, AppUpdate.sourceForInstaller(null))
+        assertEquals(UpdateSource.GITHUB, AppUpdate.sourceForInstaller(""))
+        assertEquals(UpdateSource.GITHUB, AppUpdate.sourceForInstaller("com.android.shell"))
+        assertEquals(UpdateSource.GITHUB, AppUpdate.sourceForInstaller("com.google.android.packageinstaller"))
+    }
+
+    @Test
+    fun `the play store is not mistaken for f-droid`() {
+        // Nightbell is not on Play, so this can only be a repackage. Watching
+        // GitHub is the honest answer rather than guessing at a store listing.
+        assertEquals(UpdateSource.GITHUB, AppUpdate.sourceForInstaller("com.android.vending"))
+    }
+
+    @Test
+    fun `the banner carries the apk so the install button has something to fetch`() {
+        val state = seen("3.2.2").copy(
+            latestApkUrl = "https://example.com/nightbell-3.2.2.apk",
+            latestApkSize = 15_400_000L,
+        )
+        val shown = banner(state)
+        assertEquals("https://example.com/nightbell-3.2.2.apk", shown?.apkUrl)
+        assertEquals(15_400_000L, shown?.apkSize)
+    }
+
+    @Test
+    fun `a release with no apk leaves the banner with nothing to install`() {
+        // Not a fabricated download link. The surface hides the button rather than
+        // offering a URL nobody published.
+        assertEquals("", banner(seen("3.2.2"))?.apkUrl)
+    }
+
+    @Test
+    fun `the fetched apk address is folded into the state the banner reads`() {
+        val release = AppUpdate.Release(
+            version = "3.2.2",
+            url = "https://example.com/r",
+            source = UpdateSource.GITHUB,
+            apkUrl = "https://example.com/nightbell-3.2.2.apk",
+            apkSize = 15_400_000L,
+        )
+        val decided = AppUpdate.decide(release, "3.2.1", UpdateState(), NOW)
+        assertEquals("https://example.com/nightbell-3.2.2.apk", decided.state.latestApkUrl)
+        assertEquals(15_400_000L, decided.state.latestApkSize)
+    }
+
+    @Test
     fun `the banner still shows after the notification has been posted`() {
         // The whole point of the change, named so it cannot be quietly undone.
         // `notifiedVersion` means "the shade was written to once", and reusing it

@@ -9,6 +9,7 @@ import me.river.nightbell.data.check.GitHubChecker
 import me.river.nightbell.data.check.HttpChecker
 import me.river.nightbell.data.check.LatencyReference
 import me.river.nightbell.data.check.UpdateChecker
+import me.river.nightbell.data.update.UpdateInstaller
 import me.river.nightbell.data.health.SystemLimits
 import me.river.nightbell.data.icons.FaviconStore
 import me.river.nightbell.data.net.NetworkMonitor
@@ -18,6 +19,7 @@ import me.river.nightbell.BuildConfig
 import me.river.nightbell.domain.Summary
 import me.river.nightbell.domain.runCatchingCancellable
 import me.river.nightbell.widget.NightbellWidgetProvider
+import me.river.nightbell.domain.AppUpdate
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -62,6 +64,16 @@ object Nightbell {
          */
         val github = GitHubChecker(settingsFor = { store.snapshot.value.settings })
         val updates = UpdateChecker()
+
+        /**
+         * Fetching and installing a release, on a tap and never otherwise.
+         *
+         * Graph-scoped rather than owned by a screen: the download outlives the
+         * dashboard banner that starts it, because the dashboard is exactly what
+         * a user leaves when they go and read the release notes, and a transfer
+         * that restarts every time they come back is worse than no button.
+         */
+        val installer = UpdateInstaller(context, appScope)
         val engine = CheckEngine(
             store = store,
             http = http,
@@ -110,6 +122,27 @@ object Nightbell {
         }
 
         init {
+            // Point the update switch at wherever this copy came from, once.
+            //
+            // Only while it is still a guess: the moment the user touches the
+            // switch it becomes their answer and this stops running. Doing it
+            // here rather than at the first check means the Settings card is
+            // already right the first time anyone opens it.
+            appScope.launch {
+                if (!store.currentSnapshot().settings.updateSourceChosen) {
+                    val guess = AppUpdate.sourceForInstaller(installer.installerPackage())
+                    store.updateSettings {
+                        it.copy(updateSource = guess, updateSourceChosen = true)
+                    }
+                }
+            }
+
+            // The installer reports through a broadcast and the first thing it
+            // reports is usually "somebody has to show the confirmation dialog".
+            // Registered here rather than from a screen because the answer can
+            // arrive after the screen that asked has gone.
+            installer.registerStatusReceiver()
+
             // Widgets follow the data.
             //
             // Every placed widget renders exactly what `Summary.of` returns, so that

@@ -243,7 +243,10 @@ class NightbellE2ETest {
         composeRule.onNodeWithTag("detail-list").performScrollToIndex(0)
         composeRule.captureScreenshot("05-detail")
 
-        composeRule.onNodeWithText("Check now").performClick()
+        // By tag, not by label. The label is "Check now" where there is room for
+        // it and "Check" where there is not, and which one a 5-inch emulator gets
+        // is not what this test is about.
+        composeRule.onNodeWithTag("detail-check").performClick()
         awaitTrue(description = "second sample recorded") {
             runBlocking {
                 (Nightbell.require().store.currentSnapshot().runtimes.values.firstOrNull()?.samples?.size ?: 0) >= 2

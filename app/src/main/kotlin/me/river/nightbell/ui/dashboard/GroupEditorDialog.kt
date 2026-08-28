@@ -194,14 +194,16 @@ fun GroupEditorDialog(
                     onValueChange = { value -> onChange { it.copy(title = value) } },
                     label = "Title",
                     placeholder = "Nightbell",
-                    leadingIcon = NightbellIcons.Sparkle,
                     accent = accent,
+                    corner = NightbellRadii.inSheet,
                 )
 
                 Spacer(Modifier.height(14.dp))
+                // No glyph. Globe is already spoken for twice inside this section,
+                // on "Another site" and on the address field, and a heading wearing
+                // the same mark as two controls under it reads as a third control.
                 SectionHeader(
                     title = "Group icon",
-                    icon = NightbellIcons.Sparkle,
                     accent = NightbellColors.TextSecondary,
                 )
                 Text(
@@ -334,6 +336,7 @@ fun GroupEditorDialog(
                             },
                             leadingIcon = NightbellIcons.Globe,
                             accent = accent,
+                            corner = NightbellRadii.inSheet,
                             // Last field in the form, so the keyboard offers a way
                             // out rather than a Next with nowhere to go.
                             imeAction = androidx.compose.ui.text.input.ImeAction.Done,

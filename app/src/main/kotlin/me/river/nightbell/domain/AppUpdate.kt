@@ -43,6 +43,10 @@ data class UpdateState(
     val latestUrl: String = "",
     val latestSource: UpdateSource = UpdateSource.GITHUB,
     val latestNotes: String = "",
+    /** The APK itself, when the source publishes one Nightbell can fetch. */
+    val latestApkUrl: String = "",
+    /** Bytes, as the source reported them. 0 when it did not say. */
+    val latestApkSize: Long = 0L,
     /** The version the user has already been told about, so it is said once. */
     val notifiedVersion: String = "",
     /** "Not this one." Suppresses exactly this version and nothing later. */
@@ -60,10 +64,12 @@ data class UpdateState(
  * answered this question (installed it, ignored it, deferred it, been told once
  * already), and each of those is a test rather than a release to sit through.
  *
- * Nothing here downloads or installs anything. Android package installation is a
- * user action behind a system prompt, and an uptime monitor quietly replacing its
- * own APK would be indistinguishable from the thing every user is told to be
- * afraid of.
+ * Nothing here downloads or installs anything either; that is
+ * `data.update.UpdateInstaller`, and it only ever runs because a user tapped a
+ * button that says so. An uptime monitor replacing its own APK on its own
+ * initiative would be indistinguishable from the thing every user is told to be
+ * afraid of, so the decision to fetch stays a tap and the install itself stays
+ * behind Android's own prompt.
  */
 object AppUpdate {
 
@@ -87,6 +93,9 @@ object AppUpdate {
         val url: String,
         val source: UpdateSource,
         val notes: String = "",
+        /** Direct link to the APK, or blank when the source does not offer one. */
+        val apkUrl: String = "",
+        val apkSize: Long = 0L,
     )
 
     enum class Action { NONE, NOTIFY }
@@ -101,7 +110,11 @@ object AppUpdate {
     data class Banner(
         val latestVersion: String,
         val installedVersion: String,
+        /** The release page, for "What's new". */
         val url: String,
+        /** The APK, for the install button. Blank hides that button entirely. */
+        val apkUrl: String = "",
+        val apkSize: Long = 0L,
     )
 
     /**
@@ -144,7 +157,36 @@ object AppUpdate {
             // A release with no page of its own still needs somewhere to send
             // someone, or the banner's only action is a dead end.
             url = state.latestUrl.ifBlank { DOWNLOAD_URL },
+            apkUrl = state.latestApkUrl,
+            apkSize = state.latestApkSize,
         )
+    }
+
+    /**
+     * Which source a copy of Nightbell should watch, given whatever installed it.
+     *
+     * The signature is what actually matters. F-Droid builds Nightbell
+     * reproducibly and republishes the maintainer's own signed APK, so either
+     * channel can update the other, but their publishing runs behind the tags by
+     * design: telling an F-Droid user about a GitHub release is telling them
+     * about something their client cannot give them for another week.
+     *
+     * The third-party clients are here because an app pulled from the F-Droid
+     * repository through Droid-ify or Neo Store is an F-Droid install in every
+     * way that counts. They can be pointed at other repositories, which is the
+     * case this guesses wrong, and it stays a guess the user can overrule.
+     *
+     * A sideload reports null, or the shell on a device being driven by adb, and
+     * both land on GitHub, which is where a sideloaded APK came from.
+     */
+    fun sourceForInstaller(installerPackage: String?): UpdateSource = when (installerPackage) {
+        "org.fdroid.fdroid",
+        "org.fdroid.basic",
+        "com.looker.droidify",
+        "com.machiav3lli.fdroid",
+        -> UpdateSource.FDROID
+
+        else -> UpdateSource.GITHUB
     }
 
     /** Undoes [ignore], for the Settings card. A mis-tap has to be recoverable. */
@@ -206,6 +248,8 @@ object AppUpdate {
             latestUrl = release.url,
             latestSource = release.source,
             latestNotes = release.notes,
+            latestApkUrl = release.apkUrl,
+            latestApkSize = release.apkSize,
         )
         if (!isNewer(release.version, installedVersion)) {
             // Caught up. Anything the user deferred or refused was about a version

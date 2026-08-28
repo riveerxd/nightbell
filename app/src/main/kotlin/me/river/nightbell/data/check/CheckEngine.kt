@@ -25,6 +25,7 @@ import me.river.nightbell.domain.NetworkBaseline
 import me.river.nightbell.domain.TlsTrust
 import me.river.nightbell.domain.UrgentAlerts
 import me.river.nightbell.domain.runCatchingCancellable
+import me.river.nightbell.domain.Reachability
 import java.util.Calendar
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.cancellation.CancellationException
@@ -176,9 +177,48 @@ class CheckEngine(
      * happened.
      */
     suspend fun run(monitorId: String, force: Boolean = true): CheckResult? =
-        locks.getOrPut(monitorId) { Mutex() }.withLock { runLocked(monitorId, force) }
+        run(monitorId, force, PassWitness())
 
-    private suspend fun runLocked(monitorId: String, force: Boolean): CheckResult? {
+    private suspend fun run(monitorId: String, force: Boolean, witness: PassWitness): CheckResult? =
+        locks.getOrPut(monitorId) { Mutex() }.withLock { runLocked(monitorId, force, witness) }
+
+    /**
+     * One reading of whether this phone can reach anything, shared for as long
+     * as the object lives.
+     *
+     * A pass makes one and hands it to every check in it, the same way
+     * [refreshReference] takes one reading of the latency control for the whole
+     * pass. Losing signal fails every monitor at once, and without this a car
+     * park with ten monitors in it meant ten identical probes to the same host
+     * inside one sweep, all of them asking a question the first had answered.
+     *
+     * Lazy, which is the half that matters for cost: a pass where nothing fails
+     * never calls [of] at all and so never spends a request. A pass where four
+     * monitors fail spends exactly one.
+     *
+     * Deliberately not shared beyond the pass. A hand-driven re-check builds its
+     * own and probes afresh, because it is rare, it is somebody waiting for an
+     * answer, and reusing a verdict from a sweep minutes ago would be answering
+     * a question nobody asked.
+     */
+    private class PassWitness {
+        private var asked = false
+        private var verdict = Reachability.Verdict.UNKNOWN
+
+        suspend fun of(probe: suspend () -> Reachability.Verdict): Reachability.Verdict {
+            if (!asked) {
+                verdict = probe()
+                asked = true
+            }
+            return verdict
+        }
+    }
+
+    private suspend fun runLocked(
+        monitorId: String,
+        force: Boolean,
+        witness: PassWitness,
+    ): CheckResult? {
         val snapshot = store.currentSnapshot()
         val monitor = snapshot.monitors.firstOrNull { it.id == monitorId } ?: return null
         val before = snapshot.runtimes[monitorId] ?: MonitorRuntime()
@@ -282,7 +322,45 @@ class CheckEngine(
         } finally {
             store.markChecking(monitorId, false)
         }
-        if (result == null) {
+        // Between the checker and the record: a failure that never reached
+        // anything might be this phone rather than the service.
+        //
+        // Folded into the existing no-verdict path rather than given one of its
+        // own, because "the network could not carry this check" and "the checker
+        // could not produce a verdict" want exactly the same treatment: no
+        // health, no sample, no alert, only the note that an attempt happened.
+        // Writing a second version of that would be writing a second set of ways
+        // to get it subtly wrong.
+        val worthConfirming = result != null && reference != null && Reachability.shouldConfirm(
+            enabled = settings.confirmOutagesEnabled,
+            referenceEnabled = settings.latencyBaselineEnabled,
+            referenceUrl = settings.latencyReferenceUrl,
+            ok = result.ok,
+            kind = result.failureKind,
+        )
+        // A missing reference is not evidence, so it pages: every path out of
+        // this that is not a proven-dead network ends with UNKNOWN.
+        val probe = if (worthConfirming) {
+            witness.of { reference.reach(settings.latencyReferenceUrl) }
+        } else {
+            Reachability.Verdict.UNKNOWN
+        }
+        val localOutage = Reachability.isLocalOutage(
+            probe = probe,
+            // Same readings the latency verdict below uses, and no new request:
+            // a reference that has not answered this phone in six hours does not
+            // get to claim the network is dead.
+            referenceHasVouched = Reachability.hasVouched(snapshot.reference, nowMs()),
+        )
+        if (localOutage) {
+            Log.i(
+                TAG,
+                "${monitor.displayName} reached nothing and neither did the reference; " +
+                    "recording nothing rather than paging for this phone's network",
+            )
+        }
+
+        if (result == null || localOutage) {
             // Record *only* that an attempt happened at this time — no health, no
             // sample, no message. Without this the monitor stays permanently due,
             // and `nextWakeDelayMs` floors to MIN_TICK_MS, so a checker that
@@ -1203,10 +1281,13 @@ class CheckEngine(
         val snapshot = store.currentSnapshot()
         val now = nowMs()
         var ran = 0
+        // And one witness for the pass, for the same reason. Nothing is probed
+        // unless something in here fails without reaching anything.
+        val witness = PassWitness()
         for (monitor in snapshot.monitors) {
             if (!monitor.enabled) continue
             if (!force && !isDue(monitor, snapshot.runtimes[monitor.id], now)) continue
-            run(monitor.id, force = force)
+            run(monitor.id, force, witness)
             ran++
         }
         return ran

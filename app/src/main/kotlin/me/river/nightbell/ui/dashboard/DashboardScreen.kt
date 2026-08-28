@@ -75,7 +75,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
 import androidx.compose.ui.unit.sp
 import android.content.Intent
 import android.net.Uri
@@ -101,6 +100,7 @@ import me.river.nightbell.ui.components.ChipSelector
 import me.river.nightbell.ui.components.GlassField
 import me.river.nightbell.ui.components.MicroTag
 import me.river.nightbell.ui.components.PullToRefreshLayout
+import me.river.nightbell.ui.update.rememberUpdateInstall
 import me.river.nightbell.ui.components.NightbellButton
 import me.river.nightbell.ui.components.NightbellMark
 import me.river.nightbell.ui.components.SectionHeader
@@ -125,6 +125,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import me.river.nightbell.ui.theme.rememberLoopingFloat
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.zIndex
+import me.river.nightbell.ui.theme.NightbellRadii
 
 /**
  * Narrowest a monitor card may be before the grid drops a column.
@@ -165,6 +167,7 @@ fun DashboardScreen(
     val pause by viewModel.pause.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val updateBanner by viewModel.updateBanner.collectAsStateWithLifecycle()
+    val update = rememberUpdateInstall()
     // Collected, not read off the flow inside the view model: a StateFlow's
     // `.value` is invisible to Compose, and a group created or collapsed would
     // not redraw the list until something else happened to recompose it.
@@ -420,25 +423,6 @@ fun DashboardScreen(
                         }
                     }
 
-                    // Under the fleet verdict, above everything else. The order is
-                    // the argument: what is broken right now comes first, and what
-                    // version this app happens to be comes second.
-                    updateBanner?.let { banner ->
-                        item(key = "update", span = { GridItemSpan(maxLineSpan) }) {
-                            StaggeredEntrance(index = 1, key = "update", log = entrance) {
-                                UpdateBanner(
-                                    banner = banner,
-                                    onOpen = { url ->
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                        runCatching { context.startActivity(intent) }
-                                    },
-                                    onDismiss = viewModel::dismissUpdate,
-                                )
-                            }
-                        }
-                    }
-
                     if (panel != DashboardPanel.NONE) {
                         item(key = "panel", span = { GridItemSpan(maxLineSpan) }) {
                             when (panel) {
@@ -627,6 +611,24 @@ fun DashboardScreen(
                     }
                 }
             }
+        }
+
+        // Its own window over a blurred dashboard. See UpdateBanner for why it
+        // stopped being something this screen positions at all.
+        updateBanner?.let { banner ->
+            UpdateBanner(
+                banner = banner,
+                stage = update.stage,
+                canRequestInstall = update.canRequestInstall,
+                onOpen = { url ->
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    runCatching { context.startActivity(intent) }
+                },
+                onInstall = { update.start(banner.apkUrl, banner.latestVersion, banner.apkSize) },
+                onOpenInstallSettings = update::openSettings,
+                onDismiss = viewModel::dismissUpdate,
+            )
         }
 
         // The FAB steps aside for the selection bar rather than sitting on top of
@@ -940,6 +942,7 @@ private fun SearchPanel(
                 } else {
                     null
                 },
+                corner = NightbellRadii.inCard,
             )
             Spacer(Modifier.width(8.dp))
             panelClose(onClose)()
@@ -1569,7 +1572,7 @@ private fun MonitorRowCard(
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(13.dp))
+                        .clip(RoundedCornerShape(NightbellRadii.inCard))
                         .background(tone.copy(alpha = 0.10f))
                         .padding(horizontal = 11.dp, vertical = 9.dp),
                     verticalAlignment = Alignment.CenterVertically,

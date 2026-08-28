@@ -14,7 +14,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
 import me.river.nightbell.NightbellTestSupport.appContext
-import me.river.nightbell.NightbellTestSupport.captureScreenshot
+import me.river.nightbell.NightbellTestSupport.captureDeviceScreenshot
 import me.river.nightbell.NightbellTestSupport.openSettingsTab
 import me.river.nightbell.data.Nightbell
 import me.river.nightbell.data.NightbellSnapshot
@@ -31,6 +31,7 @@ import org.junit.After
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.junit.Assert.assertEquals
 
 /**
  * The update banner on the dashboard, and getting rid of it.
@@ -135,7 +136,7 @@ class UpdateBannerInstrumentedTest {
         composeRule.onNodeWithText("What's new").assertExists()
         // The fleet verdict is still the first thing on the screen.
         composeRule.onNodeWithText("Marketing site").assertExists()
-        composeRule.captureScreenshot("70-update-banner")
+        composeRule.captureDeviceScreenshot("70-update-banner")
     }
 
     @Test
@@ -151,22 +152,36 @@ class UpdateBannerInstrumentedTest {
         composeRule.onNodeWithText("Nightbell $version is available").assertDoesNotExist()
     }
 
+    /**
+     * Closing the modal defers the version. It does not refuse it.
+     *
+     * The distinction is what lets this be a modal at all: every way out of a
+     * dialog is easy to hit by accident, so none of them may cost anything. A
+     * regression to `ignore` here would mean a stray tap on the scrim silences a
+     * release for good, which is what the close button used to do when it sat a
+     * few dp from the Settings gear.
+     */
     @Test
-    fun dismissingItRecordsTheRefusalAndHidesIt() {
+    fun closingItDefersTheVersionRatherThanRefusingIt() {
         val version = newer
         seed(UpdateState(lastCheckedAt = now, latestVersion = version))
         scenario = ActivityScenario.launch(MainActivity::class.java)
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithContentDescription("Don't show $version again").performClick()
+        composeRule.onNodeWithContentDescription("Not now").performClick()
         composeRule.waitForIdle()
 
         composeRule.onNodeWithText("Nightbell $version is available").assertDoesNotExist()
         // Written through to the store, so it survives the process rather than
         // living in a composable's memory until the next launch.
-        NightbellTestSupport.awaitTrue(description = "the refusal was persisted") {
-            storedUpdate().ignoredVersion == version
+        NightbellTestSupport.awaitTrue(description = "the deferral was persisted") {
+            storedUpdate().remindAfter > now
         }
+        assertEquals(
+            "closing must not refuse the version",
+            "",
+            storedUpdate().ignoredVersion,
+        )
     }
 
     @Test
@@ -196,7 +211,7 @@ class UpdateBannerInstrumentedTest {
             .performScrollToNode(hasTestTag("unignore-update"))
         composeRule.waitForIdle()
         composeRule.onNodeWithText("Not showing $version", substring = true).assertExists()
-        composeRule.captureScreenshot("71-settings-update-ignored")
+        composeRule.captureDeviceScreenshot("71-settings-update-ignored")
 
         composeRule.onNodeWithTag("unignore-update").performClick()
         composeRule.waitForIdle()
@@ -213,13 +228,24 @@ class UpdateBannerInstrumentedTest {
         composeRule.waitForIdle()
         // And it comes back, which is the whole reason the button exists.
         composeRule.onNodeWithText("Nightbell $version is available").assertExists()
-        composeRule.captureScreenshot("72-update-banner-restored")
+        composeRule.captureDeviceScreenshot("72-update-banner-restored")
     }
 
     @Test
     fun theSettingsCardComparesInstalledAgainstLatest() {
         val version = newer
-        seed(UpdateState(lastCheckedAt = now, latestVersion = version))
+        // Deferred rather than merely known, so the dashboard notice stays down
+        // and the Settings gear is reachable. The card itself is unaffected: it
+        // reads `latestVersion`, which "remind later" does not touch. Without
+        // this the notice covers the header, and the tap meant for Settings
+        // lands on the notice's own close button.
+        seed(
+            UpdateState(
+                lastCheckedAt = now,
+                latestVersion = version,
+                remindAfter = now + 60 * 60 * 1000,
+            ),
+        )
         scenario = ActivityScenario.launch(MainActivity::class.java)
         composeRule.waitForIdle()
 
@@ -233,6 +259,6 @@ class UpdateBannerInstrumentedTest {
         composeRule.onNodeWithText(BuildConfig.VERSION_NAME).assertExists()
         composeRule.onNodeWithText("Latest").assertExists()
         composeRule.onNodeWithText(version).assertExists()
-        composeRule.captureScreenshot("73-settings-update-card")
+        composeRule.captureDeviceScreenshot("73-settings-update-card")
     }
 }

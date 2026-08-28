@@ -70,6 +70,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import me.river.nightbell.domain.Validation
 import me.river.nightbell.ui.icons.NightbellIcons
@@ -77,6 +78,11 @@ import me.river.nightbell.ui.theme.NightbellColors
 import me.river.nightbell.ui.theme.NightbellRadii
 import me.river.nightbell.ui.theme.glassInteractive
 import me.river.nightbell.ui.theme.rememberLoopingFloat
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFontFamilyResolver
 
 // ---------------------------------------------------------------- text fields
 
@@ -97,6 +103,16 @@ fun GlassField(
     keyboardType: KeyboardType = KeyboardType.Text,
     imeAction: ImeAction = ImeAction.Next,
     enabled: Boolean = true,
+    /**
+     * Defaults to the standalone field radius, which is what most of Setup uses:
+     * those fields sit on the page itself with nothing around them, so there is
+     * no outer curve for them to answer to.
+     *
+     * A field *inside* a card or a sheet is a different shape problem and has to
+     * be told: pass [NightbellRadii.inCard], [NightbellRadii.inSheet], or
+     * [NightbellRadii.inside] for a container that pads by something else.
+     */
+    corner: Dp = NightbellRadii.field,
 ) {
     var focused by remember { mutableStateOf(false) }
     val isError = note?.severity == Validation.Severity.ERROR
@@ -114,7 +130,8 @@ fun GlassField(
             modifier = Modifier
                 .fillMaxWidth()
                 .glassInteractive(
-                    shape = RoundedCornerShape(NightbellRadii.field),
+                    shape = RoundedCornerShape(corner),
+                    corner = corner,
                     focused = focused,
                     accent = accent,
                     error = isError,
@@ -238,6 +255,21 @@ fun NightbellButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * What the label becomes when [text] will not fit on one line.
+     *
+     * A row of three buttons on a 5-inch phone gives the widest of them about
+     * eleven characters, and "Check now" needs twelve with its icon, so on the
+     * detail screen it broke across two lines and the button grew a second row
+     * of height that the two beside it did not have. Wrapping is the wrong
+     * answer for a control: a button is one word for one action, and the honest
+     * way to lose a word is to lose it deliberately rather than to have the
+     * layout tear it in half.
+     *
+     * Left null, an over-long label ellipsises instead, which is still better
+     * than wrapping and needs no decision from the caller.
+     */
+    shortText: String? = null,
     icon: ImageVector? = null,
     tone: ButtonTone = ButtonTone.Primary,
     enabled: Boolean = true,
@@ -299,11 +331,37 @@ fun NightbellButton(
             Icon(icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(17.dp))
             Spacer(Modifier.width(9.dp))
         }
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelLarge,
-            color = contentColor,
-        )
+        // Measured against the space actually left over, so the label comes back
+        // the moment there is room for it: on a tablet, in landscape, or when the
+        // row loses a sibling. A one-way collapse would leave a phone that had
+        // once been narrow saying "Check" forever.
+        val style = MaterialTheme.typography.labelLarge
+        val measurer = rememberTextMeasurer()
+        BoxWithConstraints {
+            val roomFor = constraints.maxWidth
+            val fits = remember(text, style, roomFor, LocalDensity.current, LocalFontFamilyResolver.current) {
+                measurer.measure(AnnotatedString(text), style, softWrap = false).size.width <= roomFor
+            }
+            val shown = if (fits || shortText.isNullOrBlank()) text else shortText
+            Text(
+                text = shown,
+                // Trimming is a layout concession, not a change of meaning, so
+                // the full phrase stays on the node. TalkBack keeps saying
+                // "Check now" on a screen too narrow to print it.
+                modifier = if (shown == text) {
+                    Modifier
+                } else {
+                    Modifier.semantics { contentDescription = text }
+                },
+                style = style,
+                color = contentColor,
+                // A button never wraps. Whatever is left after the short label is
+                // an ellipsis, which at least keeps the row one height.
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
@@ -436,10 +494,11 @@ fun <T> SegmentedSelector(
     BoxWithConstraints(
         modifier
             .fillMaxWidth()
+            .padding(vertical = (MinTouchTarget - SEGMENT_HEIGHT - SEGMENT_GUTTER * 2) / 2)
             .clip(shape)
             .background(NightbellColors.sheen(0.055f))
             .border(BorderStroke(1.dp, NightbellColors.sheen(0.09f)), shape)
-            .padding(4.dp),
+            .padding(SEGMENT_GUTTER),
     ) {
         val itemWidth = maxWidth / options.size
         val offsetX by animateDpAsState(
@@ -447,15 +506,27 @@ fun <T> SegmentedSelector(
             animationSpec = spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow),
             label = "segmentOffset",
         )
-        // The pill keeps its 34 dp height; the tappable segments around it are
-        // MinTouchTarget tall, so the control grew a little breathing room rather
-        // than the sliding indicator growing fat.
+        // The indicator fills the track's inside, so the gap between the two
+        // shapes is SEGMENT_GUTTER on all four sides.
+        //
+        // That is the whole point, and it is a geometry rule rather than a taste
+        // one. Two nested rounded shapes look right only when the inner radius is
+        // the outer radius minus the gap between them, so their curves stay
+        // parallel. Both of these are capsules, and a capsule's radius is half its
+        // height, so a uniform gap makes the rule hold by itself: the track is
+        // 34 + 2 x 4 tall at radius 21, the indicator is 34 at radius 17, and
+        // 21 - 4 is 17.
+        //
+        // It did not hold before. The indicator was 34 dp tall inside a track
+        // sized to the 48 dp touch floor, which left 4 dp of gap at the ends and
+        // 11 dp above and below, and two capsules that far out of step read as one
+        // shape sitting crookedly inside another rather than as a control.
         Box(
             Modifier
                 .align(Alignment.CenterStart)
                 .offset(x = offsetX)
                 .width(itemWidth)
-                .height(34.dp)
+                .height(SEGMENT_HEIGHT)
                 .clip(shape)
                 .background(
                     Brush.linearGradient(
@@ -470,7 +541,11 @@ fun <T> SegmentedSelector(
                 Box(
                     modifier = Modifier
                         .width(itemWidth)
-                        .height(MinTouchTarget)
+                        // The label rides the indicator's height; the touch floor
+                        // is reached with padding outside the track, the same way
+                        // ChipSelector reaches it, so growing the target cannot
+                        // pull the two capsules back out of step.
+                        .height(SEGMENT_HEIGHT)
                         .clip(shape)
                         .clickable(
                             indication = ripple(color = accent),
@@ -501,6 +576,16 @@ fun <T> SegmentedSelector(
  */
 private val CHIP_HEIGHT = 38.dp
 private val CHIP_MIN_WIDTH = 78.dp
+
+/**
+ * The segmented control's two measurements.
+ *
+ * Named rather than inlined because the concentric-radius rule in
+ * [SegmentedSelector] is a relationship between them, and a literal changed in
+ * one place and not the other is exactly how that relationship gets broken.
+ */
+private val SEGMENT_HEIGHT = 34.dp
+private val SEGMENT_GUTTER = 4.dp
 
 /** Wrapping chip picker for larger option sets. */
 @Composable

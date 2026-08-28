@@ -174,7 +174,7 @@ private fun GroupTargetRow(
         pageUrl = (markSource as? GroupMark.Site)?.url.orEmpty(),
         enabled = markSource is GroupMark.Site,
     )
-    val shape = RoundedCornerShape(18.dp)
+    val shape = RoundedCornerShape(NightbellRadii.inSheet)
 
     Row(
         modifier = Modifier

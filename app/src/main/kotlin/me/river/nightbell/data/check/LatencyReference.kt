@@ -7,6 +7,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.io.IOException
+import me.river.nightbell.domain.Reachability
 
 /**
  * Times a known-good endpoint, so the phone's own network cost can be told apart
@@ -76,6 +78,59 @@ class LatencyReference(
         } catch (error: Throwable) {
             Log.i(TAG, "Reference probe failed (${error::class.java.simpleName}); latency will be judged raw")
             null
+        }
+    }
+
+    /**
+     * Whether this phone can reach anything at all, asked of the same endpoint.
+     *
+     * Here rather than in a class of its own because it is the same URL, the same
+     * client and the same four-second budget; a second copy of that would drift
+     * from this one the first time either was touched. What differs is only what
+     * counts as an answer, and [probe] cannot say: it returns null both for "the
+     * network is dead" and for "this endpoint is blocked but the network is
+     * fine", and the whole point here is to tell those two apart.
+     *
+     * The distinction is in the catch. An exception that means nothing was
+     * reached is [Reachability.Verdict.UNREACHABLE]; any HTTP reply, of any
+     * status, is [Reachability.Verdict.REACHABLE]; anything else, including a
+     * URL this app cannot parse, settles nothing and stays
+     * [Reachability.Verdict.UNKNOWN], which pages as normal.
+     */
+    suspend fun reach(url: String): Reachability.Verdict = withContext(Dispatchers.IO) {
+        if (url.isBlank()) return@withContext Reachability.Verdict.UNKNOWN
+        val request = try {
+            Request.Builder()
+                .url(url)
+                .get()
+                .header("User-Agent", USER_AGENT)
+                .header("Cache-Control", "no-cache")
+                .build()
+        } catch (error: IllegalArgumentException) {
+            Log.w(TAG, "Bad reference URL: $url", error)
+            return@withContext Reachability.Verdict.UNKNOWN
+        }
+        try {
+            client.newCall(request).execute().use { response ->
+                // Reached, not healthy. A 500 from the reference still proves the
+                // packets went out and came back, which is the entire question.
+                if (response.code > 0) {
+                    Reachability.Verdict.REACHABLE
+                } else {
+                    Reachability.Verdict.UNKNOWN
+                }
+            }
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (error: IOException) {
+            // The failure a dead network produces: no DNS, no route, no reply.
+            // Matched on the same class of error the checkers classify as
+            // connection-shaped, so the two sides of the comparison agree.
+            Log.i(TAG, "Reference unreachable (${error::class.java.simpleName}); the network looks local")
+            Reachability.Verdict.UNREACHABLE
+        } catch (error: Throwable) {
+            Log.i(TAG, "Reference probe inconclusive (${error::class.java.simpleName})")
+            Reachability.Verdict.UNKNOWN
         }
     }
 

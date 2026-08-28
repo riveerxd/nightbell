@@ -43,7 +43,10 @@ class MainActivity : ComponentActivity() {
             // recreation, and replaying the animation every time the device turns
             // is the kind of thing that makes a splash hated.
             var splashDone by rememberSaveable { mutableStateOf(false) }
-            NightbellApp(initialMonitorId = monitorId)
+            NightbellApp(
+                pagedMonitorId = monitorId,
+                onPagedMonitorOpened = { pendingMonitorId = null },
+            )
             if (!splashDone) {
                 NightbellSplash(onFinished = { splashDone = true })
             }

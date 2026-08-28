@@ -43,6 +43,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.zIndex
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -101,8 +102,50 @@ object Routes {
     fun detail(id: String) = "detail/$id"
 }
 
+/**
+ * Puts a monitor that a page or a widget row asked for on the screen.
+ *
+ * The dashboard has to end up directly behind it, and nothing else may. Until
+ * this existed the call was a bare `navigate`, so a second page arriving while
+ * the first monitor was still open stacked one detail screen on another, and the
+ * back arrow then walked through the night's outages one at a time instead of
+ * going home. Two monitors down at once is the normal case for anyone who owns
+ * this app, so that was most of the time.
+ *
+ * The [Routes.DASHBOARD] insertion covers the other way in: a cold start from a
+ * page can land on the pager gate, and a monitor opened on top of the gate has
+ * nowhere to go back to at all.
+ */
+private fun openPagedMonitor(navController: NavHostController, monitorId: String) {
+    // `getBackStackEntry` and not `currentBackStack`: the latter reads the list
+    // directly and is marked RestrictedApi, which lint fails the release build on.
+    // Asking for the entry and catching the miss is the supported question.
+    val dashboardIsBehind = runCatching { navController.getBackStackEntry(Routes.DASHBOARD) }
+        .isSuccess
+    if (!dashboardIsBehind) {
+        navController.navigate(Routes.DASHBOARD) {
+            popUpTo(navController.graph.findStartDestination().id) { inclusive = true }
+        }
+    }
+    navController.navigate(Routes.detail(monitorId)) {
+        popUpTo(Routes.DASHBOARD)
+        launchSingleTop = true
+    }
+}
+
+/**
+ * @param pagedMonitorId the monitor a notification or widget row is asking for,
+ *   or null when the app was opened normally.
+ * @param onPagedMonitorOpened clears that request. It has to be a one-shot: the
+ *   same monitor paging twice is the same value arriving twice, and an effect
+ *   keyed on an unchanged value never runs a second time, so the second tap on
+ *   the shade used to do nothing at all.
+ */
 @Composable
-fun NightbellApp(initialMonitorId: String? = null) {
+fun NightbellApp(
+    pagedMonitorId: String? = null,
+    onPagedMonitorOpened: () -> Unit = {},
+) {
     val graph = Nightbell.require()
     val settings by graph.store.snapshot.collectAsStateWithLifecycle()
     val navController = rememberNavController()
@@ -122,10 +165,13 @@ fun NightbellApp(initialMonitorId: String? = null) {
         }
     }
 
-    LaunchedEffect(initialMonitorId) {
-        if (!initialMonitorId.isNullOrBlank()) {
-            navController.navigate(Routes.detail(initialMonitorId))
-        }
+    LaunchedEffect(pagedMonitorId) {
+        val id = pagedMonitorId?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
+        // Navigate first, clear second. Clearing flips the key to null and
+        // cancels this coroutine, and neither call suspends, so doing them in
+        // this order is what makes the cancellation land after the work.
+        openPagedMonitor(navController, id)
+        onPagedMonitorOpened()
     }
 
     val nowMs by rememberNowMs()
