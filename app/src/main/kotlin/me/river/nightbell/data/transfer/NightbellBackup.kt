@@ -198,6 +198,11 @@ fun NightbellBackup.toImportableSnapshot(): NightbellSnapshot {
         monitors = monitors,
         runtimes = runtimes,
         settings = snapshot.settings,
+        // Grouping is part of how someone has arranged their monitors, so it
+        // travels with them. Members that did not survive the filter above are
+        // dropped by the store's own read migration, so nothing here has to
+        // second-guess which ids made it.
+        groups = snapshot.groups,
     )
 }
 

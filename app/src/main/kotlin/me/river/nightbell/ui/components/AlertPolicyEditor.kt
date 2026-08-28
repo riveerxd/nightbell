@@ -62,7 +62,10 @@ fun AlertPolicyEditor(
     onSendTestAlert: (() -> Unit)? = null,
     showMasterToggle: Boolean = true,
 ) {
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    // No arrangement spacing: every row shape already carries its own gutter, and
+    // stacking 4 dp on top of that pushed two toggles in the same category 24 dp
+    // apart, further than the break between categories.
+    Column(modifier.fillMaxWidth()) {
 
         if (showMasterToggle) {
             ToggleRow(
@@ -80,7 +83,7 @@ fun AlertPolicyEditor(
             enter = fadeIn() + expandVertically(),
             exit = fadeOut() + shrinkVertically(),
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column {
 
                 ToggleRow(
                     title = "Notify when it goes down",
@@ -100,7 +103,7 @@ fun AlertPolicyEditor(
                     accent = NightbellColors.Mint,
                 )
 
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(14.dp))
                 SectionHeader("Latency", icon = NightbellIcons.Gauge, accent = NightbellColors.Amber)
                 Text(
                     text = "Degraded is up-but-slow: the check passed, it just blew its " +
@@ -179,7 +182,7 @@ fun AlertPolicyEditor(
                     }
                 }
 
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(14.dp))
                 SectionHeader("Sound", icon = NightbellIcons.Volume, accent = accent)
                 ChipSelector(
                     options = SoundChoice.entries.toList(),

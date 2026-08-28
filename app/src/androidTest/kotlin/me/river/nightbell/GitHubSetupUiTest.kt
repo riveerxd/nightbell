@@ -24,6 +24,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
 import me.river.nightbell.NightbellTestSupport.awaitTrue
 import me.river.nightbell.NightbellTestSupport.captureScreenshot
+import me.river.nightbell.NightbellTestSupport.openSettingsTab
 import me.river.nightbell.data.Nightbell
 import me.river.nightbell.domain.GitHubState
 import me.river.nightbell.domain.GitHubWatch
@@ -248,6 +249,7 @@ class GitHubSetupUiTest {
         composeRule.onNodeWithContentDescription("Settings").performClick()
         composeRule.waitForIdle()
 
+        composeRule.openSettingsTab("Checks")
         composeRule.onNodeWithTag("settings-list").assertIsDisplayed()
         // A LazyColumn, so a card further down the list is not composed until the
         // list is asked to scroll to it.
@@ -275,6 +277,8 @@ class GitHubSetupUiTest {
         }
         composeRule.captureScreenshot("gh-07b-settings-token-scopes")
 
+        // Updates are not a checking setting, so they are a tab away.
+        composeRule.openSettingsTab("About")
         composeRule.onNodeWithTag("settings-list")
             .performScrollToNode(hasTestTag("check-for-update"))
         composeRule.waitForIdle()
@@ -383,6 +387,7 @@ class GitHubSetupUiTest {
         launchApp()
         composeRule.onNodeWithContentDescription("Settings").performClick()
         composeRule.waitForIdle()
+        composeRule.openSettingsTab("Checks")
         val list = composeRule.onNodeWithTag("settings-list")
         list.performScrollToNode(hasText("Discount my connection"))
         composeRule.waitForIdle()

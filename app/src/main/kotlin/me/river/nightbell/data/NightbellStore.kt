@@ -14,8 +14,10 @@ import me.river.nightbell.domain.GlobalSettings
 import me.river.nightbell.domain.Health
 import me.river.nightbell.domain.UrgentAlerts
 import me.river.nightbell.domain.LegacyCrashRepair
+import me.river.nightbell.domain.GroupRollup
 import me.river.nightbell.domain.Monitor
 import me.river.nightbell.domain.MonitorCard
+import me.river.nightbell.domain.MonitorGroup
 import me.river.nightbell.domain.MonitorRuntime
 import me.river.nightbell.domain.PauseState
 import me.river.nightbell.domain.ReferenceSample
@@ -38,6 +40,17 @@ data class NightbellSnapshot(
     val schema: Int = SCHEMA_VERSION,
     val monitors: List<Monitor> = emptyList(),
     val runtimes: Map<String, MonitorRuntime> = emptyMap(),
+    /**
+     * User-made groups of monitors, in the order they should be drawn.
+     *
+     * A sibling of [monitors] rather than a `groupId` on [Monitor], for two
+     * reasons. A group has state of its own, a title, an icon, whether it is
+     * collapsed, which has nowhere to live on a monitor; and the membership
+     * *order* inside a group is the user's, which a foreign key cannot express.
+     *
+     * Defaulted, so every store written before groups existed decodes untouched.
+     */
+    val groups: List<MonitorGroup> = emptyList(),
     val settings: GlobalSettings = GlobalSettings(),
     /**
      * Rolling timings of the latency reference, newest last.
@@ -246,6 +259,76 @@ class NightbellStore(
         snap.copy(
             monitors = snap.monitors.filterNot { it.id == id },
             runtimes = snap.runtimes - id,
+            // A group holding a deleted monitor would report "1 of 3 not checked
+            // yet" forever, so membership goes with the monitor. In the same write:
+            // two writes would leave a window where the dashboard could read one.
+            groups = GroupRollup.withoutMonitor(snap.groups, id),
+        )
+    }
+
+    /**
+     * Creates or replaces a group.
+     *
+     * Membership goes through [GroupRollup.assign], so saving a group also takes
+     * its members out of whichever group used to hold them. One group per
+     * monitor, enforced at the only door that can add a member.
+     */
+    suspend fun upsertGroup(group: MonitorGroup) = mutate { snap ->
+        val known = snap.monitors.map { it.id }.toSet()
+        val existing = snap.groups.indexOfFirst { it.id == group.id }
+        val withGroup = if (existing >= 0) {
+            snap.groups.toMutableList().also { it[existing] = group }
+        } else {
+            snap.groups + group
+        }
+        snap.copy(groups = GroupRollup.assign(withGroup, group.id, group.memberIds, known))
+    }
+
+    /**
+     * Deletes a group and nothing else.
+     *
+     * The monitors are the point of the app; the grouping is a view of them.
+     * There is deliberately no "delete the group and its monitors" here, which
+     * would put a way to destroy four monitors' history behind a button labelled
+     * about grouping.
+     */
+    suspend fun deleteGroup(id: String) = mutate { snap ->
+        if (snap.groups.none { it.id == id }) snap
+        else snap.copy(groups = snap.groups.filterNot { it.id == id })
+    }
+
+    suspend fun setGroupCollapsed(id: String, collapsed: Boolean) = mutate { snap ->
+        val current = snap.groups.firstOrNull { it.id == id } ?: return@mutate snap
+        if (current.collapsed == collapsed) snap
+        else snap.copy(
+            groups = snap.groups.map { if (it.id == id) it.copy(collapsed = collapsed) else it },
+        )
+    }
+
+    /**
+     * Takes several monitors out of whichever groups hold them, in one write.
+     *
+     * One write rather than one per group: a check landing between two of them
+     * would render a fleet that was half regrouped, and the dashboard reads the
+     * snapshot on every emission.
+     */
+    suspend fun removeFromGroups(monitorIds: Set<String>) = mutate { snap ->
+        val next = snap.groups.map { group ->
+            val members = group.memberIds.filterNot { it in monitorIds }
+            if (members == group.memberIds) group else group.copy(memberIds = members)
+        }
+        if (next == snap.groups) snap else snap.copy(groups = next)
+    }
+
+    /** Removes one monitor from one group, leaving the monitor alone. */
+    suspend fun removeFromGroup(groupId: String, monitorId: String) = mutate { snap ->
+        val current = snap.groups.firstOrNull { it.id == groupId } ?: return@mutate snap
+        if (monitorId !in current.memberIds) snap
+        else snap.copy(
+            groups = snap.groups.map { group ->
+                if (group.id == groupId) group.copy(memberIds = group.memberIds - monitorId)
+                else group
+            },
         )
     }
 
@@ -357,9 +440,11 @@ class NightbellStore(
         val monitors = snapshot.monitors.map { it.migrated }
         val runtimes = scrubFakeCrashState(snapshot.runtimes)
         val settings = retireGoogleReference(snapshot.settings)
+        val groups = pruneGroups(snapshot.groups, monitors.map { it.id }.toSet())
         return if (monitors == snapshot.monitors &&
             runtimes == snapshot.runtimes &&
-            settings == snapshot.settings
+            settings == snapshot.settings &&
+            groups == snapshot.groups
         ) {
             snapshot
         } else {
@@ -368,7 +453,25 @@ class NightbellStore(
                 monitors = monitors,
                 runtimes = runtimes,
                 settings = settings,
+                groups = groups,
             )
+        }
+    }
+
+    /**
+     * Drops members no longer backed by a monitor, and memberships claimed twice.
+     *
+     * Applied on read rather than as a one-off write, like the repairs below it:
+     * an imported backup and a store hand-edited on a rooted device arrive by
+     * doors no startup task guards, and a group holding a ghost would report a
+     * monitor that cannot be shown or checked.
+     */
+    private fun pruneGroups(groups: List<MonitorGroup>, known: Set<String>): List<MonitorGroup> {
+        if (groups.isEmpty()) return groups
+        val seen = mutableSetOf<String>()
+        return groups.map { group ->
+            val members = group.memberIds.filter { it in known && seen.add(it) }
+            if (members == group.memberIds) group else group.copy(memberIds = members)
         }
     }
 

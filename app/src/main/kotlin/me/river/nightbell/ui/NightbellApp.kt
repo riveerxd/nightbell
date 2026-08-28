@@ -50,6 +50,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import me.river.nightbell.data.Nightbell
 import me.river.nightbell.ui.components.AuroraBackground
+import me.river.nightbell.ui.components.DismissKeyboardOnOutsideTap
 import me.river.nightbell.ui.dashboard.DashboardScreen
 import me.river.nightbell.ui.detail.DetailScreen
 import me.river.nightbell.ui.settings.SettingsScreen
@@ -145,11 +146,13 @@ fun NightbellApp(initialMonitorId: String? = null) {
                 modifier = Modifier.fillMaxSize(),
                 intensity = (0.35f + motionIntensity * 0.65f).coerceIn(0.35f, 1.2f),
             ) {
-                NightbellNavHost(
-                    navController = navController,
-                    startDestination = startDestination,
-                    onToast = { toastMessage = it },
-                )
+                DismissKeyboardOnOutsideTap(Modifier.fillMaxSize()) {
+                    NightbellNavHost(
+                        navController = navController,
+                        startDestination = startDestination,
+                        onToast = { toastMessage = it },
+                    )
+                }
                 GlassToast(
                     message = toastMessage,
                     onDismissed = { toastMessage = null },

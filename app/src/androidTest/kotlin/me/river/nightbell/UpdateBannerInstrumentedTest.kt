@@ -15,6 +15,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
 import me.river.nightbell.NightbellTestSupport.appContext
 import me.river.nightbell.NightbellTestSupport.captureScreenshot
+import me.river.nightbell.NightbellTestSupport.openSettingsTab
 import me.river.nightbell.data.Nightbell
 import me.river.nightbell.data.NightbellSnapshot
 import me.river.nightbell.domain.GlobalSettings
@@ -190,6 +191,7 @@ class UpdateBannerInstrumentedTest {
         // on screen does not put the button on screen, and a tap on a node outside
         // the viewport lands nowhere at all: the first version of this scrolled to
         // the text, clicked, and silently did nothing.
+        composeRule.openSettingsTab("About")
         composeRule.onNodeWithTag("settings-list")
             .performScrollToNode(hasTestTag("unignore-update"))
         composeRule.waitForIdle()
@@ -223,6 +225,7 @@ class UpdateBannerInstrumentedTest {
 
         composeRule.onNodeWithContentDescription("Settings").performClick()
         composeRule.waitForIdle()
+        composeRule.openSettingsTab("About")
         composeRule.onNodeWithTag("settings-list").performScrollToNode(hasText("Installed"))
         composeRule.waitForIdle()
 

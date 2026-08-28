@@ -939,7 +939,7 @@ private fun StepExpectations(
         exit = fadeOut() + shrinkVertically(),
     ) {
         Column {
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
             StepperRow(
                 title = "Expected code",
                 value = draft.status.code,
@@ -965,7 +965,7 @@ private fun StepExpectations(
         exit = fadeOut() + shrinkVertically(),
     ) {
         Column {
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
             StepperRow(
                 title = "From",
                 value = draft.status.rangeStart,
@@ -984,7 +984,7 @@ private fun StepExpectations(
         }
     }
 
-    Spacer(Modifier.height(10.dp))
+    Spacer(Modifier.height(14.dp))
     SectionHeader("Response body", icon = NightbellIcons.Braces, accent = accent)
     ChipSelector(
         options = AssertionMode.entries.toList(),
@@ -1414,7 +1414,7 @@ private fun StepSchedule(
     // fact about GitHub, and calling the monitor degraded over it would put an
     // amber card on the dashboard about somebody else's CDN.
     if (draft.kind != MonitorKind.GITHUB_REPO) {
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(14.dp))
         SectionHeader("Latency budget", icon = NightbellIcons.Gauge, accent = NightbellColors.Amber)
         LatencySloEditor(
             value = draft.latencySloMs,
@@ -1422,7 +1422,7 @@ private fun StepSchedule(
         )
     }
 
-    Spacer(Modifier.height(12.dp))
+    Spacer(Modifier.height(14.dp))
     SectionHeader("Urgent", icon = NightbellIcons.Zap, accent = NightbellColors.Rose)
     UrgentEditor(
         urgent = draft.urgent,
@@ -1431,7 +1431,7 @@ private fun StepSchedule(
         onRepeatChange = { v -> viewModel.update { it.copy(urgentRepeatMinutes = v) } },
     )
 
-    Spacer(Modifier.height(12.dp))
+    Spacer(Modifier.height(14.dp))
     SectionHeader("Alerts", icon = NightbellIcons.Bell, accent = accent)
     ToggleRow(
         title = "Use my global alert settings",

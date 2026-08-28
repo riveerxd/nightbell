@@ -1,0 +1,30 @@
+Monitors can be grouped now, and a group is one card with one verdict.
+
+"Is Nightbell up" was never a question about the website or about the repository.
+It was a question about both, and the dashboard could only answer it one row at a
+time, with you doing the and-ing. A group answers it directly: All 2 operational,
+or 1 of 2 is down, in the line where a monitor card puts its host. The worst
+member decides it. Pausing one member never decides it unless every member is
+paused, because a pause you set last week must not be able to hide an outage.
+
+Long-press monitors and pick a group, or make a new one. A group opens and shuts
+with a tap, and its members are still ordinary cards inside it: same long-press,
+same re-check, same drag handle. Grouping changes nothing about what gets checked
+or what gets announced.
+
+The group's icon comes from a row of previews rather than a text field. Each
+member site is offered once, and you can upload your own picture instead, which
+travels in the backup rather than sitting in a file the next phone would not have.
+A photo picked from the camera roll now arrives the right way up.
+
+Settings is four tabs: Alerts, Checks, Look, About. Twenty cards on one scroll was
+a screen nobody reached the bottom of. Each tab remembers where you scrolled it to
+and you can swipe between them.
+
+Two smaller things that were wrong. Tapping outside a text field now unfocuses it
+and puts the keyboard away. And a section heading in Settings used to sit further
+from its own rows than two categories sat from each other, which is fixed
+everywhere.
+
+Still no account, no server and nothing leaving the phone except the checks you
+asked for.

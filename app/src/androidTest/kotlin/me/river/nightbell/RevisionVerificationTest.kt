@@ -28,6 +28,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
 import me.river.nightbell.NightbellTestSupport.captureScreenshot
+import me.river.nightbell.NightbellTestSupport.openSettingsTab
 import me.river.nightbell.data.Nightbell
 import me.river.nightbell.data.NightbellSnapshot
 import me.river.nightbell.domain.CertificateWatch
@@ -207,8 +208,13 @@ class RevisionVerificationTest {
         launch()
         composeRule.onNodeWithContentDescription("Settings").performClick()
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("settings-list")
-            .performScrollToNode(hasContentDescription("Appearance"))
+        composeRule.openSettingsTab("Look")
+        // Scrolled to the chip, not to the section header above it. Bringing the
+        // heading into view leaves the chips below the fold: they are composed
+        // (the whole card is one lazy item) but off screen, so the tap lands on
+        // nothing. Anything that changes the height of a settings row moves that
+        // boundary, so the assertion has to name what it clicks.
+        composeRule.onNodeWithTag("settings-list").performScrollToNode(hasText("Light"))
         composeRule.waitForIdle()
         composeRule.onNodeWithText("Light").performClick()
         composeRule.waitForIdle()
@@ -486,6 +492,7 @@ class RevisionVerificationTest {
         launch()
         composeRule.onNodeWithContentDescription("Settings").performClick()
         composeRule.waitForIdle()
+        composeRule.openSettingsTab("About")
         composeRule.onNodeWithTag("settings-list")
             .performScrollToNode(hasText("Why is my monitor checked less often than I set?"))
         composeRule.waitForIdle()

@@ -22,7 +22,9 @@ import me.river.nightbell.domain.CheckerLimit
 import me.river.nightbell.domain.ElementTarget
 import me.river.nightbell.domain.GlobalSettings
 import me.river.nightbell.domain.Monitor
+import me.river.nightbell.domain.GroupRollup
 import me.river.nightbell.domain.MonitorCard
+import me.river.nightbell.domain.MonitorGroup
 import me.river.nightbell.domain.MonitorQuery
 import me.river.nightbell.domain.MonitorTemplates
 import me.river.nightbell.domain.PauseScope
@@ -39,6 +41,9 @@ import me.river.nightbell.domain.StatusMode
 import me.river.nightbell.domain.Validation
 import me.river.nightbell.domain.isCancellation
 import me.river.nightbell.domain.runCatchingCancellable
+import me.river.nightbell.ui.dashboard.DashboardRow
+import me.river.nightbell.ui.dashboard.GroupDraft
+import me.river.nightbell.ui.dashboard.GroupTarget
 import java.util.UUID
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -67,6 +72,11 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
     val settings: StateFlow<GlobalSettings> = graph.store.snapshot
         .map { it.settings }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), GlobalSettings())
+
+    /** Groups as stored, in the order they should be drawn. */
+    val groups: StateFlow<List<MonitorGroup>> = graph.store.snapshot
+        .map { it.groups }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     var refreshing by mutableStateOf(false)
         private set
@@ -247,6 +257,233 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
     fun clearNarrowing() {
         spec = MonitorQuery.Spec(sort = spec.sort)
     }
+
+    // ---- grouping ----------------------------------------------------------
+
+    /**
+     * Takes [groupList] as a parameter rather than reading [groups] itself.
+     *
+     * `StateFlow.value` is invisible to Compose, so a `rows` that read it would
+     * hand the grid a stale list every time a group was created, renamed or
+     * collapsed. The screen would only catch up on the next unrelated
+     * recomposition. The caller collects the flow, which is what makes the read
+     * observable.
+     *
+     * Grouping is suppressed while the list is narrowed. A search for "night"
+     * that matches one member of a three-member group cannot honestly draw the
+     * group, because the card would state a verdict for two monitors it is
+     * hiding, and a flat list of matches is exactly what someone searching asked
+     * for. Sort is still honoured, inside each group and across the ungrouped
+     * tail.
+     */
+    fun rowsFor(groupList: List<MonitorGroup>): List<DashboardRow> {
+        run {
+            val shown = visible
+            if (groupList.isEmpty() || narrowed) {
+                return shown.map(DashboardRow::Single)
+            }
+            val rank = shown.withIndex().associate { (index, card) -> card.monitor.id to index }
+            val rows = mutableListOf<DashboardRow>()
+            GroupRollup.of(groupList, shown).forEach { rolled ->
+                // Drawn even when empty: a group whose last member was deleted
+                // would otherwise vanish with no trace, and the user would have no
+                // way to tell it apart from one they never made.
+                rows += DashboardRow.Group(
+                    rolled.copy(members = rolled.members.sortedBy { rank[it.monitor.id] ?: 0 }),
+                )
+            }
+            rows += GroupRollup.ungrouped(groupList, shown).map(DashboardRow::Single)
+            return rows
+        }
+    }
+
+    /** The group open in the editor, or null when it is closed. */
+    var groupDraft by mutableStateOf<GroupDraft?>(null)
+        private set
+
+    /**
+     * Open while the user is choosing which group the selection should join.
+     *
+     * Null both when nothing is selected and when there is nothing to choose
+     * between. See [startGroupFromSelection].
+     */
+    var groupTarget by mutableStateOf<GroupTarget?>(null)
+        private set
+
+    /**
+     * The selection is going into a group. Which one is the next question, unless
+     * there are no groups yet, in which case there is only one answer.
+     *
+     * Skipping the chooser on a fresh install matters: a menu with one item is a
+     * tap that asks a question the user cannot answer wrongly, and every early
+     * group would have paid for it.
+     */
+    fun startGroupFromSelection() {
+        val ids = selectedInOrder()
+        if (ids.isEmpty()) return
+        if (groups.value.isEmpty()) {
+            createGroupFromSelection()
+        } else {
+            groupTarget = GroupTarget(
+                monitorIds = ids,
+                // Named here rather than worked out in the dialog: a monitor
+                // leaving the group it is in is the one surprising consequence of
+                // this action, and the sheet has to be able to say so.
+                leavingGroups = groups.value
+                    .filter { group -> group.memberIds.any { it in ids } }
+                    .map { it.displayTitle },
+            )
+        }
+    }
+
+    fun dismissGroupTarget() {
+        groupTarget = null
+    }
+
+    /** Opens the editor on a brand-new group made of the selection. */
+    fun createGroupFromSelection() {
+        val ids = selectedInOrder()
+        if (ids.isEmpty()) return
+        groupTarget = null
+        val monitors = cards.value.filter { it.monitor.id in ids }.map { it.monitor }
+        groupDraft = GroupDraft(
+            group = MonitorGroup(
+                id = java.util.UUID.randomUUID().toString(),
+                title = GroupRollup.suggestedTitle(monitors),
+                // Seeded from the first member with a URL, because that is the icon
+                // the user would have typed by hand nine times out of ten.
+                iconUrl = monitors.firstOrNull { it.url.isNotBlank() }?.url.orEmpty(),
+                memberIds = ids,
+            ),
+            creating = true,
+        )
+    }
+
+    /**
+     * Appends the selection to an existing group.
+     *
+     * Two details that are not obvious and both matter:
+     *
+     *  - **Appended, not replaced.** The group keeps the members it had, in the
+     *    order it had them, and the new ones land at the end. [MonitorGroup]
+     *    order is the user's, and rewriting it as a side effect of adding one
+     *    monitor would be a silent reorder.
+     *  - **The group opens.** Adding to a *collapsed* group makes the card vanish
+     *    from the dashboard, because it is inside a group that is drawn shut,
+     *    which reads exactly like the monitor was deleted. Expanding is what
+     *    turns a disappearance into a move you can see.
+     */
+    fun addSelectionToGroup(groupId: String) {
+        val ids = groupTarget?.monitorIds ?: selectedInOrder()
+        groupTarget = null
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            val group = graph.store.currentSnapshot().groups.firstOrNull { it.id == groupId }
+                ?: return@launch
+            graph.store.upsertGroup(
+                group.copy(
+                    memberIds = group.memberIds + ids.filterNot { it in group.memberIds },
+                    collapsed = false,
+                ),
+            )
+            graph.notifyStateChanged()
+            toast = "Added ${ids.size} ${plural(ids.size)} to “${group.displayTitle}”"
+            clearSelection()
+        }
+    }
+
+    /**
+     * Pulls the selection out of whichever groups hold it.
+     *
+     * The monitors themselves are untouched. They come back to the top level of
+     * the dashboard, which is where they were before anyone grouped them. There
+     * is deliberately no path from this button that deletes anything.
+     */
+    fun removeSelectionFromGroups() {
+        val ids = selection
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            val holders = graph.store.currentSnapshot().groups
+                .filter { group -> group.memberIds.any { it in ids } }
+            val moved = holders.sumOf { group -> group.memberIds.count { it in ids } }
+            if (moved == 0) {
+                clearSelection()
+                return@launch
+            }
+            graph.store.removeFromGroups(ids)
+            graph.notifyStateChanged()
+            toast = if (holders.size == 1) {
+                "Removed $moved ${plural(moved)} from “${holders.single().displayTitle}”"
+            } else {
+                "Removed $moved ${plural(moved)} from their groups"
+            }
+            clearSelection()
+        }
+    }
+
+    fun editGroup(groupId: String) {
+        val group = groups.value.firstOrNull { it.id == groupId } ?: return
+        groupDraft = GroupDraft(group = group, creating = false)
+    }
+
+    fun updateGroupDraft(transform: (MonitorGroup) -> MonitorGroup) {
+        groupDraft = groupDraft?.let { it.copy(group = transform(it.group)) }
+    }
+
+    fun dismissGroupDraft() {
+        groupDraft = null
+    }
+
+    fun saveGroupDraft() {
+        val draft = groupDraft ?: return
+        val group = draft.group.copy(title = draft.group.title.trim())
+        val creating = draft.creating
+        groupDraft = null
+        viewModelScope.launch {
+            graph.store.upsertGroup(group)
+            graph.notifyStateChanged()
+            toast = if (creating) "Grouped ${group.size} ${plural(group.size)}" else "Group updated"
+            if (creating) clearSelection()
+        }
+    }
+
+    /**
+     * Deletes the group and keeps every monitor in it.
+     *
+     * Called "ungroup" everywhere the user can see it, because that is what it
+     * does: the rows come back to the top level rather than going anywhere. There
+     * is deliberately no path from here that deletes the monitors, which would
+     * put four monitors' history behind a button labelled about arrangement.
+     */
+    fun ungroupDraft() {
+        val draft = groupDraft ?: return
+        groupDraft = null
+        viewModelScope.launch {
+            graph.store.deleteGroup(draft.group.id)
+            graph.notifyStateChanged()
+            toast = "Ungrouped ${draft.group.size} ${plural(draft.group.size)}"
+        }
+    }
+
+    fun setGroupCollapsed(groupId: String, collapsed: Boolean) {
+        viewModelScope.launch { graph.store.setGroupCollapsed(groupId, collapsed) }
+    }
+
+    fun removeFromGroup(groupId: String, monitorId: String) {
+        viewModelScope.launch {
+            graph.store.removeFromGroup(groupId, monitorId)
+            graph.notifyStateChanged()
+        }
+    }
+
+    /**
+     * The selection in the order it is drawn, not the order it was tapped.
+     *
+     * A set has no order, and membership order is what the group will keep, so it
+     * has to come from the list the user was looking at.
+     */
+    private fun selectedInOrder(): List<String> =
+        visible.map { it.monitor.id }.filter { it in selection }
 
     // ---- selection ---------------------------------------------------------
     //

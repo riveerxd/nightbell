@@ -6,11 +6,13 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -71,6 +73,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.unit.sp
@@ -78,6 +81,8 @@ import android.content.Intent
 import android.net.Uri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.river.nightbell.domain.CertificateWatch
+import me.river.nightbell.domain.groupedCount
+import me.river.nightbell.domain.groupsHolding
 import me.river.nightbell.domain.Health
 import me.river.nightbell.domain.Monitor
 import me.river.nightbell.domain.MonitorCard
@@ -110,6 +115,7 @@ import me.river.nightbell.ui.components.formatLatency
 import me.river.nightbell.ui.components.formatRelative
 import me.river.nightbell.ui.icons.NightbellIcons
 import me.river.nightbell.ui.rememberDashboardViewModel
+import me.river.nightbell.ui.theme.LocalNightbellMotion
 import me.river.nightbell.ui.theme.LocalNowMs
 import me.river.nightbell.ui.theme.NightbellColors
 import me.river.nightbell.ui.theme.accentFor
@@ -159,6 +165,10 @@ fun DashboardScreen(
     val pause by viewModel.pause.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val updateBanner by viewModel.updateBanner.collectAsStateWithLifecycle()
+    // Collected, not read off the flow inside the view model: a StateFlow's
+    // `.value` is invisible to Compose, and a group created or collapsed would
+    // not redraw the list until something else happened to recompose it.
+    val groups by viewModel.groups.collectAsStateWithLifecycle()
     val context = androidx.compose.ui.platform.LocalContext.current
     val gridState = rememberLazyGridState()
     val scope = rememberCoroutineScope()
@@ -191,6 +201,156 @@ fun DashboardScreen(
         while (reorder.autoScroll != 0) {
             reorder.scrollStep()
             kotlinx.coroutines.delay(16)
+        }
+    }
+
+    // ---- opening and closing a group --------------------------------------
+    //
+    // A group's members are their own grid items, which is what keeps a grouped
+    // card draggable: `GridReorderState` finds drop targets by key in
+    // `layoutInfo`, so members folded into one container item would stop being
+    // reorderable. The cost is that expanding is an *insertion* into a lazy list,
+    // not a height animation on a container, so the movement has to come from
+    // `animateItem` rather than from `expandVertically`.
+    //
+    // Two halves, and the second is the one that does the work:
+    //
+    //  - members fade in and out as they arrive and leave, staggered so the
+    //    group unrolls from the top rather than flashing in all at once;
+    //  - **every** top-level row animates its placement, so the cards below a
+    //    group slide down to make room instead of teleporting. Without that half
+    //    the members fade in prettily while the rest of the list jumps, which
+    //    reads as a glitch rather than as an opening.
+    val motion = LocalNightbellMotion.current
+    val slide: FiniteAnimationSpec<IntOffset>? = if (motion.enabled) {
+        spring(
+            dampingRatio = 0.86f,
+            stiffness = Spring.StiffnessMediumLow,
+            // Springs on integer offsets need a threshold or they animate towards
+            // a target they can never land exactly on.
+            visibilityThreshold = IntOffset.VisibilityThreshold,
+        )
+    } else {
+        null
+    }
+    val memberFadeOut: FiniteAnimationSpec<Float>? = if (motion.enabled) {
+        // Faster than the way in. Closing is a dismissal, the user has decided
+        // they are done with this group, and making them watch it leave at the
+        // speed it arrived is the wrong side of the trade.
+        tween(motion.scale(130))
+    } else {
+        null
+    }
+
+    /** Fade-in for the member at [index], delayed so the group unrolls. */
+    fun memberFadeIn(index: Int): FiniteAnimationSpec<Float>? = if (motion.enabled) {
+        tween(
+            durationMillis = motion.scale(190),
+            // Capped: a group of thirty would otherwise take over a second to
+            // finish arriving, and the last rows would land after the finger has
+            // moved on.
+            delayMillis = motion.scale(index.coerceAtMost(6) * 45),
+        )
+    } else {
+        null
+    }
+
+    // One renderer for a monitor card, wherever it is drawn.
+    //
+    // Groups made the list two kinds of row, and an expanded group's members are
+    // emitted as their own grid items, so this call site is reached from two
+    // places. A lambda rather than a private composable because it closes over
+    // eight things the screen already has in scope, every one of which would
+    // otherwise become a parameter.
+    //
+    // `rank` is the row's place in the flat `visible` list, which is what the
+    // nudge arrows move within. Looked up rather than counted, because a group
+    // card and its members do not share one running index.
+    //
+    // `staggered` is false for a card whose arrival is already being animated by
+    // something else. StaggeredEntrance is a *once per screen* effect and a slow
+    // one (a low-stiffness spring on alpha and offset); running it on top of an
+    // `animateItem` fade left a visible empty band while the neighbours had
+    // already slid aside and the member had not yet faded in.
+    val rankOf = remember(visible) {
+        visible.withIndex().associate { (i, card) -> card.monitor.id to i }
+    }
+    val monitorCard: @Composable (MonitorCard, Int, Modifier, Boolean) -> Unit =
+        { card, stagger, mod, staggered ->
+        val rank = rankOf[card.monitor.id] ?: 0
+        StaggeredEntrance(
+            index = stagger,
+            key = card.monitor.id,
+            log = entrance,
+            modifier = mod,
+            enabled = staggered,
+        ) {
+            MonitorRowCard(
+                card = card,
+                certLevel = if (settings.certAlertsEnabled) {
+                    CertificateWatch.level(
+                        expiresAt = card.runtime.certExpiresAt,
+                        nowMs = nowMs,
+                        warnDays = settings.certWarnDays,
+                        criticalDays = settings.certCriticalDays,
+                    )
+                } else {
+                    CertificateWatch.Level.UNKNOWN
+                },
+                selecting = selecting,
+                selected = card.monitor.id in viewModel.selection,
+                dragging = reorder.draggingKey == card.monitor.id,
+                dragDelta = reorder.delta,
+                reorderHandle = if (canReorder) {
+                    {
+                        ReorderHandle(
+                            monitorName = card.monitor.displayName,
+                            onDragStart = {
+                                viewModel.beginReorder()
+                                reorder.start(card.monitor.id)
+                            },
+                            onDrag = { amount ->
+                                reorder.drag(
+                                    amount,
+                                    reorderableKeys = reorderableKeys,
+                                ) { fromId, toId ->
+                                    viewModel.moveInReorder(fromId, toId)
+                                }
+                            },
+                            onDragEnd = {
+                                reorder.end()
+                                viewModel.commitReorder()
+                            },
+                            onMoveUp = if (rank > 0) {
+                                { viewModel.nudge(card.monitor.id, -1) }
+                            } else {
+                                null
+                            },
+                            onMoveDown = if (rank < visible.lastIndex) {
+                                { viewModel.nudge(card.monitor.id, 1) }
+                            } else {
+                                null
+                            },
+                        )
+                    }
+                } else {
+                    null
+                },
+                // In selection mode a tap toggles instead of
+                // navigating: opening a monitor while picking
+                // several of them is never what was meant.
+                onOpen = {
+                    if (selecting) {
+                        viewModel.toggleSelected(card.monitor.id)
+                    } else {
+                        onOpenMonitor(card.monitor.id)
+                    }
+                },
+                onLongPress = { viewModel.toggleSelected(card.monitor.id) },
+                onCheck = { viewModel.check(card.monitor.id) },
+                onToggle = { viewModel.setEnabled(card.monitor.id, it) },
+                onAcknowledge = { viewModel.acknowledgeUrgent(card.monitor.id) },
+            )
         }
     }
 
@@ -340,77 +500,112 @@ fun DashboardScreen(
                             )
                         }
                     } else {
-                        // itemsIndexed rather than a lookup inside the row: recovering
-                        // the index with indexOfFirst ran a scan per row per
-                        // recomposition for a number the list already knew.
-                        itemsIndexed(visible, key = { _, card -> card.monitor.id }) { index, card ->
-                            StaggeredEntrance(index = index + 1, key = card.monitor.id, log = entrance) {
-                                MonitorRowCard(
-                                    card = card,
-                                    certLevel = if (settings.certAlertsEnabled) {
-                                        CertificateWatch.level(
-                                            expiresAt = card.runtime.certExpiresAt,
-                                            nowMs = nowMs,
-                                            warnDays = settings.certWarnDays,
-                                            criticalDays = settings.certCriticalDays,
-                                        )
-                                    } else {
-                                        CertificateWatch.Level.UNKNOWN
-                                    },
-                                    selecting = selecting,
-                                    selected = card.monitor.id in viewModel.selection,
-                                    dragging = reorder.draggingKey == card.monitor.id,
-                                    dragDelta = reorder.delta,
-                                    reorderHandle = if (canReorder) {
-                                        {
-                                            ReorderHandle(
-                                                monitorName = card.monitor.displayName,
-                                                onDragStart = {
-                                                    viewModel.beginReorder()
-                                                    reorder.start(card.monitor.id)
+                        // One flat emission covering both kinds of row. A group is a
+                        // full-width card and its members follow it as ordinary
+                        // monitor items, so the grid still virtualises a flat list
+                        // and a grouped card keeps its long-press, its re-check and
+                        // its drag handle. Nesting them inside the group card would
+                        // have cost all three and handed the grid one enormous item.
+                        val rows = viewModel.rowsFor(groups)
+                        rows.forEachIndexed { rowIndex, row ->
+                            when (row) {
+                                is DashboardRow.Group -> {
+                                    val rolled = row.rolled
+                                    val group = rolled.group
+                                    val expanded = !group.collapsed
+                                    item(
+                                        key = "group-${group.id}",
+                                        span = { GridItemSpan(maxLineSpan) },
+                                    ) {
+                                        StaggeredEntrance(
+                                            index = rowIndex + 1,
+                                            key = "group-${group.id}",
+                                            log = entrance,
+                                            modifier = Modifier.animateItem(
+                                                fadeInSpec = null,
+                                                placementSpec = slide,
+                                                fadeOutSpec = null,
+                                            ),
+                                        ) {
+                                            GroupCard(
+                                                rolled = rolled,
+                                                expanded = expanded,
+                                                onToggle = {
+                                                    viewModel.setGroupCollapsed(
+                                                        group.id,
+                                                        !group.collapsed,
+                                                    )
                                                 },
-                                                onDrag = { amount ->
-                                                    reorder.drag(
-                                                        amount,
-                                                        reorderableKeys = reorderableKeys,
-                                                    ) { fromId, toId ->
-                                                        viewModel.moveInReorder(fromId, toId)
-                                                    }
-                                                },
-                                                onDragEnd = {
-                                                    reorder.end()
-                                                    viewModel.commitReorder()
-                                                },
-                                                onMoveUp = if (index > 0) {
-                                                    { viewModel.nudge(card.monitor.id, -1) }
-                                                } else {
-                                                    null
-                                                },
-                                                onMoveDown = if (index < visible.lastIndex) {
-                                                    { viewModel.nudge(card.monitor.id, 1) }
-                                                } else {
-                                                    null
-                                                },
+                                                onEdit = { viewModel.editGroup(group.id) },
                                             )
                                         }
-                                    } else {
-                                        null
-                                    },
-                                    // In selection mode a tap toggles instead of
-                                    // navigating: opening a monitor while picking
-                                    // several of them is never what was meant.
-                                    onOpen = {
-                                        if (selecting) {
-                                            viewModel.toggleSelected(card.monitor.id)
-                                        } else {
-                                            onOpenMonitor(card.monitor.id)
+                                    }
+                                    if (expanded) {
+                                        if (rolled.members.isEmpty()) {
+                                            item(
+                                                key = "group-empty-${group.id}",
+                                                span = { GridItemSpan(maxLineSpan) },
+                                            ) {
+                                                GroupEmptyMembers(
+                                                    Modifier.animateItem(
+                                                        fadeInSpec = memberFadeIn(0),
+                                                        placementSpec = slide,
+                                                        fadeOutSpec = memberFadeOut,
+                                                    ),
+                                                )
+                                            }
                                         }
-                                    },
-                                    onLongPress = { viewModel.toggleSelected(card.monitor.id) },
-                                    onCheck = { viewModel.check(card.monitor.id) },
-                                    onToggle = { viewModel.setEnabled(card.monitor.id, it) },
-                                    onAcknowledge = { viewModel.acknowledgeUrgent(card.monitor.id) },
-                                )
+                                        // Full width even on a tablet: a member is
+                                        // read as part of the column above it, and
+                                        // two members side by side would break the
+                                        // rail that says so.
+                                        rolled.members.forEachIndexed { memberIndex, card ->
+                                            item(
+                                                key = card.monitor.id,
+                                                span = { GridItemSpan(maxLineSpan) },
+                                            ) {
+                                                GroupedMember(
+                                                    accent = accentFor(group.accent).first,
+                                                    modifier = Modifier.animateItem(
+                                                        fadeInSpec = memberFadeIn(memberIndex),
+                                                        placementSpec = slide,
+                                                        fadeOutSpec = memberFadeOut,
+                                                    ),
+                                                ) {
+                                                    monitorCard(
+                                                        card,
+                                                        rowIndex + 1 + memberIndex,
+                                                        Modifier,
+                                                        // Staggered only when the
+                                                        // screen itself is arriving.
+                                                        // A group the user has just
+                                                        // opened has already played
+                                                        // its own entrance, and its
+                                                        // members' arrival belongs to
+                                                        // `animateItem` above. Two
+                                                        // animations on one card
+                                                        // fight, and the slower one
+                                                        // wins.
+                                                        !entrance.hasPlayed("group-${group.id}"),
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                is DashboardRow.Single -> item(key = row.card.monitor.id) {
+                                    monitorCard(
+                                        row.card,
+                                        rowIndex + 1,
+                                        Modifier.animateItem(
+                                            fadeInSpec = null,
+                                            placementSpec = slide,
+                                            fadeOutSpec = null,
+                                        ),
+                                        true,
+                                    )
+                                }
                             }
                         }
 
@@ -458,9 +653,52 @@ fun DashboardScreen(
             )
         }
 
+        // Asked before the editor, and only when there is a choice: with no groups
+        // yet `startGroupFromSelection` goes straight to the editor.
+        viewModel.groupTarget?.let { target ->
+            GroupTargetDialog(
+                target = target,
+                groups = groups,
+                cards = cards,
+                onAddTo = viewModel::addSelectionToGroup,
+                onCreateNew = viewModel::createGroupFromSelection,
+                onDismiss = viewModel::dismissGroupTarget,
+            )
+        }
+
+        viewModel.groupDraft?.let { draft ->
+            GroupEditorDialog(
+                draft = draft,
+                // Resolved from the live card list rather than carried in the draft,
+                // so a member deleted from a notification while the dialog is open
+                // disappears from it instead of being re-saved into the group.
+                members = draft.group.memberIds.mapNotNull { id ->
+                    cards.firstOrNull { it.monitor.id == id }
+                },
+                onChange = viewModel::updateGroupDraft,
+                onSave = viewModel::saveGroupDraft,
+                onUngroup = viewModel::ungroupDraft,
+                onRemoveMember = { id ->
+                    viewModel.updateGroupDraft { it.copy(memberIds = it.memberIds - id) }
+                },
+                onDismiss = viewModel::dismissGroupDraft,
+            )
+        }
+
+        // The bar's group actions depend on where the selection already lives, so
+        // the facts are worked out here, where `groups` is collected and therefore
+        // observable, rather than read off a StateFlow inside the bar.
+        val holders = groupsHolding(groups, viewModel.selection)
+        val groupedInSelection = groupedCount(groups, viewModel.selection)
+
         SelectionBar(
             count = viewModel.selection.size,
             visible = selecting,
+            hasGroups = groups.isNotEmpty(),
+            groupedCount = groupedInSelection,
+            holderTitles = holders.map { it.displayTitle },
+            onGroup = viewModel::startGroupFromSelection,
+            onRemoveFromGroup = viewModel::removeSelectionFromGroups,
             onPause = { viewModel.setEnabledForSelection(false) },
             onResume = { viewModel.setEnabledForSelection(true) },
             onMute = { viewModel.muteSelection(1) },
@@ -773,7 +1011,7 @@ private fun TunePanel(
                 }
             },
         )
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(14.dp))
         SectionHeader("Order", icon = NightbellIcons.Sliders, accent = NightbellColors.Violet)
         ChipSelector(
             options = MonitorQuery.Sort.entries.toList(),
@@ -890,6 +1128,13 @@ private fun NarrowingStrip(
 private fun SelectionBar(
     count: Int,
     visible: Boolean,
+    hasGroups: Boolean,
+    /** How many of the selected monitors already belong to a group. */
+    groupedCount: Int,
+    /** Titles of the groups holding any of them, for naming the remove action. */
+    holderTitles: List<String>,
+    onGroup: () -> Unit,
+    onRemoveFromGroup: () -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
     onMute: () -> Unit,
@@ -999,6 +1244,53 @@ private fun SelectionBar(
                         modifier = Modifier.weight(1f),
                     )
                 }
+                // Grouping gets its own rows, full width. Every other action here
+                // changes monitors that already exist; these arrange them, and
+                // pairing one with Delete would put "arrange" and "destroy" side by
+                // side at identical weight.
+                //
+                // Which rows appear depends on where the selection already lives.
+                // Offering "add to a group" for a monitor that is *in* a group,
+                // with no way to take it out, was the bar answering a question
+                // nobody asked. Remove comes first when it applies, because pulling
+                // a card out is the likelier reason to have long-pressed it.
+                val allGrouped = groupedCount == count
+                Spacer(Modifier.height(8.dp))
+                if (groupedCount > 0) {
+                    NightbellButton(
+                        // Names the group when there is exactly one to name.
+                        // "Remove from group" is fine; "Remove from Nightbell" is
+                        // better, because it is the sentence the user can check.
+                        text = when {
+                            holderTitles.size == 1 -> "Remove from “${holderTitles.single()}”"
+                            else -> "Remove from their groups"
+                        },
+                        onClick = onRemoveFromGroup,
+                        icon = NightbellIcons.Close,
+                        tone = ButtonTone.Secondary,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+                NightbellButton(
+                    // "Move" once everything selected is already in a group,
+                    // because that is what happens: one group per monitor, so
+                    // joining another is leaving this one. "Add" while nothing has
+                    // a group yet, and "Group" before any group exists, because
+                    // promising a picker with nothing in it would be a lie.
+                    text = when {
+                        !hasGroups && count == 1 -> "Group this monitor"
+                        !hasGroups -> "Group these $count"
+                        allGrouped && count == 1 -> "Move to another group"
+                        allGrouped -> "Move these $count to another group"
+                        count == 1 -> "Add this to a group"
+                        else -> "Add these $count to a group"
+                    },
+                    onClick = onGroup,
+                    icon = NightbellIcons.Layers,
+                    tone = ButtonTone.Secondary,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
     }

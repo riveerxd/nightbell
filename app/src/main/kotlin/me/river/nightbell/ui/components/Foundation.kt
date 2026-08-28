@@ -13,6 +13,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -43,6 +44,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.focus.FocusManager
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -119,7 +124,12 @@ fun SectionHeader(
     trailing: @Composable (() -> Unit)? = null,
 ) {
     Row(
-        modifier = modifier.fillMaxWidth().padding(bottom = 10.dp),
+        // A heading has to sit closer to the rows it labels than the rows sit to
+        // each other, or the eye groups it with the section above. Rows carry
+        // RowGutter of their own, so 6 dp here lands a heading 10 dp above its
+        // first row and leaves the 14 dp before the *next* heading as the wider
+        // gap that actually separates categories.
+        modifier = modifier.fillMaxWidth().padding(bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icon != null) {
@@ -153,6 +163,48 @@ fun SectionHeader(
             Spacer(Modifier.width(12.dp))
             trailing()
         }
+    }
+}
+
+/**
+ * Gives every screen a tap target for "I'm done typing".
+ *
+ * A `BasicTextField` keeps focus and keeps the keyboard up until something takes
+ * focus away, and nothing else on these screens ever did: tapping the card
+ * behind a field, or any empty space, left the caret blinking and the keyboard
+ * covering half the form. One handler at the root fixes it everywhere rather
+ * than each screen remembering to.
+ *
+ * It is a *parent* of the content on purpose. Pointer events reach children
+ * first, so anything that handles its own taps (a switch, a chip, a stepper, the
+ * field itself) consumes the press and never reaches this. Drags are likewise
+ * not taps, so scrolling a form does not dismiss the keyboard mid-gesture.
+ *
+ * Used twice: once around the whole nav host, and again inside the group editor,
+ * because a `Dialog` is its own window and the handler at the root of the
+ * activity never sees a tap that lands in it.
+ */
+@Composable
+fun DismissKeyboardOnOutsideTap(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val focusManager: FocusManager = LocalFocusManager.current
+    // Dropping focus does not reliably take the keyboard with it, so the IME is
+    // dismissed by hand as well. Verified on the emulator: focus alone left
+    // `mInputShown=true` and half the form still covered.
+    val keyboard = LocalSoftwareKeyboardController.current
+    Box(
+        modifier.pointerInput(Unit) {
+            detectTapGestures(
+                onTap = {
+                    focusManager.clearFocus()
+                    keyboard?.hide()
+                },
+            )
+        },
+    ) {
+        content()
     }
 }
 
@@ -210,12 +262,19 @@ fun StaggeredEntrance(
     key: Any,
     log: EntranceLog,
     modifier: Modifier = Modifier,
+    /**
+     * False for an item whose arrival is animated by something else.
+     *
+     * The key is still recorded, so turning this off does not leave the item
+     * eligible to drift in later. It means "this one is already handled".
+     */
+    enabled: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     val motion = LocalNightbellMotion.current
     // Read while composing, before the effect below records it: the first pass
-    // animates, every later one — including after recycling — does not.
-    val animate = remember(key) { motion.enabled && !log.hasPlayed(key) }
+    // animates, every later one, including after recycling, does not.
+    val animate = remember(key) { enabled && motion.enabled && !log.hasPlayed(key) }
     var shown by remember(key) { mutableStateOf(!animate) }
     LaunchedEffect(key) {
         // Recorded up front, not after the delay, so scrolling away mid-flight

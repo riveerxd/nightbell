@@ -336,8 +336,36 @@ android {
         // The star itself is a filled gold glyph rather than the word or an
         // outline, with its own colour so it cannot be read as the amber that
         // means degraded everywhere else in the app.
-        versionCode = 33
-        versionName = "3.4.0"
+        // 3.5.0 adds groups. "Is Nightbell up" is not a question about a website
+        // or about a repository, it is a question about both, and the dashboard
+        // could only ever answer it one row at a time. A group is one card with
+        // one verdict: worst member wins, a paused member never decides it unless
+        // every member is paused, and the wording is the fleet banner's so a
+        // group is not a third vocabulary for the same fact. Tapping it unrolls
+        // the members, which stay real cards with their own long-press, re-check
+        // and drag handle. Grouping changes nothing about what gets checked or
+        // what alerts.
+        //
+        // A group's mark comes from a picker rather than a field, because with two
+        // members the question is "that one or that one" and no text field can be
+        // asked it. Sites offered one per origin, or a picture from the photo
+        // picker, held in the group as base64 so it survives a backup rather than
+        // as a file path the new phone would not have.
+        //
+        // The settings screen is four tabs. Twenty cards on one scroll was a
+        // screen nobody reached the bottom of, and the split is by the question
+        // being asked: what gets announced, how the checking runs, how the app
+        // looks, and the app as a thing you installed. Each tab keeps its own
+        // scroll position and can be swiped between.
+        //
+        // Two things that were simply wrong. Tapping outside a text field left it
+        // focused with the keyboard covering half the form, because nothing in the
+        // app ever cleared focus and clearing it does not reliably take the
+        // keyboard with it. And every settings row carried 10 dp of its own
+        // padding on top of the 10 dp a section heading added below itself, so the
+        // gap inside a category was wider than the gap between two of them.
+        versionCode = 34
+        versionName = "3.5.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -469,6 +497,11 @@ dependencies {
     implementation(libs.okhttp)
     // ProxyController, so a page-element check can be routed through SOCKS5 too.
     implementation(libs.androidx.webkit)
+    // Reads the orientation tag off a picked photo. `BitmapFactory` ignores it,
+    // and every phone camera writes a portrait shot as landscape plus a tag, so
+    // without this a group icon picked from the camera roll arrives on its side.
+    // `ImageDecoder` would apply it for free, but only from API 28 and minSdk is 26.
+    implementation(libs.androidx.exifinterface)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
@@ -481,5 +514,6 @@ dependencies {
     androidTestImplementation(libs.compose.ui.test.junit4)
     androidTestImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.okhttp.tls)
+    androidTestImplementation(libs.androidx.exifinterface)
     debugImplementation(libs.compose.ui.test.manifest)
 }

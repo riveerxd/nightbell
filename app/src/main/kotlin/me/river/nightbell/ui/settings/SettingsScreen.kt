@@ -13,6 +13,27 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material3.ripple
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -81,6 +102,7 @@ import me.river.nightbell.ui.components.ToggleRow
 import me.river.nightbell.ui.icons.NightbellIcons
 import me.river.nightbell.ui.rememberSettingsViewModel
 import me.river.nightbell.ui.theme.Backdrop
+import me.river.nightbell.ui.theme.LocalNightbellMotion
 import me.river.nightbell.ui.theme.NightbellColors
 import me.river.nightbell.ui.theme.readableContentPadding
 import me.river.nightbell.widget.NightbellWidgetProvider
@@ -163,1009 +185,1098 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
     val topInset = WindowInsets.systemBars.asPaddingValues().calculateTopPadding()
     val bottomInset = WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
 
-    LazyColumn(
-        Modifier.fillMaxSize().testTag("settings-list"),
-        contentPadding = readableContentPadding(
-            top = topInset + 12.dp,
-            bottom = bottomInset + 40.dp,
-        ),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        item(key = "header") {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                GlassIconButton(
-                    icon = NightbellIcons.ArrowLeft,
-                    onClick = onBack,
-                    contentDescription = "Back",
-                    accent = NightbellColors.TextSecondary,
-                    size = 38.dp,
-                )
-                Spacer(Modifier.width(14.dp))
-                Text(
-                    text = "Settings",
-                    style = MaterialTheme.typography.displayMedium,
-                    color = NightbellColors.TextPrimary,
-                )
-            }
-        }
-
-        item(key = "permission") {
-            AnimatedVisibility(
-                visible = !notificationsAllowed,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically(),
-            ) {
-                GlassCard(accent = NightbellColors.Amber) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconBadge(NightbellIcons.BellOff, NightbellColors.Amber, size = 40.dp)
-                        Spacer(Modifier.width(13.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                "Notifications are blocked",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = NightbellColors.TextPrimary,
-                            )
-                            Text(
-                                "Nightbell can still check monitors, but it can't tell you when " +
-                                    "something breaks.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = NightbellColors.TextTertiary,
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(13.dp))
-                    NightbellButton(
-                        text = "Open notification settings",
-                        onClick = {
-                            val intent = Intent(AndroidSettings.ACTION_APP_NOTIFICATION_SETTINGS)
-                                .putExtra(AndroidSettings.EXTRA_APP_PACKAGE, context.packageName)
-                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            runCatching { context.startActivity(intent) }
-                        },
-                        icon = NightbellIcons.Bell,
-                        tone = ButtonTone.Secondary,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            }
-        }
-
-        item(key = "master") {
-            StaggeredEntrance(index = 0, key = "master", log = entrance) {
-                GlassCard(accent = if (settings.masterAlertsEnabled) Color.Transparent else NightbellColors.Rose) {
-                    ToggleRow(
-                        title = "All alerts",
-                        subtitle = if (settings.masterAlertsEnabled) {
-                            "Monitors can notify you"
-                        } else {
-                            "Everything is muted — nothing will notify you"
-                        },
-                        checked = settings.masterAlertsEnabled,
-                        onCheckedChange = { value ->
-                            viewModel.update { it.copy(masterAlertsEnabled = value) }
-                        },
-                        icon = if (settings.masterAlertsEnabled) NightbellIcons.Bell else NightbellIcons.BellOff,
-                        accent = NightbellColors.Aqua,
-                    )
-                }
-            }
-        }
-
-        item(key = "defaults") {
-            StaggeredEntrance(index = 1, key = "defaults", log = entrance) {
-                GlassCard {
-                    SectionHeader("Default alert policy", icon = NightbellIcons.Shield, accent = NightbellColors.Aqua)
-                    Text(
-                        text = "Applies to every monitor set to “use my global alert settings”.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = NightbellColors.TextTertiary,
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    AlertPolicyEditor(
-                        policy = settings.defaultAlert,
-                        onChange = { policy -> viewModel.updateDefaultAlert { policy } },
-                        onPreviewVibration = viewModel::previewVibration,
-                        onSendTestAlert = {
-                            notificationsAllowed = Nightbell.install(context).alerts.hasNotificationPermission()
-                            viewModel.sendTestAlert()
-                        },
-                        showMasterToggle = false,
-                    )
-                }
-            }
-        }
-
-        item(key = "scheduling") {
-            StaggeredEntrance(index = 2, key = "scheduling", log = entrance) {
-                GlassCard {
-                    SectionHeader("Background checks", icon = NightbellIcons.Radar, accent = NightbellColors.Violet)
-                    ToggleRow(
-                        title = "Run checks in the background",
-                        subtitle = "Uses WorkManager; Android batches work to save battery",
-                        checked = settings.backgroundChecksEnabled,
-                        onCheckedChange = { v -> viewModel.update { it.copy(backgroundChecksEnabled = v) } },
-                        icon = NightbellIcons.Power,
-                        accent = NightbellColors.Violet,
-                    )
-                    ToggleRow(
-                        title = "Wi-Fi only",
-                        subtitle = "Skip checks on metered mobile data",
-                        checked = settings.onlyOnUnmeteredNetwork,
-                        onCheckedChange = { v -> viewModel.update { it.copy(onlyOnUnmeteredNetwork = v) } },
-                        icon = NightbellIcons.Wifi,
-                        accent = NightbellColors.Violet,
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    StepperRow(
-                        title = "Default interval",
-                        value = settings.defaultIntervalMinutes,
-                        onValueChange = { v -> viewModel.update { it.copy(defaultIntervalMinutes = v) } },
-                        range = 1..1440,
-                        suffix = "m",
-                        icon = NightbellIcons.Clock,
-                        accent = NightbellColors.Violet,
-                    )
-                    StepperRow(
-                        title = "Default timeout",
-                        value = settings.defaultTimeoutSeconds,
-                        onValueChange = { v -> viewModel.update { it.copy(defaultTimeoutSeconds = v) } },
-                        range = 1..120,
-                        suffix = "s",
-                        icon = NightbellIcons.Gauge,
-                        accent = NightbellColors.Violet,
-                    )
-                    StepperRow(
-                        title = "History kept",
-                        value = settings.historyDepth,
-                        onValueChange = { v -> viewModel.update { it.copy(historyDepth = v) } },
-                        range = 10..300,
-                        step = 10,
-                        icon = NightbellIcons.History,
-                        accent = NightbellColors.Violet,
-                    )
-                }
-            }
-        }
-
-        item(key = "checker-health") {
-            StaggeredEntrance(index = 3, key = "checker-health", log = entrance) {
-                CheckerHealthCard(
-                    health = checkerHealth,
-                    limit = checkerLimit,
-                    batteryOptimised = batteryOptimised,
-                    strict = settings.strictForegroundMonitoring,
-                    onOpenBatterySettings = {
-                        runCatching { context.startActivity(viewModel.batterySettingsIntent()) }
-                    },
-                )
-            }
-        }
-
-        item(key = "strict") {
-            StaggeredEntrance(index = 4, key = "strict", log = entrance) {
-                GlassCard(accent = if (settings.strictForegroundMonitoring) NightbellColors.Amber else Color.Transparent) {
-                    SectionHeader("Strict cadence", icon = NightbellIcons.Zap, accent = NightbellColors.Amber)
-                    Text(
-                        text = "WorkManager is battery-friendly but Doze can defer a check for " +
-                            "a long time, and its periodic minimum is 15 minutes. Strict mode " +
-                            "runs a foreground service that keeps your intervals exactly.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = NightbellColors.TextTertiary,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    ToggleRow(
-                        title = "Strict foreground monitoring",
-                        subtitle = if (settings.strictForegroundMonitoring) {
-                            "On — a permanent notification is showing"
-                        } else {
-                            "Off — checks are best-effort, batched by Android"
-                        },
-                        checked = settings.strictForegroundMonitoring,
-                        onCheckedChange = { v ->
-                            viewModel.update { it.copy(strictForegroundMonitoring = v) }
-                        },
-                        icon = NightbellIcons.Power,
-                        accent = NightbellColors.Amber,
-                    )
-                    AnimatedVisibility(
-                        visible = settings.strictForegroundMonitoring,
-                        enter = fadeIn() + expandVertically(),
-                        exit = fadeOut() + shrinkVertically(),
-                    ) {
-                        Column {
-                            Spacer(Modifier.height(6.dp))
-                            WarningPanel(
-                                "This costs real battery. Nightbell wakes up as often as your " +
-                                    "tightest interval needs and holds a persistent " +
-                                    "notification Android will not let you dismiss.\n\n" +
-                                    "Background checks stay armed underneath as a repair " +
-                                    "sweep, so nothing is lost if the OS kills the service.",
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        text = "An unacknowledged URGENT outage starts the same service on its " +
-                            "own, whatever this is set to, and stops it once you confirm.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = NightbellColors.TextTertiary,
-                    )
-                }
-            }
-        }
-
-        item(key = "latency") {
-            StaggeredEntrance(index = 5, key = "latency", log = entrance) {
-                GlassCard {
-                    SectionHeader("Latency budget", icon = NightbellIcons.Gauge, accent = NightbellColors.Amber)
-                    Text(
-                        text = "The default for monitors that don't set their own. A successful " +
-                            "check slower than this is DEGRADED — up, but not well.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = NightbellColors.TextTertiary,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    ToggleRow(
-                        title = "Flag slow responses",
-                        subtitle = if (settings.defaultLatencySloMs > 0) {
-                            "Degraded above ${settings.defaultLatencySloMs} ms"
-                        } else {
-                            "Off — only up and down, never degraded"
-                        },
-                        checked = settings.defaultLatencySloMs > 0,
-                        onCheckedChange = { on ->
-                            viewModel.update { it.copy(defaultLatencySloMs = if (on) 2_500 else 0) }
-                        },
-                        icon = NightbellIcons.Activity,
-                        accent = NightbellColors.Amber,
-                    )
-                    AnimatedVisibility(
-                        visible = settings.defaultLatencySloMs > 0,
-                        enter = fadeIn() + expandVertically(),
-                        exit = fadeOut() + shrinkVertically(),
-                    ) {
-                        StepperRow(
-                            title = "Degraded above",
-                            value = settings.defaultLatencySloMs.coerceAtLeast(100),
-                            onValueChange = { v -> viewModel.update { it.copy(defaultLatencySloMs = v) } },
-                            range = 100..60_000,
-                            step = 100,
-                            suffix = "ms",
-                            icon = NightbellIcons.Gauge,
-                            accent = NightbellColors.Amber,
+    // ---- what lives on which tab -------------------------------------------
+    //
+    // One screen of twenty cards was a screen nobody read to the bottom of. The
+    // split is by the question being asked, not by how the code is organised:
+    //  - **Alerts**, what gets announced, and how loudly.
+    //  - **Checks**, how the checking itself runs, and whether it is keeping up.
+    //  - **Look**, this app's appearance, and the surfaces outside it.
+    //  - **About**, the app as a thing you installed: updates, your data, help.
+    //
+    // Held as `LazyListScope` lambdas rather than as composables so every card
+    // keeps reading the screen's own locals. The alternative was threading a
+    // dozen parameters through four call sites for no gain.
+    val alertsItems: LazyListScope.() -> Unit = {
+            item(key = "master") {
+                StaggeredEntrance(index = 0, key = "master", log = entrance) {
+                    GlassCard(accent = if (settings.masterAlertsEnabled) Color.Transparent else NightbellColors.Rose) {
+                        ToggleRow(
+                            title = "All alerts",
+                            subtitle = if (settings.masterAlertsEnabled) {
+                                "Monitors can notify you"
+                            } else {
+                                "Everything is muted — nothing will notify you"
+                            },
+                            checked = settings.masterAlertsEnabled,
+                            onCheckedChange = { value ->
+                                viewModel.update { it.copy(masterAlertsEnabled = value) }
+                            },
+                            icon = if (settings.masterAlertsEnabled) NightbellIcons.Bell else NightbellIcons.BellOff,
+                            accent = NightbellColors.Aqua,
                         )
                     }
+                }
+            }
 
-                    AnimatedVisibility(
-                        visible = settings.defaultLatencySloMs > 0,
-                        enter = fadeIn() + expandVertically(),
-                        exit = fadeOut() + shrinkVertically(),
-                    ) {
-                        Column {
-                            GlassDivider(Modifier.padding(vertical = 12.dp))
-                            Text(
-                                text = "A latency measured from this phone is your connection " +
-                                    "plus the server. On bad wifi that makes everything look " +
-                                    "slow at once. Nightbell can time a known-good endpoint " +
-                                    "alongside the checks and subtract whatever your " +
-                                    "connection is adding.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = NightbellColors.TextTertiary,
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            ToggleRow(
-                                title = "Discount my connection",
-                                subtitle = if (settings.latencyBaselineEnabled) {
-                                    "Slow readings are checked against a reference first"
-                                } else {
-                                    "Off — a slow connection will read as slow services"
-                                },
-                                checked = settings.latencyBaselineEnabled,
-                                onCheckedChange = { on ->
-                                    viewModel.update { it.copy(latencyBaselineEnabled = on) }
-                                },
-                                icon = NightbellIcons.Wifi,
-                                accent = NightbellColors.Aqua,
-                            )
-                            AnimatedVisibility(
-                                visible = settings.latencyBaselineEnabled,
-                                enter = fadeIn() + expandVertically(),
-                                exit = fadeOut() + shrinkVertically(),
-                            ) {
-                                Column {
-                                    Spacer(Modifier.height(8.dp))
-                                    GlassField(
-                                        value = settings.latencyReferenceUrl,
-                                        onValueChange = { v ->
-                                            viewModel.update { it.copy(latencyReferenceUrl = v.trim()) }
-                                        },
-                                        label = "Reference endpoint",
-                                        placeholder = ConnectivityReference.DEFAULT_URL,
-                                        helper = "Wants to be always up and cheap to answer. If your " +
-                                            "network blocks it, latency is judged raw and nothing breaks.",
-                                        leadingIcon = NightbellIcons.Globe,
-                                        accent = NightbellColors.Aqua,
-                                        keyboardType = KeyboardType.Uri,
-                                        modifier = Modifier.testTag("reference-endpoint"),
-                                    )
-                                    Spacer(Modifier.height(8.dp))
-                                    ChipSelector(
-                                        options = ConnectivityReference.presets.map { it.url },
-                                        selected = settings.latencyReferenceUrl,
-                                        onSelect = { url ->
-                                            viewModel.update { it.copy(latencyReferenceUrl = url) }
-                                        },
-                                        label = { url ->
-                                            ConnectivityReference.presets
-                                                .first { it.url == url }.label
-                                        },
-                                        accent = NightbellColors.Aqua,
-                                    )
-                                    Spacer(Modifier.height(8.dp))
-                                    Text(
-                                        text = "The default is GrapheneOS's connectivity check " +
-                                            "rather than Google's. It answers the same empty 204, " +
-                                            "and an app that keeps everything on your device had " +
-                                            "no business pinging an advertising company every " +
-                                            "forty-five seconds to time your wifi. Your own " +
-                                            "always-up endpoint is better still.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = NightbellColors.TextTertiary,
-                                    )
-                                }
-                            }
-                        }
+            item(key = "defaults") {
+                StaggeredEntrance(index = 1, key = "defaults", log = entrance) {
+                    GlassCard {
+                        SectionHeader("Default alert policy", icon = NightbellIcons.Shield, accent = NightbellColors.Aqua)
+                        Text(
+                            text = "Applies to every monitor set to “use my global alert settings”.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NightbellColors.TextTertiary,
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        AlertPolicyEditor(
+                            policy = settings.defaultAlert,
+                            onChange = { policy -> viewModel.updateDefaultAlert { policy } },
+                            onPreviewVibration = viewModel::previewVibration,
+                            onSendTestAlert = {
+                                notificationsAllowed = Nightbell.install(context).alerts.hasNotificationPermission()
+                                viewModel.sendTestAlert()
+                            },
+                            showMasterToggle = false,
+                        )
                     }
                 }
             }
-        }
 
-        item(key = "pause") {
-            StaggeredEntrance(index = 6, key = "pause", log = entrance) {
-                GlassCard {
-                    SectionHeader("Pause button", icon = NightbellIcons.Pause, accent = NightbellColors.Amber)
-                    Text(
-                        text = "The pause on the dashboard banner. Nightbell already stops " +
-                            "checking when the phone has no connection at all, but one bar in " +
-                            "a forest still counts as online: every check times out, every " +
-                            "monitor goes down at once, and none of it is about your services.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = NightbellColors.TextTertiary,
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    SegmentedSelector(
-                        options = PauseChoice.entries.toList(),
-                        selected = settings.pauseChoice,
-                        onSelect = { choice -> viewModel.update { it.copy(pauseChoice = choice) } },
-                        label = { it.label },
-                        accent = NightbellColors.Amber,
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        text = when (settings.pauseChoice) {
-                            PauseChoice.STOP_CHECKS -> PauseScope.STOP_CHECKS.blurb
-                            PauseChoice.ALERTS_ONLY -> PauseScope.ALERTS_ONLY.blurb
-                            PauseChoice.ASK -> "The button asks which one every time, then how long."
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = NightbellColors.TextTertiary,
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        text = "How long is always asked: 30 minutes up to 8 hours, or until you " +
-                            "turn it back on. A timed pause lifts itself, which an indefinite one " +
-                            "cannot, so it is the safer one to reach for at 2am.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = NightbellColors.TextTertiary,
-                    )
-                }
-            }
-        }
-
-        item(key = "proxy") {
-            StaggeredEntrance(index = 7, key = "proxy", log = entrance) {
-                GlassCard {
-                    SectionHeader("SOCKS5 proxy", icon = NightbellIcons.Shield, accent = NightbellColors.Aqua)
-                    Text(
-                        text = "Reach a Tor or I2P hidden service without putting the whole " +
-                            "phone in VPN mode. Nothing is routed until a monitor asks for " +
-                            "it: the switch is per monitor, on its Cadence step.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = NightbellColors.TextTertiary,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    ToggleRow(
-                        title = "Offer a proxy to monitors",
-                        subtitle = if (proxyEndpoint != null) {
-                            "Available at ${proxyEndpoint.host}:${proxyEndpoint.port}"
-                        } else if (settings.socksProxyEnabled) {
-                            "Needs a host and a port between 1 and 65535"
-                        } else {
-                            "Off, every check goes out directly"
-                        },
-                        checked = settings.socksProxyEnabled,
-                        onCheckedChange = { on ->
-                            viewModel.update { it.copy(socksProxyEnabled = on) }
-                        },
-                        icon = NightbellIcons.Shield,
-                        accent = NightbellColors.Aqua,
-                    )
-                    AnimatedVisibility(
-                        visible = settings.socksProxyEnabled,
-                        enter = fadeIn() + expandVertically(),
-                        exit = fadeOut() + shrinkVertically(),
-                    ) {
-                        // Both fields below draw from local state once they have been
-                        // touched, and from the store until then.
-                        //
-                        // Binding a text field straight to the store looks right and
-                        // types appallingly: every keystroke writes the whole snapshot
-                        // to DataStore, the field's value only comes back when that
-                        // write lands, and the cursor jumps to the end when it does.
-                        // Typing an address at any speed drops and reorders characters.
-                        // "127.0.0.1" arrived as "27.0.0.11" on a device.
-                        //
-                        // Null means untouched, so the stored value still shows on
-                        // first open and after the settings flow has loaded.
-                        var typedHost by rememberSaveable { mutableStateOf<String?>(null) }
-                        var typedPort by rememberSaveable { mutableStateOf<String?>(null) }
-                        Column {
-                            Spacer(Modifier.height(8.dp))
-                            GlassField(
-                                value = typedHost ?: settings.socksProxyHost,
-                                onValueChange = { v ->
-                                    typedHost = v
-                                    viewModel.update { it.copy(socksProxyHost = v.trim()) }
-                                },
-                                label = "Proxy host",
-                                placeholder = "127.0.0.1",
-                                helper = "An IPv6 literal works here too, with or without " +
-                                    "brackets: ::1 and [::1] both dial the same place.",
-                                leadingIcon = NightbellIcons.Server,
-                                accent = NightbellColors.Aqua,
-                                note = if (settings.socksProxyHost.isBlank()) {
-                                    Validation.Note(
-                                        Validation.Field.PROXY,
-                                        Validation.Severity.ERROR,
-                                        "A host is required",
-                                    )
-                                } else {
-                                    null
-                                },
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            GlassField(
-                                value = typedPort ?: if (settings.socksProxyPort > 0) {
-                                    settings.socksProxyPort.toString()
-                                } else {
-                                    ""
-                                },
-                                onValueChange = { v ->
-                                    val digits = v.filter { it.isDigit() }.take(5)
-                                    typedPort = digits
-                                    viewModel.update { it.copy(socksProxyPort = digits.toIntOrNull() ?: 0) }
-                                },
-                                label = "Proxy port",
-                                placeholder = "9050",
-                                helper = "Tor listens on 9050 by default, and Orbot on 9050 too. " +
-                                    "I2P's HTTP proxy is 4444.",
-                                leadingIcon = NightbellIcons.Link,
-                                accent = NightbellColors.Aqua,
-                                keyboardType = KeyboardType.Number,
-                                note = if (settings.socksProxyPort !in ProxyRoute.PORTS) {
-                                    Validation.Note(
-                                        Validation.Field.PROXY,
-                                        Validation.Severity.ERROR,
-                                        "Ports run from 1 to 65535",
-                                    )
-                                } else {
-                                    null
-                                },
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            StepperRow(
-                                title = "Allow routed checks",
-                                value = settings.proxiedTimeoutSeconds,
-                                onValueChange = { v ->
-                                    viewModel.update { it.copy(proxiedTimeoutSeconds = v) }
-                                },
-                                range = 5..180,
-                                step = 5,
-                                suffix = "s",
-                                icon = NightbellIcons.Clock,
-                                accent = NightbellColors.Aqua,
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                text = "Longer than an ordinary check on purpose. Most of the wait " +
-                                    "is Tor building a circuit to the service, which says nothing " +
-                                    "about whether the service is healthy, and 15 seconds reports " +
-                                    "a working hidden service as down. Tor itself waits 120.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = NightbellColors.TextTertiary,
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                text = "The proxy resolves the hostname, not this phone, which " +
-                                    "is what makes an .onion address work and keeps the name " +
-                                    "off the device's own DNS. Page-element monitors are " +
-                                    "routed as well, and so is the live preview you pick their " +
-                                    "elements in. Those loads run one at a time, because the " +
-                                    "WebView proxy setting belongs to the whole app rather " +
-                                    "than to one page, and a WebView too old to accept one at " +
-                                    "all refuses the check instead of loading it in the clear.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = NightbellColors.TextTertiary,
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        item(key = "github") {
-            StaggeredEntrance(index = 8, key = "github", log = entrance) {
-                GitHubTokenCard(
-                    redactedToken = githubTokenRedacted,
-                    onSave = viewModel::setGitHubToken,
-                    onOpenTokenPage = { openLink(context, GitHubWatch.TOKEN_PAGE_URL) },
-                )
-            }
-        }
-
-        item(key = "updates") {
-            StaggeredEntrance(index = 9, key = "updates", log = entrance) {
-                GlassCard {
-                    SectionHeader("Nightbell updates", icon = NightbellIcons.Import, accent = NightbellColors.Sky)
-                    Text(
-                        text = "Nightbell can look for a newer version of itself, notify you once " +
-                            "and show a banner on the dashboard until you dismiss it. It never " +
-                            "downloads or installs anything: both of them open a page, and " +
-                            "Android asks before an APK is installed.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = NightbellColors.TextTertiary,
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    ToggleRow(
-                        title = "Tell me about new versions",
-                        subtitle = if (settings.updateChecksEnabled) {
-                            // Both paths, because the launch one is what makes this
-                            // work at all for anyone who turned background checks
-                            // off, and the six hours is the cap on both together.
-                            "Checked when you open the app and in the background, " +
-                                "at most once every six hours"
-                        } else {
-                            "Off, your installer handles it"
-                        },
-                        checked = settings.updateChecksEnabled,
-                        onCheckedChange = { v -> viewModel.update { it.copy(updateChecksEnabled = v) } },
-                        icon = NightbellIcons.Bell,
-                        accent = NightbellColors.Sky,
-                    )
-                    AnimatedVisibility(
-                        visible = settings.updateChecksEnabled,
-                        enter = fadeIn() + expandVertically(),
-                        exit = fadeOut() + shrinkVertically(),
-                    ) {
-                        Column {
-                            Spacer(Modifier.height(8.dp))
-                            SegmentedSelector(
-                                options = UpdateSource.entries.toList(),
-                                selected = settings.updateSource,
-                                onSelect = { choice -> viewModel.update { it.copy(updateSource = choice) } },
-                                label = { it.label },
-                                accent = NightbellColors.Sky,
-                                modifier = Modifier.testTag("update-source"),
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                text = settings.updateSource.blurb,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = NightbellColors.TextTertiary,
-                            )
-                            Spacer(Modifier.height(12.dp))
-                            // Two labelled numbers rather than one sentence. This
-                            // card exists to answer "am I behind", and "Newest
-                            // seen: 3.2.2" reads as trivia unless you happen to
-                            // remember what you are running. A comparison needs
-                            // both halves of it on screen.
-                            VersionRow("Installed", viewModel.installedVersion)
-                            Spacer(Modifier.height(6.dp))
-                            VersionRow(
-                                label = "Latest",
-                                value = when {
-                                    appUpdate.lastCheckedAt <= 0L -> "not checked yet"
-                                    appUpdate.latestVersion.isBlank() ->
-                                        "couldn't reach ${settings.updateSource.label}"
-                                    else -> appUpdate.latestVersion
-                                },
-                                highlight = AppUpdate.isNewer(
-                                    appUpdate.latestVersion,
-                                    viewModel.installedVersion,
-                                ),
-                            )
-                            if (appUpdate.ignoredVersion.isNotBlank()) {
-                                Spacer(Modifier.height(10.dp))
-                                Text(
-                                    text = "Not showing ${appUpdate.ignoredVersion}. A later " +
-                                        "version will still be announced.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = NightbellColors.TextTertiary,
-                                )
-                                Spacer(Modifier.height(8.dp))
-                                // The undo. Dismissing is now one tap on a dashboard
-                                // banner, so a mis-tap can silence a release
-                                // forever, and the place to recover from it is next
-                                // to the line that admits it happened.
-                                NightbellButton(
-                                    text = "Show it again",
-                                    onClick = viewModel::unignoreUpdate,
-                                    icon = NightbellIcons.Bell,
-                                    tone = ButtonTone.Secondary,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .testTag("unignore-update"),
-                                )
-                            }
-                            Spacer(Modifier.height(10.dp))
-                            NightbellButton(
-                                text = if (viewModel.checkingForUpdate) "Checking…" else "Check now",
-                                onClick = viewModel::checkForUpdateNow,
-                                icon = NightbellIcons.Refresh,
-                                tone = ButtonTone.Secondary,
-                                loading = viewModel.checkingForUpdate,
-                                modifier = Modifier.fillMaxWidth().testTag("check-for-update"),
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        item(key = "widgets") {
-            StaggeredEntrance(index = 10, key = "widgets", log = entrance) {
-                WidgetsCard(
-                    ids = placedWidgetIds,
-                    onConfigure = { id ->
-                        runCatching {
-                            context.startActivity(
-                                Intent(context, WidgetConfigActivity::class.java)
-                                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
-                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                            )
-                        }
-                    },
-                )
-            }
-        }
-
-        item(key = "certificates") {
-            StaggeredEntrance(index = 11, key = "certificates", log = entrance) {
-                GlassCard {
-                    SectionHeader(
-                        "TLS certificates",
-                        icon = NightbellIcons.Shield,
-                        accent = NightbellColors.Mint,
-                    )
-                    Text(
-                        text = "Every HTTPS check already completes a handshake, and the " +
-                            "handshake carries the certificate's expiry date. Reading it costs " +
-                            "nothing and catches the one outage you can see coming.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = NightbellColors.TextTertiary,
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    ToggleRow(
-                        title = "Warn before certificates expire",
-                        subtitle = if (settings.certAlertsEnabled) {
-                            "Advisory only — never wakes you, never bypasses quiet hours"
-                        } else {
-                            "A cert can lapse without warning"
-                        },
-                        checked = settings.certAlertsEnabled,
-                        onCheckedChange = { v -> viewModel.update { it.copy(certAlertsEnabled = v) } },
-                        icon = NightbellIcons.Shield,
-                        accent = NightbellColors.Mint,
-                    )
-                    if (settings.certAlertsEnabled) {
-                        Spacer(Modifier.height(6.dp))
-                        StepperRow(
-                            title = "Start warning",
-                            value = settings.certWarnDays,
-                            onValueChange = { v -> viewModel.update { it.copy(certWarnDays = v) } },
-                            range = 1..90,
-                            suffix = "d",
-                            icon = NightbellIcons.Clock,
+            item(key = "pause") {
+                StaggeredEntrance(index = 2, key = "pause", log = entrance) {
+                    GlassCard {
+                        SectionHeader("Pause button", icon = NightbellIcons.Pause, accent = NightbellColors.Amber)
+                        Text(
+                            text = "The pause on the dashboard banner. Nightbell already stops " +
+                                "checking when the phone has no connection at all, but one bar in " +
+                                "a forest still counts as online: every check times out, every " +
+                                "monitor goes down at once, and none of it is about your services.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NightbellColors.TextTertiary,
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        SegmentedSelector(
+                            options = PauseChoice.entries.toList(),
+                            selected = settings.pauseChoice,
+                            onSelect = { choice -> viewModel.update { it.copy(pauseChoice = choice) } },
+                            label = { it.label },
                             accent = NightbellColors.Amber,
                         )
-                        StepperRow(
-                            title = "Urgent below",
-                            value = settings.certCriticalDays,
-                            onValueChange = { v -> viewModel.update { it.copy(certCriticalDays = v) } },
-                            range = 0..30,
-                            suffix = "d",
-                            icon = NightbellIcons.Zap,
-                            accent = NightbellColors.Rose,
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            text = when (settings.pauseChoice) {
+                                PauseChoice.STOP_CHECKS -> PauseScope.STOP_CHECKS.blurb
+                                PauseChoice.ALERTS_ONLY -> PauseScope.ALERTS_ONLY.blurb
+                                PauseChoice.ASK -> "The button asks which one every time, then how long."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NightbellColors.TextTertiary,
                         )
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            text = "Said once when it crosses each threshold, then at most once " +
-                                "a day. A renewal clears the notice on the next check. " +
-                                "Plain-HTTP monitors have no certificate and are skipped.",
+                            text = "How long is always asked: 30 minutes up to 8 hours, or until you " +
+                                "turn it back on. A timed pause lifts itself, which an indefinite one " +
+                                "cannot, so it is the safer one to reach for at 2am.",
                             style = MaterialTheme.typography.bodySmall,
                             color = NightbellColors.TextTertiary,
                         )
                     }
                 }
             }
-        }
 
-        item(key = "favicons") {
-            StaggeredEntrance(index = 12, key = "favicons", log = entrance) {
-                GlassCard {
-                    SectionHeader("Site icons", icon = NightbellIcons.Globe, accent = NightbellColors.Sky)
-                    Text(
-                        text = "Website-element monitors are badged with the site's own favicon, " +
-                            "cached for a month so the dashboard isn't hitting somebody else's " +
-                            "server every time you scroll. If a site has changed its mark, this " +
-                            "fetches them all again now.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = NightbellColors.TextTertiary,
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    NightbellButton(
-                        text = if (viewModel.refetchingFavicons) "Refetching…" else "Refetch site icons",
-                        onClick = viewModel::refetchFavicons,
-                        icon = NightbellIcons.Refresh,
-                        tone = ButtonTone.Secondary,
-                        loading = viewModel.refetchingFavicons,
-                        modifier = Modifier.fillMaxWidth().testTag("refetch-favicons"),
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        text = "An icon that can't be fetched keeps the one it had — you won't " +
-                            "end up with blank badges because a site was briefly down.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = NightbellColors.TextTertiary,
-                    )
-                }
-            }
-        }
-
-        item(key = "backup") {
-            StaggeredEntrance(index = 13, key = "backup", log = entrance) {
-                GlassCard {
-                    SectionHeader("Backup and transfer", icon = NightbellIcons.Export, accent = NightbellColors.Violet)
-                    Text(
-                        text = "Writes every monitor, its history and your settings to a JSON " +
-                            "file, wherever you choose to put it. Nothing is uploaded — the file " +
-                            "goes where you send it and nowhere else.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = NightbellColors.TextTertiary,
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    ToggleRow(
-                        title = "Include the GitHub token",
-                        subtitle = if (settings.includeSecretsInExport) {
-                            "The file will carry a working credential"
-                        } else {
-                            "Left out, you'll paste it again on the new phone"
-                        },
-                        checked = settings.includeSecretsInExport,
-                        onCheckedChange = { v ->
-                            viewModel.update { it.copy(includeSecretsInExport = v) }
-                        },
-                        icon = NightbellIcons.Shield,
-                        accent = NightbellColors.Rose,
-                    )
-                    AnimatedVisibility(
-                        visible = settings.includeSecretsInExport,
-                        enter = fadeIn() + expandVertically(),
-                        exit = fadeOut() + shrinkVertically(),
-                    ) {
-                        Column {
-                            Spacer(Modifier.height(4.dp))
-                            WarningPanel(
-                                "Anyone who opens the file can use the token as you until you " +
-                                    "revoke it, and that stays true of every copy the file makes " +
-                                    "on the way to the other phone. Off is the right answer " +
-                                    "unless you are moving the file by hand and deleting it after.",
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(10.dp))
-                    NightbellButton(
-                        text = if (viewModel.transfer == Transfer.EXPORT) {
-                            "Writing the file…"
-                        } else {
-                            "Export to a file"
-                        },
-                        onClick = { exportBackup.launch(backupFileName()) },
-                        icon = NightbellIcons.Export,
-                        tone = ButtonTone.Secondary,
-                        loading = viewModel.transfer == Transfer.EXPORT,
-                        enabled = !viewModel.transferring,
-                        modifier = Modifier.fillMaxWidth().testTag("export-backup"),
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    AnimatedVisibility(
-                        visible = !confirmImport,
-                        enter = fadeIn() + expandVertically(),
-                        exit = fadeOut() + shrinkVertically(),
-                    ) {
-                        // Reading, decoding and replacing the store takes long
-                        // enough on a real backup to look like nothing happened.
-                        // The button says what it is doing rather than just going
-                        // grey, which is indistinguishable from a dead tap.
-                        NightbellButton(
-                            text = if (viewModel.transfer == Transfer.IMPORT) {
-                                "Reading the file…"
-                            } else {
-                                "Import from a file"
-                            },
-                            onClick = { confirmImport = true },
-                            icon = NightbellIcons.Import,
-                            tone = ButtonTone.Secondary,
-                            loading = viewModel.transfer == Transfer.IMPORT,
-                            enabled = !viewModel.transferring,
-                            modifier = Modifier.fillMaxWidth().testTag("import-backup"),
+            item(key = "certificates") {
+                StaggeredEntrance(index = 3, key = "certificates", log = entrance) {
+                    GlassCard {
+                        SectionHeader(
+                            "TLS certificates",
+                            icon = NightbellIcons.Shield,
+                            accent = NightbellColors.Mint,
                         )
-                    }
-                    AnimatedVisibility(
-                        visible = confirmImport,
-                        enter = fadeIn() + expandVertically(),
-                        exit = fadeOut() + shrinkVertically(),
-                    ) {
-                        Column {
-                            Text(
-                                text = "Import replaces everything",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = NightbellColors.TextPrimary,
+                        Text(
+                            text = "Every HTTPS check already completes a handshake, and the " +
+                                "handshake carries the certificate's expiry date. Reading it costs " +
+                                "nothing and catches the one outage you can see coming.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NightbellColors.TextTertiary,
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        ToggleRow(
+                            title = "Warn before certificates expire",
+                            subtitle = if (settings.certAlertsEnabled) {
+                                "Advisory only — never wakes you, never bypasses quiet hours"
+                            } else {
+                                "A cert can lapse without warning"
+                            },
+                            checked = settings.certAlertsEnabled,
+                            onCheckedChange = { v -> viewModel.update { it.copy(certAlertsEnabled = v) } },
+                            icon = NightbellIcons.Shield,
+                            accent = NightbellColors.Mint,
+                        )
+                        if (settings.certAlertsEnabled) {
+                            Spacer(Modifier.height(6.dp))
+                            StepperRow(
+                                title = "Start warning",
+                                value = settings.certWarnDays,
+                                onValueChange = { v -> viewModel.update { it.copy(certWarnDays = v) } },
+                                range = 1..90,
+                                suffix = "d",
+                                icon = NightbellIcons.Clock,
+                                accent = NightbellColors.Amber,
+                            )
+                            StepperRow(
+                                title = "Urgent below",
+                                value = settings.certCriticalDays,
+                                onValueChange = { v -> viewModel.update { it.copy(certCriticalDays = v) } },
+                                range = 0..30,
+                                suffix = "d",
+                                icon = NightbellIcons.Zap,
+                                accent = NightbellColors.Rose,
                             )
                             Spacer(Modifier.height(6.dp))
                             Text(
-                                text = "The monitors and history on this device are dropped and " +
-                                    "the file's take their place. Export first if you want to " +
-                                    "keep them. This can't be undone.",
+                                text = "Said once when it crosses each threshold, then at most once " +
+                                    "a day. A renewal clears the notice on the next check. " +
+                                    "Plain-HTTP monitors have no certificate and are skipped.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = NightbellColors.TextTertiary,
                             )
-                            Spacer(Modifier.height(12.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                NightbellButton(
-                                    text = "Cancel",
-                                    onClick = { confirmImport = false },
-                                    tone = ButtonTone.Secondary,
-                                    modifier = Modifier.weight(1f),
+                        }
+                    }
+                }
+            }
+    }
+    val checksItems: LazyListScope.() -> Unit = {
+            item(key = "scheduling") {
+                StaggeredEntrance(index = 0, key = "scheduling", log = entrance) {
+                    GlassCard {
+                        SectionHeader("Background checks", icon = NightbellIcons.Radar, accent = NightbellColors.Violet)
+                        ToggleRow(
+                            title = "Run checks in the background",
+                            subtitle = "Uses WorkManager; Android batches work to save battery",
+                            checked = settings.backgroundChecksEnabled,
+                            onCheckedChange = { v -> viewModel.update { it.copy(backgroundChecksEnabled = v) } },
+                            icon = NightbellIcons.Power,
+                            accent = NightbellColors.Violet,
+                        )
+                        ToggleRow(
+                            title = "Wi-Fi only",
+                            subtitle = "Skip checks on metered mobile data",
+                            checked = settings.onlyOnUnmeteredNetwork,
+                            onCheckedChange = { v -> viewModel.update { it.copy(onlyOnUnmeteredNetwork = v) } },
+                            icon = NightbellIcons.Wifi,
+                            accent = NightbellColors.Violet,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        StepperRow(
+                            title = "Default interval",
+                            value = settings.defaultIntervalMinutes,
+                            onValueChange = { v -> viewModel.update { it.copy(defaultIntervalMinutes = v) } },
+                            range = 1..1440,
+                            suffix = "m",
+                            icon = NightbellIcons.Clock,
+                            accent = NightbellColors.Violet,
+                        )
+                        StepperRow(
+                            title = "Default timeout",
+                            value = settings.defaultTimeoutSeconds,
+                            onValueChange = { v -> viewModel.update { it.copy(defaultTimeoutSeconds = v) } },
+                            range = 1..120,
+                            suffix = "s",
+                            icon = NightbellIcons.Gauge,
+                            accent = NightbellColors.Violet,
+                        )
+                        StepperRow(
+                            title = "History kept",
+                            value = settings.historyDepth,
+                            onValueChange = { v -> viewModel.update { it.copy(historyDepth = v) } },
+                            range = 10..300,
+                            step = 10,
+                            icon = NightbellIcons.History,
+                            accent = NightbellColors.Violet,
+                        )
+                    }
+                }
+            }
+
+            item(key = "checker-health") {
+                StaggeredEntrance(index = 1, key = "checker-health", log = entrance) {
+                    CheckerHealthCard(
+                        health = checkerHealth,
+                        limit = checkerLimit,
+                        batteryOptimised = batteryOptimised,
+                        strict = settings.strictForegroundMonitoring,
+                        onOpenBatterySettings = {
+                            runCatching { context.startActivity(viewModel.batterySettingsIntent()) }
+                        },
+                    )
+                }
+            }
+
+            item(key = "strict") {
+                StaggeredEntrance(index = 2, key = "strict", log = entrance) {
+                    GlassCard(accent = if (settings.strictForegroundMonitoring) NightbellColors.Amber else Color.Transparent) {
+                        SectionHeader("Strict cadence", icon = NightbellIcons.Zap, accent = NightbellColors.Amber)
+                        Text(
+                            text = "WorkManager is battery-friendly but Doze can defer a check for " +
+                                "a long time, and its periodic minimum is 15 minutes. Strict mode " +
+                                "runs a foreground service that keeps your intervals exactly.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NightbellColors.TextTertiary,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        ToggleRow(
+                            title = "Strict foreground monitoring",
+                            subtitle = if (settings.strictForegroundMonitoring) {
+                                "On — a permanent notification is showing"
+                            } else {
+                                "Off — checks are best-effort, batched by Android"
+                            },
+                            checked = settings.strictForegroundMonitoring,
+                            onCheckedChange = { v ->
+                                viewModel.update { it.copy(strictForegroundMonitoring = v) }
+                            },
+                            icon = NightbellIcons.Power,
+                            accent = NightbellColors.Amber,
+                        )
+                        AnimatedVisibility(
+                            visible = settings.strictForegroundMonitoring,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically(),
+                        ) {
+                            Column {
+                                Spacer(Modifier.height(6.dp))
+                                WarningPanel(
+                                    "This costs real battery. Nightbell wakes up as often as your " +
+                                        "tightest interval needs and holds a persistent " +
+                                        "notification Android will not let you dismiss.\n\n" +
+                                        "Background checks stay armed underneath as a repair " +
+                                        "sweep, so nothing is lost if the OS kills the service.",
                                 )
-                                NightbellButton(
-                                    text = "Choose file",
-                                    // Anything, rather than application/json: mime
-                                    // detection for .json is inconsistent across
-                                    // storage providers and a filter that hides the
-                                    // user's own backup is worse than one that shows
-                                    // too much. The codec validates what comes back.
-                                    onClick = { importBackup.launch(arrayOf("*/*")) },
-                                    tone = ButtonTone.Danger,
-                                    icon = NightbellIcons.Import,
-                                    modifier = Modifier.weight(1f).testTag("confirm-import"),
+                            }
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = "An unacknowledged URGENT outage starts the same service on its " +
+                                "own, whatever this is set to, and stops it once you confirm.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NightbellColors.TextTertiary,
+                        )
+                    }
+                }
+            }
+
+            item(key = "latency") {
+                StaggeredEntrance(index = 3, key = "latency", log = entrance) {
+                    GlassCard {
+                        SectionHeader("Latency budget", icon = NightbellIcons.Gauge, accent = NightbellColors.Amber)
+                        Text(
+                            text = "The default for monitors that don't set their own. A successful " +
+                                "check slower than this is DEGRADED — up, but not well.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NightbellColors.TextTertiary,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        ToggleRow(
+                            title = "Flag slow responses",
+                            subtitle = if (settings.defaultLatencySloMs > 0) {
+                                "Degraded above ${settings.defaultLatencySloMs} ms"
+                            } else {
+                                "Off — only up and down, never degraded"
+                            },
+                            checked = settings.defaultLatencySloMs > 0,
+                            onCheckedChange = { on ->
+                                viewModel.update { it.copy(defaultLatencySloMs = if (on) 2_500 else 0) }
+                            },
+                            icon = NightbellIcons.Activity,
+                            accent = NightbellColors.Amber,
+                        )
+                        AnimatedVisibility(
+                            visible = settings.defaultLatencySloMs > 0,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically(),
+                        ) {
+                            StepperRow(
+                                title = "Degraded above",
+                                value = settings.defaultLatencySloMs.coerceAtLeast(100),
+                                onValueChange = { v -> viewModel.update { it.copy(defaultLatencySloMs = v) } },
+                                range = 100..60_000,
+                                step = 100,
+                                suffix = "ms",
+                                icon = NightbellIcons.Gauge,
+                                accent = NightbellColors.Amber,
+                            )
+                        }
+
+                        AnimatedVisibility(
+                            visible = settings.defaultLatencySloMs > 0,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically(),
+                        ) {
+                            Column {
+                                GlassDivider(Modifier.padding(vertical = 12.dp))
+                                Text(
+                                    text = "A latency measured from this phone is your connection " +
+                                        "plus the server. On bad wifi that makes everything look " +
+                                        "slow at once. Nightbell can time a known-good endpoint " +
+                                        "alongside the checks and subtract whatever your " +
+                                        "connection is adding.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = NightbellColors.TextTertiary,
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                ToggleRow(
+                                    title = "Discount my connection",
+                                    subtitle = if (settings.latencyBaselineEnabled) {
+                                        "Slow readings are checked against a reference first"
+                                    } else {
+                                        "Off — a slow connection will read as slow services"
+                                    },
+                                    checked = settings.latencyBaselineEnabled,
+                                    onCheckedChange = { on ->
+                                        viewModel.update { it.copy(latencyBaselineEnabled = on) }
+                                    },
+                                    icon = NightbellIcons.Wifi,
+                                    accent = NightbellColors.Aqua,
+                                )
+                                AnimatedVisibility(
+                                    visible = settings.latencyBaselineEnabled,
+                                    enter = fadeIn() + expandVertically(),
+                                    exit = fadeOut() + shrinkVertically(),
+                                ) {
+                                    Column {
+                                        Spacer(Modifier.height(8.dp))
+                                        GlassField(
+                                            value = settings.latencyReferenceUrl,
+                                            onValueChange = { v ->
+                                                viewModel.update { it.copy(latencyReferenceUrl = v.trim()) }
+                                            },
+                                            label = "Reference endpoint",
+                                            placeholder = ConnectivityReference.DEFAULT_URL,
+                                            helper = "Wants to be always up and cheap to answer. If your " +
+                                                "network blocks it, latency is judged raw and nothing breaks.",
+                                            leadingIcon = NightbellIcons.Globe,
+                                            accent = NightbellColors.Aqua,
+                                            keyboardType = KeyboardType.Uri,
+                                            modifier = Modifier.testTag("reference-endpoint"),
+                                        )
+                                        Spacer(Modifier.height(8.dp))
+                                        ChipSelector(
+                                            options = ConnectivityReference.presets.map { it.url },
+                                            selected = settings.latencyReferenceUrl,
+                                            onSelect = { url ->
+                                                viewModel.update { it.copy(latencyReferenceUrl = url) }
+                                            },
+                                            label = { url ->
+                                                ConnectivityReference.presets
+                                                    .first { it.url == url }.label
+                                            },
+                                            accent = NightbellColors.Aqua,
+                                        )
+                                        Spacer(Modifier.height(8.dp))
+                                        Text(
+                                            text = "The default is GrapheneOS's connectivity check " +
+                                                "rather than Google's. It answers the same empty 204, " +
+                                                "and an app that keeps everything on your device had " +
+                                                "no business pinging an advertising company every " +
+                                                "forty-five seconds to time your wifi. Your own " +
+                                                "always-up endpoint is better still.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = NightbellColors.TextTertiary,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            item(key = "proxy") {
+                StaggeredEntrance(index = 4, key = "proxy", log = entrance) {
+                    GlassCard {
+                        SectionHeader("SOCKS5 proxy", icon = NightbellIcons.Shield, accent = NightbellColors.Aqua)
+                        Text(
+                            text = "Reach a Tor or I2P hidden service without putting the whole " +
+                                "phone in VPN mode. Nothing is routed until a monitor asks for " +
+                                "it: the switch is per monitor, on its Cadence step.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NightbellColors.TextTertiary,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        ToggleRow(
+                            title = "Offer a proxy to monitors",
+                            subtitle = if (proxyEndpoint != null) {
+                                "Available at ${proxyEndpoint.host}:${proxyEndpoint.port}"
+                            } else if (settings.socksProxyEnabled) {
+                                "Needs a host and a port between 1 and 65535"
+                            } else {
+                                "Off, every check goes out directly"
+                            },
+                            checked = settings.socksProxyEnabled,
+                            onCheckedChange = { on ->
+                                viewModel.update { it.copy(socksProxyEnabled = on) }
+                            },
+                            icon = NightbellIcons.Shield,
+                            accent = NightbellColors.Aqua,
+                        )
+                        AnimatedVisibility(
+                            visible = settings.socksProxyEnabled,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically(),
+                        ) {
+                            // Both fields below draw from local state once they have been
+                            // touched, and from the store until then.
+                            //
+                            // Binding a text field straight to the store looks right and
+                            // types appallingly: every keystroke writes the whole snapshot
+                            // to DataStore, the field's value only comes back when that
+                            // write lands, and the cursor jumps to the end when it does.
+                            // Typing an address at any speed drops and reorders characters.
+                            // "127.0.0.1" arrived as "27.0.0.11" on a device.
+                            //
+                            // Null means untouched, so the stored value still shows on
+                            // first open and after the settings flow has loaded.
+                            var typedHost by rememberSaveable { mutableStateOf<String?>(null) }
+                            var typedPort by rememberSaveable { mutableStateOf<String?>(null) }
+                            Column {
+                                Spacer(Modifier.height(8.dp))
+                                GlassField(
+                                    value = typedHost ?: settings.socksProxyHost,
+                                    onValueChange = { v ->
+                                        typedHost = v
+                                        viewModel.update { it.copy(socksProxyHost = v.trim()) }
+                                    },
+                                    label = "Proxy host",
+                                    placeholder = "127.0.0.1",
+                                    helper = "An IPv6 literal works here too, with or without " +
+                                        "brackets: ::1 and [::1] both dial the same place.",
+                                    leadingIcon = NightbellIcons.Server,
+                                    accent = NightbellColors.Aqua,
+                                    note = if (settings.socksProxyHost.isBlank()) {
+                                        Validation.Note(
+                                            Validation.Field.PROXY,
+                                            Validation.Severity.ERROR,
+                                            "A host is required",
+                                        )
+                                    } else {
+                                        null
+                                    },
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                GlassField(
+                                    value = typedPort ?: if (settings.socksProxyPort > 0) {
+                                        settings.socksProxyPort.toString()
+                                    } else {
+                                        ""
+                                    },
+                                    onValueChange = { v ->
+                                        val digits = v.filter { it.isDigit() }.take(5)
+                                        typedPort = digits
+                                        viewModel.update { it.copy(socksProxyPort = digits.toIntOrNull() ?: 0) }
+                                    },
+                                    label = "Proxy port",
+                                    placeholder = "9050",
+                                    helper = "Tor listens on 9050 by default, and Orbot on 9050 too. " +
+                                        "I2P's HTTP proxy is 4444.",
+                                    leadingIcon = NightbellIcons.Link,
+                                    accent = NightbellColors.Aqua,
+                                    keyboardType = KeyboardType.Number,
+                                    note = if (settings.socksProxyPort !in ProxyRoute.PORTS) {
+                                        Validation.Note(
+                                            Validation.Field.PROXY,
+                                            Validation.Severity.ERROR,
+                                            "Ports run from 1 to 65535",
+                                        )
+                                    } else {
+                                        null
+                                    },
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                StepperRow(
+                                    title = "Allow routed checks",
+                                    value = settings.proxiedTimeoutSeconds,
+                                    onValueChange = { v ->
+                                        viewModel.update { it.copy(proxiedTimeoutSeconds = v) }
+                                    },
+                                    range = 5..180,
+                                    step = 5,
+                                    suffix = "s",
+                                    icon = NightbellIcons.Clock,
+                                    accent = NightbellColors.Aqua,
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = "Longer than an ordinary check on purpose. Most of the wait " +
+                                        "is Tor building a circuit to the service, which says nothing " +
+                                        "about whether the service is healthy, and 15 seconds reports " +
+                                        "a working hidden service as down. Tor itself waits 120.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = NightbellColors.TextTertiary,
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    text = "The proxy resolves the hostname, not this phone, which " +
+                                        "is what makes an .onion address work and keeps the name " +
+                                        "off the device's own DNS. Page-element monitors are " +
+                                        "routed as well, and so is the live preview you pick their " +
+                                        "elements in. Those loads run one at a time, because the " +
+                                        "WebView proxy setting belongs to the whole app rather " +
+                                        "than to one page, and a WebView too old to accept one at " +
+                                        "all refuses the check instead of loading it in the clear.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = NightbellColors.TextTertiary,
                                 )
                             }
                         }
                     }
-                    GlassDivider(Modifier.padding(vertical = 12.dp))
-                    Text(
-                        text = "Moving to another phone",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = NightbellColors.TextSecondary,
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        text = "Export on the old phone, import on the new one. Android keeps " +
-                            "each app's data to itself, so a file you carry across is the only " +
-                            "route — and it has to be written before the old install goes away.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = NightbellColors.TextTertiary,
+                }
+            }
+
+            item(key = "github") {
+                StaggeredEntrance(index = 5, key = "github", log = entrance) {
+                    GitHubTokenCard(
+                        redactedToken = githubTokenRedacted,
+                        onSave = viewModel::setGitHubToken,
+                        onOpenTokenPage = { openLink(context, GitHubWatch.TOKEN_PAGE_URL) },
                     )
                 }
             }
-        }
-
-        item(key = "help") {
-            StaggeredEntrance(index = 14, key = "help", log = entrance) {
-                HelpCard()
-            }
-        }
-
-        item(key = "appearance") {
-            StaggeredEntrance(index = 15, key = "appearance", log = entrance) {
-                GlassCard {
-                    SectionHeader("Appearance", icon = NightbellIcons.Eye, accent = NightbellColors.Aqua)
-                    Text(
-                        text = "Nightbell is built dark-first — the glass reads on depth, and depth " +
-                            "is easiest to draw on black. The light scheme is a designed " +
-                            "counterpart rather than an inversion: same layout, re-picked " +
-                            "colours, and the status hues darkened until they stay legible.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = NightbellColors.TextTertiary,
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    SegmentedSelector(
-                        options = ThemeChoice.entries.toList(),
-                        selected = settings.theme,
-                        onSelect = { choice -> viewModel.update { it.copy(theme = choice) } },
-                        label = { it.label },
-                        modifier = Modifier.testTag("theme-selector"),
-                    )
+    }
+    val lookItems: LazyListScope.() -> Unit = {
+            item(key = "appearance") {
+                StaggeredEntrance(index = 0, key = "appearance", log = entrance) {
+                    GlassCard {
+                        SectionHeader("Appearance", icon = NightbellIcons.Eye, accent = NightbellColors.Aqua)
+                        Text(
+                            text = "Nightbell is built dark-first — the glass reads on depth, and depth " +
+                                "is easiest to draw on black. The light scheme is a designed " +
+                                "counterpart rather than an inversion: same layout, re-picked " +
+                                "colours, and the status hues darkened until they stay legible.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NightbellColors.TextTertiary,
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        SegmentedSelector(
+                            options = ThemeChoice.entries.toList(),
+                            selected = settings.theme,
+                            onSelect = { choice -> viewModel.update { it.copy(theme = choice) } },
+                            label = { it.label },
+                            modifier = Modifier.testTag("theme-selector"),
+                        )
+                    }
                 }
             }
-        }
 
-        item(key = "motion") {
-            StaggeredEntrance(index = 16, key = "motion", log = entrance) {
-                GlassCard {
-                    SectionHeader("Motion", icon = NightbellIcons.Sparkle, accent = NightbellColors.Mint)
-                    Text(
-                        text = when {
-                            settings.motionIntensity < 0.06f -> "Animations off — everything snaps into place."
-                            settings.motionIntensity < 0.7f -> "Subtle motion."
-                            settings.motionIntensity < 1.2f -> "Full Nightbell: aurora, sonar rings, the lot."
-                            else -> "Extra lively."
+            item(key = "motion") {
+                StaggeredEntrance(index = 1, key = "motion", log = entrance) {
+                    GlassCard {
+                        SectionHeader("Motion", icon = NightbellIcons.Sparkle, accent = NightbellColors.Mint)
+                        Text(
+                            text = when {
+                                settings.motionIntensity < 0.06f -> "Animations off — everything snaps into place."
+                                settings.motionIntensity < 0.7f -> "Subtle motion."
+                                settings.motionIntensity < 1.2f -> "Full Nightbell: aurora, sonar rings, the lot."
+                                else -> "Extra lively."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NightbellColors.TextTertiary,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Slider(
+                            value = settings.motionIntensity,
+                            onValueChange = { v -> viewModel.update { it.copy(motionIntensity = v) } },
+                            valueRange = 0f..1.4f,
+                            colors = SliderDefaults.colors(
+                                thumbColor = NightbellColors.Mint,
+                                activeTrackColor = NightbellColors.Mint,
+                                inactiveTrackColor = NightbellColors.GlassFill,
+                            ),
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        ToggleRow(
+                            title = "Frosted glass",
+                            subtitle = when {
+                                !Backdrop.isSupported ->
+                                    "Needs Android 12 — this device uses solid panes"
+                                settings.realBlurEnabled ->
+                                    "Real backdrop blur behind floating sheets"
+                                else ->
+                                    "Solid panes — cheaper to draw"
+                            },
+                            checked = settings.realBlurEnabled && Backdrop.isSupported,
+                            onCheckedChange = { v -> viewModel.update { it.copy(realBlurEnabled = v) } },
+                            icon = NightbellIcons.Layers,
+                            accent = NightbellColors.Mint,
+                            enabled = Backdrop.isSupported,
+                        )
+                    }
+                }
+            }
+
+            item(key = "favicons") {
+                StaggeredEntrance(index = 2, key = "favicons", log = entrance) {
+                    GlassCard {
+                        SectionHeader("Site icons", icon = NightbellIcons.Globe, accent = NightbellColors.Sky)
+                        Text(
+                            text = "Website-element monitors are badged with the site's own favicon, " +
+                                "cached for a month so the dashboard isn't hitting somebody else's " +
+                                "server every time you scroll. If a site has changed its mark, this " +
+                                "fetches them all again now.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NightbellColors.TextTertiary,
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        NightbellButton(
+                            text = if (viewModel.refetchingFavicons) "Refetching…" else "Refetch site icons",
+                            onClick = viewModel::refetchFavicons,
+                            icon = NightbellIcons.Refresh,
+                            tone = ButtonTone.Secondary,
+                            loading = viewModel.refetchingFavicons,
+                            modifier = Modifier.fillMaxWidth().testTag("refetch-favicons"),
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = "An icon that can't be fetched keeps the one it had — you won't " +
+                                "end up with blank badges because a site was briefly down.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NightbellColors.TextTertiary,
+                        )
+                    }
+                }
+            }
+
+            item(key = "widgets") {
+                StaggeredEntrance(index = 3, key = "widgets", log = entrance) {
+                    WidgetsCard(
+                        ids = placedWidgetIds,
+                        onConfigure = { id ->
+                            runCatching {
+                                context.startActivity(
+                                    Intent(context, WidgetConfigActivity::class.java)
+                                        .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                                )
+                            }
                         },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = NightbellColors.TextTertiary,
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Slider(
-                        value = settings.motionIntensity,
-                        onValueChange = { v -> viewModel.update { it.copy(motionIntensity = v) } },
-                        valueRange = 0f..1.4f,
-                        colors = SliderDefaults.colors(
-                            thumbColor = NightbellColors.Mint,
-                            activeTrackColor = NightbellColors.Mint,
-                            inactiveTrackColor = NightbellColors.GlassFill,
-                        ),
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    ToggleRow(
-                        title = "Frosted glass",
-                        subtitle = when {
-                            !Backdrop.isSupported ->
-                                "Needs Android 12 — this device uses solid panes"
-                            settings.realBlurEnabled ->
-                                "Real backdrop blur behind floating sheets"
-                            else ->
-                                "Solid panes — cheaper to draw"
-                        },
-                        checked = settings.realBlurEnabled && Backdrop.isSupported,
-                        onCheckedChange = { v -> viewModel.update { it.copy(realBlurEnabled = v) } },
-                        icon = NightbellIcons.Layers,
-                        accent = NightbellColors.Mint,
-                        enabled = Backdrop.isSupported,
                     )
                 }
             }
+    }
+    val aboutItems: LazyListScope.() -> Unit = {
+            item(key = "updates") {
+                StaggeredEntrance(index = 0, key = "updates", log = entrance) {
+                    GlassCard {
+                        SectionHeader("Nightbell updates", icon = NightbellIcons.Import, accent = NightbellColors.Sky)
+                        Text(
+                            text = "Nightbell can look for a newer version of itself, notify you once " +
+                                "and show a banner on the dashboard until you dismiss it. It never " +
+                                "downloads or installs anything: both of them open a page, and " +
+                                "Android asks before an APK is installed.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NightbellColors.TextTertiary,
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        ToggleRow(
+                            title = "Tell me about new versions",
+                            subtitle = if (settings.updateChecksEnabled) {
+                                // Both paths, because the launch one is what makes this
+                                // work at all for anyone who turned background checks
+                                // off, and the six hours is the cap on both together.
+                                "Checked when you open the app and in the background, " +
+                                    "at most once every six hours"
+                            } else {
+                                "Off, your installer handles it"
+                            },
+                            checked = settings.updateChecksEnabled,
+                            onCheckedChange = { v -> viewModel.update { it.copy(updateChecksEnabled = v) } },
+                            icon = NightbellIcons.Bell,
+                            accent = NightbellColors.Sky,
+                        )
+                        AnimatedVisibility(
+                            visible = settings.updateChecksEnabled,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically(),
+                        ) {
+                            Column {
+                                Spacer(Modifier.height(8.dp))
+                                SegmentedSelector(
+                                    options = UpdateSource.entries.toList(),
+                                    selected = settings.updateSource,
+                                    onSelect = { choice -> viewModel.update { it.copy(updateSource = choice) } },
+                                    label = { it.label },
+                                    accent = NightbellColors.Sky,
+                                    modifier = Modifier.testTag("update-source"),
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    text = settings.updateSource.blurb,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = NightbellColors.TextTertiary,
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                // Two labelled numbers rather than one sentence. This
+                                // card exists to answer "am I behind", and "Newest
+                                // seen: 3.2.2" reads as trivia unless you happen to
+                                // remember what you are running. A comparison needs
+                                // both halves of it on screen.
+                                VersionRow("Installed", viewModel.installedVersion)
+                                Spacer(Modifier.height(6.dp))
+                                VersionRow(
+                                    label = "Latest",
+                                    value = when {
+                                        appUpdate.lastCheckedAt <= 0L -> "not checked yet"
+                                        appUpdate.latestVersion.isBlank() ->
+                                            "couldn't reach ${settings.updateSource.label}"
+                                        else -> appUpdate.latestVersion
+                                    },
+                                    highlight = AppUpdate.isNewer(
+                                        appUpdate.latestVersion,
+                                        viewModel.installedVersion,
+                                    ),
+                                )
+                                if (appUpdate.ignoredVersion.isNotBlank()) {
+                                    Spacer(Modifier.height(10.dp))
+                                    Text(
+                                        text = "Not showing ${appUpdate.ignoredVersion}. A later " +
+                                            "version will still be announced.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = NightbellColors.TextTertiary,
+                                    )
+                                    Spacer(Modifier.height(8.dp))
+                                    // The undo. Dismissing is now one tap on a dashboard
+                                    // banner, so a mis-tap can silence a release
+                                    // forever, and the place to recover from it is next
+                                    // to the line that admits it happened.
+                                    NightbellButton(
+                                        text = "Show it again",
+                                        onClick = viewModel::unignoreUpdate,
+                                        icon = NightbellIcons.Bell,
+                                        tone = ButtonTone.Secondary,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("unignore-update"),
+                                    )
+                                }
+                                Spacer(Modifier.height(10.dp))
+                                NightbellButton(
+                                    text = if (viewModel.checkingForUpdate) "Checking…" else "Check now",
+                                    onClick = viewModel::checkForUpdateNow,
+                                    icon = NightbellIcons.Refresh,
+                                    tone = ButtonTone.Secondary,
+                                    loading = viewModel.checkingForUpdate,
+                                    modifier = Modifier.fillMaxWidth().testTag("check-for-update"),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            item(key = "backup") {
+                StaggeredEntrance(index = 1, key = "backup", log = entrance) {
+                    GlassCard {
+                        SectionHeader("Backup and transfer", icon = NightbellIcons.Export, accent = NightbellColors.Violet)
+                        Text(
+                            text = "Writes every monitor, its history and your settings to a JSON " +
+                                "file, wherever you choose to put it. Nothing is uploaded — the file " +
+                                "goes where you send it and nowhere else.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NightbellColors.TextTertiary,
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        ToggleRow(
+                            title = "Include the GitHub token",
+                            subtitle = if (settings.includeSecretsInExport) {
+                                "The file will carry a working credential"
+                            } else {
+                                "Left out, you'll paste it again on the new phone"
+                            },
+                            checked = settings.includeSecretsInExport,
+                            onCheckedChange = { v ->
+                                viewModel.update { it.copy(includeSecretsInExport = v) }
+                            },
+                            icon = NightbellIcons.Shield,
+                            accent = NightbellColors.Rose,
+                        )
+                        AnimatedVisibility(
+                            visible = settings.includeSecretsInExport,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically(),
+                        ) {
+                            Column {
+                                Spacer(Modifier.height(4.dp))
+                                WarningPanel(
+                                    "Anyone who opens the file can use the token as you until you " +
+                                        "revoke it, and that stays true of every copy the file makes " +
+                                        "on the way to the other phone. Off is the right answer " +
+                                        "unless you are moving the file by hand and deleting it after.",
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        NightbellButton(
+                            text = if (viewModel.transfer == Transfer.EXPORT) {
+                                "Writing the file…"
+                            } else {
+                                "Export to a file"
+                            },
+                            onClick = { exportBackup.launch(backupFileName()) },
+                            icon = NightbellIcons.Export,
+                            tone = ButtonTone.Secondary,
+                            loading = viewModel.transfer == Transfer.EXPORT,
+                            enabled = !viewModel.transferring,
+                            modifier = Modifier.fillMaxWidth().testTag("export-backup"),
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        AnimatedVisibility(
+                            visible = !confirmImport,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically(),
+                        ) {
+                            // Reading, decoding and replacing the store takes long
+                            // enough on a real backup to look like nothing happened.
+                            // The button says what it is doing rather than just going
+                            // grey, which is indistinguishable from a dead tap.
+                            NightbellButton(
+                                text = if (viewModel.transfer == Transfer.IMPORT) {
+                                    "Reading the file…"
+                                } else {
+                                    "Import from a file"
+                                },
+                                onClick = { confirmImport = true },
+                                icon = NightbellIcons.Import,
+                                tone = ButtonTone.Secondary,
+                                loading = viewModel.transfer == Transfer.IMPORT,
+                                enabled = !viewModel.transferring,
+                                modifier = Modifier.fillMaxWidth().testTag("import-backup"),
+                            )
+                        }
+                        AnimatedVisibility(
+                            visible = confirmImport,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically(),
+                        ) {
+                            Column {
+                                Text(
+                                    text = "Import replaces everything",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = NightbellColors.TextPrimary,
+                                )
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    text = "The monitors and history on this device are dropped and " +
+                                        "the file's take their place. Export first if you want to " +
+                                        "keep them. This can't be undone.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = NightbellColors.TextTertiary,
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    NightbellButton(
+                                        text = "Cancel",
+                                        onClick = { confirmImport = false },
+                                        tone = ButtonTone.Secondary,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    NightbellButton(
+                                        text = "Choose file",
+                                        // Anything, rather than application/json: mime
+                                        // detection for .json is inconsistent across
+                                        // storage providers and a filter that hides the
+                                        // user's own backup is worse than one that shows
+                                        // too much. The codec validates what comes back.
+                                        onClick = { importBackup.launch(arrayOf("*/*")) },
+                                        tone = ButtonTone.Danger,
+                                        icon = NightbellIcons.Import,
+                                        modifier = Modifier.weight(1f).testTag("confirm-import"),
+                                    )
+                                }
+                            }
+                        }
+                        GlassDivider(Modifier.padding(vertical = 12.dp))
+                        Text(
+                            text = "Moving to another phone",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = NightbellColors.TextSecondary,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = "Export on the old phone, import on the new one. Android keeps " +
+                                "each app's data to itself, so a file you carry across is the only " +
+                                "route — and it has to be written before the old install goes away.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NightbellColors.TextTertiary,
+                        )
+                    }
+                }
+            }
+
+            item(key = "help") {
+                StaggeredEntrance(index = 2, key = "help", log = entrance) {
+                    HelpCard()
+                }
+            }
+
+            item(key = "about") {
+                StaggeredEntrance(index = 3, key = "about", log = entrance) {
+                    GlassCard {
+                        SectionHeader("About", icon = NightbellIcons.Info, accent = NightbellColors.Sky)
+                        AboutRow("Version", "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+                        AboutRow("Android", "API ${Build.VERSION.SDK_INT} · ${Build.MODEL}")
+                        AboutRow("Storage", "Local only, nothing leaves the device")
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            text = "Nightbell checks HTTP endpoints, asserts on response bodies, and " +
+                                "watches individual elements on real rendered pages. Background " +
+                                "cadence is best-effort: Android may delay work in Doze.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NightbellColors.TextTertiary,
+                        )
+                    }
+                }
+            }
+    }
+
+    val tabItems = mapOf(
+        SettingsTab.ALERTS to alertsItems,
+        SettingsTab.CHECKS to checksItems,
+        SettingsTab.LOOK to lookItems,
+        SettingsTab.ABOUT to aboutItems,
+    )
+
+    val pagerState = rememberPagerState(pageCount = { SettingsTab.entries.size })
+    val scope = rememberCoroutineScope()
+    val motion = LocalNightbellMotion.current
+    // One scroll position per tab. Coming back to a tab you had scrolled down and
+    // finding it at the top is the small betrayal that makes tabs feel like four
+    // screens instead of one.
+    val listStates = SettingsTab.entries.map { rememberLazyListState() }
+    val gutter = readableContentPadding()
+
+    Column(Modifier.fillMaxSize()) {
+        // Title and the permission warning sit above the tabs, not on one of them.
+        // A blocked-notifications banner is true on every tab, and hiding it behind
+        // the wrong one would be the single worst place in this app to hide it.
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(start = gutter.calculateStartPadding(LocalLayoutDirection.current))
+                .padding(end = gutter.calculateEndPadding(LocalLayoutDirection.current))
+                .padding(top = topInset + 12.dp),
+        ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            GlassIconButton(
+                icon = NightbellIcons.ArrowLeft,
+                onClick = onBack,
+                contentDescription = "Back",
+                accent = NightbellColors.TextSecondary,
+                size = 38.dp,
+            )
+            Spacer(Modifier.width(14.dp))
+            Text(
+                text = "Settings",
+                style = MaterialTheme.typography.displayMedium,
+                color = NightbellColors.TextPrimary,
+            )
         }
 
-        item(key = "about") {
-            StaggeredEntrance(index = 17, key = "about", log = entrance) {
-                GlassCard {
-                    SectionHeader("About", icon = NightbellIcons.Info, accent = NightbellColors.Sky)
-                    AboutRow("Version", "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
-                    AboutRow("Android", "API ${Build.VERSION.SDK_INT} · ${Build.MODEL}")
-                    AboutRow("Storage", "Local only, nothing leaves the device")
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        text = "Nightbell checks HTTP endpoints, asserts on response bodies, and " +
-                            "watches individual elements on real rendered pages. Background " +
-                            "cadence is best-effort: Android may delay work in Doze.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = NightbellColors.TextTertiary,
-                    )
+        AnimatedVisibility(
+            visible = !notificationsAllowed,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically(),
+        ) {
+            GlassCard(accent = NightbellColors.Amber) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconBadge(NightbellIcons.BellOff, NightbellColors.Amber, size = 40.dp)
+                    Spacer(Modifier.width(13.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "Notifications are blocked",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = NightbellColors.TextPrimary,
+                        )
+                        Text(
+                            "Nightbell can still check monitors, but it can't tell you when " +
+                                "something breaks.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NightbellColors.TextTertiary,
+                        )
+                    }
                 }
+                Spacer(Modifier.height(13.dp))
+                NightbellButton(
+                    text = "Open notification settings",
+                    onClick = {
+                        val intent = Intent(AndroidSettings.ACTION_APP_NOTIFICATION_SETTINGS)
+                            .putExtra(AndroidSettings.EXTRA_APP_PACKAGE, context.packageName)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        runCatching { context.startActivity(intent) }
+                    },
+                    icon = NightbellIcons.Bell,
+                    tone = ButtonTone.Secondary,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+            Spacer(Modifier.height(14.dp))
+        }
+
+        SettingsTabBar(
+            selected = pagerState.currentPage,
+            // Fractional, so the underline tracks a swiping finger instead of
+            // snapping when the page settles.
+            position = pagerState.currentPage + pagerState.currentPageOffsetFraction,
+            scrolled = listStates[pagerState.currentPage].canScrollBackward,
+            onSelect = { page ->
+                scope.launch {
+                    // "Animations off" means off here too. A tab that glides while
+                    // every other transition in the app snaps is the inconsistency
+                    // the setting exists to remove.
+                    if (motion.enabled) {
+                        pagerState.animateScrollToPage(page)
+                    } else {
+                        pagerState.scrollToPage(page)
+                    }
+                }
+            },
+        )
+
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize(),
+            // Only the page on screen is composed. Settings holds a heavy set of
+            // cards, and pre-composing three of them to save a frame on a swipe is
+            // the wrong trade.
+            beyondViewportPageCount = 0,
+            key = { SettingsTab.entries[it].name },
+        ) { page ->
+            val tab = SettingsTab.entries[page]
+            LazyColumn(
+                Modifier
+                    .fillMaxSize()
+                    // The tag names the list the user is actually looking at, so a
+                    // test that scrolls "the settings list" cannot silently drive a
+                    // page that is off screen.
+                    .then(
+                        if (page == pagerState.settledPage) {
+                            Modifier.testTag("settings-list")
+                        } else {
+                            Modifier
+                        },
+                    ),
+                state = listStates[page],
+                contentPadding = readableContentPadding(
+                    top = 14.dp,
+                    bottom = bottomInset + 40.dp,
+                ),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                tabItems.getValue(tab)(this)
             }
         }
     }
+
 }
 
 /**
@@ -1179,6 +1290,140 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
  * are never a notification; only a verified, repeated fault inside Nightbell's own
  * code is.
  */
+/**
+ * The four questions Settings answers.
+ *
+ * Order is not alphabetical and not the order the code was written in: it is how
+ * often a setting here gets changed. Alerts first because that is what people
+ * come to Settings to adjust; About last because it is the tab you visit once.
+ */
+private enum class SettingsTab(val label: String, val icon: ImageVector) {
+    ALERTS("Alerts", NightbellIcons.Bell),
+    CHECKS("Checks", NightbellIcons.Radar),
+    LOOK("Look", NightbellIcons.Sparkle),
+    ABOUT("About", NightbellIcons.Info),
+}
+
+/** Each tab borrows the accent its own cards already use. */
+@Composable
+private fun tabAccent(tab: SettingsTab): Color = when (tab) {
+    SettingsTab.ALERTS -> NightbellColors.Aqua
+    SettingsTab.CHECKS -> NightbellColors.Violet
+    SettingsTab.LOOK -> NightbellColors.Mint
+    SettingsTab.ABOUT -> NightbellColors.Sky
+}
+
+/**
+ * Navigation between the four tabs.
+ *
+ * Deliberately *not* a [SegmentedSelector], which this app uses everywhere to
+ * pick a value. Reusing that shape for navigation would make "which page am I
+ * on" and "which option did I choose" look like the same kind of answer. So this
+ * is the other familiar shape: icon over label, with a rule underneath that
+ * marks the page.
+ *
+ * [position] is fractional and comes from the pager, so the rule follows a
+ * swiping finger the whole way rather than jumping when the page settles. That
+ * one detail is most of what makes a tab bar feel attached to its content.
+ */
+@Composable
+private fun SettingsTabBar(
+    selected: Int,
+    position: Float,
+    scrolled: Boolean,
+    onSelect: (Int) -> Unit,
+) {
+    val tabs = SettingsTab.entries
+    val gutter = readableContentPadding()
+    val startGutter = gutter.calculateStartPadding(LocalLayoutDirection.current)
+    val endGutter = gutter.calculateEndPadding(LocalLayoutDirection.current)
+
+    Column(Modifier.fillMaxWidth()) {
+        BoxWithConstraints(
+            Modifier
+                .fillMaxWidth()
+                .padding(start = startGutter, end = endGutter),
+        ) {
+            val slot = maxWidth / tabs.size
+            val ruleWidth = slot * 0.44f
+
+            Row(Modifier.fillMaxWidth()) {
+                tabs.forEachIndexed { index, tab ->
+                    val active = index == selected
+                    val accent = tabAccent(tab)
+                    // The whole slot is the target, not the glyph: a 17 dp icon
+                    // with a caption under it is a 24 dp thing to hit otherwise.
+                    Column(
+                        modifier = Modifier
+                            .width(slot)
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable(
+                                indication = ripple(color = accent),
+                                interactionSource = remember { MutableInteractionSource() },
+                            ) { onSelect(index) }
+                            .padding(vertical = 9.dp)
+                            .semantics {
+                                contentDescription = "${tab.label} tab"
+                                stateDescription = if (active) "Selected" else "Not selected"
+                            },
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Icon(
+                            imageVector = tab.icon,
+                            contentDescription = null,
+                            tint = if (active) accent else NightbellColors.TextTertiary,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.height(5.dp))
+                        Text(
+                            text = tab.label,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (active) {
+                                NightbellColors.TextPrimary
+                            } else {
+                                NightbellColors.TextTertiary
+                            },
+                            maxLines = 1,
+                        )
+                    }
+                }
+            }
+
+            // Drawn under the row rather than inside a tab, so it can sit between
+            // two of them mid-swipe. Colour lerps as well as position: arriving at
+            // a tab whose accent is already the right one is what makes the
+            // movement read as one object rather than as a rule that teleports.
+            val fraction = position.coerceIn(0f, (tabs.size - 1).toFloat())
+            val lower = fraction.toInt().coerceIn(0, tabs.lastIndex)
+            val upper = (lower + 1).coerceAtMost(tabs.lastIndex)
+            val blend = fraction - lower
+            Box(
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .offset(x = slot * fraction + (slot - ruleWidth) / 2)
+                    .width(ruleWidth)
+                    .height(2.5.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(
+                        lerp(tabAccent(tabs[lower]), tabAccent(tabs[upper]), blend),
+                    ),
+            )
+        }
+        // Appears only once there is something above the fold, which is the one
+        // moment a reader needs telling that the bar is not the top of the page.
+        val hairline by animateFloatAsState(
+            targetValue = if (scrolled) 0.14f else 0f,
+            label = "tabHairline",
+        )
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(NightbellColors.sheen(hairline)),
+        )
+    }
+}
+
 @Composable
 private fun CheckerHealthCard(
     health: CheckerHealth.State,

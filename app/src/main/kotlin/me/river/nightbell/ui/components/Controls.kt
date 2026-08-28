@@ -39,6 +39,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -56,6 +57,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -97,6 +100,8 @@ fun GlassField(
 ) {
     var focused by remember { mutableStateOf(false) }
     val isError = note?.severity == Validation.Severity.ERROR
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
 
     Column(modifier.fillMaxWidth()) {
         Text(
@@ -149,6 +154,17 @@ fun GlassField(
                         keyboardType = keyboardType,
                         imeAction = imeAction,
                     ),
+                    // The keys that mean "that's the answer" have to put the
+                    // keyboard away. Without these the field asks for Done or
+                    // Search and then ignores the tap, so the only way out was
+                    // the back gesture. Next is left to the default, which walks
+                    // to the following field.
+                    keyboardActions = KeyboardActions(
+                        onDone = { dismissKeyboard(focusManager, keyboard) },
+                        onGo = { dismissKeyboard(focusManager, keyboard) },
+                        onSearch = { dismissKeyboard(focusManager, keyboard) },
+                        onSend = { dismissKeyboard(focusManager, keyboard) },
+                    ),
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = if (singleLine) 20.dp else (minLines * 21).dp)
@@ -163,6 +179,19 @@ fun GlassField(
         }
         FieldNote(note = note, helper = helper)
     }
+}
+
+/**
+ * Puts the keyboard away and takes focus off the field.
+ *
+ * Both halves are needed: clearing focus on its own leaves the IME on screen.
+ */
+private fun dismissKeyboard(
+    focusManager: androidx.compose.ui.focus.FocusManager,
+    keyboard: androidx.compose.ui.platform.SoftwareKeyboardController?,
+) {
+    focusManager.clearFocus()
+    keyboard?.hide()
 }
 
 @Composable
@@ -562,6 +591,18 @@ fun <T> ChipSelector(
 
 // --------------------------------------------------------------------- rows
 
+/**
+ * The one vertical gutter a settings row carries.
+ *
+ * Two rows in the same category therefore sit 2 x RowGutter apart, which has to
+ * stay smaller than the gap that separates one category from the next, because
+ * that is the whole grouping cue. At 10 dp each, adjacent toggles were 20 dp
+ * apart while a category break was 18 dp, so every row read as its own island
+ * and a heading belonged to nothing. Every row shape uses this, so a toggle and
+ * a stepper sit the same distance under their heading instead of 20 dp and 10 dp.
+ */
+private val RowGutter = 4.dp
+
 @Composable
 fun ToggleRow(
     title: String,
@@ -578,7 +619,7 @@ fun ToggleRow(
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .clickable(enabled = enabled) { onCheckedChange(!checked) }
-            .padding(vertical = 10.dp),
+            .padding(vertical = RowGutter),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icon != null) {
@@ -629,7 +670,7 @@ fun StepperRow(
     accent: Color = NightbellColors.Aqua,
     note: Validation.Note? = null,
 ) {
-    Column(modifier.fillMaxWidth()) {
+    Column(modifier.fillMaxWidth().padding(vertical = RowGutter)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             if (icon != null) {
                 IconBadge(icon = icon, accent = accent, size = 34.dp)

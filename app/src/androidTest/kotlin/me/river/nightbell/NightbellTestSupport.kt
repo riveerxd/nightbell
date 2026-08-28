@@ -5,7 +5,9 @@ import android.graphics.Bitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.ComposeTestRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
 import me.river.nightbell.data.Nightbell
 import me.river.nightbell.data.NightbellSnapshot
@@ -67,6 +69,19 @@ object NightbellTestSupport {
         File(screenshotDir(), "$name.png").outputStream().use { stream ->
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
         }
+    }
+
+    /**
+     * Switches Settings to one of its tabs.
+     *
+     * Settings is four pages behind a tab bar, so "scroll the settings list to X"
+     * only means something once the page holding X is on screen. Named by the
+     * tab's spoken label rather than by an index, so a reordered bar does not
+     * silently drive the wrong page.
+     */
+    fun ComposeTestRule.openSettingsTab(label: String) {
+        onNodeWithContentDescription("$label tab").performClick()
+        waitForIdle()
     }
 
     /** Polls until [condition] holds, failing with a readable message on timeout. */
