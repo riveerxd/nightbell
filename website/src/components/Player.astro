@@ -149,6 +149,22 @@ const ICONS = {
 
       {/* Cue text lands here rather than in the browser's own overlay. */}
       <p class="player-captions" data-captions aria-live="off" hidden></p>
+
+      {/*
+        Buffering, and the fetch that failed.
+
+        `preload="none"` puts a real wait between the first press and the first
+        frame, and until this was here the poster gave no sign that anything had
+        started. The failure case was worse: an `error` on the source leaves a
+        poster and a play button that cannot work, with nothing said and nowhere
+        to go, so the same line hands over the file.
+      */}
+      <p class="player-status" data-status hidden>
+        <span data-status-text></span>
+        <a class="player-status-go" href={src} hidden data-status-go>
+          Download the MP4, {mb} MB
+        </a>
+      </p>
     </div>
 
     <div class="player-bar" hidden data-bar>

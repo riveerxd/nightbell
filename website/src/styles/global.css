@@ -159,7 +159,7 @@ a {
   text-underline-offset: 0.22em;
   text-decoration-thickness: 1px;
   text-decoration-color: color-mix(in srgb, var(--sky) 45%, transparent);
-  transition: color 0.15s ease, text-decoration-color 0.15s ease;
+  transition: color 0.2s ease, text-decoration-color 0.2s ease;
 }
 
 a:hover {
@@ -249,6 +249,9 @@ strong {
   text-transform: uppercase;
   color: var(--text3);
   line-height: 1.4;
+  /* Every count, version and offset on the page is set in one of these, so the
+     figures are locked to one width here rather than at each of them. */
+  font-variant-numeric: tabular-nums;
 }
 
 .eyebrow {
@@ -458,6 +461,12 @@ strong {
   font-size: 0.875rem;
   font-weight: 500;
   white-space: nowrap;
+  /* The bar is 56 px tall and the type in these was 20, so the press target was
+     a third of the row it sits in. Grown to 44 and centred, which the bar has
+     room for, so nothing moves. */
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
 }
 
 .masthead nav a:hover {
@@ -474,13 +483,13 @@ strong {
 
 @media (min-width: 44rem) {
   .masthead nav .only-mid {
-    display: inline;
+    display: inline-flex;
   }
 }
 
 @media (min-width: 62rem) {
   .masthead nav .only-wide {
-    display: inline;
+    display: inline-flex;
   }
 }
 
@@ -533,6 +542,7 @@ strong {
   color: var(--spine);
   letter-spacing: 0.06em;
   /* Two digits, tabular, so the bar does not twitch as the number changes. */
+  font-variant-numeric: tabular-nums;
   min-width: 2ch;
 }
 
@@ -579,10 +589,10 @@ strong {
   text-decoration: none;
   cursor: pointer;
   transition:
-    transform 0.12s ease,
-    background-color 0.15s ease,
-    border-color 0.15s ease,
-    color 0.15s ease;
+    transform 0.2s ease,
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
 }
 
 /*
@@ -851,7 +861,7 @@ strong {
   /* Optical centring: a right-pointing triangle in a circle reads left-heavy
      when its bounding box is centred. */
   padding-left: 5px;
-  transition: transform 0.16s ease, border-color 0.16s ease, background-color 0.16s ease;
+  transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
 }
 
 .player-cover:hover .player-cover-mark {
@@ -907,6 +917,50 @@ strong {
   pointer-events: none;
 }
 
+/*
+  What the picture is doing when there is no picture.
+
+  `preload="none"` means the first press is also the first byte, so on a slow
+  line there is a real wait between pressing play and seeing a frame, and it was
+  silent. A fetch that fails outright is worse: the poster stays, and the play
+  button under the pointer cannot ever work. Both say so here, and the failure
+  hands over the file itself rather than stopping at the news.
+*/
+.player-status {
+  position: absolute;
+  left: 50%;
+  /* The top of the picture, because the middle of it is where the play mark
+     sits and the bottom is where a caption cue lands, and a buffer can happen
+     while either of those is on screen. */
+  top: 1rem;
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0 0.85rem;
+  max-width: min(88%, 40ch);
+  margin: 0;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  /* Opaque enough to read over any frame of either clip, which a caption cue at
+     78% does not have to be because a cue is on screen for two seconds and this
+     is the only thing left on a picture that failed. */
+  background: color-mix(in srgb, var(--void) 92%, transparent);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  color: var(--text2);
+  font-size: 0.8125rem;
+  text-align: center;
+}
+
+.player-status-go {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
 .player-bar {
   border-top: 1px solid var(--line);
   padding: 0.75rem 0.85rem 0.6rem;
@@ -940,7 +994,7 @@ strong {
 .player[data-enhanced]:not([data-started]) .player-scrub {
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.18s ease;
+  transition: opacity 0.2s ease;
 }
 
 .player[data-enhanced]:not([data-started]):hover .player-scrub,
@@ -949,14 +1003,27 @@ strong {
   pointer-events: auto;
 }
 
+/*
+  The row stays 22 px and the control is 44.
+
+  A seek bar as tall as its own hit area is a 22 px target for a thumb, which is
+  half what a finger needs. The input is taken out of flow and grown past the row
+  instead, so the hairline, the chapter marks and the height of the bar are all
+  exactly where they were, and the overflow is 11 px of the picture above and 11
+  of the gap below. The button row below claims itself back with a z-index.
+*/
 .scrub {
   --p: 0;
   --b: 0;
   appearance: none;
   -webkit-appearance: none;
-  width: 100%;
-  height: 22px;
-  margin: 0;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  width: auto;
+  height: 44px;
+  margin: -22px 0 0;
   background: transparent;
   cursor: pointer;
 }
@@ -999,7 +1066,7 @@ strong {
   border-radius: 2px;
   background: var(--text);
   box-shadow: 0 0 0 1px var(--void);
-  transition: transform 0.12s ease, background-color 0.12s ease;
+  transition: transform 0.2s ease, background-color 0.2s ease;
 }
 
 .scrub::-moz-range-thumb {
@@ -1052,16 +1119,21 @@ strong {
 }
 
 .player-row {
+  position: relative;
+  /* Above the seek bar, which overflows its own row downward by 11 px. */
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 
+/* 44 px, not the 34 these were. The glyph inside is still 18, so what changed is
+   the room around it. */
 .player-btn {
   display: inline-grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
   flex: none;
   padding: 0;
   border: 1px solid transparent;
@@ -1070,7 +1142,7 @@ strong {
   color: var(--text2);
   font: inherit;
   cursor: pointer;
-  transition: color 0.14s ease, background-color 0.14s ease, border-color 0.14s ease;
+  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .player-btn:hover {
@@ -1085,7 +1157,7 @@ strong {
 
 .player-text {
   width: auto;
-  min-width: 34px;
+  min-width: 44px;
   padding-inline: 0.55rem;
   font-family: 'JetBrains Mono Variable', ui-monospace, Menlo, monospace;
   font-size: 0.6875rem;
@@ -1163,7 +1235,7 @@ strong {
   text-transform: uppercase;
   white-space: nowrap;
   cursor: pointer;
-  transition: color 0.14s ease, background-color 0.14s ease;
+  transition: color 0.2s ease, background-color 0.2s ease;
 }
 
 .chapter:hover {
@@ -1205,11 +1277,6 @@ strong {
 @media (max-width: 30rem) {
   .player-now {
     display: none;
-  }
-
-  .player-btn {
-    width: 38px;
-    height: 38px;
   }
 }
 
@@ -2021,7 +2088,7 @@ html[data-revealing] .trace:not(.is-in) {
   font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: color 0.15s ease, background-color 0.15s ease;
+  transition: color 0.2s ease, background-color 0.2s ease;
 }
 
 .w-tab:hover {
@@ -3226,6 +3293,11 @@ html[data-revealing] .trace:not(.is-in) {
   font-size: 0.875rem;
   font-weight: 550;
   white-space: nowrap;
+  /* 44 px of target on a 23 px line, taken out of the row rather than added to
+     it: the rows are 55 px apart, so no two of these can overlap and nothing
+     above or below is pressable. */
+  min-height: 44px;
+  margin-block: -11px;
 }
 
 @media (min-width: 56rem) {
@@ -3337,6 +3409,17 @@ pre .c {
   cursor: pointer;
 }
 
+/* The chip is 30 px tall because that is the size this block wants it drawn at.
+   The press target is grown past it rather than the chip being drawn bigger, and
+   there is nothing else to press inside the code block for it to steal from.
+   `.copy-inline` is excluded: it is static, so this would anchor to the wrong
+   box, and its two siblings are close enough that the targets would overlap. */
+.copy:not(.copy-inline)::after {
+  content: '';
+  position: absolute;
+  inset: -9px;
+}
+
 .copy:hover {
   color: var(--text);
   border-color: var(--aqua);
@@ -3348,6 +3431,14 @@ pre .c {
   position: static;
   align-self: start;
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  /* 22 px of chip, which is under the 24 WCAG 2.2 asks for. Held at the same
+     floor the player's chapter chips are, and taken in height rather than in
+     padding so the chip keeps its proportions. Not grown further than that: its
+     neighbour is another one of these 30 px below, and a 44 px target here would
+     mean pressing near the edge of one copied the other hash. */
+  min-height: 26px;
   padding: 0.22rem 0.5rem;
   font-size: 0.625rem;
 }
@@ -3505,6 +3596,7 @@ pre .c {
 
 .transcript li time {
   font-family: 'JetBrains Mono Variable', ui-monospace, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
   font-size: 0.75rem;
   color: var(--text3);
 }

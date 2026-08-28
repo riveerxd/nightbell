@@ -1046,7 +1046,7 @@ const transcript: { t: string; s: string }[] = [
         <pre><code><span class="c"># download the APK from the release above, then</span>
 adb install -r {RELEASE.apkName}</code></pre>
         <button class="copy" type="button" data-copy={`adb install -r ${RELEASE.apkName}`} hidden>
-          <Glyph name="copy" size={14} /><span data-copy-text>Copy</span>
+          <Glyph name="copy" size={14} /><span data-copy-text aria-live="polite">Copy</span>
         </button>
       </div>
 
@@ -1067,7 +1067,7 @@ adb install -r {RELEASE.apkName}</code></pre>
             <dd>
               <span class="fp-val">{RELEASE.apkSha256}</span>
               <button class="copy copy-inline" type="button" data-copy={RELEASE.apkSha256} hidden>
-                <Glyph name="copy" size={13} /><span data-copy-text>Copy</span>
+                <Glyph name="copy" size={13} /><span data-copy-text aria-live="polite">Copy</span>
               </button>
             </dd>
           </div>
@@ -1076,7 +1076,7 @@ adb install -r {RELEASE.apkName}</code></pre>
             <dd>
               <span class="fp-val">{RELEASE.signingCertSha256}</span>
               <button class="copy copy-inline" type="button" data-copy={RELEASE.signingCertSha256} hidden>
-                <Glyph name="copy" size={13} /><span data-copy-text>Copy</span>
+                <Glyph name="copy" size={13} /><span data-copy-text aria-live="polite">Copy</span>
               </button>
             </dd>
           </div>
@@ -1163,18 +1163,66 @@ adb install -r {RELEASE.apkName}</code></pre>
       than a child of the button's text, so confirming the copy cannot wipe the
       icon out of the button.
     */
+    /*
+      The last resort, for a clipboard that refuses.
+
+      `writeText` rejects rather than throwing, and it rejects for reasons that
+      have nothing to do with this page: an insecure context, a document that is
+      not focused, an iframe without the permission. Unhandled, the confirmation
+      never ran and the reader was told nothing at all, which on a page whose
+      copy buttons exist to compare two hashes is the worst of the three
+      outcomes.
+    */
+    const copyByCommand = (text: string): boolean => {
+      const pen = document.createElement('textarea');
+      pen.value = text;
+      pen.setAttribute('readonly', '');
+      pen.style.position = 'fixed';
+      pen.style.top = '0';
+      pen.style.opacity = '0';
+      document.body.append(pen);
+      pen.select();
+      let done = false;
+      try {
+        done = document.execCommand('copy');
+      } catch {
+        done = false;
+      }
+      pen.remove();
+      return done;
+    };
+
     if (navigator.clipboard) {
       for (const button of document.querySelectorAll<HTMLButtonElement>('.copy')) {
         const word = button.querySelector<HTMLElement>('[data-copy-text]');
         if (!word) continue;
+        /*
+          The resting label is read once, here, and the timer belongs to the
+          button rather than to the click.
+
+          Read inside the handler it was whatever the label said at the time, so
+          a second press while the first was still confirming saved "Copied" as
+          the word to go back to and the button then read Copied for good, which
+          is a copy button that has stopped reporting anything.
+        */
+        const idle = word.textContent ?? 'Copy';
+        let back = 0;
         button.hidden = false;
         button.addEventListener('click', async () => {
-          await navigator.clipboard.writeText(button.dataset.copy ?? '');
-          const was = word.textContent;
-          word.textContent = 'Copied';
-          setTimeout(() => {
-            word.textContent = was;
-          }, 1600);
+          const value = button.dataset.copy ?? '';
+          let done = true;
+          try {
+            await navigator.clipboard.writeText(value);
+          } catch {
+            done = copyByCommand(value);
+          }
+          window.clearTimeout(back);
+          // The value is on the page either way, so the failure says which of
+          // the two happened instead of confirming something that did not.
+          word.textContent = done ? 'Copied' : 'Copy it by hand';
+          back = window.setTimeout(() => {
+            word.textContent = idle;
+          }, 2000);
         });
       }
     }

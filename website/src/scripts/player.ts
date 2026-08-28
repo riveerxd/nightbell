@@ -61,6 +61,9 @@ function enhance(fig: HTMLElement): void {
   const fullButton = fig.querySelector<HTMLButtonElement>('[data-full]');
   const iconPlay = fig.querySelector<HTMLElement>('[data-icon-play]');
   const iconPause = fig.querySelector<HTMLElement>('[data-icon-pause]');
+  const status = fig.querySelector<HTMLElement>('[data-status]');
+  const statusText = fig.querySelector<HTMLElement>('[data-status-text]');
+  const statusGo = fig.querySelector<HTMLElement>('[data-status-go]');
   const iconVol = fig.querySelector<HTMLElement>('[data-icon-vol]');
   const iconMuted = fig.querySelector<HTMLElement>('[data-icon-muted]');
   const chapters = [...fig.querySelectorAll<HTMLButtonElement>('.chapter')];
@@ -168,6 +171,51 @@ function enhance(fig: HTMLElement): void {
     stopLoop();
     if (cover && !video.loop) cover.hidden = false;
   });
+  /*
+    Buffering, and the fetch that failed.
+
+    The video is `preload="none"`, so the first press is the first byte: on a
+    slow line there are seconds between the press and the picture, and nothing
+    said so. A failed fetch was worse, because the poster stays put and the
+    button under the pointer can never work.
+
+    The failure listener is on the `<source>` as well as on the video, and that
+    is not belt and braces. With a `<source>` child the resource selection
+    algorithm fires `error` at the source it could not use and leaves the video
+    element itself in NETWORK_NO_SOURCE without an event, so a video-only
+    listener never hears about the one case that matters.
+  */
+  const say = (text: string, offerFile: boolean): void => {
+    if (!status || !statusText) return;
+    statusText.textContent = text;
+    if (statusGo) statusGo.hidden = !offerFile;
+    status.hidden = false;
+  };
+
+  const settled = (): void => {
+    fig.removeAttribute('aria-busy');
+    // Not while the element is holding an error: that line is the last thing
+    // left on the picture and a stray `canplay` must not wipe it.
+    if (!video.error && status) status.hidden = true;
+  };
+
+  video.addEventListener('waiting', () => {
+    fig.setAttribute('aria-busy', 'true');
+    say('Buffering', false);
+  });
+  video.addEventListener('playing', settled);
+  video.addEventListener('canplay', settled);
+
+  const failed = (): void => {
+    fig.removeAttribute('aria-busy');
+    stopLoop();
+    setPlayingUi(false);
+    if (cover) cover.hidden = true;
+    say('The video did not load.', true);
+  };
+  video.addEventListener('error', failed);
+  video.querySelector('source')?.addEventListener('error', failed);
+
   video.addEventListener('loadedmetadata', paint);
   video.addEventListener('progress', paint);
   video.addEventListener('seeked', paint);
