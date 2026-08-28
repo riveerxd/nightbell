@@ -2945,9 +2945,41 @@ html[data-revealing] .trace:not(.is-in) {
   gap: 1.5rem;
 }
 
+/*
+  Each of the three states its own width, and it is load bearing rather than
+  tidy.
+
+  `width: auto` on an image that has not arrived yet is zero. The width and
+  height attributes give a replaced element an aspect ratio and nothing else, so
+  with no width in CSS there is nothing for that ratio to be a ratio of, and all
+  three of these were 0 by 0 until their bytes landed. They are lazy and they sit
+  in section 04, so the document was 579 px short of its real height for as long
+  as nobody had scrolled this far, and every anchor below this figure resolved
+  against that: tapping Install in the masthead computed a target from a page
+  missing half a viewport, the widgets loaded on the way past, and the jump
+  finished 579 px above the section it was aimed at. Which link was wrong and by
+  how much depended on how fast the images arrived, which is what made it look
+  random.
+
+  The widths are the ones already written in each `sizes` attribute in
+  index.astro, so nothing renders at a different size than it did: `sizes` is
+  what the loaded image was taking its width from anyway. If one changes, the
+  other has to change with it.
+*/
 .widget-row img {
-  width: auto;
   max-width: 100%;
+}
+
+.widget-row .w-tall {
+  width: min(78vw, 330px);
+}
+
+.widget-row .w-wide {
+  width: min(92vw, 420px);
+}
+
+.widget-row .w-flat {
+  width: min(100vw, 525px);
 }
 
 @media (min-width: 52rem) {
@@ -2961,10 +2993,21 @@ html[data-revealing] .trace:not(.is-in) {
   .widget-row img {
     /* Each keeps its own share of the row, so all three stay at one scale and
        the picture reads as one widget at three sizes rather than three widgets. */
-    width: auto;
     height: auto;
     flex: 0 1 auto;
     min-width: 0;
+  }
+
+  .widget-row .w-tall {
+    width: 22vw;
+  }
+
+  .widget-row .w-wide {
+    width: 28vw;
+  }
+
+  .widget-row .w-flat {
+    width: 34vw;
   }
 }
 
