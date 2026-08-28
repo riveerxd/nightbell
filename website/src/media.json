@@ -1,7 +1,7 @@
 {
   "promo": {
     "file": "/media/nightbell-promo.mp4",
-    "bytes": 6395486,
+    "bytes": 6414284,
     "seconds": 40,
     "width": 1920,
     "height": 1080,
@@ -18,22 +18,22 @@
         "title": "Monitoring, on your phone"
       },
       {
-        "at": 9.333,
+        "at": 8.933,
         "label": "Add a monitor",
         "title": "Four steps to add a monitor"
       },
       {
-        "at": 17.133,
-        "label": "Checks running",
-        "title": "Every check runs on the device"
+        "at": 16.333,
+        "label": "A repository",
+        "title": "Watching a GitHub repository"
       },
       {
-        "at": 22.533,
+        "at": 22.267,
         "label": "The alert",
         "title": "The alert firing"
       },
       {
-        "at": 33.533,
+        "at": 33.267,
         "label": "Download",
         "title": "Where to get it"
       }
@@ -41,7 +41,7 @@
   },
   "payoff": {
     "file": "/media/nightbell-alert-firing.mp4",
-    "bytes": 2131442,
+    "bytes": 2245623,
     "seconds": 11.4,
     "width": 1920,
     "height": 1080

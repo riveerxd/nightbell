@@ -153,8 +153,35 @@ for (const [from, to] of FACES) {
 // untouched: they are already h.264 High / yuv420p, which every browser plays,
 // and re-encoding a finished grade to save a few hundred kilobytes is how a
 // gradient turns into a staircase.
-const gotPromo = take('docs/video/nightbell-promo.mp4', 'public/media/nightbell-promo.mp4');
-const gotPayoff = take('docs/video/nightbell-alert-firing.mp4', 'public/media/nightbell-alert-firing.mp4');
+// The served names do not carry the cut's version and are not going to. They are
+// what `/media/*` caches for thirty days in a browser, so a rename is a cache
+// decision rather than a naming one; the version lives on the source side.
+const gotPromo = take('docs/video/nightbell-promo-v3.mp4', 'public/media/nightbell-promo.mp4');
+const gotPayoff = take(
+  'docs/video/nightbell-alert-firing-v3.mp4',
+  'public/media/nightbell-alert-firing.mp4',
+);
+
+// The caption track, generated from the narration table rather than written.
+//
+// It used to be a committed file somebody maintained, and it went stale in the
+// worst available way: the timings drifted a few tenths, which nobody notices,
+// and one cue still read "Every check runs on the phone" over what is now the
+// repository scene. A caption track is what a deaf viewer has instead of the
+// audio, so one that states a claim the picture is not making is worse than
+// none. It is derived now, and it lives under audio/build/ with the rest of the
+// generated sound, which is outside a clean checkout for the same reason the
+// typefaces are.
+const CAPTIONS = 'promo-video/audio/build/vo-v3.vtt';
+const CAPTIONS_TO = 'public/media/nightbell-promo.en.vtt';
+if (HAS_CUT && existsSync(join(REPO, CAPTIONS))) {
+  take(CAPTIONS, CAPTIONS_TO);
+} else if (existsSync(join(SITE, CAPTIONS_TO))) {
+  if (previousLock[CAPTIONS]) lock[CAPTIONS] = previousLock[CAPTIONS];
+  notes.push(`${CAPTIONS_TO}  (committed, no cut in tree)`);
+} else {
+  problems.push(`missing captions: ${CAPTIONS_TO} is not committed and ${CAPTIONS} is not in the tree`);
+}
 
 // ------------------------------------------------------------- screenshots
 //
@@ -301,7 +328,11 @@ if (!check) {
 // has been re-budgeted must not leave a stale table sitting in another file. If
 // the arithmetic here stops agreeing with the rendered duration, that is a
 // problem worth failing on rather than a chapter list that is quietly wrong.
-const CUT_FILE = join(REPO, 'promo-video/src/NightbellPromo.tsx');
+// The 40 s cut, which is what the site plays. `NightbellPromo.tsx` is the 61 s
+// one and is still built from the same scenes; pointing this at the wrong file
+// is not a cosmetic error, because the drift check below compares the chapter
+// table it produces against the real duration of the mp4 and would fail.
+const CUT_FILE = join(REPO, 'promo-video/src/NightbellPromoShort.tsx');
 const ROOT_FILE = join(REPO, 'promo-video/src/Root.tsx');
 
 /**
@@ -318,7 +349,10 @@ const CHAPTER_NAMES = {
   Hook: ['Intro', 'The claim'],
   Wedge: ['On your phone', 'Monitoring, on your phone'],
   Setup: ['Add a monitor', 'Four steps to add a monitor'],
+  Repos: ['A repository', 'Watching a GitHub repository'],
+  Groups: ['Groups', 'Many monitors, one verdict'],
   Proof: ['Checks running', 'Every check runs on the device'],
+  Homelab: ['Self-hosted', 'Self-signed, or behind Tor'],
   Alert: ['The alert', 'The alert firing'],
   Cta: ['Download', 'Where to get it'],
 };
@@ -329,7 +363,7 @@ function readChapters() {
   // overwriting it with a media.json that has no chapters at all.
   if (!HAS_CUT) return null;
   if (!existsSync(CUT_FILE)) {
-    problems.push('missing source: promo-video/src/NightbellPromo.tsx, chapters not rebuilt');
+    problems.push('missing source: promo-video/src/NightbellPromoShort.tsx, chapters not rebuilt');
     return null;
   }
   const cut = readFileSync(CUT_FILE, 'utf8');
@@ -342,7 +376,7 @@ function readChapters() {
   const scenes = numbers('SCENES', cut);
   const overlaps = numbers('OVERLAPS', cut);
   if (!scenes || !overlaps) {
-    problems.push('could not parse SCENES / OVERLAPS out of NightbellPromo.tsx');
+    problems.push('could not parse SCENES / OVERLAPS out of NightbellPromoShort.tsx');
     return null;
   }
 
@@ -425,9 +459,9 @@ if (cut && media.promo) {
   const drift = Math.abs(cut.expectedSeconds - (media.promo.seconds ?? 0));
   if (media.promo.seconds != null && drift > 0.15) {
     problems.push(
-      `the cut in NightbellPromo.tsx is ${cut.expectedSeconds.toFixed(2)} s but ` +
+      `the cut in NightbellPromoShort.tsx is ${cut.expectedSeconds.toFixed(2)} s but ` +
         `nightbell-promo.mp4 runs ${media.promo.seconds.toFixed(2)} s. Re-render the ` +
-        `video (cd promo-video && npm run render) before trusting the chapters.`,
+        `video (cd promo-video && npm run render:v3) before trusting the chapters.`,
     );
   }
   media.promo.fps = cut.fps;

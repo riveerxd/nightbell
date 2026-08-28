@@ -11,15 +11,20 @@
       "sha256": "18be452724bfdc236c074ca94a249a7f41a86752c7d04ab258ce9ed5651f6a7e",
       "copiedTo": "public/fonts/jetbrains-mono-latin-wght-normal.woff2"
     },
-    "docs/video/nightbell-promo.mp4": {
-      "bytes": 6395486,
-      "sha256": "3031a5f2bce156563b98d5e5b2f11a89c1fd8aabe9c00c7c385b62a8b7810ba7",
+    "docs/video/nightbell-promo-v3.mp4": {
+      "bytes": 6414284,
+      "sha256": "c50fbc150543de568f851bbaa136573eeab495b4cb678ceb69d3f52b725d01de",
       "copiedTo": "public/media/nightbell-promo.mp4"
     },
-    "docs/video/nightbell-alert-firing.mp4": {
-      "bytes": 2131442,
-      "sha256": "1596255773027e0b16eede0b4352c0db4d8d4f0f3d8838b247082ab6b61dfae3",
+    "docs/video/nightbell-alert-firing-v3.mp4": {
+      "bytes": 2245623,
+      "sha256": "9a4c31cdaf683e583f9eeb86d4e9d45c67f943af12529468957459f8bf6beacd",
       "copiedTo": "public/media/nightbell-alert-firing.mp4"
+    },
+    "promo-video/audio/build/vo-v3.vtt": {
+      "bytes": 1565,
+      "sha256": "5d8671f5b1bca52e4db5537f3ec26b41731b98e01b6984d63747bd71321f42cf",
+      "copiedTo": "public/media/nightbell-promo.en.vtt"
     },
     "docs/screens/urgent-b.png": {
       "bytes": 407635,
