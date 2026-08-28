@@ -1252,8 +1252,8 @@ data class GlobalSettings(
  * answer. `www.gstatic.com/generate_204` fits, which is why it shipped, and it
  * carries a cost that was never argued for: an app whose pitch is no server, no
  * account and no third party was quietly telling Google's edge where the phone
- * was, once every forty-five seconds, for a measurement the user never asked
- * Google to be part of.
+ * was, on every check pass, for a measurement the user never asked Google to be
+ * part of.
  *
  * GrapheneOS runs the same 204 for the same purpose and answers to nobody with an
  * advertising business, so it is the default now. The field stays free text: a

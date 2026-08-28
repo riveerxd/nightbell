@@ -90,6 +90,28 @@ and its own recovery notification, deliberately independent of the down track:
 the cooldown an outage needs. An outage always supersedes slowness, so you never
 get two notifications for one event.
 
+### The latency reference, and how often it is contacted
+
+The baseline needs a control, so Nightbell times a known-good endpoint and
+subtracts whatever the connection itself is adding. That endpoint is
+`connectivitycheck.grapheneos.network/generate_204` by default, it is a free text
+field in Settings, and none of it happens with **Discount my connection** off.
+
+It is timed once per check *pass*, never once per check, and never twice inside
+`CheckEngine.REFERENCE_MIN_INTERVAL_MS` (45 s). That constant is a floor, not a
+cadence. What sets the real rate is how often a pass runs: with strict mode off
+the only recurring pass is the 15-minute sweep, so four requests an hour is the
+ceiling and Doze makes it fewer; with strict mode on the service loop wakes every
+15 to 60 s, so the floor becomes the real limit at roughly one a minute. Pull to
+refresh and "Check all now" run a pass too, which is the case the floor exists to
+absorb.
+
+If the endpoint stops answering, the gap doubles per consecutive failure up to six
+doublings, so a network that blocks it settles at one wasted request every 48
+minutes rather than one per pass. Absent readings are not an error: the baseline
+maths treats them as "judge the latency raw".
+
+
 ### How background checks actually run
 
 Three layers, and the app is explicit about what each one can promise:

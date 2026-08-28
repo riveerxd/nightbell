@@ -606,7 +606,8 @@ class CheckEngine(
      * little older than the check it informs.
      *
      * Backs off exponentially while probes fail, so a network that blocks the
-     * endpoint costs one wasted request every half hour rather than one per pass.
+     * endpoint settles at one wasted request every forty-eight minutes rather
+     * than one per pass.
      */
     private suspend fun refreshReference() {
         val settings = store.currentSnapshot().settings

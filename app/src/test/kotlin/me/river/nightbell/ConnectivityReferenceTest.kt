@@ -15,7 +15,7 @@ import org.junit.Test
  * slow website. Any always-up 204 does that equally well, and the one that
  * shipped was `www.gstatic.com/generate_204`, which meant an app whose whole
  * pitch is no server, no account and no third party was telling Google's edge
- * where the phone was every forty-five seconds. GrapheneOS runs the same check
+ * where the phone was on every check pass. GrapheneOS runs the same check
  * and has no advertising business, so that is the default now.
  *
  * The field stays free text, so nothing here forbids gstatic. What it forbids is

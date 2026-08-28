@@ -578,8 +578,9 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                                             text = "The default is GrapheneOS's connectivity check " +
                                                 "rather than Google's. It answers the same empty 204, " +
                                                 "and an app that keeps everything on your device had " +
-                                                "no business pinging an advertising company every " +
-                                                "forty-five seconds to time your wifi. Your own " +
+                                                "no business handing an advertising company a timing " +
+                                                "signal from your phone. It goes out with your checks " +
+                                                "rather than on a clock of its own. Your own " +
                                                 "always-up endpoint is better still.",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = NightbellColors.TextTertiary,
