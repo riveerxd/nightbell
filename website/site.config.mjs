@@ -43,6 +43,16 @@ export const REPO = {
   owner: 'riveerxd',
   name: 'nightbell',
   issues: 'https://github.com/riveerxd/nightbell/issues',
+  /*
+    The two forms in .github/ISSUE_TEMPLATE, addressed directly.
+    `issues/new` on its own opens the chooser, so a reader who came from a link
+    that says "Report a bug" still had to pick the bug form out of a list, and
+    the one that said "Request a feature" was landing on the same chooser. The
+    `template` value is the file name, which is what GitHub matches on, so these
+    break if either file is renamed.
+  */
+  bugReport: 'https://github.com/riveerxd/nightbell/issues/new?template=bug_report.yml',
+  featureRequest: 'https://github.com/riveerxd/nightbell/issues/new?template=feature_request.yml',
   releases: 'https://github.com/riveerxd/nightbell/releases',
   latestRelease: 'https://github.com/riveerxd/nightbell/releases/latest',
   license: 'https://github.com/riveerxd/nightbell/blob/master/LICENSE',

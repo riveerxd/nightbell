@@ -61,10 +61,10 @@ const { home = '#top' } = Astro.props;
         <h2><Glyph name="bell" size={14} />Contact</h2>
         <ul>
           <li>
-            <a href={REPO.issues} target="_blank" rel="noopener"><Glyph name="warning" size={15} />Report a bug</a>
+            <a href={REPO.bugReport} target="_blank" rel="noopener"><Glyph name="warning" size={15} />Report a bug</a>
           </li>
           <li>
-            <a href={`${REPO.issues}/new`} target="_blank" rel="noopener"><Glyph name="plus" size={15} />Request a feature</a>
+            <a href={REPO.featureRequest} target="_blank" rel="noopener"><Glyph name="plus" size={15} />Request a feature</a>
           </li>
           <li>
             <a href={`https://github.com/${REPO.owner}`} target="_blank" rel="noopener"><Glyph name="pointer" size={15} />The person who built it</a>
