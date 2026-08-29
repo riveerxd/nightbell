@@ -364,8 +364,35 @@ android {
         // keyboard with it. And every settings row carried 10 dp of its own
         // padding on top of the 10 dp a section heading added below itself, so the
         // gap inside a category was wider than the gap between two of them.
-        versionCode = 34
-        versionName = "3.5.0"
+        // 3.6.0 updates itself, and stops a check of its own from silencing an
+        // outage. An update arrives as a notice, downloads in the app and installs
+        // from there, so there is no browser round trip and no file to sideload by
+        // hand.
+        //
+        // The correctness half matters more. The connectivity reference exists to
+        // tell "this phone lost signal" apart from "the service is down", and an
+        // unreachable reference was being read as proof of the first. Blocked,
+        // mistyped, down or merely slower than four seconds all look identical to
+        // a dead network through an IOException, so every failure that reached
+        // nothing was dropped and the app went quiet. A reference now has to have
+        // answered this phone inside the six hour window the store already keeps
+        // before it may vouch for anything. A car park still works, because the
+        // phone holds readings from before it went underground. A firewalled
+        // endpoint never earns one.
+        //
+        // The interface holds at the font sizes accessibility offers. A Row hands
+        // its unweighted children the space first, so at 180 per cent a monitor
+        // card's pause button measured to nothing and left the tree, and the fleet
+        // banner set its monitor count one letter to a line. Rows wrap and the
+        // controls are measured first. Two touch targets under the floor are not
+        // any more, including the quiet hours nudges, which decide when the phone
+        // is allowed to wake somebody.
+        //
+        // The site said nothing leaves the device except the check itself. That
+        // was never true of the reference endpoint and is named now rather than
+        // left for a packet capture to find.
+        versionCode = 35
+        versionName = "3.6.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

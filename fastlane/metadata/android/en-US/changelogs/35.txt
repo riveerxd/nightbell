@@ -1,0 +1,13 @@
+Nightbell updates itself now, and it will no longer go quiet about an outage because a check of its own could not get through.
+
+An update arrives as a notice on the dashboard, downloads inside the app and installs from there. No browser, no file to find, nothing fetched until you ask for it.
+
+The fix underneath that headline is the one worth reading. To tell "this phone lost signal" apart from "the service is down", Nightbell asks one reference endpoint whether it answers. If that endpoint was blocked by a network, mistyped, down, or simply slower than four seconds, the app read it as a dead connection and dropped the failure. It stopped paging, silently, in exactly the situation you installed it for. A reference now has to have answered your phone recently before it is allowed to vouch for anything. A phone in a car park still works, because it holds readings from before it went underground. A firewalled endpoint never earns one.
+
+That endpoint is yours to choose. It defaults to GrapheneOS's connectivity check rather than an advertising company's, it is a text field so you can point it at your own always-up host, and it can be switched off entirely under Settings, Checks. The website used to say nothing left the device except your checks. That was never quite true, and it says what actually happens now.
+
+The interface holds together at large text sizes. At 180 per cent a monitor card's pause button had shrunk until it could not be tapped, and the fleet banner set its monitor count one letter to a line down the side. Rows wrap and the controls keep their size. Two touch targets that were under the minimum are not any more, including the quiet hours controls that decide when the phone may wake you. Labels that used to shred into four lines beside a one line value now stack instead.
+
+Tapping check twice no longer sends two requests to your service, and the same is true of saving a monitor and of deleting one.
+
+Latency columns line up. Screen readers are told which sort is selected, which kind of monitor a row is, and that a greyed out button is unavailable rather than simply text.
