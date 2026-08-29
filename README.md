@@ -40,7 +40,9 @@
 
 Point it at anything that answers over HTTP, or at one element on a rendered web
 page, and it watches it, charts it, and gets loud when it breaks. **No server, no
-account, no third party.** The phone in your pocket does the checking.
+account, no middleman.** The phone in your pocket does the checking, and the only
+host it contacts that you did not choose is a connectivity probe you can change or
+switch off.
 
 ---
 

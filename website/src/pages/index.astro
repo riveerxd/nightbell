@@ -53,7 +53,7 @@ const faqs: { q: string; a: string }[] = [
   },
   {
     q: 'Does anything leave my phone?',
-    a: 'The check itself, to the service you pointed it at. Nothing else. There is no analytics library, no crash reporter and no backend in the dependency list, the permission list is short enough to read in one go, and site icons are fetched from the monitored origin rather than through an icon proxy. Your service sees the request and your IP, the same as any other client on your network would. What never happens is a third party seeing your tokens, your URLs or your uptime history.',
+    a: 'The check itself, to the service you pointed it at, and one other thing worth naming: a connectivity probe to a reference endpoint, so losing signal in a car park is not reported as every service going down at once. It is an empty 204 carrying nothing about you, it defaults to GrapheneOS rather than an advertising company, you can point it at your own always-up host, and you can turn it off in Settings under Checks. Beyond those two, nothing. There is no analytics library, no crash reporter and no backend in the dependency list, the permission list is short enough to read in one go, and site icons are fetched from the monitored origin rather than through an icon proxy. Your service sees the request and your IP, the same as any other client on your network would. What never happens is a third party seeing your tokens, your URLs or your uptime history.',
   },
   {
     q: 'Can I watch something on my home network, or over plain HTTP?',
@@ -532,7 +532,8 @@ const transcript: { t: string; s: string }[] = [
           server, and nowhere in between. No third party can leak it, subpoena it, or change its
           terms of service. There is no analytics library, no crash reporter and no backend in the
           dependency list, and site icons are fetched from the monitored origin itself rather than
-          through an icon proxy.
+          through an icon proxy. The one host Nightbell contacts that you did not choose is the
+          connectivity reference, and you can choose that one too, or switch it off.
         </p>
         <p>
           It does not buy you anonymity from the thing you are watching. Your service sees the

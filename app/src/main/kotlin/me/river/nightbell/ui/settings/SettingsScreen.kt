@@ -1213,7 +1213,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
                         SectionHeader("About", icon = NightbellIcons.Info, accent = NightbellColors.Sky)
                         AboutRow("Version", "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
                         AboutRow("Android", "API ${Build.VERSION.SDK_INT} · ${Build.MODEL}")
-                        AboutRow("Storage", "Local only, nothing leaves the device")
+                        AboutRow("Storage", "Local only, your monitors never leave the device")
                         Spacer(Modifier.height(10.dp))
                         Text(
                             text = "Nightbell checks HTTP endpoints, asserts on response bodies, and " +
