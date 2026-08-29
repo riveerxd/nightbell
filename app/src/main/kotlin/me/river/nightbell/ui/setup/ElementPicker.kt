@@ -789,14 +789,16 @@ private fun PickerBottomBar(
                     onClick = onClear,
                     tone = ButtonTone.Secondary,
                     icon = NightbellIcons.Close,
+                    modifier = Modifier.weight(1f, fill = false),
                 )
             }
             NightbellButton(
                 text = if (picked != null) "Use this element" else "Pick an element",
+                shortText = if (picked != null) "Use this" else "Pick one",
                 onClick = onConfirm,
                 enabled = picked != null,
                 icon = NightbellIcons.Check,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(2f),
             )
         }
     }

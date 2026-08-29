@@ -290,10 +290,13 @@ class RevisionVerificationTest {
         composeRule.waitForIdle()
         composeRule.onNodeWithText("Nothing is broken. That is the answer you wanted.")
             .assertIsDisplayed()
-        composeRule.onNodeWithText("Clear filters").assertIsDisplayed()
+        // "Show all", the same words the tune panel and the narrowing strip use.
+        // It said "Clear filters" here and "Show all" in the other two places,
+        // which was one action wearing three names on one screen.
+        composeRule.onNodeWithText("Show all").assertIsDisplayed()
         composeRule.captureScreenshot("query-04-empty-filter")
 
-        composeRule.onNodeWithText("Clear filters").performClick()
+        composeRule.onNodeWithText("Show all").performClick()
         composeRule.waitForIdle()
         // Clearing restores the full list; the card may sit below the fold, so
         // scroll to it rather than asserting it happens to be on screen.

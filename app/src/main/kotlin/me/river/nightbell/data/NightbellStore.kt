@@ -159,6 +159,15 @@ class NightbellStore(
      */
     val loaded: Boolean get() = loadedFlag.value
 
+    /**
+     * The same fact, observable.
+     *
+     * A composable cannot read [loaded] and expect to be redrawn when it flips, so
+     * a screen that has to tell "no monitors" apart from "not read yet" needs this
+     * one rather than the getter.
+     */
+    val loadedFlow: StateFlow<Boolean> = loadedFlag.asStateFlow()
+
     init {
         // The only reader of `dataStore.data`. Everything else in the app goes
         // through `live`, so a decode of the JSON document happens once per commit

@@ -255,14 +255,21 @@ private fun IconChoiceTile(
             }
 
             if (onDelete != null) {
+                // A 34dp target carrying a 21dp badge, and deliberately under the
+                // 48dp floor the rest of the app keeps.
+                //
+                // The tile underneath is 60dp and is itself a target: it picks
+                // this picture. A 48dp delete would cover four fifths of it and
+                // make choosing a picture harder than removing one, which is the
+                // wrong trade for the rarer and more destructive of the two. 34dp
+                // is what the tile can give up, it is a large improvement on 21,
+                // and the mis-tap it still allows selects the picture rather than
+                // deleting it.
                 Box(
                     Modifier
                         .align(Alignment.TopEnd)
-                        .offset(x = 4.dp, y = (-4).dp)
-                        .size(21.dp)
-                        .clip(CircleShape)
-                        .background(NightbellColors.ToastFill)
-                        .border(BorderStroke(1.dp, NightbellColors.sheen(0.16f)), CircleShape)
+                        .offset(x = 10.dp, y = (-10).dp)
+                        .size(34.dp)
                         .clickable(
                             indication = ripple(bounded = false, color = NightbellColors.Rose),
                             interactionSource = remember { MutableInteractionSource() },
@@ -271,12 +278,21 @@ private fun IconChoiceTile(
                         .semantics { contentDescription = deleteDescription },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(
-                        imageVector = NightbellIcons.Close,
-                        contentDescription = null,
-                        tint = NightbellColors.TextSecondary,
-                        modifier = Modifier.size(11.dp),
-                    )
+                    Box(
+                        Modifier
+                            .size(21.dp)
+                            .clip(CircleShape)
+                            .background(NightbellColors.ToastFill)
+                            .border(BorderStroke(1.dp, NightbellColors.sheen(0.16f)), CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = NightbellIcons.Close,
+                            contentDescription = null,
+                            tint = NightbellColors.TextSecondary,
+                            modifier = Modifier.size(11.dp),
+                        )
+                    }
                 }
             }
         }

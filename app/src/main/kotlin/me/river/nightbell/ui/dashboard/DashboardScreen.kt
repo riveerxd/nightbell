@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package me.river.nightbell.ui.dashboard
 
 import androidx.activity.compose.BackHandler
@@ -29,6 +31,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -163,6 +166,7 @@ fun DashboardScreen(
 ) {
     val viewModel = rememberDashboardViewModel()
     val cards by viewModel.cards.collectAsStateWithLifecycle()
+    val loaded by viewModel.loaded.collectAsStateWithLifecycle()
     val offline by viewModel.offline.collectAsStateWithLifecycle()
     val pause by viewModel.pause.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
@@ -302,6 +306,7 @@ fun DashboardScreen(
                 },
                 selecting = selecting,
                 selected = card.monitor.id in viewModel.selection,
+                offline = offline,
                 dragging = reorder.draggingKey == card.monitor.id,
                 dragDelta = reorder.delta,
                 reorderHandle = if (canReorder) {
@@ -409,17 +414,30 @@ fun DashboardScreen(
                         )
                     }
 
-                    item(key = "overview", span = { GridItemSpan(maxLineSpan) }) {
-                        StaggeredEntrance(index = 0, key = "overview", log = entrance) {
-                            FleetBanner(
-                                stats = fleetStatsOf(cards, nowMs = nowMs, offline = offline),
-                                refreshing = viewModel.refreshing,
-                                onCheckAll = { viewModel.checkAll() },
-                                pause = pause,
-                                nowMs = nowMs,
-                                promptOpen = viewModel.pausePrompt != null,
-                                onPauseTapped = { viewModel.onPauseTapped() },
-                            )
+                    // Held back until the store has answered. An empty snapshot is
+                    // the initial value of the flow as well as a genuine empty
+                    // fleet, and drawing the verdict from the first would tell
+                    // someone with eight monitors that nothing is being watched.
+                    if (loaded) {
+                        item(key = "overview", span = { GridItemSpan(maxLineSpan) }) {
+                            StaggeredEntrance(index = 0, key = "overview", log = entrance) {
+                                // Recomputed only when something it reads has
+                                // moved. It walks every sample of every monitor
+                                // twice, and the clock ticking is enough to
+                                // recompose this item on its own.
+                                val stats = remember(cards, nowMs, offline) {
+                                    fleetStatsOf(cards, nowMs = nowMs, offline = offline)
+                                }
+                                FleetBanner(
+                                    stats = stats,
+                                    refreshing = viewModel.refreshing,
+                                    onCheckAll = { viewModel.checkAll() },
+                                    pause = pause,
+                                    nowMs = nowMs,
+                                    promptOpen = viewModel.pausePrompt != null,
+                                    onPauseTapped = { viewModel.onPauseTapped() },
+                                )
+                            }
                         }
                     }
 
@@ -447,7 +465,12 @@ fun DashboardScreen(
                                 DashboardPanel.NONE -> Unit
                             }
                         }
-                    } else if (viewModel.narrowed) {
+                    } else if (viewModel.narrowed && visible.isNotEmpty()) {
+                        // Not when the list is empty. The strip exists to say that
+                        // a short list is short on purpose, and an empty one has
+                        // the empty state saying that better and carrying the same
+                        // action. Both at once put two identical "Show all"
+                        // buttons a centimetre apart.
                         item(key = "narrowing", span = { GridItemSpan(maxLineSpan) }) {
                             NarrowingStrip(
                                 spec = viewModel.spec,
@@ -458,7 +481,17 @@ fun DashboardScreen(
                         }
                     }
 
-                    if (cards.isEmpty()) {
+                    if (cards.isEmpty() && !loaded) {
+                        // Nothing is drawn here on purpose. The store is still
+                        // being read, and the two things this branch could say
+                        // are both lies: "no monitors" is the first-run screen
+                        // shown to someone who has eight, and a skeleton grid is
+                        // fake monitors. The banner above already reads
+                        // "Nothing watched" for the same fraction of a second and
+                        // corrects itself, which is the honest amount of noise to
+                        // make about a disk read.
+                        Unit
+                    } else if (cards.isEmpty()) {
                         item(key = "first-run", span = { GridItemSpan(maxLineSpan) }) {
                             Spacer(Modifier.height(24.dp))
                             FirstRunStarter(
@@ -474,8 +507,12 @@ fun DashboardScreen(
                                 message = MonitorQuery.emptyMessage(viewModel.spec, cards.size),
                                 icon = NightbellIcons.Search,
                                 action = {
+                                    // Same words as the tune panel and the
+                                    // narrowing strip. Three labels for one
+                                    // action taught three different lessons
+                                    // about what it does.
                                     NightbellButton(
-                                        text = "Clear filters",
+                                        text = "Show all",
                                         onClick = viewModel::clearNarrowing,
                                         icon = NightbellIcons.Close,
                                         tone = ButtonTone.Secondary,
@@ -1038,11 +1075,27 @@ private fun TunePanel(
         AnimatedVisibility(visible = spec.sort == MonitorQuery.Sort.MANUAL) {
             Column {
                 Spacer(Modifier.height(10.dp))
+                // Manual sort does not by itself put grips on the cards:
+                // `MonitorQuery.canReorder` also needs the list un-narrowed, for
+                // the reason its own doc gives. Saying "drag the grip" while a
+                // filter is on sends the user hunting for a control the code has
+                // deliberately withheld.
+                val draggable = MonitorQuery.canReorder(spec)
                 Text(
-                    text = "Drag the grip on any card to arrange them. Nothing re-sorts " +
-                        "them behind your back while this is on.",
+                    text = if (draggable) {
+                        "Drag the grip on any card to arrange them. Nothing re-sorts " +
+                            "them behind your back while this is on."
+                    } else {
+                        "The grips stay hidden while a filter or a search is narrowing " +
+                            "the list, because a card's place in a filtered view says " +
+                            "nothing about where it belongs. Show all to start dragging."
+                    },
                     style = MaterialTheme.typography.bodySmall,
-                    color = NightbellColors.TextTertiary,
+                    color = if (draggable) {
+                        NightbellColors.TextTertiary
+                    } else {
+                        NightbellColors.Amber
+                    },
                 )
             }
         }
@@ -1307,6 +1360,7 @@ private fun MonitorRowCard(
     certLevel: CertificateWatch.Level,
     selecting: Boolean,
     selected: Boolean,
+    offline: Boolean,
     dragging: Boolean,
     dragDelta: Offset,
     reorderHandle: (@Composable () -> Unit)?,
@@ -1449,8 +1503,20 @@ private fun MonitorRowCard(
             )
         } else {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            // A flow, and weighted, because this row has no fixed budget: pill,
+            // muted, urgent, latency, connection, code and a certificate deadline
+            // can all be true at once. As a plain Row the tags were measured first
+            // and the "checked 4m ago" stamp on the right got whatever was left,
+            // which at a large font scale was nothing: it collapsed to one
+            // character per line and stretched the card. The stamp is the point of
+            // a monitoring card, so it is measured first now and the tags wrap.
+            FlowRow(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                itemVerticalAlignment = Alignment.CenterVertically,
+            ) {
             StatusPill(health = health, checking = card.checking)
-            Spacer(Modifier.width(8.dp))
             if (muted) {
                 MicroTag(
                     text = "Muted",
@@ -1458,7 +1524,6 @@ private fun MonitorRowCard(
                     background = NightbellColors.Amber.copy(alpha = 0.14f),
                     icon = NightbellIcons.BellOff,
                 )
-                Spacer(Modifier.width(6.dp))
             }
             if (urgentPending) {
                 MicroTag(
@@ -1467,7 +1532,6 @@ private fun MonitorRowCard(
                     background = NightbellColors.Rose.copy(alpha = 0.16f),
                     icon = NightbellIcons.Zap,
                 )
-                Spacer(Modifier.width(6.dp))
             }
             if (runtime.lastLatencyMs > 0) {
                 MicroTag(
@@ -1475,7 +1539,6 @@ private fun MonitorRowCard(
                     color = if (health == Health.DEGRADED) NightbellColors.Amber else NightbellColors.TextSecondary,
                     icon = NightbellIcons.Gauge,
                 )
-                Spacer(Modifier.width(6.dp))
             }
             // Says why a number that looks slow was not treated as slow. Without
             // this the compensation is invisible, and an invisible correction to a
@@ -1487,21 +1550,18 @@ private fun MonitorRowCard(
                     background = NightbellColors.Sky.copy(alpha = 0.14f),
                     icon = NightbellIcons.Wifi,
                 )
-                Spacer(Modifier.width(6.dp))
             } else if (runtime.lastNetworkExcessMs > 0) {
                 MicroTag(
                     text = "−${formatLatency(runtime.lastNetworkExcessMs)}",
                     color = NightbellColors.Sky,
                     icon = NightbellIcons.Wifi,
                 )
-                Spacer(Modifier.width(6.dp))
             }
             if (runtime.lastCode > 0) {
                 MicroTag(
                     text = runtime.lastCode.toString(),
                     color = if (runtime.health == Health.UP) NightbellColors.Mint else NightbellColors.Amber,
                 )
-                Spacer(Modifier.width(6.dp))
             }
             // A cert deadline earns a tag but never the card's rim: the service is
             // up, and painting it amber would put a warning colour on something
@@ -1523,7 +1583,8 @@ private fun MonitorRowCard(
                     icon = NightbellIcons.Shield,
                 )
             }
-            Spacer(Modifier.weight(1f))
+            }
+            Spacer(Modifier.width(8.dp))
             Text(
                 text = formatRelative(runtime.lastCheckedAt, now),
                 style = MaterialTheme.typography.bodySmall,
@@ -1618,21 +1679,35 @@ private fun MonitorRowCard(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            MicroTag(text = monitor.kind.label, color = accent, icon = kindIcon(monitor.kind))
-            if (monitor.kind == MonitorKind.WEBSITE_ELEMENT && monitor.targets.size > 1) {
-                MicroTag(
-                    text = "${monitor.targets.size} elements",
-                    color = NightbellColors.TextTertiary,
-                    icon = NightbellIcons.Target,
-                )
-            }
-            if (monitor.kind != MonitorKind.WEBSITE_ELEMENT &&
-                monitor.kind != MonitorKind.GITHUB_REPO
+            // The tags give way, never the buttons.
+            //
+            // As a plain Row the four tags were measured before the two controls,
+            // so at 150 per cent font the re-check button was drawn past the card's
+            // right edge and at 180 per cent the pause button measured to zero and
+            // left the accessibility tree altogether: a monitor that could not be
+            // paused from the dashboard at all. Weighting the tags means they are
+            // measured against what the buttons leave behind, and they wrap.
+            FlowRow(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                itemVerticalAlignment = Alignment.CenterVertically,
             ) {
-                MicroTag(text = monitor.method.name, color = NightbellColors.TextTertiary)
+                MicroTag(text = monitor.kind.label, color = accent, icon = kindIcon(monitor.kind))
+                if (monitor.kind == MonitorKind.WEBSITE_ELEMENT && monitor.targets.size > 1) {
+                    MicroTag(
+                        text = "${monitor.targets.size} elements",
+                        color = NightbellColors.TextTertiary,
+                        icon = NightbellIcons.Target,
+                    )
+                }
+                if (monitor.kind != MonitorKind.WEBSITE_ELEMENT &&
+                    monitor.kind != MonitorKind.GITHUB_REPO
+                ) {
+                    MicroTag(text = monitor.method.name, color = NightbellColors.TextTertiary)
+                }
+                MicroTag(text = "${monitor.intervalMinutes}m", color = NightbellColors.TextTertiary, icon = NightbellIcons.Clock)
             }
-            MicroTag(text = "${monitor.intervalMinutes}m", color = NightbellColors.TextTertiary, icon = NightbellIcons.Clock)
-            Spacer(Modifier.weight(1f))
             // Per-card actions step aside during selection: a re-check button that
             // fires a real request is the last thing that should be one mis-tap
             // away while the finger is busy picking rows.
@@ -1644,13 +1719,21 @@ private fun MonitorRowCard(
                     size = 34.dp,
                     accent = NightbellColors.TextSecondary,
                 )
+                // Greyed out with no connection, the same as the fleet's own
+                // "check all". It used to stay lit and answer the tap with a
+                // toast, so the two controls that do the same thing taught two
+                // different lessons about the same condition.
                 GlassIconButton(
-                    icon = NightbellIcons.Refresh,
+                    icon = if (offline) NightbellIcons.WifiOff else NightbellIcons.Refresh,
                     onClick = onCheck,
-                    contentDescription = "Check now",
+                    contentDescription = if (offline) {
+                        "Check now, waiting for a connection"
+                    } else {
+                        "Check now"
+                    },
                     size = 34.dp,
                     accent = accent,
-                    enabled = !card.checking,
+                    enabled = !card.checking && !offline,
                 )
             }
         }
@@ -1683,65 +1766,71 @@ private fun GitHubFactsRow(
     val state = runtime.github
     val watch = monitor.github
     Row(verticalAlignment = Alignment.CenterVertically) {
-        if (checking || health == Health.DOWN || health == Health.PAUSED) {
-            StatusPill(health = health, checking = checking)
-            Spacer(Modifier.width(8.dp))
-        }
-        if (state.rateLimited) {
-            MicroTag(
-                text = "Rate limited",
-                color = NightbellColors.Amber,
-                background = NightbellColors.Amber.copy(alpha = 0.14f),
-                icon = NightbellIcons.Clock,
-            )
-            Spacer(Modifier.width(6.dp))
-        }
-        if (muted) {
-            MicroTag(
-                text = "Muted",
-                color = NightbellColors.Amber,
-                background = NightbellColors.Amber.copy(alpha = 0.14f),
-                icon = NightbellIcons.BellOff,
-            )
-            Spacer(Modifier.width(6.dp))
-        }
-        if (!state.seeded) {
-            // Zeros here would be a claim. Nothing has been read yet.
-            MicroTag(text = "Not checked yet", color = NightbellColors.TextTertiary)
-        } else {
-            if (watch.notifyOnStars) {
-                MicroTag(
-                    text = state.lastStarCount.toString(),
-                    color = NightbellColors.Gold,
-                    icon = NightbellIcons.Star,
-                    iconDescription = "stars",
-                    // "13 ★", not "★ 13": the number is the fact and the star is
-                    // its unit. Same order as the detail card and the widget.
-                    iconAtEnd = true,
-                )
-                Spacer(Modifier.width(6.dp))
+        // Weighted and wrapping for the same reason as the row it stands in for:
+        // a repository watching stars, issues and releases at once carries three
+        // tags plus a pill, and the last-checked stamp on the right must not be
+        // the thing that gets squeezed out.
+        FlowRow(
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            itemVerticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (checking || health == Health.DOWN || health == Health.PAUSED) {
+                StatusPill(health = health, checking = checking)
             }
-            if (watch.notifyOnIssues || watch.watchPullRequests) {
+            if (state.rateLimited) {
                 MicroTag(
-                    text = "${state.openIssues} open",
-                    color = if (state.openIssues > 0) {
-                        NightbellColors.TextSecondary
-                    } else {
-                        NightbellColors.TextTertiary
-                    },
-                    icon = NightbellIcons.Warning,
-                )
-                Spacer(Modifier.width(6.dp))
-            }
-            if (watch.watchReleases && state.lastReleaseTag.isNotBlank()) {
-                MicroTag(
-                    text = state.lastReleaseTag,
-                    color = NightbellColors.Mint,
-                    icon = NightbellIcons.Import,
+                    text = "Rate limited",
+                    color = NightbellColors.Amber,
+                    background = NightbellColors.Amber.copy(alpha = 0.14f),
+                    icon = NightbellIcons.Clock,
                 )
             }
+            if (muted) {
+                MicroTag(
+                    text = "Muted",
+                    color = NightbellColors.Amber,
+                    background = NightbellColors.Amber.copy(alpha = 0.14f),
+                    icon = NightbellIcons.BellOff,
+                )
+            }
+            if (!state.seeded) {
+                // Zeros here would be a claim. Nothing has been read yet.
+                MicroTag(text = "Not checked yet", color = NightbellColors.TextTertiary)
+            } else {
+                if (watch.notifyOnStars) {
+                    MicroTag(
+                        text = state.lastStarCount.toString(),
+                        color = NightbellColors.Gold,
+                        icon = NightbellIcons.Star,
+                        iconDescription = "stars",
+                        // "13 ★", not "★ 13": the number is the fact and the star is
+                        // its unit. Same order as the detail card and the widget.
+                        iconAtEnd = true,
+                    )
+                }
+                if (watch.notifyOnIssues || watch.watchPullRequests) {
+                    MicroTag(
+                        text = "${state.openIssues} open",
+                        color = if (state.openIssues > 0) {
+                            NightbellColors.TextSecondary
+                        } else {
+                            NightbellColors.TextTertiary
+                        },
+                        icon = NightbellIcons.Warning,
+                    )
+                }
+                if (watch.watchReleases && state.lastReleaseTag.isNotBlank()) {
+                    MicroTag(
+                        text = state.lastReleaseTag,
+                        color = NightbellColors.Mint,
+                        icon = NightbellIcons.Import,
+                    )
+                }
+            }
         }
-        Spacer(Modifier.weight(1f))
+        Spacer(Modifier.width(8.dp))
         Text(
             text = formatRelative(runtime.lastCheckedAt, now),
             style = MaterialTheme.typography.bodySmall,

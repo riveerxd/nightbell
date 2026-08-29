@@ -90,6 +90,7 @@ import me.river.nightbell.ui.components.AlertPolicyEditor
 import me.river.nightbell.ui.components.ButtonTone
 import me.river.nightbell.ui.components.ChipSelector
 import me.river.nightbell.ui.components.GlassCard
+import me.river.nightbell.ui.components.LabelledRow
 import me.river.nightbell.ui.components.GlassIconButton
 import me.river.nightbell.ui.components.IconBadge
 import me.river.nightbell.ui.components.NightbellButton
@@ -1683,19 +1684,29 @@ private fun WarningPanel(text: String) {
 
 @Composable
 private fun AboutRow(label: String, value: String) {
-    Row(Modifier.fillMaxWidth().height(28.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = NightbellColors.TextTertiary,
-            modifier = Modifier.width(96.dp),
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodySmall,
-            color = NightbellColors.TextSecondary,
-        )
-    }
+    // No fixed height either: 28dp was a line and a half of the default size and
+    // exactly one line short at 150 per cent, which clipped the value's descenders.
+    LabelledRow(
+        labelWidth = 96.dp,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        label = { mod ->
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = NightbellColors.TextTertiary,
+                modifier = mod,
+            )
+        },
+        value = { mod ->
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodySmall,
+                color = NightbellColors.TextSecondary,
+                modifier = mod,
+            )
+        },
+    )
 }
 
 /**
@@ -1807,6 +1818,7 @@ private fun GitHubTokenCard(
                         text = "Cancel",
                         onClick = { typed = null },
                         tone = ButtonTone.Secondary,
+                        modifier = Modifier.weight(1f, fill = false),
                     )
                 }
             }
@@ -1879,20 +1891,26 @@ private fun GitHubTokenCard(
  */
 @Composable
 private fun TokenScopeRow(permission: String, purpose: String) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.Top) {
-        Text(
-            text = permission,
-            style = MaterialTheme.typography.bodySmall,
-            color = NightbellColors.Sky,
-            modifier = Modifier.width(112.dp),
-        )
-        Text(
-            text = purpose,
-            style = MaterialTheme.typography.bodySmall,
-            color = NightbellColors.TextTertiary,
-            modifier = Modifier.weight(1f),
-        )
-    }
+    LabelledRow(
+        labelWidth = 112.dp,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+        label = { mod ->
+            Text(
+                text = permission,
+                style = MaterialTheme.typography.bodySmall,
+                color = NightbellColors.Sky,
+                modifier = mod,
+            )
+        },
+        value = { mod ->
+            Text(
+                text = purpose,
+                style = MaterialTheme.typography.bodySmall,
+                color = NightbellColors.TextTertiary,
+                modifier = mod,
+            )
+        },
+    )
 }
 
 /** Hands a URL to whatever the user browses with. */
@@ -1910,17 +1928,25 @@ private fun openLink(context: android.content.Context, url: String) {
  */
 @Composable
 private fun VersionRow(label: String, value: String, highlight: Boolean = false) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = NightbellColors.TextTertiary,
-            modifier = Modifier.width(88.dp),
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (highlight) NightbellColors.Sky else NightbellColors.TextPrimary,
-        )
-    }
+    LabelledRow(
+        labelWidth = 88.dp,
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        label = { mod ->
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodySmall,
+                color = NightbellColors.TextTertiary,
+                modifier = mod,
+            )
+        },
+        value = { mod ->
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (highlight) NightbellColors.Sky else NightbellColors.TextPrimary,
+                modifier = mod,
+            )
+        },
+    )
 }

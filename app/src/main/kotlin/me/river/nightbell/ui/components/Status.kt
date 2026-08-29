@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -623,9 +624,18 @@ fun UptimeRing(
         ) {
             Text(
                 text = if (unknown) "—" else "${animated.roundToInt()}%",
-                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold),
+                style = MaterialTheme.typography.headlineMedium.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    // The figure this whole ring exists to show. Tabular so it
+                    // does not shuffle sideways as it counts up on a check.
+                    fontFeatureSettings = "tnum",
+                ),
                 color = if (unknown) NightbellColors.TextTertiary else NightbellColors.TextPrimary,
                 maxLines = 1,
+                autoSize = TextAutoSize.StepBased(
+                    minFontSize = 14.sp,
+                    maxFontSize = MaterialTheme.typography.headlineMedium.fontSize,
+                ),
             )
             Text(
                 text = label.uppercase(),
@@ -635,6 +645,13 @@ fun UptimeRing(
                 softWrap = false,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
+                // The ring is a fixed-size drawing, so the type inside it has to
+                // give rather than the circle. Ellipsised, "PAST 6M" became
+                // "PAST …" at 200 per cent, which says less than nothing.
+                autoSize = TextAutoSize.StepBased(
+                    minFontSize = 7.sp,
+                    maxFontSize = MaterialTheme.typography.labelSmall.fontSize,
+                ),
             )
         }
     }
@@ -1133,11 +1150,25 @@ fun MetricTile(
                 maxLines = 1,
                 softWrap = false,
                 overflow = TextOverflow.Ellipsis,
+                // Three of these sit side by side, so each gets a third of the
+                // card: "AVERAGE" and "CHECKS" both ellipsised to "AVER…" and
+                // "CHEC…" at 200 per cent, which is two tiles nobody can name.
+                autoSize = TextAutoSize.StepBased(
+                    minFontSize = 8.sp,
+                    maxFontSize = MaterialTheme.typography.labelSmall.fontSize,
+                ),
             )
         }
         Text(
             text = value,
-            style = MaterialTheme.typography.titleLarge.copy(fontSize = 19.sp),
+            // Tabular figures. Three of these sit in a row reading average, p95
+            // and count, and with proportional digits a 1 is half the width of a
+            // 0, so the three numbers never line up with each other and the row
+            // shifts every time a check lands. They are meant to be compared.
+            style = MaterialTheme.typography.titleLarge.copy(
+                fontSize = 19.sp,
+                fontFeatureSettings = "tnum",
+            ),
             color = NightbellColors.TextPrimary,
             maxLines = 1,
         )

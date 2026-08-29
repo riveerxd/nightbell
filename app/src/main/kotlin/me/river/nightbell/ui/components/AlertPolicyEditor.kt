@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -408,7 +409,9 @@ private fun TimeStepper(
             }
             Text(
                 text = formatMinuteOfDay(minute),
-                style = MaterialTheme.typography.titleLarge,
+                // Tabular, so 09:00 and 11:30 are the same width and the two
+                // steppers beside it do not shift as the hour changes.
+                style = MaterialTheme.typography.titleLarge.copy(fontFeatureSettings = "tnum"),
                 color = NightbellColors.TextPrimary,
                 modifier = Modifier.weight(1f),
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -420,27 +423,41 @@ private fun TimeStepper(
     }
 }
 
+/**
+ * One nudge of a quiet-hours boundary.
+ *
+ * The gesture area is [MinTouchTarget] with the 30dp pill drawn inside it, which
+ * is the pattern `StepperButton` and `GlassIconButton` already use in this app.
+ * It used to be 30dp of clickable and nothing else: four targets well under the
+ * floor, on the one control someone sets half asleep deciding when the phone is
+ * allowed to wake them.
+ */
 @Composable
 private fun SmallStep(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     description: String,
     onClick: () -> Unit,
 ) {
-    Row(
-        Modifier
-            .size(30.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(NightbellColors.sheen(0.06f))
+    Box(
+        modifier = Modifier
+            .size(MinTouchTarget)
             .clickable(onClick = onClick)
             .semantics { contentDescription = description },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center,
+        contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            tint = NightbellColors.TextSecondary,
-            modifier = Modifier.size(14.dp),
-        )
+        Box(
+            Modifier
+                .size(30.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(NightbellColors.sheen(0.06f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = NightbellColors.TextSecondary,
+                modifier = Modifier.size(14.dp),
+            )
+        }
     }
 }

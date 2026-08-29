@@ -18,6 +18,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -59,6 +60,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import me.river.nightbell.ui.theme.LocalNightbellMotion
@@ -453,4 +455,43 @@ fun ProvideMutedContent(content: @Composable () -> Unit) {
         LocalContentColor provides NightbellColors.TextSecondary,
         content = content,
     )
+}
+
+/**
+ * A label beside its value, and a label above its value when that stops fitting.
+ *
+ * Six screens draw this shape and every one of them pinned the label column to a
+ * flat dp figure measured at the default text size. That column does not grow
+ * with the type, so at 200 per cent "Expected status" broke over four lines
+ * beside a one-line value, and the pattern repeated in Setup's summary, the
+ * About rows, the token scopes, the version rows and the urgent screen's facts.
+ *
+ * Two things happen here. The column is scaled by the same factor the text is,
+ * so the ratio the design was drawn at survives; and once even that would eat
+ * more than [stackAt] of the row, the pair stacks instead. A label above its
+ * value still reads as a label. A label torn into four lines does not.
+ */
+@Composable
+fun LabelledRow(
+    labelWidth: Dp,
+    modifier: Modifier = Modifier,
+    verticalAlignment: Alignment.Vertical = Alignment.Top,
+    stackAt: Float = 0.5f,
+    label: @Composable (Modifier) -> Unit,
+    value: @Composable (Modifier) -> Unit,
+) {
+    val scaled = labelWidth * LocalDensity.current.fontScale
+    BoxWithConstraints(modifier) {
+        if (scaled > maxWidth * stackAt) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                label(Modifier)
+                value(Modifier.fillMaxWidth())
+            }
+        } else {
+            Row(verticalAlignment = verticalAlignment) {
+                label(Modifier.width(scaled))
+                value(Modifier.weight(1f))
+            }
+        }
+    }
 }

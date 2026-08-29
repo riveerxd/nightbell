@@ -66,9 +66,17 @@ object NightbellTestSupport {
     fun ComposeTestRule.captureScreenshot(name: String) {
         waitForIdle()
         val bitmap: Bitmap = onRoot().captureToImage().asAndroidBitmap()
-        File(screenshotDir(), "$name.png").outputStream().use { stream ->
+        val file = File(screenshotDir(), "$name.png")
+        val encoded = file.outputStream().use { stream ->
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
         }
+        // `Bitmap.compress` reports failure by returning false rather than by
+        // throwing, and the stream has already created the file by then. Eight of
+        // these were landing as 0-byte PNGs while their tests reported OK, which
+        // is the exact shape of a screenshot assertion that proves nothing: the
+        // run is green and there is no picture behind it.
+        check(encoded) { "compress() refused to encode $name (${bitmap.width}x${bitmap.height})" }
+        check(file.length() > 0L) { "$name.png was written empty" }
     }
 
     /**
@@ -84,9 +92,14 @@ object NightbellTestSupport {
     fun ComposeTestRule.captureDeviceScreenshot(name: String) {
         waitForIdle()
         val bitmap = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
-        File(screenshotDir(), "$name.png").outputStream().use { stream ->
+        val file = File(screenshotDir(), "$name.png")
+        val encoded = file.outputStream().use { stream ->
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
         }
+        // Same guard as above, and this path has its own way to produce nothing:
+        // `takeScreenshot` can hand back a bitmap the platform failed to fill.
+        check(encoded) { "compress() refused to encode $name (${bitmap.width}x${bitmap.height})" }
+        check(file.length() > 0L) { "$name.png was written empty" }
     }
 
     /**

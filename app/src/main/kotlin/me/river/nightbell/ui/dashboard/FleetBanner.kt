@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package me.river.nightbell.ui.dashboard
 
 import androidx.compose.foundation.background
@@ -5,6 +7,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -240,7 +243,18 @@ fun FleetBanner(
 
         // Dot-separated rather than tiled: three numbers do not each need a box,
         // and the banner's job is the verdict above, not a metrics dashboard.
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        //
+        // A flow rather than a row, because the three do not fit on one line at
+        // every font scale. As a Row the last of them was measured against
+        // whatever the first two left, and at 150 per cent that was two lines, at
+        // 200 per cent it was five pixels wide and a thousand tall: "1 MONITOR"
+        // set one letter to a line, down the side of the banner. Wrapping puts a
+        // separator at the end of a line, which reads the way prose does.
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            itemVerticalAlignment = Alignment.CenterVertically,
+        ) {
             Mono(
                 text = "${stats.uptimeText} ${stats.uptimeScope}",
                 color = NightbellColors.TextSecondary,
@@ -385,15 +399,30 @@ fun Mono(
     },
 )
 
+/** The separator alone. Its spacing is the flow's, or it would double up on wrap. */
 @Composable
-private fun MonoDot() {
-    Spacer(Modifier.width(8.dp))
-    Mono("·", color = NightbellColors.TextTertiary, size = 10)
-    Spacer(Modifier.width(8.dp))
+private fun MonoDot() = Mono("·", color = NightbellColors.TextTertiary, size = 10)
+
+/**
+ * What the tick row is actually saying, in words.
+ *
+ * The strip's whole content is a proportion: how much of the fleet is red. That
+ * is free to read and invisible to TalkBack, which used to be told only
+ * "Per-monitor health", the name of a thing rather than anything it says. Same
+ * argument as `chartSummary` in `ui/components/Status.kt`.
+ */
+internal fun ticksSummary(healths: List<Health>): String {
+    if (healths.isEmpty()) return "Per-monitor health, nothing watched"
+    val counted = Health.entries.mapNotNull { health ->
+        val count = healths.count { it == health }
+        if (count == 0) null else "$count ${health.label.lowercase()}"
+    }
+    val monitors = if (healths.size == 1) "1 monitor" else "${healths.size} monitors"
+    return "Per-monitor health, $monitors: ${counted.joinToString(", ")}"
 }
 
 /**
- * One tick per monitor, worst-first, coloured by health — so a red banner also
+ * One tick per monitor, worst-first, coloured by health, so a red banner also
  * tells you *how much* of the fleet is red without opening anything.
  */
 @Composable
@@ -407,7 +436,7 @@ fun FleetTicks(
     Row(
         modifier
             .height(height)
-            .clearAndSetSemantics { contentDescription = "Per-monitor health" },
+            .clearAndSetSemantics { contentDescription = ticksSummary(healths) },
         horizontalArrangement = Arrangement.spacedBy(gap),
     ) {
         if (healths.isEmpty()) {

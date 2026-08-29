@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import me.river.nightbell.ui.components.LabelledRow
 import me.river.nightbell.ui.icons.NightbellIcons
 import me.river.nightbell.ui.theme.NightbellColors
 
@@ -519,28 +520,32 @@ private fun Incident(
 @Composable
 private fun FactRow(label: String, value: String) {
     Column {
-        Row(
-            Modifier.padding(vertical = 9.dp),
+        LabelledRow(
+            labelWidth = 126.dp,
+            modifier = Modifier.fillMaxWidth().padding(vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                label,
-                style = MaterialTheme.typography.labelSmall,
-                fontFamily = FontFamily.Monospace,
-                color = NightbellColors.TextTertiary,
-                letterSpacing = 1.2.sp,
-                modifier = Modifier.width(126.dp),
-            )
-            Text(
-                value,
-                style = MaterialTheme.typography.bodyMedium,
-                fontFamily = FontFamily.Monospace,
-                color = NightbellColors.TextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-        }
+            label = { mod ->
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = NightbellColors.TextTertiary,
+                    letterSpacing = 1.2.sp,
+                    modifier = mod,
+                )
+            },
+            value = { mod ->
+                Text(
+                    value,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontFamily = FontFamily.Monospace,
+                    color = NightbellColors.TextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = mod,
+                )
+            },
+        )
         Box(
             Modifier
                 .fillMaxWidth()

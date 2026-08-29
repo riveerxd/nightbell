@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package me.river.nightbell.ui.detail
 
 import androidx.compose.animation.AnimatedVisibility
@@ -9,7 +11,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -45,6 +49,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import me.river.nightbell.domain.CertificateWatch
 import me.river.nightbell.domain.DigestMode
 import me.river.nightbell.domain.GitHubActivity
@@ -63,6 +68,7 @@ import me.river.nightbell.ui.components.GlassCard
 import me.river.nightbell.ui.components.GlassDivider
 import me.river.nightbell.ui.components.GlassIconButton
 import me.river.nightbell.ui.components.IconBadge
+import me.river.nightbell.ui.components.LabelledRow
 import me.river.nightbell.ui.components.LatencyBars
 import me.river.nightbell.ui.components.LatencyBudgetLegend
 import me.river.nightbell.ui.components.MetricTile
@@ -104,6 +110,7 @@ fun DetailScreen(
     val viewModel = rememberDetailViewModel(monitorId)
     val card by viewModel.card.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val offline by viewModel.offline.collectAsStateWithLifecycle()
     var confirmDelete by remember { mutableStateOf(false) }
     var showAllChecks by remember { mutableStateOf(false) }
     /** Repository monitors show activity; this is the way back to the poll list. */
@@ -222,6 +229,7 @@ fun DetailScreen(
                     enabled = monitor.enabled,
                     busy = viewModel.busy || current.checking,
                     muted = runtime.mutedUntil > now,
+                    offline = offline,
                     accent = accent,
                     onCheck = viewModel::checkNow,
                     onToggle = { viewModel.setEnabled(!monitor.enabled) },
@@ -519,7 +527,7 @@ private fun HeroCard(
                                 // DEGRADED is a pass, so lastMessage is empty — spell
                                 // out why the card is amber rather than green.
                                 health == Health.DEGRADED ->
-                                    "Responded in ${formatLatency(runtime.lastLatencyMs)} — " +
+                                    "Responded in ${formatLatency(runtime.lastLatencyMs)}, " +
                                         "over its latency budget"
                                 else -> "Last response ${formatLatency(runtime.lastLatencyMs)}"
                             }
@@ -530,7 +538,14 @@ private fun HeroCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                // Wraps, because this column is already narrowed by the ring
+                // beside it: at 200 per cent "Status check" alone fills the width
+                // and the status code next to it was squeezed to a sliver a few
+                // pixels wide.
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
                     MicroTag(monitor.kind.label, color = accent, icon = kindIcon(monitor.kind))
                     if (runtime.lastCode > 0) {
                         MicroTag(runtime.lastCode.toString(), color = accentEnd)
@@ -609,38 +624,80 @@ private fun ActionsRow(
     enabled: Boolean,
     busy: Boolean,
     muted: Boolean,
+    offline: Boolean,
     accent: Color,
     onCheck: () -> Unit,
     onToggle: () -> Unit,
     onMute: () -> Unit,
     onUnmute: () -> Unit,
 ) {
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
+    // Three across on a normal phone, stacked once the labels stop fitting.
+    //
+    // "Check now" was the only weighted button, so the two beside it were
+    // measured first and it took whatever was left: at 200 per cent that was
+    // nothing, and the screen's primary action shrank to its own padding. The
+    // labels are what has to give, and past a certain size they cannot, so the
+    // row becomes a column rather than three squeezed stumps.
+    val stacked = LocalDensity.current.fontScale >= 1.45f
+    val check: @Composable (Modifier) -> Unit = { mod ->
         NightbellButton(
-            text = if (busy) "Checking…" else "Check now",
+            text = when {
+                offline -> "Waiting for a connection"
+                busy -> "Checking…"
+                else -> "Check now"
+            },
             // This is the widest of the three and the only one with room to give.
-            shortText = if (busy) "Checking" else "Check",
+            shortText = when {
+                offline -> "Offline"
+                busy -> "Checking"
+                else -> "Check"
+            },
             onClick = onCheck,
             loading = busy,
-            icon = NightbellIcons.Refresh,
+            enabled = !offline,
+            icon = if (offline) NightbellIcons.WifiOff else NightbellIcons.Refresh,
             accent = accent,
-            modifier = Modifier.weight(1f).testTag("detail-check"),
+            modifier = mod.testTag("detail-check"),
         )
+    }
+    val pause: @Composable (Modifier) -> Unit = { mod ->
         NightbellButton(
             text = if (enabled) "Pause" else "Resume",
             onClick = onToggle,
             icon = if (enabled) NightbellIcons.Pause else NightbellIcons.Play,
             tone = ButtonTone.Secondary,
+            modifier = mod,
         )
+    }
+    val mute: @Composable (Modifier) -> Unit = { mod ->
         NightbellButton(
             text = if (muted) "Un-mute" else "Mute 1h",
             onClick = if (muted) onUnmute else onMute,
             icon = if (muted) NightbellIcons.Bell else NightbellIcons.BellOff,
             tone = ButtonTone.Secondary,
+            modifier = mod,
         )
+    }
+    if (stacked) {
+        Column(
+            Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            check(Modifier.fillMaxWidth())
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                pause(Modifier.weight(1f))
+                mute(Modifier.weight(1f))
+            }
+        }
+    } else {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            check(Modifier.weight(1f))
+            pause(Modifier)
+            mute(Modifier)
+        }
     }
 }
 
@@ -669,7 +726,7 @@ private fun UrgentBanner(repeatMinutes: Int, onAcknowledge: () -> Unit) {
         }
         Spacer(Modifier.height(13.dp))
         NightbellButton(
-            text = "I've got it — acknowledge",
+            text = "I've got it, acknowledge",
             onClick = onAcknowledge,
             icon = NightbellIcons.Check,
             tone = ButtonTone.Danger,
@@ -678,7 +735,7 @@ private fun UrgentBanner(repeatMinutes: Int, onAcknowledge: () -> Unit) {
         Spacer(Modifier.height(8.dp))
         Text(
             text = "The monitor stays down until it recovers. Acknowledging only stops " +
-                "the repeats for this outage — the next one will shout again.",
+                "the repeats for this outage. The next one will shout again.",
             style = MaterialTheme.typography.bodySmall,
             color = NightbellColors.TextTertiary,
         )
@@ -871,28 +928,35 @@ private fun ConfigCard(monitor: Monitor, accent: Color) {
     }
 }
 
+/**
+ * One configured fact, label beside value, stacking when the label stops fitting.
+ * See [LabelledRow] for why the column is not a flat dp figure any more.
+ */
 @Composable
 private fun ConfigRow(label: String, value: String) {
     if (value.isBlank()) return
-    Row(
-        Modifier.fillMaxWidth().padding(vertical = 5.dp),
-        verticalAlignment = Alignment.Top,
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = NightbellColors.TextTertiary,
-            modifier = Modifier.width(112.dp),
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodySmall,
-            color = NightbellColors.TextSecondary,
-            modifier = Modifier.weight(1f),
-            maxLines = 3,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
+    LabelledRow(
+        labelWidth = 112.dp,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
+        label = { mod ->
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = NightbellColors.TextTertiary,
+                modifier = mod,
+            )
+        },
+        value = { mod ->
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodySmall,
+                color = NightbellColors.TextSecondary,
+                modifier = mod,
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+    )
 }
 
 private val certDateFormat = SimpleDateFormat("d MMM yyyy", Locale.getDefault())
@@ -932,7 +996,11 @@ private fun EventRow(sample: Sample) {
         Spacer(Modifier.width(10.dp))
         Text(
             text = formatLatency(sample.latencyMs),
-            style = MaterialTheme.typography.labelLarge,
+            // Tabular figures, because this is a column of numbers rather than a
+            // number in a sentence: twenty-four of these stack up the right edge
+            // of the history and proportional digits make the column ragged for
+            // no reason a reader can use.
+            style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
             color = NightbellColors.TextSecondary,
         )
     }

@@ -60,7 +60,7 @@ import kotlinx.coroutines.launch
  * loud: silently doing nothing would read as the app being broken, and running
  * the check would produce a false outage.
  */
-private const val OFFLINE_TOAST = "You're offline — checks are paused"
+private const val OFFLINE_TOAST = "You're offline, checks are paused"
 
 // ------------------------------------------------------------------ dashboard
 
@@ -68,6 +68,17 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
 
     val cards: StateFlow<List<MonitorCard>> = graph.store.cards
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Whether [cards] is an answer yet.
+     *
+     * It starts as an empty list, which is indistinguishable from a fleet of
+     * nothing, so without this the dashboard greets an existing user with the
+     * first-run screen for as long as the disk takes. The widget has guarded this
+     * since it was reported there; this is the same guard on the other reader.
+     */
+    val loaded: StateFlow<Boolean> = graph.store.loadedFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), graph.store.loaded)
 
     val settings: StateFlow<GlobalSettings> = graph.store.snapshot
         .map { it.settings }
@@ -641,12 +652,31 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
         }
     }
 
+    /**
+     * Ids with a hand-driven check in flight.
+     *
+     * The card's re-check button is disabled on `card.checking`, which is the
+     * store's own in-flight set and therefore only true once the engine has
+     * picked the work up. Between the tap and that moment the button is still
+     * live, and this is a control whose whole job is to fire a real request at
+     * somebody's server. Held here rather than derived, so the guard closes on
+     * the tap rather than on the round trip.
+     */
+    private val checkingNow = mutableSetOf<String>()
+
     fun check(monitorId: String) {
         if (!graph.network.isOnline()) {
             toast = OFFLINE_TOAST
             return
         }
-        viewModelScope.launch { graph.engine.run(monitorId) }
+        if (!checkingNow.add(monitorId)) return
+        viewModelScope.launch {
+            try {
+                graph.engine.run(monitorId)
+            } finally {
+                checkingNow.remove(monitorId)
+            }
+        }
     }
 
     fun setEnabled(monitorId: String, enabled: Boolean) {
@@ -999,9 +1029,22 @@ class SetupViewModel(
         }
     }
 
+    /**
+     * Guarded, and the guard is about the request rather than the record.
+     *
+     * `upsert` is keyed by id so writing twice is harmless, but the last line of
+     * this is `engine.run`, which fires a real request at the user's endpoint. A
+     * double tap on a button that has not visibly changed yet is the ordinary
+     * human response to a slow save, and it hit the service twice.
+     */
+    var saving by mutableStateOf(false)
+        private set
+
     fun save() {
+        if (saving) return
         val validation = report
         if (!validation.isValid) return
+        saving = true
         viewModelScope.launch {
             val clean = draft.copy(
                 url = draft.url.trim(),
@@ -1014,6 +1057,7 @@ class SetupViewModel(
             graph.scheduler.ensureSweep(snapshot.settings)
             if (clean.enabled) graph.engine.run(clean.id)
             saved = true
+            saving = false
         }
     }
 
@@ -1050,6 +1094,11 @@ class DetailViewModel(
 
     var busy by mutableStateOf(false)
         private set
+
+    /** Greys out "check now" rather than letting it fire and answer with a toast. */
+    val offline: StateFlow<Boolean> = graph.network.online
+        .map { !it }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), !graph.network.isOnline())
 
     var toast by mutableStateOf<String?>(null)
         private set
@@ -1110,7 +1159,7 @@ class DetailViewModel(
     fun acknowledgeUrgent() {
         viewModelScope.launch {
             graph.engine.acknowledgeUrgent(monitorId)
-            toast = "Acknowledged — no more urgent alerts for this outage"
+            toast = "Acknowledged, no more urgent alerts for this outage"
         }
     }
 
@@ -1132,7 +1181,19 @@ class DetailViewModel(
         }
     }
 
+    /**
+     * Guarded, and the guard is about the navigation rather than the delete.
+     *
+     * Deleting twice is harmless in the store, but `onDone` is a back-stack pop:
+     * two of them take the dashboard with them and drop the user out of the app.
+     * A second tap on a button that is still working is the normal human response
+     * to a screen that has not changed yet.
+     */
+    private var deleting = false
+
     fun delete(onDone: () -> Unit) {
+        if (deleting) return
+        deleting = true
         viewModelScope.launch {
             graph.store.delete(monitorId)
             graph.scheduler.cancel(monitorId)
@@ -1462,15 +1523,25 @@ class SettingsViewModel(private val graph: Nightbell.Graph) : ViewModel() {
         graph.alerts.previewVibration(style)
     }
 
+    /** True while a test alert is on its way, so a second tap is not a second page. */
+    var sendingTestAlert by mutableStateOf(false)
+        private set
+
     fun sendTestAlert() {
+        if (sendingTestAlert) return
+        sendingTestAlert = true
         viewModelScope.launch {
-            val policy = graph.store.currentSnapshot().settings.defaultAlert
-            if (!graph.alerts.hasNotificationPermission()) {
-                toast = "Notifications are blocked — enable them in system settings"
-                return@launch
+            try {
+                val policy = graph.store.currentSnapshot().settings.defaultAlert
+                if (!graph.alerts.hasNotificationPermission()) {
+                    toast = "Notifications are blocked, enable them in system settings"
+                    return@launch
+                }
+                graph.alerts.previewPolicy(policy)
+                toast = "Test alert sent"
+            } finally {
+                sendingTestAlert = false
             }
-            graph.alerts.previewPolicy(policy)
-            toast = "Test alert sent"
         }
     }
 

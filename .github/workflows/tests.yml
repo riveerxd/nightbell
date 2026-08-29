@@ -1,0 +1,61 @@
+name: tests
+
+# The JVM suite and a minified release build, on every push and pull request.
+# Instrumented tests are deliberately absent: they need an emulator, they are
+# slow and flaky in a runner, and half their value is looking at the screenshots
+# they produce, which nothing here can do. Those stay on a real device.
+#
+# The release build is here because R8 has broken this app in ways no JVM test
+# could see. Without keystore/keystore.properties the task still builds, just
+# unsigned, which is exactly what is wanted from a check.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  jvm:
+    name: JVM tests and release build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # 21 is what the release procedure in docs/FDROID.md pins, so CI matches it
+      # rather than agreeing with the source compatibility level alone.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # compileSdk is 36, which a runner image does not always carry.
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-36 build-tools;36.0.0'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: JVM tests
+        run: ./gradlew :app:testDebugUnitTest --console=plain
+
+      - name: Release build
+        run: ./gradlew :app:assembleRelease --console=plain
+
+      # Only on failure: a green run has nothing anyone needs to download.
+      - name: Test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: app/build/reports/tests/testDebugUnitTest
+          retention-days: 14

@@ -65,6 +65,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -309,6 +310,12 @@ fun NightbellButton(
         else -> NightbellColors.TextPrimary
     }.copy(alpha = alpha)
 
+    // `clickable(enabled = false)` takes the click away and says nothing about
+    // why: the node keeps its label and TalkBack reads it as an ordinary piece of
+    // text, so a blocked button is indistinguishable from a caption. `disabled()`
+    // is what makes it announce as unavailable. The label still has to carry the
+    // reason, which is why the offline buttons say what they are waiting for.
+    val gated = !enabled || loading
     Row(
         modifier = modifier
             .graphicsLayer { scaleX = scale; scaleY = scale }
@@ -320,6 +327,7 @@ fun NightbellButton(
                 indication = ripple(color = if (tone == ButtonTone.Primary) Color.Black else accent),
                 onClick = onClick,
             )
+            .then(if (gated) Modifier.semantics { disabled() } else Modifier)
             .padding(horizontal = 20.dp, vertical = 13.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
@@ -424,7 +432,12 @@ fun GlassIconButton(
                 indication = ripple(bounded = false, color = accent),
                 onClick = onClick,
             )
-            .semantics { this.contentDescription = contentDescription },
+            .semantics {
+                this.contentDescription = contentDescription
+                // Same reason as NightbellButton: without this a greyed-out icon
+                // button reads to TalkBack exactly like a working one.
+                if (!enabled) disabled()
+            },
         contentAlignment = Alignment.Center,
     ) {
         Box(
@@ -770,8 +783,13 @@ fun StepperRow(
             StepperButton("−", "Decrease $title") {
                 onValueChange((value - step).coerceIn(range.first, range.last))
             }
+            // Scaled with the type. 74dp holds "999 min" at the default size and
+            // clips it to "999 m" at 150 per cent, which is a readout that lies
+            // about the value the two buttons beside it are changing.
             Box(
-                modifier = Modifier.width(74.dp).padding(horizontal = 4.dp),
+                modifier = Modifier
+                    .width(74.dp * LocalDensity.current.fontScale)
+                    .padding(horizontal = 4.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 AnimatedCounter(

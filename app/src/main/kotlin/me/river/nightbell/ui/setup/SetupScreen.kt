@@ -57,6 +57,8 @@ import android.net.Uri
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -82,6 +84,7 @@ import me.river.nightbell.ui.components.ButtonTone
 import me.river.nightbell.ui.components.ChipSelector
 import me.river.nightbell.ui.components.FieldNote
 import me.river.nightbell.ui.components.GlassCard
+import me.river.nightbell.ui.components.LabelledRow
 import me.river.nightbell.ui.components.GlassField
 import me.river.nightbell.ui.components.GlassIconButton
 import me.river.nightbell.ui.components.IconBadge
@@ -237,6 +240,7 @@ fun SetupScreen(
                     onBack = { if (viewModel.step == 0) requestLeave() else viewModel.back() },
                     onNext = viewModel::next,
                     onSave = viewModel::save,
+                    saving = viewModel.saving,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .onSizeChanged { footerHeight = with(density) { it.height.toDp() } },
@@ -418,26 +422,93 @@ private fun SetupFooter(
     onBack: () -> Unit,
     onNext: () -> Unit,
     onSave: () -> Unit,
+    saving: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier
-            .fillMaxWidth()
-            // Real frosted glass on API 31+: the form scrolls visibly out of
-            // focus underneath. Falls back to the opaque pane below that.
-            .softShadow(corner = NightbellRadii.sheet, radius = 20.dp, strength = 1.6f)
-            .sheetSurface(backdrop)
-            .padding(horizontal = 18.dp, vertical = 16.dp)
-            .padding(bottom = bottomInset),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    // Side by side while both labels fit, stacked once they stop.
+    //
+    // Weighting alone was not enough. It saved the primary, which was the bug,
+    // but at 200 per cent it spent the saving on the other button: Cancel came
+    // out as "Ca…" beside a full-width Continue. A wizard footer is two whole
+    // sentences or it is not a footer, so past this point they get a line each,
+    // the same shape the monitor screen's action row takes.
+    val stacked = LocalDensity.current.fontScale >= 1.45f
+    val footerModifier = modifier
+        .fillMaxWidth()
+        // Real frosted glass on API 31+: the form scrolls visibly out of
+        // focus underneath. Falls back to the opaque pane below that.
+        .softShadow(corner = NightbellRadii.sheet, radius = 20.dp, strength = 1.6f)
+        .sheetSurface(backdrop)
+        .padding(horizontal = 18.dp, vertical = 16.dp)
+        .padding(bottom = bottomInset)
+    val content: @Composable (secondary: Modifier, primary: Modifier) -> Unit = { secondary, primary ->
+        FooterButtons(
+            step = step,
+            canContinue = canContinue,
+            canSave = canSave,
+            editing = editing,
+            accent = accent,
+            accentEnd = accentEnd,
+            saving = saving,
+            onBack = onBack,
+            onNext = onNext,
+            onSave = onSave,
+            secondaryModifier = secondary,
+            primaryModifier = primary,
+            primaryFirst = stacked,
+        )
+    }
+    if (stacked) {
+        Column(
+            footerModifier,
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            content(Modifier.fillMaxWidth(), Modifier.fillMaxWidth())
+        }
+    } else {
+        Row(
+            footerModifier,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            content(Modifier.weight(1f, fill = false), Modifier.weight(2f))
+        }
+    }
+}
+
+/**
+ * The footer's two buttons, in whichever order the caller is laying them out.
+ *
+ * [primaryFirst] exists because stacking reverses them: side by side the back
+ * affordance reads first from the left, and stacked the action being taken should
+ * be the one nearest the top of the pair rather than buried under Cancel.
+ */
+@Composable
+private fun FooterButtons(
+    step: Int,
+    canContinue: Boolean,
+    canSave: Boolean,
+    editing: Boolean,
+    accent: Color,
+    accentEnd: Color,
+    saving: Boolean,
+    onBack: () -> Unit,
+    onNext: () -> Unit,
+    onSave: () -> Unit,
+    secondaryModifier: Modifier,
+    primaryModifier: Modifier,
+    primaryFirst: Boolean,
+) {
+    val secondary: @Composable () -> Unit = {
         NightbellButton(
             text = if (step == 0) "Cancel" else "Back",
             onClick = onBack,
             tone = ButtonTone.Secondary,
             icon = if (step == 0) NightbellIcons.Close else NightbellIcons.ArrowLeft,
+            modifier = secondaryModifier,
         )
+    }
+    val primary: @Composable () -> Unit = {
         if (step < SetupViewModel.LAST_STEP) {
             NightbellButton(
                 text = "Continue",
@@ -446,19 +517,37 @@ private fun SetupFooter(
                 icon = NightbellIcons.ArrowRight,
                 accent = accent,
                 accentEnd = accentEnd,
-                modifier = Modifier.weight(1f),
+                modifier = primaryModifier,
             )
         } else {
             NightbellButton(
-                text = if (editing) "Save changes" else "Create monitor",
+                text = when {
+                    saving && editing -> "Saving…"
+                    saving -> "Creating…"
+                    editing -> "Save changes"
+                    else -> "Create monitor"
+                },
+                shortText = when {
+                    saving -> "Saving…"
+                    editing -> "Save"
+                    else -> "Create"
+                },
                 onClick = onSave,
+                loading = saving,
                 enabled = canSave,
                 icon = NightbellIcons.Check,
                 accent = accent,
                 accentEnd = accentEnd,
-                modifier = Modifier.weight(1f),
+                modifier = primaryModifier,
             )
         }
+    }
+    if (primaryFirst) {
+        primary()
+        secondary()
+    } else {
+        secondary()
+        primary()
     }
 }
 
@@ -500,8 +589,15 @@ private fun StepKind(draft: Monitor, onSelect: (MonitorKind) -> Unit) {
                     if (selected) accent.copy(alpha = 0.6f) else NightbellColors.sheen(0.09f),
                     RoundedCornerShape(NightbellRadii.card),
                 )
-                .clickable { onSelect(kind) }
+                .selectable(
+                    selected = selected,
+                    role = Role.RadioButton,
+                    onClick = { onSelect(kind) },
+                )
                 .padding(16.dp)
+                // The tick that marks the chosen kind is decorative, so without
+                // this the four rows read to TalkBack as four identical
+                // descriptions with nothing saying which one is in force.
                 .semantics { contentDescription = "${kind.label}. ${kind.blurb}" },
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -828,11 +924,13 @@ private fun HeadersEditor(
             )
         }
         headers.forEachIndexed { index, header ->
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.Bottom,
-            ) {
+            // Two fields and a delete on one line is fine at the default text
+            // size and unusable well before the largest: a header value is the
+            // longest thing anyone types on this screen, and at 150 per cent it
+            // was being typed into about eleven characters of visible field.
+            // Past that the pair stacks and each field gets the full width.
+            val stackedFields = LocalDensity.current.fontScale >= 1.3f
+            val nameField: @Composable (Modifier) -> Unit = { mod ->
                 GlassField(
                     value = header.name,
                     onValueChange = { value ->
@@ -841,8 +939,10 @@ private fun HeadersEditor(
                     label = "Name",
                     placeholder = "Authorization",
                     accent = accent,
-                    modifier = Modifier.weight(1f),
+                    modifier = mod,
                 )
+            }
+            val valueField: @Composable (Modifier) -> Unit = { mod ->
                 GlassField(
                     value = header.value,
                     onValueChange = { value ->
@@ -851,8 +951,10 @@ private fun HeadersEditor(
                     label = "Value",
                     placeholder = "Bearer …",
                     accent = accent,
-                    modifier = Modifier.weight(1.2f),
+                    modifier = mod,
                 )
+            }
+            val removeButton: @Composable () -> Unit = {
                 Box(Modifier.padding(bottom = 4.dp)) {
                     GlassIconButton(
                         icon = NightbellIcons.Trash,
@@ -861,6 +963,29 @@ private fun HeadersEditor(
                         size = 38.dp,
                         accent = NightbellColors.Rose,
                     )
+                }
+            }
+            if (stackedFields) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    nameField(Modifier.fillMaxWidth())
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.Bottom,
+                    ) {
+                        valueField(Modifier.weight(1f))
+                        removeButton()
+                    }
+                }
+            } else {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.Bottom,
+                ) {
+                    nameField(Modifier.weight(1f))
+                    valueField(Modifier.weight(1.2f))
+                    removeButton()
                 }
             }
         }
@@ -1152,21 +1277,28 @@ private fun SelectorSummary(element: me.river.nightbell.domain.ElementTarget, ac
 @Composable
 private fun SummaryLine(label: String, value: String) {
     if (value.isBlank()) return
-    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = NightbellColors.TextTertiary,
-            modifier = Modifier.width(96.dp),
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodySmall,
-            color = NightbellColors.TextSecondary,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
+    LabelledRow(
+        labelWidth = 96.dp,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+        label = { mod ->
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = NightbellColors.TextTertiary,
+                modifier = mod,
+            )
+        },
+        value = { mod ->
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodySmall,
+                color = NightbellColors.TextSecondary,
+                modifier = mod,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+    )
 }
 
 /**
@@ -1833,6 +1965,7 @@ private fun GitHubTokenHint(viewModel: SetupViewModel, accent: Color) {
                         text = "Cancel",
                         onClick = { typed = null },
                         tone = ButtonTone.Secondary,
+                        modifier = Modifier.weight(1f, fill = false),
                     )
                 }
             }

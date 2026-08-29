@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package me.river.nightbell.ui.dashboard
 
 import androidx.compose.animation.core.Spring
@@ -9,6 +11,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -167,46 +170,53 @@ fun GroupCard(
         Spacer(Modifier.height(13.dp))
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            StatusPill(health = health, checking = rolled.checking)
-            Spacer(Modifier.width(8.dp))
-            MicroTag(
-                text = "${rolled.total}",
-                icon = NightbellIcons.Layers,
-                iconDescription = if (rolled.total == 1) "monitor" else "monitors",
-            )
-            if (rolled.urgentPending > 0) {
-                Spacer(Modifier.width(6.dp))
+            // Weighted and wrapping, so the pencil is measured before the tags
+            // rather than after them. The same row on a monitor card lost a whole
+            // control at a large font scale, and this one is the only route to
+            // renaming or ungrouping.
+            FlowRow(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                itemVerticalAlignment = Alignment.CenterVertically,
+            ) {
+                StatusPill(health = health, checking = rolled.checking)
                 MicroTag(
-                    text = if (rolled.urgentPending == 1) "Urgent" else "${rolled.urgentPending} urgent",
-                    color = NightbellColors.Rose,
-                    background = NightbellColors.Rose.copy(alpha = 0.16f),
-                    icon = NightbellIcons.Zap,
+                    text = "${rolled.total}",
+                    icon = NightbellIcons.Layers,
+                    iconDescription = if (rolled.total == 1) "monitor" else "monitors",
                 )
+                if (rolled.urgentPending > 0) {
+                    MicroTag(
+                        text = if (rolled.urgentPending == 1) "Urgent" else "${rolled.urgentPending} urgent",
+                        color = NightbellColors.Rose,
+                        background = NightbellColors.Rose.copy(alpha = 0.16f),
+                        icon = NightbellIcons.Zap,
+                    )
+                }
+                if (rolled.paused in 1 until rolled.total) {
+                    MicroTag(
+                        text = "${rolled.paused} paused",
+                        color = NightbellColors.Amber,
+                        background = NightbellColors.Amber.copy(alpha = 0.14f),
+                        icon = NightbellIcons.Pause,
+                    )
+                }
+                if (rolled.slowestLatencyMs > 0) {
+                    MicroTag(
+                        // The slowest member, labelled as such. A group average would be
+                        // a number that describes nothing anybody is watching.
+                        text = formatLatency(rolled.slowestLatencyMs),
+                        color = if (health == Health.DEGRADED) {
+                            NightbellColors.Amber
+                        } else {
+                            NightbellColors.TextSecondary
+                        },
+                        icon = NightbellIcons.Gauge,
+                    )
+                }
             }
-            if (rolled.paused in 1 until rolled.total) {
-                Spacer(Modifier.width(6.dp))
-                MicroTag(
-                    text = "${rolled.paused} paused",
-                    color = NightbellColors.Amber,
-                    background = NightbellColors.Amber.copy(alpha = 0.14f),
-                    icon = NightbellIcons.Pause,
-                )
-            }
-            if (rolled.slowestLatencyMs > 0) {
-                Spacer(Modifier.width(6.dp))
-                MicroTag(
-                    // The slowest member, labelled as such. A group average would be
-                    // a number that describes nothing anybody is watching.
-                    text = formatLatency(rolled.slowestLatencyMs),
-                    color = if (health == Health.DEGRADED) {
-                        NightbellColors.Amber
-                    } else {
-                        NightbellColors.TextSecondary
-                    },
-                    icon = NightbellIcons.Gauge,
-                )
-            }
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.width(6.dp))
             GlassIconButton(
                 icon = NightbellIcons.Pencil,
                 onClick = onEdit,
@@ -219,7 +229,10 @@ fun GroupCard(
         if (rolled.total == 0) {
             Spacer(Modifier.height(10.dp))
             Text(
-                text = "Nothing in here any more. Open it to rename or ungroup it.",
+                // Names the pencil, because tapping the card is what expands it.
+                // "Open it to rename or ungroup" sent the user into an empty
+                // expansion holding neither of the two things it promised.
+                text = "Nothing in here any more. Tap the pencil to rename or ungroup it.",
                 style = MaterialTheme.typography.bodySmall,
                 color = NightbellColors.TextTertiary,
             )

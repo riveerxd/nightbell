@@ -39,6 +39,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -244,6 +246,13 @@ private fun RequirementRow(requirement: Requirement, granted: Boolean, onClick: 
     GlassCard(
         accent = if (granted) Color.Transparent else NightbellColors.Rose,
         onClick = if (granted) null else onClick,
+        // The tick and the trailing "Allow" both carry the state visually and
+        // neither reaches TalkBack: the icon is decorative and the word only
+        // exists on the rows that are not done yet, so a granted row and a
+        // pending one differed by a blurb nobody would read as a status.
+        modifier = Modifier.semantics {
+            stateDescription = if (granted) "Granted" else "Not granted"
+        },
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
