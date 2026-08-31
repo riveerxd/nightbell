@@ -391,8 +391,32 @@ android {
         // The site said nothing leaves the device except the check itself. That
         // was never true of the reference endpoint and is named now rather than
         // left for a packet capture to find.
-        versionCode = 35
-        versionName = "3.6.0"
+        // 3.7.0 watches things that are behind a door. Some sites show nothing
+        // until you have pressed something, and the press leaves its mark in the
+        // browser rather than in the URL, so the picker held it and the check
+        // started from nothing. What the preview was carrying when the element
+        // was chosen is now saved with the monitor and replayed before each load.
+        // It is a credential and leaves on the same terms as the GitHub token.
+        //
+        // The other half of that report was simpler and worse. The preview
+        // follows links on purpose, and the selector that came back had no page
+        // attached, so it was filed against whatever had been typed on the setup
+        // screen. Pick something one link in and the check loads the page you
+        // started on, forever, and calls the element missing. A pick now carries
+        // the page it was made on, the toolbar shows the live address instead of
+        // the typed one, and the screen says the monitor is about to move before
+        // the button that moves it.
+        //
+        // A failed lookup asks whether something gate shaped is standing over the
+        // page before it blames the selector, and quotes the button it can see.
+        // Nothing is clicked on anyone's behalf: replaying a recorded press every
+        // interval was considered and refused.
+        //
+        // The home screen widget fills the size it was dragged to rather than
+        // drawing a fixed count and reporting the remainder as "+N more" with
+        // room going spare. Placed widgets keep whatever they were set to.
+        versionCode = 36
+        versionName = "3.7.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

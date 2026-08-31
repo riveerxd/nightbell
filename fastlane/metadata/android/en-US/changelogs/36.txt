@@ -1,0 +1,11 @@
+Nightbell can now watch something on a page that only shows up after you press a button. A cookie banner, an age gate, a "continue to site" wall: press through it once in the live preview and every check afterwards arrives on the other side of it.
+
+The home screen widget also fills the size you dragged it to, instead of drawing a fixed number of monitors and counting the rest as "+N more" with empty space underneath.
+
+The preview follows links, and that used to be a trap. If you browsed one page in from the address you typed and tapped an element there, Nightbell stored the selector but kept watching the page you started on, so every check reported the element missing and there was nothing on screen to explain why. The preview now shows the address it is actually on, and confirming a pick made somewhere else points the monitor at that page. It tells you it is about to, before you tap the button.
+
+Whatever the preview was carrying when you picked, the cookies and the browser storage a site uses to remember that you have been through its gate, is saved with the monitor and put back before each check. That is what makes a gated page keep working at three in the morning rather than only in the minute after you set it up. It is treated as a password: never written to a log, never shown, and never included in an exported backup unless you ask for secrets in the same breath. The monitor's setup screen says it is carrying one, because sites expire these and yours will eventually be asked again.
+
+When a check does find a gate back in the way, it says so and quotes the button it can see rather than telling you the element is missing. Nothing is ever clicked on your behalf.
+
+Widget detail for anyone who had one placed: new widgets default to filling their space, and a widget where you had pinned a specific number keeps that number, so nothing on your home screen changes on its own.
