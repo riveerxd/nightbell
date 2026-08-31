@@ -767,6 +767,12 @@ fun StepperRow(
     icon: ImageVector? = null,
     accent: Color = NightbellColors.Aqua,
     note: Validation.Note? = null,
+    /**
+     * What to show in place of the digits at zero, for a stepper whose bottom position
+     * means "decide for me" rather than "none". Without it the widget's monitor count
+     * would read "0", which is a promise of an empty widget.
+     */
+    zeroLabel: String? = null,
 ) {
     Column(modifier.fillMaxWidth().padding(vertical = RowGutter)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -792,12 +798,20 @@ fun StepperRow(
                     .padding(horizontal = 4.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                AnimatedCounter(
-                    value = value,
-                    suffix = suffix,
-                    color = NightbellColors.TextPrimary,
-                    style = MaterialTheme.typography.titleMedium,
-                )
+                if (value == 0 && zeroLabel != null) {
+                    Text(
+                        text = zeroLabel,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = NightbellColors.TextPrimary,
+                    )
+                } else {
+                    AnimatedCounter(
+                        value = value,
+                        suffix = suffix,
+                        color = NightbellColors.TextPrimary,
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                }
             }
             StepperButton("+", "Increase $title") {
                 onValueChange((value + step).coerceIn(range.first, range.last))

@@ -126,7 +126,21 @@ data class WidgetConfig(
     val showTimestamp: Boolean = true,
     /** Hide healthy monitors so the widget only speaks up when it matters. */
     val onlyProblems: Boolean = false,
-    val maxRows: Int = 5,
+
+    /**
+     * How many monitors the widget will list at most: `0` means as many as fit.
+     *
+     * It used to be a plain number with a default of 5 and a ceiling of 10, and that
+     * number was applied before the layout was planned. A widget dragged tall enough for
+     * eight rows in each of two columns therefore drew five and five, counted the rest as
+     * "+3 more", and left the bottom third of the surface empty: the cap decided the
+     * content and the size had no say. Auto hands the decision back to the size the user
+     * actually dragged, which is the only thing that knows how much room there is.
+     *
+     * A number still wins where it is set, because "never more than three, however big I
+     * make it" is a legitimate thing to want from a glanceable widget.
+     */
+    val maxRows: Int = 0,
 
     /**
      * Monitor columns: `0` sizes itself, `1`–[WidgetLayout.MAX_COLUMNS] forces it.

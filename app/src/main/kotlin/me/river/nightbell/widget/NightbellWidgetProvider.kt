@@ -22,7 +22,8 @@ import kotlinx.coroutines.launch
  * a `RemoteViewsService` buys scrolling at the cost of a second process hop, a
  * factory lifecycle and a class of "widget stuck on stale data" bugs. A short
  * worst-first list is what someone actually wants glanceable on a home screen,
- * so the rows are built inline and capped by [WidgetConfig.maxRows].
+ * so the rows are built inline: as many as the size the launcher reports can
+ * hold, or fewer where [WidgetConfig.maxRows] pins a number.
  *
  * ### Launcher limitations worth knowing
  *  - `updatePeriodMillis` is clamped to 30 minutes by the platform, so the
@@ -184,7 +185,7 @@ class NightbellWidgetProvider : AppWidgetProvider() {
             views.removeAllViews(R.id.widget_columns)
             val candidates = fleet.ranked
                 .filter { !config.onlyProblems || it.health != Health.UP }
-                .take(config.maxRows.coerceIn(1, MAX_ROWS))
+                .take(rowCap(config))
 
             // Plan against what the user asked for, then trim to what actually fits. Doing
             // it the other way round would let the plan size itself to a list it had
@@ -200,6 +201,11 @@ class NightbellWidgetProvider : AppWidgetProvider() {
                 // the timestamp is on is the safe direction: over-reserving costs one row
                 // of height, under-reserving clips the last row of every column.
                 mightHaveFooter = config.showTimestamp || candidates.size < fleet.ranked.size,
+                // Every text size in the widget is sp, so someone reading at 150 per cent
+                // gets rows half again as tall in the same box. Without this the plan
+                // keeps counting normal-sized rows and the bottom one is drawn off the
+                // edge of the surface.
+                fontScale = context.resources.configuration.fontScale,
             )
             val shown = candidates.take(plan.capacity)
             val gapPx = (WidgetLayout.COLUMN_GAP_DP * context.resources.displayMetrics.density).toInt()
@@ -241,6 +247,17 @@ class NightbellWidgetProvider : AppWidgetProvider() {
             if (footer.isNotBlank()) views.setTextViewText(R.id.widget_footer, footer)
             return views
         }
+
+        /**
+         * How many monitors are worth handing to the planner.
+         *
+         * On automatic this is only a safety rail, not a look: the plan trims to what the
+         * widget's measured size can hold, and [AUTO_ROWS] is there so a fleet of two
+         * hundred does not build two hundred rows into a RemoteViews that has to cross a
+         * process boundary. Nothing on a phone-sized widget gets near it.
+         */
+        internal fun rowCap(config: WidgetConfig): Int =
+            if (config.maxRows <= 0) AUTO_ROWS else config.maxRows.coerceIn(1, MAX_ROWS)
 
         private fun row(
             context: Context,
@@ -406,6 +423,11 @@ class NightbellWidgetProvider : AppWidgetProvider() {
 
         private const val VISIBLE = android.view.View.VISIBLE
         private const val GONE = android.view.View.GONE
+
+        /** The highest number the "Monitors" stepper offers. Above it lies automatic. */
         const val MAX_ROWS = 10
+
+        /** The ceiling automatic will not build past, whatever size the widget is. */
+        const val AUTO_ROWS = 30
     }
 }

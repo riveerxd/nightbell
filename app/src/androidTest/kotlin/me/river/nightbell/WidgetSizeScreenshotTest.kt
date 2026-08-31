@@ -67,8 +67,30 @@ class WidgetSizeScreenshotTest {
         ),
     )
 
+    /**
+     * A fleet bigger than one column of a phone widget, which is the case the sizes above
+     * never covered: six monitors fit almost anywhere, so nothing here ever showed what a
+     * real home screen looks like when there are more monitors than rows.
+     */
+    private val crowdedFleet = Summary.of(
+        (1..13).map { monitor("m$it", CROWD_NAMES[it - 1]) },
+        (1..13).associate { index ->
+            "m$index" to when (index) {
+                1 -> runtime(Health.DOWN, message = "Connection refused")
+                2 -> runtime(Health.DEGRADED, latency = 3_370L)
+                else -> runtime(Health.UP, latency = (60L * index) + 41L)
+            }
+        },
+    )
+
     /** dp of widget, as the launcher reports it, to a real pixel bitmap. */
-    private fun capture(name: String, config: WidgetConfig, widthDp: Int, heightDp: Int): File {
+    private fun capture(
+        name: String,
+        config: WidgetConfig,
+        widthDp: Int,
+        heightDp: Int,
+        fleet: Summary.Fleet = this.fleet,
+    ): File {
         val density = appContext.resources.displayMetrics.density
         val widthPx = (widthDp * density).toInt()
         val heightPx = (heightDp * density).toInt()
@@ -127,5 +149,38 @@ class WidgetSizeScreenshotTest {
         written.forEach { file ->
             assertTrue("${file.name} was not written", file.isFile && file.length() > 0)
         }
+    }
+
+    /**
+     * The 5x3 widget on a real home screen, with thirteen monitors behind it.
+     *
+     * Capped, the widget draws ten of them as five and five and leaves the bottom third
+     * empty; automatic fills the height it was given. Both are worth keeping as pictures,
+     * because the difference is geometric and no assertion about how many rows exist can
+     * tell you the surface looked half used.
+     */
+    @Test
+    fun renderACrowdedFleet() {
+        // 531x300 is the widget the bug was reported against, measured off the photo of it:
+        // the status dot is 9dp and came out 16px, and the rows are one row-height apart,
+        // which between them give the scale without needing to know the phone. Guessing the
+        // size instead is how the first attempt at this concluded a monitor had to be
+        // dropped on a widget that had room for it.
+        val written = listOf(
+            capture("widget-fill-auto", WidgetConfig(), 531, 300, crowdedFleet),
+            capture("widget-fill-capped", WidgetConfig(maxRows = 10), 531, 300, crowdedFleet),
+            capture("widget-fill-auto-short", WidgetConfig(), 340, 284, crowdedFleet),
+        )
+        written.forEach { file ->
+            assertTrue("${file.name} was not written", file.isFile && file.length() > 0)
+        }
+    }
+
+    private companion object {
+        val CROWD_NAMES = listOf(
+            "Marketing site", "Checkout API", "Auth service", "Search index", "CDN edge",
+            "Webhooks", "Billing", "Mail relay", "Status page", "Image resizer",
+            "Analytics", "Admin console", "Backup runner",
+        )
     }
 }

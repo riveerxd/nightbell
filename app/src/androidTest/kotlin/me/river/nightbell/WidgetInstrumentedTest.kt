@@ -17,6 +17,7 @@ import me.river.nightbell.widget.NightbellWidgetProvider
 import me.river.nightbell.widget.WidgetConfig
 import me.river.nightbell.widget.WidgetConfigStore
 import me.river.nightbell.widget.WidgetDensity
+import me.river.nightbell.widget.WidgetLayout
 import me.river.nightbell.widget.WidgetTheme
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -491,6 +492,134 @@ class WidgetInstrumentedTest {
         columns(root).forEachIndexed { index, column ->
             val group = column as android.view.ViewGroup
             assertTrue("column $index is empty", group.childCount > 0)
+        }
+    }
+
+    /**
+     * The reason automatic exists: a widget dragged big enough for twelve monitors drew
+     * five of them and counted the other eight in the footer, because the row count was a
+     * number in the configuration and the size of the widget had no say in it.
+     */
+    @Test
+    fun automaticFillsTheHeightTheWidgetWasGiven() {
+        val crowd = Summary.of(
+            (1..13).map { monitor("m$it", "Monitor $it") },
+            (1..13).associate { "m$it" to runtime(Health.UP, latency = it * 40L) },
+        )
+        fun rows(config: WidgetConfig): Int {
+            val views = NightbellWidgetProvider.build(appContext, config, crowd, 7, 340, 284)
+            val root = views.apply(appContext, FrameLayout(appContext))
+            val container = root.findViewById<android.view.ViewGroup>(R.id.widget_columns)
+            return (0 until container.childCount).sumOf { index ->
+                (container.getChildAt(index) as android.view.ViewGroup).childCount
+            }
+        }
+
+        val capped = rows(WidgetConfig(maxRows = 5))
+        val automatic = rows(WidgetConfig())
+        assertEquals("an explicit five is still five", 5, capped)
+        assertTrue(
+            "automatic should have filled the widget, drew $automatic of 13",
+            automatic >= 12,
+        )
+    }
+
+    /**
+     * The planner's height constants against the views that actually get drawn.
+     *
+     * [WidgetLayout] divides a widget's height by a row height it cannot measure, and
+     * every one of those numbers was an estimate written from the XML. Estimate one dp
+     * low and a six-row widget plans seven, which clips the bottom of the surface: that
+     * shipped, and the only reason it was not obvious is that the clipped thing was the
+     * footer rather than a monitor.
+     *
+     * Measured at 250dp wide with plenty of height, so the rows keep their natural size
+     * and only the container takes the slack.
+     */
+    @Test
+    fun theHeightConstantsCoverWhatIsDrawn() {
+        // Normal, and the largest step Android's font size slider offers.
+        listOf(1f, 1.3f, 2f).forEach { fontScale -> assertMetricsCover(fontScale) }
+    }
+
+    private fun assertMetricsCover(fontScale: Float) {
+        val context = appContext.createConfigurationContext(
+            android.content.res.Configuration(appContext.resources.configuration).apply {
+                this.fontScale = fontScale
+            },
+        )
+        val density = context.resources.displayMetrics.density
+        fun measure(config: WidgetConfig): View {
+            val views = NightbellWidgetProvider.build(context, config, fleet, 7, 250, 600)
+            val root = views.apply(context, FrameLayout(context))
+            root.measure(
+                View.MeasureSpec.makeMeasureSpec((250 * density).toInt(), View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec((600 * density).toInt(), View.MeasureSpec.EXACTLY),
+            )
+            root.layout(0, 0, root.measuredWidth, root.measuredHeight)
+            return root
+        }
+        fun dp(px: Int): Float = px / density
+        fun firstRow(root: View): View =
+            (root.findViewById<android.view.ViewGroup>(R.id.widget_columns)
+                .getChildAt(0) as android.view.ViewGroup).getChildAt(0)
+
+        val compact = measure(WidgetConfig(maxRows = 3))
+        val detailed = measure(WidgetConfig(maxRows = 3, density = WidgetDensity.DETAILED))
+        val reserved = WidgetLayout.metrics(fontScale)
+        val measured = listOf(
+            Triple("header", dp(compact.findViewById<View>(R.id.widget_header).height), reserved.header),
+            Triple("footer", dp(compact.findViewById<View>(R.id.widget_footer).height), reserved.footer),
+            Triple("compact row", dp(firstRow(compact).height), reserved.compactRow),
+            Triple("detailed row", dp(firstRow(detailed).height), reserved.detailedRow),
+        )
+
+        // All of them in one message: fixing these one failure at a time means four
+        // builds to learn four numbers that were all available on the first run.
+        val short = measured.filter { (_, drawn, held) -> drawn > held }
+        assertTrue(
+            "at font scale $fontScale the planner reserves less than is drawn: " +
+                short.joinToString { (what, drawn, held) -> "$what is ${drawn}dp against $held" },
+            short.isEmpty(),
+        )
+    }
+
+    /**
+     * Nothing the planner said would fit may be drawn outside the widget.
+     *
+     * The end of the arithmetic, checked the only way that means anything: lay the whole
+     * thing out at a real size and look at where the last row and the footer ended up.
+     * A row whose bottom is past the surface is a row someone sees cut in half.
+     */
+    @Test
+    fun everythingPlannedStaysInsideTheWidget() {
+        val density = appContext.resources.displayMetrics.density
+        listOf(110, 180, 250, 320).forEach { heightDp ->
+            val root = inflate(WidgetConfig(maxRows = 6), widthDp = 250, heightDp = heightDp)
+            val heightPx = (heightDp * density).toInt()
+            root.measure(
+                View.MeasureSpec.makeMeasureSpec((250 * density).toInt(), View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(heightPx, View.MeasureSpec.EXACTLY),
+            )
+            root.layout(0, 0, root.measuredWidth, root.measuredHeight)
+
+            val columns = root.findViewById<android.view.ViewGroup>(R.id.widget_columns)
+            for (c in 0 until columns.childCount) {
+                val column = columns.getChildAt(c) as android.view.ViewGroup
+                val last = column.getChildAt(column.childCount - 1)
+                val bottom = last.bottom + column.top + columns.top
+                assertTrue(
+                    "at ${heightDp}dp the last row of column $c ends at ${bottom / density}dp",
+                    bottom <= heightPx,
+                )
+            }
+            val footer = root.findViewById<View>(R.id.widget_footer)
+            if (footer.visibility == View.VISIBLE) {
+                assertTrue(
+                    "at ${heightDp}dp the footer ends at ${footer.bottom / density}dp",
+                    footer.bottom <= heightPx,
+                )
+            }
         }
     }
 

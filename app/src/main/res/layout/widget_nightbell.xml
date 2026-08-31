@@ -101,11 +101,17 @@
             added into those. A short, wide widget spills monitors sideways instead of
             hiding them below the fold, which is what the vertical-only container used to
             do. WidgetLayout decides how many columns from the launcher's reported size.
+
+            It takes the leftover height rather than wrapping to its rows, so whatever
+            slack a widget has sits between the last monitor and a footer pinned to the
+            bottom edge. Wrapping put the slack under the footer instead, and a card with
+            its content bunched into the top half reads as broken rather than as roomy.
         -->
         <LinearLayout
             android:id="@+id/widget_columns"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="0dp"
+            android:layout_weight="1"
             android:orientation="horizontal"
             android:baselineAligned="false" />
 

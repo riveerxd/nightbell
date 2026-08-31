@@ -394,9 +394,22 @@ private fun ConfigBody(
                         title = "Monitors",
                         value = config.maxRows,
                         onValueChange = { onChange(config.copy(maxRows = it)) },
-                        range = 1..NightbellWidgetProvider.MAX_ROWS,
+                        range = 0..NightbellWidgetProvider.MAX_ROWS,
+                        zeroLabel = "Auto",
+                        modifier = Modifier.testTag("widget-monitor-count"),
                         icon = NightbellIcons.Layers,
                         accent = NightbellColors.Violet,
+                    )
+                    Text(
+                        text = if (config.maxRows <= 0) {
+                            "As many as the widget's size holds. Drag it taller and more " +
+                                "monitors appear instead of the space going empty."
+                        } else {
+                            "At most ${config.maxRows}, however big the widget is. " +
+                                "The rest are counted in the footer."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = NightbellColors.TextTertiary,
                     )
                     Spacer(Modifier.height(14.dp))
                     Text(
@@ -560,7 +573,7 @@ private fun WidgetPreview(config: WidgetConfig, fleet: Summary.Fleet) {
     val tertiary = Color(palette.tertiary)
     val rows = fleet.ranked
         .filter { !config.onlyProblems || it.health != Health.UP }
-        .take(config.maxRows)
+        .take(NightbellWidgetProvider.rowCap(config))
 
     // A checkerboard behind the surface, so "fully transparent" previews as
     // see-through rather than as whatever colour this screen happens to be.

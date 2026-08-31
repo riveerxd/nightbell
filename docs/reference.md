@@ -202,8 +202,12 @@ A worst-first list of monitors, configurable per instance:
   lose the branding with it.
 - Show/hide the last-checked footer, and optionally hide healthy monitors
   entirely.
-- Monitor cap, with any overflow disclosed as "+N more" rather than silently
-  truncated.
+- **Monitors**: automatic, or capped at 1-10. Automatic lists as many as the
+  size the widget was dragged to can hold, which is the setting a widget should
+  have had from the start: the cap used to be applied before the layout was
+  planned, so a widget with room for twelve rows drew five and counted the rest
+  as "+7 more" with a third of its surface empty. Any overflow is still
+  disclosed as "+N more" rather than silently truncated.
 - **Columns**: automatic, or pinned to 1-3. See below.
 
 Tapping the widget opens the dashboard; tapping a row deep-links to that
@@ -239,23 +243,43 @@ the list, still counted in "+3 more", and invisible. A short widget has spare
 `onAppWidgetOptionsChanged`. It is a pure function with no Android types in it,
 because it is the arithmetic that decides whether a monitor is visible at all and
 the only other way to exercise it is to drag a widget around a home screen by
-hand — which is to say, never. Nineteen unit tests cover the cell sizes a phone
-launcher actually offers.
+hand, which is to say never. Twenty-seven unit tests cover the cell sizes a
+phone launcher actually offers, including the 531x300 one this was reported
+against.
 
-Three rules earn their keep:
+Five rules earn their keep:
 
 - **Width always caps the column count.** No number of monitors justifies a
   column too narrow to read a name in, so a forced count of 3 still collapses on
-  a two-cell-wide widget. The floor is about 104dp a column, which is what lets a
-  standard four-cell widget have two.
+  a two-cell-wide widget. The floor is about 104dp a column, counted with the
+  12dp gutters taken out: dividing the bare width by 104 said three columns fit a
+  340dp widget, where three columns are 96dp each and every name ellipsised.
+- **The cheapest shape that shows everything wins, and the footer is cheaper than
+  a column.** One column is tried before two, and within a column count the
+  timestamp is spent before another column is added: at 250 square that one row
+  is the difference between six monitors and five with a "+1 more". A column
+  costs width, and a narrow column costs the latency reading beside every name,
+  so it is the more expensive of the two. The footer only goes when losing it
+  means nothing is hidden: dropping it to show fourteen of twenty would take away
+  the one line saying the list is incomplete, which is a worse widget than twelve
+  and an honest "+8 more".
 - **Below roughly 150dp a column, the trailing value is dropped.** Two columns in
   a four-cell widget leaves about 105dp each, and "DOWN" or "4100 ms" was eating
   enough of that to truncate "Marketing site" to "Market…". The dot already
   carries health and the number is one tap away, so the name wins.
 - **A widget too short for both a footer and a monitor drops the footer.** A
   header, one row and a footer come to more than a four-by-two widget's 110dp.
-  "Checked just now" is worth less than the monitor it was pushing off the bottom,
-  and the alternative was not a missing footer but a clipped one.
+  This is the same trade as the rule above, at the size where there is nothing
+  left to trade: the footer goes whether or not its height buys a whole row,
+  because the alternative is a monitor clipped down to a coloured dash.
+- **The heights it divides by are measured, not read off the XML.** A compact row
+  is 28.95dp, not the 27 that was assumed from its attributes, so a widget with
+  room for six rows planned seven and drew the last one past the bottom edge.
+  Each height is a line through the font scale, since every text size here is sp
+  and someone reading at 200 per cent gets rows half again as tall in the same
+  box. `WidgetInstrumentedTest` measures the real views against those lines at
+  100, 130 and 200 per cent, and lays the whole widget out at four heights to
+  check that nothing planned ends up drawn outside it.
 
 `RemoteViews` has no flexbox and cannot set `LayoutParams`, so a column is its
 own layout file carrying `layout_weight="1"`, added into a horizontal container,
@@ -661,7 +685,8 @@ keytool -genkeypair -v -keystore keystore/nightbell-release.jks -alias nightbell
 | `AlertsInstrumentedTest` | 11 | real notifications, channels, escalation, mute, actions |
 | `UrgentModeInstrumentedTest` | 8 | urgent end-to-end through the real engine + notification action |
 | `CheckerCancellationInstrumentedTest` | 5 | the reported bug through the real graph: a cancelled check, and a cancelled six-monitor pass, must announce nothing |
-| `WidgetInstrumentedTest` | 22 | RemoteViews **inflation**, ordering, every theme/density, custom colours at three opacities, the settings cog, config persistence and id remapping |
+| `WidgetInstrumentedTest` | 34 | RemoteViews **inflation**, ordering, every theme/density, custom colours at three opacities, the settings cog, config persistence and id remapping, the planner's heights against the views that get drawn |
+| `WidgetConfigUiTest` | 2 | the widget's own settings screen, driven: the monitor count on Auto, pinned to a number, and back |
 | `ScreenshotTest` | 3 | drives every screen and writes PNGs |
 
 `WidgetInstrumentedTest` calls `RemoteViews.apply()` rather than asserting on
