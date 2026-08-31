@@ -1,6 +1,6 @@
 # Nightbell — handoff
 
-## Unreleased: a page element behind an access button (issue #8)
+## 3.7.0: a page element behind an access button (issue #8)
 
 The report: press a button to get into a site, then pick the element to watch,
 then "Test now" fails. The reporter guessed cookies. It was two separate things
