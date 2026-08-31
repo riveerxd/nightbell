@@ -46,11 +46,21 @@ class LatencyBaselineInstrumentedTest {
     fun setUp() {
         delayMs = 0
         server = TinyHttpServer { TinyHttpServer.Response(body = "ok", delayMs = delayMs) }
+        // Pinned, the way every other class that drives the engine pins it.
+        // `refreshReference` returns early when the device reads as offline, and
+        // this was the one engine test still asking the emulator's radio. Late in
+        // a full suite the answer came back false once and
+        // `probingIsRateLimitedAcrossAPass` failed with zero probes against a
+        // fixture on loopback, which cannot be offline by any useful definition.
+        graph.engine.isOnline = { true }
         notifications.cancelAll()
     }
 
     @After
     fun tearDown() {
+        // Restored rather than left set: the graph is process-wide, and a
+        // leaked `true` would hide a genuine offline gate in a later class.
+        graph.engine.isOnline = graph.network::isOnline
         server.close()
         notifications.cancelAll()
     }
