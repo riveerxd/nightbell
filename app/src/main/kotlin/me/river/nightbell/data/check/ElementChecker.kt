@@ -5,6 +5,7 @@ import android.content.Context
 import android.os.Build
 import android.util.Log
 import android.net.http.SslCertificate
+import android.webkit.CookieManager
 import android.net.http.SslError
 import android.webkit.SslErrorHandler
 import android.webkit.WebResourceError
@@ -12,8 +13,11 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
 import me.river.nightbell.data.web.PickerScripts
 import me.river.nightbell.domain.Assertions
+import me.river.nightbell.domain.BrowserState
 import me.river.nightbell.domain.CheckResult
 import me.river.nightbell.domain.ElementTarget
 import me.river.nightbell.domain.FailureKind
@@ -74,6 +78,11 @@ class ElementChecker(
         val nodeCount: Int = 0,
         val loadError: String = "",
         /**
+         * The words on the control that appears to be standing over the page,
+         * when a lookup failed and one was found. See [PickerScripts.GATE_PROBE].
+         */
+        val gateLabel: String = "",
+        /**
          * Pin of the certificate the page presented, when it was readable.
          *
          * Only ever non-empty on a load where the WebView objected to the
@@ -121,10 +130,17 @@ class ElementChecker(
         val started = System.nanoTime()
         val page = try {
             if (endpoint == null) {
-                locateAll(monitor.url, targets, timeout, monitor.tlsTrust, certPin)
+                locateAll(monitor.url, targets, timeout, monitor.tlsTrust, certPin, monitor.browserState)
             } else {
                 WebViewProxy.routed(endpoint) {
-                    locateAll(monitor.url, targets, timeout, monitor.tlsTrust, certPin)
+                    locateAll(
+                        monitor.url,
+                        targets,
+                        timeout,
+                        monitor.tlsTrust,
+                        certPin,
+                        monitor.browserState,
+                    )
                 }
             }
         } catch (unavailable: WebViewProxy.Unavailable) {
@@ -211,6 +227,17 @@ class ElementChecker(
                     failures.forEach { (target, verdict) ->
                         append("• ${target.displayLabel}: ${verdict.message}\n")
                     }
+                    // The difference between "your element is gone" and "we never
+                    // got to see your element" is the whole of issue #8, and the
+                    // person reading this at 3am cannot tell them apart from a
+                    // selector. What the page is showing instead can.
+                    if (page.gateLabel.isNotBlank()) {
+                        append(
+                            "\nThe page is showing a “${page.gateLabel}” button over its " +
+                                "content, so it may be asking to be let in again. Open the live " +
+                                "preview, press through it, and pick the element once more.\n",
+                        )
+                    }
                 }
                 if (page.title.isNotBlank()) append("\nPage: ${page.title}")
                 if (page.nodeCount > 0) append("\nDOM nodes: ${page.nodeCount}")
@@ -284,6 +311,12 @@ class ElementChecker(
         timeoutSeconds: Int,
         tlsTrust: TlsTrust = TlsTrust.SYSTEM,
         pin: String = "",
+        /**
+         * What the picker was carrying when this monitor was set up. Replayed
+         * before the load so a page behind a gate shows the same thing it showed
+         * the person who chose the element. See [BrowserState].
+         */
+        state: BrowserState = BrowserState(),
     ): PageResult? = withContext(Dispatchers.Main) {
         if (targets.isEmpty()) return@withContext PageResult()
         var webView: WebView? = null
@@ -293,7 +326,9 @@ class ElementChecker(
                 val view = WebView(context).also { webView = it }
                 configure(view)
 
-                val pageDone = PageLatch()
+                // Reassigned by the storage fallback below, so the client has to
+                // close over the variable rather than over the first latch.
+                var pageDone = PageLatch()
                 // What the page's certificate hashed to, when the WebView objected
                 // to it and therefore let us see it. Only ever set on the path that
                 // can read a real certificate; see onReceivedSslError.
@@ -381,9 +416,25 @@ class ElementChecker(
                 // skip layout for lazily-rendered content.
                 view.measure(VIEWPORT_WIDTH, VIEWPORT_HEIGHT)
                 view.layout(0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT)
-                view.loadUrl(url)
 
+                val applies = state.appliesTo(url)
+                if (applies) seedCookies(url, state.cookies)
+                // Storage has to exist before the page's own scripts read it, and
+                // the only way to guarantee that is a document-start script. Where
+                // the WebView is too old to have them, the page runs once seeing
+                // nothing, gets the storage, and is loaded again. One extra load
+                // on an old device beats a gate that never opens.
+                val seededEarly = applies && state.localStorage.isNotBlank() &&
+                    seedStorageAtDocumentStart(view, state)
+                view.loadUrl(url)
                 pageDone.await()
+
+                if (applies && state.localStorage.isNotBlank() && !seededEarly) {
+                    view.evalJs(PickerScripts.seedStorage(state.localStorage))
+                    pageDone = PageLatch()
+                    view.reload()
+                    pageDone.await()
+                }
 
                 val script = PickerScripts.locateMany(targets)
                 var attempt = 0
@@ -404,8 +455,12 @@ class ElementChecker(
                     }
                     attempt++
                 }
+                // Only asked once the page has had every chance to produce the
+                // elements, because the answer is only interesting as an
+                // explanation for their absence.
+                val gate = gateLabel(view)
                 (best ?: PageResult(results = List(targets.size) { Located(found = false) }))
-                    .copy(loadError = errors.toString(), certSpki = presentedPin)
+                    .copy(loadError = errors.toString(), certSpki = presentedPin, gateLabel = gate)
             }
         } catch (cancellation: CancellationException) {
             // The page is not broken; we were interrupted. Turning this into a
@@ -428,6 +483,58 @@ class ElementChecker(
                 view.destroy()
             }
         }
+    }
+
+    /**
+     * Puts the captured cookies back in the shared store before the load.
+     *
+     * `Path=/` is forced. What was captured is a site session, and the picker
+     * reads it back through `CookieManager.getCookie`, which does not report the
+     * path a cookie was set with. Re-setting it at the page's own directory would
+     * quietly narrow a site-wide gate flag to one folder, so the wider of the two
+     * is chosen and said out loud here rather than discovered later.
+     *
+     * Nothing is logged. These are session credentials; see [BrowserState].
+     */
+    private fun seedCookies(url: String, cookies: String) {
+        if (cookies.isBlank()) return
+        val manager = runCatching { CookieManager.getInstance() }.getOrNull() ?: return
+        runCatching {
+            manager.setAcceptCookie(true)
+            cookies.split(';').forEach { pair ->
+                val trimmed = pair.trim()
+                if (trimmed.contains('=')) manager.setCookie(url, "$trimmed; Path=/")
+            }
+        }.onFailure { Log.w(TAG, "Could not seed the captured session") }
+    }
+
+    /**
+     * Installs the captured `localStorage` as a document-start script, scoped to
+     * the origin it came from, and says whether it took.
+     *
+     * The origin rule is not a formality. Without it the script would run on
+     * every page this WebView loads, and a redirect off the monitored site would
+     * hand another host a copy of the session.
+     */
+    private fun seedStorageAtDocumentStart(view: WebView, state: BrowserState): Boolean {
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) return false
+        if (state.origin.isBlank()) return false
+        return runCatching {
+            WebViewCompat.addDocumentStartJavaScript(
+                view,
+                PickerScripts.seedStorage(state.localStorage),
+                setOf(state.origin),
+            )
+            true
+        }.getOrDefault(false)
+    }
+
+    /** The label on whatever is standing over the page, or blank. */
+    private suspend fun gateLabel(view: WebView): String {
+        val obj = unwrap(view.evalJs(PickerScripts.GATE_PROBE)) ?: return ""
+        val isGate = obj["gate"]?.jsonPrimitive?.booleanOrNull ?: false
+        if (!isGate) return ""
+        return obj["label"]?.jsonPrimitive?.content.orEmpty().take(60)
     }
 
     private fun configure(view: WebView) {

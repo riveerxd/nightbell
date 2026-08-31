@@ -81,7 +81,7 @@ class PickerRoutingInstrumentedTest {
                     route = route,
                     existingSelector = "",
                     onDismiss = {},
-                    onConfirm = {},
+                    onConfirm = { _, _ -> },
                 )
             }
         }
@@ -204,7 +204,7 @@ class PickerRoutingInstrumentedTest {
                     route = via(),
                     existingSelector = "",
                     onDismiss = {},
-                    onConfirm = {},
+                    onConfirm = { _, _ -> },
                 )
             }
         }

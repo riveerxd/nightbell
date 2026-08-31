@@ -5,6 +5,7 @@ package me.river.nightbell.ui.setup
 import android.annotation.SuppressLint
 import android.os.Handler
 import android.os.Looper
+import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -58,6 +59,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -65,6 +68,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import me.river.nightbell.data.check.ElementChecker
 import me.river.nightbell.data.check.WebViewProxy
 import me.river.nightbell.data.web.PickerScripts
+import me.river.nightbell.domain.BrowserState
 import me.river.nightbell.domain.ProxyRoute
 import me.river.nightbell.domain.TlsTrust
 import me.river.nightbell.ui.components.ButtonTone
@@ -86,6 +90,9 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
+/** `about:blank`, which the picker loads on teardown and must never treat as a page. */
+private const val BLANK = "about:blank"
+
 /** What the picker hands back after the user taps a node. */
 data class PickedElement(
     val cssSelector: String,
@@ -97,6 +104,16 @@ data class PickedElement(
     val html: String,
     val matchCount: Int,
     val unique: Boolean,
+    /**
+     * The page this signature was derived on.
+     *
+     * Not always the URL the picker was opened with. The preview follows links,
+     * which is the point of the browsing mode, and this used to come back with
+     * no page attached: the selector was stored against whatever had been typed
+     * on the setup screen, the check then loaded a page the element had never
+     * been on, and it reported the element missing. That is issue #8.
+     */
+    val pageUrl: String = "",
 )
 
 private val pickerJson = Json { ignoreUnknownKeys = true; isLenient = true }
@@ -114,7 +131,19 @@ private fun parsePick(raw: String): PickedElement? {
         html = str("html"),
         matchCount = obj["matchCount"]?.jsonPrimitive?.intOrNull ?: 1,
         unique = obj["unique"]?.jsonPrimitive?.booleanOrNull ?: true,
+        pageUrl = str("pageUrl"),
     )
+}
+
+/**
+ * `evaluateJavascript` hands back a JSON-encoded value, so a script that returns
+ * a JSON string arrives wrapped in one more layer of quoting than it looks.
+ */
+private fun unwrapScriptResult(raw: String?): JsonObject? {
+    if (raw.isNullOrBlank() || raw == "null") return null
+    val unwrapped = runCatching { pickerJson.parseToJsonElement(raw).jsonPrimitive.content }
+        .getOrElse { raw }
+    return runCatching { pickerJson.parseToJsonElement(unwrapped) as? JsonObject }.getOrNull()
 }
 
 /**
@@ -190,7 +219,12 @@ fun ElementPickerOverlay(
     tlsTrust: TlsTrust = TlsTrust.SYSTEM,
     existingSelector: String,
     onDismiss: () -> Unit,
-    onConfirm: (PickedElement) -> Unit,
+    /**
+     * The pick, plus whatever the browser was carrying when it was made. The
+     * second half is what lets a check reach a page that is behind a gate the
+     * user has just pressed through. See [me.river.nightbell.domain.BrowserState].
+     */
+    onConfirm: (PickedElement, BrowserState) -> Unit,
     alreadyWatching: Int = 0,
 ) {
     AnimatedVisibility(
@@ -210,7 +244,7 @@ private fun PickerContent(
     existingSelector: String,
     alreadyWatching: Int,
     onDismiss: () -> Unit,
-    onConfirm: (PickedElement) -> Unit,
+    onConfirm: (PickedElement, BrowserState) -> Unit,
 ) {
     val context = LocalContext.current
     var loading by remember { mutableStateOf(true) }
@@ -220,6 +254,10 @@ private fun PickerContent(
     var picked by remember { mutableStateOf<PickedElement?>(null) }
     var webView by remember { mutableStateOf<WebView?>(null) }
     var progress by remember { mutableStateOf(0) }
+    // Where the preview actually is, which is not where it started once the user
+    // has followed a link. Shown in the toolbar and, on confirm, is what the
+    // monitor is pointed at.
+    var currentUrl by remember { mutableStateOf(url) }
 
     // Nothing is loaded until routing has been settled one way or the other, so
     // there is no window in which the page is fetched before the proxy is on.
@@ -254,7 +292,7 @@ private fun PickerContent(
         if (released.compareAndSet(false, true)) {
             webView?.apply {
                 stopLoading()
-                loadUrl("about:blank")
+                loadUrl(BLANK)
                 removeJavascriptInterface(PickerScripts.BRIDGE_NAME)
                 destroy()
             }
@@ -263,6 +301,43 @@ private fun PickerContent(
 
     LaunchedEffect(pickMode) {
         webView?.evaluateJavascript(PickerScripts.setPickMode(pickMode), null)
+    }
+
+    /**
+     * Hands back the pick together with the session that made the page visible.
+     *
+     * Two round trips and neither is optional. `localStorage` can only be read
+     * from inside the page, and cookies can only be read from out here, because
+     * the ones a gate cares about are frequently `HttpOnly` and invisible to
+     * script. The flush is what makes the capture survive the app being killed
+     * before the first check runs.
+     */
+    val confirm: () -> Unit = confirm@{
+        val element = picked ?: return@confirm
+        val view = webView
+        val page = element.pageUrl.ifBlank { currentUrl }
+        val cookies = runCatching { CookieManager.getInstance().getCookie(page) }.getOrNull().orEmpty()
+        runCatching { CookieManager.getInstance().flush() }
+        val finish = { storage: String ->
+            onConfirm(
+                element.copy(pageUrl = page),
+                BrowserState(
+                    origin = BrowserState.originOf(page),
+                    cookies = cookies,
+                    localStorage = storage,
+                    capturedAt = System.currentTimeMillis(),
+                ).takeIf { !it.isEmpty } ?: BrowserState(),
+            )
+        }
+        if (view == null) {
+            finish("")
+        } else {
+            view.evaluateJavascript(PickerScripts.CAPTURE_STATE) { raw ->
+                val parsed = unwrapScriptResult(raw)
+                val storage = parsed?.get("storage")?.jsonPrimitive?.content.orEmpty()
+                finish(if (storage == "{}") "" else storage)
+            }
+        }
     }
 
     // Keyed on nothing that changes while the picker is up: `url` and `route` are
@@ -329,12 +404,16 @@ private fun PickerContent(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
+                    // The live address, not the one that was typed. Following a
+                    // link changes what a pick will mean, so it has to change
+                    // what the screen says before the pick is made.
                     Text(
-                        text = url,
+                        text = currentUrl.ifBlank { url },
                         style = MaterialTheme.typography.bodySmall,
                         color = NightbellColors.TextTertiary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.testTag("picker-url"),
                     )
                 }
                 Spacer(Modifier.width(12.dp))
@@ -440,11 +519,28 @@ private fun PickerContent(
                                         loading = true
                                         progress = 12
                                         error = ""
+                                        if (!url.isNullOrBlank() && url != BLANK) currentUrl = url
+                                        // A pick belongs to the page it was made
+                                        // on. Leaving one selected across a
+                                        // navigation would let "Use this element"
+                                        // save a selector for a page that is no
+                                        // longer on screen.
+                                        picked = null
+                                    }
+
+                                    /** Catches a pushState, which never fires onPageStarted. */
+                                    override fun doUpdateVisitedHistory(
+                                        view: WebView?,
+                                        url: String?,
+                                        isReload: Boolean,
+                                    ) {
+                                        if (!url.isNullOrBlank() && url != BLANK) currentUrl = url
                                     }
 
                                     override fun onPageFinished(view: WebView?, url: String?) {
                                         loading = false
                                         progress = 100
+                                        if (!url.isNullOrBlank() && url != BLANK) currentUrl = url
                                         view?.evaluateJavascript(PickerScripts.BOOTSTRAP) {
                                             view.evaluateJavascript(
                                                 PickerScripts.setPickMode(pickMode),
@@ -578,11 +674,12 @@ private fun PickerContent(
                     picked = picked,
                     existingSelector = existingSelector,
                     alreadyWatching = alreadyWatching,
+                    movedTo = movedPage(url, picked?.pageUrl ?: currentUrl),
                     onClear = {
                         picked = null
                         webView?.evaluateJavascript(PickerScripts.CLEAR_SELECTION, null)
                     },
-                    onConfirm = { picked?.let(onConfirm) },
+                    onConfirm = confirm,
                 )
             }
         }
@@ -645,6 +742,31 @@ private fun RefusedPreview(reason: String, onDismiss: () -> Unit) {
     }
 }
 
+/**
+ * The page the preview has walked to, or null while it is still on the one the
+ * monitor names.
+ *
+ * Compared on everything but the fragment, because a fragment moves the
+ * scrollbar and nothing else, and telling someone their monitor is about to move
+ * because they tapped an anchor link would be noise. A trailing slash is the same
+ * page as no trailing slash for the same reason.
+ */
+internal fun movedPage(from: String, to: String): String? {
+    fun normalise(value: String) = value.trim().substringBefore('#').trimEnd('/').lowercase()
+    if (to.isBlank()) return null
+    if (normalise(to) == normalise(from)) return null
+    // about:blank is the teardown, not a destination.
+    if (to.startsWith(BLANK)) return null
+    return to
+}
+
+/** How a URL reads in a strip one line tall: the path, or the host if there isn't one. */
+internal fun shortPage(url: String): String {
+    val afterScheme = url.substringAfter("://", url)
+    val path = afterScheme.substringAfter('/', "")
+    return if (path.isBlank()) afterScheme.substringBefore('/') else "/${path.substringBefore('#')}"
+}
+
 @Composable
 private fun PickerBottomBar(
     pickMode: Boolean,
@@ -652,6 +774,7 @@ private fun PickerBottomBar(
     picked: PickedElement?,
     existingSelector: String,
     alreadyWatching: Int,
+    movedTo: String?,
     onClear: () -> Unit,
     onConfirm: () -> Unit,
 ) {
@@ -707,6 +830,12 @@ private fun PickerBottomBar(
             androidx.compose.material3.Switch(
                 checked = pickMode,
                 onCheckedChange = onPickModeChange,
+                // The row beside it explains the two modes, but the control
+                // itself was an unlabelled switch: a screen reader announced
+                // "on" with nothing to say what was on.
+                modifier = Modifier
+                    .testTag("picker-select-mode")
+                    .semantics { contentDescription = "Select mode" },
                 colors = androidx.compose.material3.SwitchDefaults.colors(
                     checkedThumbColor = NightbellColors.Void,
                     checkedTrackColor = NightbellColors.Aqua,
@@ -782,6 +911,45 @@ private fun PickerBottomBar(
             )
         }
 
+        // Says what the button is about to do before it is pressed, because the
+        // thing it does is no longer only "save a selector". The monitor's URL
+        // moves with it, and a URL changing under someone is the kind of surprise
+        // that gets found weeks later in a check result.
+        if (movedTo != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.testTag("picker-moved-page"),
+            ) {
+                Icon(
+                    imageVector = NightbellIcons.Link,
+                    contentDescription = null,
+                    tint = NightbellColors.Amber,
+                    modifier = Modifier.size(15.dp),
+                )
+                Spacer(Modifier.width(9.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = "You've moved to ${shortPage(movedTo)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = NightbellColors.TextPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = if (alreadyWatching > 0) {
+                            "Saving points the monitor here. The $alreadyWatching element" +
+                                "${if (alreadyWatching == 1) "" else "s"} already watched were " +
+                                "picked on the old page and will be looked for here too."
+                        } else {
+                            "Saving points the monitor at this page instead."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = NightbellColors.TextTertiary,
+                    )
+                }
+            }
+        }
+
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             if (picked != null) {
                 NightbellButton(
@@ -793,8 +961,16 @@ private fun PickerBottomBar(
                 )
             }
             NightbellButton(
-                text = if (picked != null) "Use this element" else "Pick an element",
-                shortText = if (picked != null) "Use this" else "Pick one",
+                text = when {
+                    picked == null -> "Pick an element"
+                    movedTo != null -> "Watch this page"
+                    else -> "Use this element"
+                },
+                shortText = when {
+                    picked == null -> "Pick one"
+                    movedTo != null -> "Watch page"
+                    else -> "Use this"
+                },
                 onClick = onConfirm,
                 enabled = picked != null,
                 icon = NightbellIcons.Check,

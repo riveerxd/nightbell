@@ -16,6 +16,7 @@ import me.river.nightbell.data.transfer.BackupError
 import me.river.nightbell.data.transfer.toImportableSnapshot
 import me.river.nightbell.domain.AlertPolicy
 import me.river.nightbell.domain.AssertionMode
+import me.river.nightbell.domain.BrowserState
 import me.river.nightbell.domain.CheckResult
 import me.river.nightbell.domain.CheckerHealth
 import me.river.nightbell.domain.CheckerLimit
@@ -993,10 +994,14 @@ class SetupViewModel(
         tagName: String,
         classSignature: String,
         text: String,
+        /** The page the selector was derived on. Blank keeps the draft's URL. */
+        pageUrl: String = "",
+        /** What the preview was carrying. Empty for an ordinary page. */
+        browserState: BrowserState = BrowserState(),
     ) {
         val current = draft.targets.toMutableList()
         val index = pickingIndex
-        // Re-picking keeps the slot's mode/label/attribute — the user is
+        // Re-picking keeps the slot's mode, label and attribute: the user is
         // repairing a broken selector, not starting over.
         val existing = current.getOrNull(index) ?: ElementTarget()
         val updated = existing.copy(
@@ -1009,10 +1014,39 @@ class SetupViewModel(
             expectedText = existing.expectedText.ifBlank { text },
         )
         if (index in current.indices) current[index] = updated else current += updated
-        draft = draft.withTargets(current)
+        draft = draft.withTargets(current).withPickedPage(pageUrl, browserState)
         pickerOpen = false
         pickingIndex = -1
         testResult = null
+    }
+
+    /**
+     * Points the draft at the page a selector was actually taken from.
+     *
+     * Re-validated here even though the picker will not offer a page that fails
+     * these, because this is where the draft is allowed to change and a guard
+     * that only lives in a composable is a guard that a second caller walks past.
+     * A page that cannot be adopted leaves the URL alone, which is the behaviour
+     * every version before this one had.
+     */
+    private fun Monitor.withPickedPage(pageUrl: String, state: BrowserState): Monitor {
+        val page = pageUrl.trim()
+        val moved = page.isNotBlank() &&
+            page != url &&
+            Validation.urlNote(page)?.severity != Validation.Severity.ERROR &&
+            ProxyRoute.previewRefusal(page, ProxyRoute.forMonitor(this, settings)) == null
+        val target = if (moved) page else url
+        return copy(
+            url = target,
+            // A capture with nothing in it does not erase a session that is still
+            // good for this page: picking a second element on the same site reads
+            // no new cookies and would otherwise undo the first pick's work.
+            browserState = when {
+                !state.isEmpty -> state
+                browserState.appliesTo(target) -> browserState
+                else -> BrowserState()
+            },
+        )
     }
 
     fun runTest() {

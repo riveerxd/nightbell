@@ -544,12 +544,32 @@ alert state would suppress the first real outage on the new device, see the
 
 1. Enter a URL and tap **Open live preview**.
 2. The page loads in a real WebView. Browse and scroll normally.
-3. With *Tap to select* on, tap the node you care about.
-4. Injected JS derives a durable signature and streams it back over a JS bridge:
+3. With *Tap to select* off, the page is live: links work, and so does the
+   button on a cookie banner or an age gate. Turn it back on when the view you
+   want is on screen.
+4. With *Tap to select* on, tap the node you care about.
+5. Injected JS derives a durable signature and streams it back over a JS bridge:
    `id` → stable data-attribute (`data-testid`, `aria-label`, …) → shortest
    unique CSS path → absolute XPath → text fingerprint.
-5. Every later check re-resolves that signature **in the same order**, so a
+6. Every later check re-resolves that signature **in the same order**, so a
    cosmetic markup change degrades instead of false-alarming.
+
+**The pick carries its page with it.** The toolbar shows the address the preview
+is actually on, not the one that was typed, and confirming a pick made somewhere
+else points the monitor at that page. The bottom bar says so before the button
+is pressed, and the button reads *Watch this page* rather than *Use this
+element*. A monitor still watches one page: every element it holds is resolved
+against that single load.
+
+**Pages behind a gate.** Some sites show nothing until you have pressed
+something. When the pick is confirmed, the cookies and `localStorage` the
+preview ended up holding are stored with the monitor and put back before each
+check, so the check sees what the person who chose the element saw. The captured
+session is treated as a credential: it is never logged, never shown, and never
+written into an export unless secrets were asked for in the same breath. Setup
+says the monitor is carrying one. When a check finds nothing and something
+gate-shaped is standing over the page, the failure names the button it can see
+rather than reporting a missing element.
 
 ## Architecture
 
@@ -682,6 +702,8 @@ keytool -genkeypair -v -keystore keystore/nightbell-release.jks -alias nightbell
 | `SummaryTest` | 10 | worst-first ranking shared by dashboard, widget and service |
 | `NightbellE2ETest` | 8 | full UI journeys on-device |
 | `ElementMonitorTest` | 10 | real WebView DOM: locate, fallbacks, picker capture |
+| `GatedElementInstrumentedTest` | 5 | issue #8 driven through the real UI: press through a gate, follow a link, pick, and have the check agree; plus the same check from a wiped browser store, a `localStorage`-only wall, the gate-shaped failure message, and a session refusing another origin |
+| `GatedPageTest` | 14 | which page a pick belongs to, which origin a captured session may be replayed at, and what an export leaves behind |
 | `AlertsInstrumentedTest` | 11 | real notifications, channels, escalation, mute, actions |
 | `UrgentModeInstrumentedTest` | 8 | urgent end-to-end through the real engine + notification action |
 | `CheckerCancellationInstrumentedTest` | 5 | the reported bug through the real graph: a cancelled check, and a cancelled six-monitor pass, must announce nothing |
@@ -734,6 +756,12 @@ intact and the element monitor re-resolving through the new code path.
 - **Element checks need a renderable page.** Heavy SPAs are polled for up to
   ~5 s after `onPageFinished`; pages that hydrate slower than that, or that hard-
   block headless/offscreen WebViews, may report "element not found".
+- **A captured browser session expires when the site says it does.** Nightbell
+  replays what the preview was holding, it does not renew it. The age gate on
+  the site in issue #8 lasts fourteen days, after which the check reports the
+  gate and the fix is to open the preview and press through it again. Nothing
+  is replayed on the user's behalf: a recorded click that re-answered a consent
+  dialog every interval was considered and refused.
 - **No custom sound-file picker.** Sound choice is silent / notification /
   alarm / ringtone; per-channel fine-tuning is handed off to system settings.
 - Local storage only, nothing leaves the device, and there is no sync or export

@@ -257,7 +257,7 @@ fun SetupScreen(
                 ?.displaySelector.orEmpty(),
             alreadyWatching = draft.targets.size,
             onDismiss = viewModel::closePicker,
-            onConfirm = { picked ->
+            onConfirm = { picked, browserState ->
                 viewModel.applyPick(
                     cssSelector = picked.cssSelector,
                     xpath = picked.xpath,
@@ -265,6 +265,8 @@ fun SetupScreen(
                     tagName = picked.tagName,
                     classSignature = picked.classSignature,
                     text = picked.text,
+                    pageUrl = picked.pageUrl,
+                    browserState = browserState,
                 )
             },
         )
@@ -774,6 +776,33 @@ private fun ElementCaptureCard(
                 onMoveUp = { viewModel.moveElement(index, -1) },
                 onMoveDown = { viewModel.moveElement(index, 1) },
             )
+        }
+
+        // A monitor that only works because the preview was let through a gate is
+        // standing on something with an expiry date, and nothing else on this
+        // screen would ever say so. When the site asks again, the check reports a
+        // missing element, and this line is what connects the two.
+        if (!draft.browserState.isEmpty) {
+            Spacer(Modifier.height(11.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.testTag("element-session-note"),
+            ) {
+                Icon(
+                    imageVector = NightbellIcons.Shield,
+                    contentDescription = null,
+                    tint = NightbellColors.Aqua,
+                    modifier = Modifier.size(15.dp),
+                )
+                Spacer(Modifier.width(9.dp))
+                Text(
+                    text = "Checks reuse the session from the preview, so pages behind a " +
+                        "cookie or age prompt stay reachable. Open the preview again if the " +
+                        "site starts asking a second time.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = NightbellColors.TextTertiary,
+                )
+            }
         }
 
         Spacer(Modifier.height(13.dp))

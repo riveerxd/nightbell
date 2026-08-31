@@ -147,7 +147,11 @@ object PickerScripts {
               text: __pText(el).slice(0, 400),
               html: (el.outerHTML || '').slice(0, 300),
               matchCount: count,
-              unique: count === 1
+              unique: count === 1,
+              // Read from the document rather than from WebView.getUrl(), which
+              // lags a history.pushState by a frame. A selector belongs to the
+              // page it was derived on, and this is the only reliable name for it.
+              pageUrl: String(location.href)
             };
           }
 
@@ -293,6 +297,102 @@ object PickerScripts {
             nodes: document.querySelectorAll('*').length,
             results: out
           });
+        })();
+    """.trimIndent()
+
+    /**
+     * Everything the check would have to be told to arrive where the picker
+     * ended up: the page, and the `localStorage` the page has written.
+     *
+     * Cookies are not read here. They are readable from Kotlin through
+     * `CookieManager`, which also sees the `HttpOnly` ones this script cannot,
+     * and a gate that sets its flag server-side sets exactly those.
+     */
+    val CAPTURE_STATE: String = """
+        (function(){
+          var store = {};
+          try {
+            for (var i = 0; i < localStorage.length; i++) {
+              var k = localStorage.key(i);
+              var v = localStorage.getItem(k);
+              // Skipped rather than truncated. Half a value is not a smaller
+              // version of the session, it is a corrupt one, and a site handed a
+              // corrupt flag behaves worse than a site handed none.
+              if (k && v !== null && k.length < 512 && v.length < 8192) store[k] = v;
+            }
+          } catch(e){}
+          return JSON.stringify({ url: String(location.href), storage: JSON.stringify(store) });
+        })();
+    """.trimIndent()
+
+    /**
+     * Puts a captured `localStorage` back, without disturbing what is already
+     * there.
+     *
+     * Existing keys win. This runs at document start on a fresh renderer so there
+     * is normally nothing to lose, but on the reload fallback the page has
+     * already run once and may have written something newer than the capture.
+     */
+    fun seedStorage(storageJson: String): String = """
+        (function(){
+          try {
+            var data = JSON.parse(${js(storageJson)});
+            for (var k in data) {
+              if (Object.prototype.hasOwnProperty.call(data, k) && localStorage.getItem(k) === null) {
+                localStorage.setItem(k, data[k]);
+              }
+            }
+            return 'seeded';
+          } catch(e){ return 'failed: ' + e; }
+        })();
+    """.trimIndent()
+
+    /**
+     * Looks for the thing standing between the check and the page.
+     *
+     * Run only after a lookup has already failed, and deliberately narrow: a
+     * clickable whose words belong to a gate, sitting inside something pinned
+     * over the page and covering most of it. The words alone match half the
+     * buttons on the web; the overlay alone matches every cookie toast and chat
+     * bubble. Together they are specific enough to put in a failure message.
+     *
+     * It reports the label rather than deciding what kind of gate it is. "There
+     * is a button saying Yes I'm 18" is something the page actually said. "This
+     * is an age gate" is a guess, and a check result is the wrong place for one.
+     */
+    val GATE_PROBE: String = """
+        (function(){
+          try {
+            var WORDS = /^(i am|i'm|yes|accept|agree|consent|allow|confirm|enter|continue|verify|got it|ok)\b|\b(18|21|over 18|over 21|adult|cookies?)\b/i;
+            var vw = window.innerWidth || 1, vh = window.innerHeight || 1;
+            var area = vw * vh;
+            var clickables = document.querySelectorAll(
+              'button, a, input[type=submit], input[type=button], [role=button]'
+            );
+            for (var i = 0; i < clickables.length; i++) {
+              var el = clickables[i];
+              var label = (el.innerText || el.textContent || el.value || '').replace(/\s+/g, ' ').trim();
+              if (!label || label.length > 60 || !WORDS.test(label)) continue;
+              var box = el.getBoundingClientRect();
+              if (!(box.width || box.height)) continue;
+              var style = window.getComputedStyle(el);
+              if (style.visibility === 'hidden' || style.display === 'none') continue;
+              var node = el.parentElement, depth = 0;
+              while (node && depth < 8) {
+                var ns = window.getComputedStyle(node);
+                if (ns.position === 'fixed' || ns.position === 'absolute') {
+                  var nb = node.getBoundingClientRect();
+                  if (ns.visibility !== 'hidden' && ns.display !== 'none' &&
+                      nb.width * nb.height > area * 0.4) {
+                    return JSON.stringify({ gate: true, label: label });
+                  }
+                }
+                node = node.parentElement;
+                depth++;
+              }
+            }
+          } catch(e){}
+          return JSON.stringify({ gate: false, label: '' });
         })();
     """.trimIndent()
 

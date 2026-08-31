@@ -1,5 +1,112 @@
 # Nightbell — handoff
 
+## Unreleased: a page element behind an access button (issue #8)
+
+The report: press a button to get into a site, then pick the element to watch,
+then "Test now" fails. The reporter guessed cookies. It was two separate things
+and only one of them was about cookies.
+
+**The picker never said which page a pick came from.** The preview follows links
+on purpose, that is what the browsing toggle is for, and `PickedElement` carried
+no URL. `applyPick` took the selector and left `draft.url` at whatever had been
+typed on the setup screen. Pick something on a collection page, and the monitor
+loads the home page every fifteen minutes and reports the element missing. The
+toolbar kept showing the typed address the whole way, so there was nothing on
+screen to make it visible either.
+
+Measured against the site in the report before any of this was written: press
+the age gate, follow the one link on the page, pick a product title. The check
+against the picked page passes; the same selector against the typed home page
+comes back "not found". That is the reported failure, on the reported site.
+
+Fixed by having `describe()` return `location.href`, carrying it through
+`PickedElement`, and pointing the monitor at it on confirm. The toolbar shows the
+live address, and the bottom bar says "You've moved to /cellar. Saving points the
+monitor at this page instead" before the button that does it, which now reads
+*Watch this page*. A monitor still watches one page: `locateAll` resolves every
+target against a single render, so the sheet also says how many already-captured
+elements are about to be looked for somewhere new. `withPickedPage` re-runs
+`Validation.urlNote` and `ProxyRoute.previewRefusal` on the new address rather
+than trusting the composable, so a link out of a routed monitor cannot quietly
+move it onto the clearnet.
+
+**Gate state was never recorded.** For a gate the server enforces, the monitor
+was standing on a cookie in the process-wide `CookieManager` that nothing in the
+app knew about. `grep CookieManager app/src/main` returned nothing before this.
+A test run moments after picking passes for the wrong reason: the preview left
+the cookie in the shared store. Wipe the store, reinstall, restore a backup, or
+wait, the age gate on the reported site lasts fourteen days, and the monitor
+goes red at 3am with a message about a missing element.
+
+So `BrowserState` is captured at confirm time and replayed before each load.
+Cookies come from `CookieManager` out in Kotlin, because a gate's flag is often
+`HttpOnly` and invisible to script; `localStorage` comes from inside the page,
+because plenty of home-rolled walls write nothing else. Replay is the mirror:
+`setCookie` before `loadUrl`, and the storage goes in as a document-start script
+scoped to its own origin so a redirect off the site cannot be handed a copy. A
+WebView too old for `DOCUMENT_START_SCRIPT` gets one extra load instead, seeded
+and reloaded, which is worse than free and better than a gate that never opens.
+
+`appliesTo` compares scheme and authority, so a session travels to a deeper page
+on the same site and nowhere else. `shop.example.attacker.test` is not
+`shop.example`, and a session taken over TLS is not replayed in the clear.
+
+The contents are treated as a credential on the same terms as the GitHub token:
+never logged, never in a check's detail line, and out of an export unless
+secrets were asked for in the same breath. Setup discloses that the monitor is
+carrying one, because it is a thing with an expiry date and nothing else on that
+screen would ever say so.
+
+**"Element not found" was the wrong sentence.** When a lookup fails, one extra
+probe looks for a clickable whose words belong to a gate sitting inside
+something pinned over the page and covering most of it. Both conditions are
+required: the vocabulary alone matches half the buttons on the web, the overlay
+alone matches every cookie toast. It reports the label rather than classifying
+the gate, because "there is a button saying Yes I'm 18" is something the page
+said and "this is an age gate" is a guess.
+
+**What was refused.** Recording the click and replaying it before every check.
+It is what the issue title asks for and it would mean the app pressing "Accept
+all" on a consent dialog every fifteen minutes, on the slowest checker in the
+app, with its own loop and timeout guards. Cookies plus storage cover the
+reported case and the common one. Revisit only if a report survives this.
+
+**Also found on the way.** In select mode the picker swallows every click by
+design, capture-phase `preventDefault` plus `stopImmediatePropagation`, so the
+consent button is unpressable until the browsing toggle is flipped. That is
+correct behaviour and the copy already explains it, but it is what the reporter
+had to discover, and it is why this arrived as a feature request rather than a
+bug. The toggle itself was an unlabelled `Switch`, announcing "on" with nothing
+to say what was on; it now carries a content description.
+
+**Verification.** `GatedElementInstrumentedTest` drives the whole journey
+through the real UI against a fixture that refuses every path until the gate has
+been passed: add a monitor, type the address, open the preview, flip to
+browsing, press the gate, follow a link, flip back, tap the element, confirm,
+Test now. Both halves have to be right for it to pass, since the check must both
+point at the linked page and arrive carrying the session. Four more cover the
+check from a wiped browser store with its negative control, a `localStorage`
+-only wall with its own control, the gate-shaped failure message, and a session
+refusing another origin. `GatedPageTest` covers the decisions on the JVM.
+
+Whole suites green on nb_agent: 659 JVM, 387 on device with 22 skipped.
+`lintRelease` is byte-identical to a run on HEAD in a scratch checkout, so this
+adds nothing to it. Worth writing down while it is fresh: the release build
+currently reports 4 errors and 90 warnings, three more warnings than the
+standing note says, and all three are dependency drift rather than code.
+
+Two things went red on the way and neither was this change. The first device
+pass after booting the emulator had four `RootViewWithoutFocusException`
+failures in unrelated Espresso tests, which passed in isolation and did not
+recur; that is window focus settling after boot. The second was real and is
+fixed here: `LatencyBaselineInstrumentedTest` was the only class driving the
+engine that did not pin `isOnline`, `refreshReference` returns early when the
+device reads as offline, and late in a full suite the emulator said offline
+once. `probingIsRateLimitedAcrossAPass` then failed with zero probes against a
+fixture on loopback, which cannot be offline by any useful definition. It now
+pins `isOnline` in setup and restores it in teardown, the way every sibling
+class already did. No assertion was relaxed.
+
 ## 2.0.0 — the app id is `me.river.nightbell`
 
 **2.0.0 does not update an earlier install. It installs beside it.**

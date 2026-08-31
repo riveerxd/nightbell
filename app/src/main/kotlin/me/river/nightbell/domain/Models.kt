@@ -205,6 +205,64 @@ data class ElementTarget(
         }
 }
 
+/**
+ * What the embedded browser was carrying when the user finished picking.
+ *
+ * Some pages will not show their content until you have pressed something: an
+ * age gate, a consent wall, a "continue to site" interstitial. The press is not
+ * the interesting part, the state it leaves behind is, and that state lives in
+ * the browser rather than in the URL. The picker ends up holding it, the check
+ * starts from nothing, and issue #8 is the gap between those two facts.
+ *
+ * So it is copied out of the picker and replayed into the check. Both halves are
+ * needed: a Shopify age gate writes a cookie, most consent managers write a
+ * cookie, and a fair number of home-rolled gates write nothing but a
+ * `localStorage` flag.
+ *
+ * [cookies] is in `name=value; name=value` form, exactly as `CookieManager`
+ * hands it over and as it goes back in. [localStorage] is a flat JSON object.
+ * [origin] is the scheme and authority they belong to, so a monitor whose URL
+ * later moves to another host does not have someone else's session pushed at it.
+ *
+ * Treat the contents as credentials. Whatever a site accepts as proof that this
+ * browser has been here before is exactly what an attacker would want, so this
+ * follows the same rule as a GitHub token: never logged, never shown, never in
+ * an export unless the user asked for secrets in the same breath. See [Secrets].
+ */
+@Serializable
+data class BrowserState(
+    val origin: String = "",
+    val cookies: String = "",
+    val localStorage: String = "",
+    val capturedAt: Long = 0L,
+) {
+    val isEmpty: Boolean get() = cookies.isBlank() && localStorage.isBlank()
+
+    /**
+     * Whether this belongs to [url].
+     *
+     * Compared on scheme and authority rather than on the whole URL, because the
+     * point of capturing it is that the monitor is allowed to watch a page deeper
+     * in the same site than the one the session was established on.
+     */
+    fun appliesTo(url: String): Boolean =
+        origin.isNotBlank() && origin.equals(originOf(url), ignoreCase = true)
+
+    companion object {
+        /** `https://host:port`, or blank when [url] has no authority to speak of. */
+        fun originOf(url: String): String {
+            val trimmed = url.trim()
+            val separator = trimmed.indexOf("://")
+            if (separator <= 0) return ""
+            val scheme = trimmed.substring(0, separator).lowercase()
+            val rest = trimmed.substring(separator + 3)
+            val authority = rest.substringBefore('/').substringBefore('?').substringBefore('#')
+            if (authority.isBlank()) return ""
+            return "$scheme://${authority.lowercase()}"
+        }
+    }
+}
+
 @Serializable
 enum class SoundChoice {
     SILENT,
@@ -461,6 +519,13 @@ data class Monitor(
     val element: ElementTarget? = null,
     /** Every element watched on one page load. See [targets]. */
     val elements: List<ElementTarget> = emptyList(),
+    /**
+     * The browser session the picker ended with, replayed before each check.
+     *
+     * Empty for every monitor on a page that just loads. See [BrowserState] for
+     * why it exists and why its contents are treated as secret.
+     */
+    val browserState: BrowserState = BrowserState(),
     /**
      * What a [MonitorKind.GITHUB_REPO] monitor watches. Ignored by every other
      * kind, and defaulted so a store written before this existed still decodes.

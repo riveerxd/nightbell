@@ -1,6 +1,7 @@
 package me.river.nightbell.data.transfer
 
 import me.river.nightbell.data.NightbellSnapshot
+import me.river.nightbell.domain.BrowserState
 import me.river.nightbell.domain.Health
 import me.river.nightbell.domain.MonitorRuntime
 import kotlinx.serialization.Serializable
@@ -154,9 +155,18 @@ object BackupCodec {
  * Top level so a test can state the rule directly rather than by inspecting a
  * serialised blob, and so anything else that ever writes the store out has one
  * obvious thing to call.
+ *
+ * A page monitor's captured browser session counts. It is whatever a site
+ * accepts as proof this browser has been through its gate before, which for a
+ * logged-in site is the login, so it leaves on the same terms as the GitHub
+ * token. The monitor survives the export; the session does not, and re-opening
+ * the live preview once is what puts it back.
  */
 fun NightbellSnapshot.withoutSecrets(): NightbellSnapshot =
-    copy(settings = settings.copy(githubToken = ""))
+    copy(
+        settings = settings.copy(githubToken = ""),
+        monitors = monitors.map { it.copy(browserState = BrowserState()) },
+    )
 
 /**
  * The snapshot as it should land in a fresh install.
