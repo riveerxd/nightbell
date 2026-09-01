@@ -482,7 +482,12 @@ private fun SetupFooter(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            content(Modifier.weight(1f, fill = false), Modifier.weight(2f))
+            // No weight on Back and all of it on the action. `weight(1f, fill =
+            // false)` on Back was the bug: a weight reserves its share of the row
+            // whether the child fills it or not, so Back was allotted a third,
+            // drew at its natural width, and the unused remainder of that third
+            // became dead space on the right that Continue could not reach into.
+            content(Modifier, Modifier.weight(1f))
         }
     }
 }
