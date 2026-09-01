@@ -117,6 +117,8 @@ import me.river.nightbell.ui.components.StatusPill
 import me.river.nightbell.ui.components.ToastMessage
 import me.river.nightbell.ui.components.formatLatency
 import me.river.nightbell.ui.components.formatRelative
+import me.river.nightbell.ui.components.GlassDivider
+import me.river.nightbell.ui.components.HoldToConfirmButton
 import me.river.nightbell.ui.icons.NightbellIcons
 import me.river.nightbell.ui.rememberDashboardViewModel
 import me.river.nightbell.ui.theme.LocalNightbellMotion
@@ -730,9 +732,17 @@ fun DashboardScreen(
         // observable, rather than read off a StateFlow inside the bar.
         val holders = groupsHolding(groups, viewModel.selection)
         val groupedInSelection = groupedCount(groups, viewModel.selection)
+        // The bar used to offer Pause and Resume side by side whatever was
+        // selected, so a selection of running monitors was handed a Resume that
+        // could not do anything, first, as the leftmost control. One button now,
+        // and this is the fact it switches on.
+        val runningInSelection = cards.count {
+            it.monitor.id in viewModel.selection && it.monitor.enabled
+        }
 
         SelectionBar(
             count = viewModel.selection.size,
+            runningCount = runningInSelection,
             visible = selecting,
             hasGroups = groups.isNotEmpty(),
             groupedCount = groupedInSelection,
@@ -1181,9 +1191,22 @@ private fun NarrowingStrip(
  * sharing the corner with it. Delete asks first — it is the one action here that
  * destroys history, and it can now destroy eight monitors' worth at once.
  */
+/**
+ * "this monitor" or "these 4 monitors", for a label that has to name what it acts
+ * on.
+ *
+ * The count belongs in the label rather than only in the header, because the
+ * header scrolls out of a screen reader's focus long before the delete button
+ * does, and "Hold to delete" on its own does not say how much.
+ */
+private fun theseN(count: Int): String =
+    if (count == 1) "this monitor" else "these $count monitors"
+
 @Composable
 private fun SelectionBar(
     count: Int,
+    /** How many of the selected monitors are still checking. Drives one button. */
+    runningCount: Int,
     visible: Boolean,
     hasGroups: Boolean,
     /** How many of the selected monitors already belong to a group. */
@@ -1200,18 +1223,13 @@ private fun SelectionBar(
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var confirmDelete by remember { mutableStateOf(false) }
-    // Reset the confirmation whenever the bar goes away, so re-entering selection
-    // never lands on a primed Delete.
-    if (!visible && confirmDelete) confirmDelete = false
-
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn() + slideInVertically { it },
         exit = fadeOut() + slideOutVertically { it },
         modifier = modifier,
     ) {
-        GlassCard(accent = if (confirmDelete) NightbellColors.Rose else NightbellColors.Aqua) {
+        GlassCard(accent = NightbellColors.Aqua) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = if (count == 1) "1 selected" else "$count selected",
@@ -1233,102 +1251,42 @@ private fun SelectionBar(
                 )
             }
             Spacer(Modifier.height(12.dp))
-            if (confirmDelete) {
-                Text(
-                    text = "Delete ${if (count == 1) "this monitor" else "these $count monitors"}? " +
-                        "Their history and scheduled checks go with them.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = NightbellColors.TextSecondary,
+            // One button, not two. The label, the icon and the handler all switch
+            // on how much of the selection is still checking, which is what
+            // `DetailScreen` has always done for a single monitor and what this bar
+            // did not do for a set. A mixed selection resolves to Pause, because
+            // that is the direction that adds cover and the mixed case has to
+            // resolve to something.
+            val running = runningCount > 0
+            NightbellButton(
+                text = if (running) "Pause ${theseN(count)}" else "Resume ${theseN(count)}",
+                shortText = if (running) "Pause" else "Resume",
+                onClick = if (running) onPause else onResume,
+                icon = if (running) NightbellIcons.Pause else NightbellIcons.Play,
+                tone = ButtonTone.Primary,
+                accent = NightbellColors.Aqua,
+                accentEnd = NightbellColors.Indigo,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(8.dp))
+            // Everything that only rearranges or quietens shares one row of equal
+            // chips, and only the group action that applies is drawn. This is the
+            // half the old layout had inverted: grouping was two full-width bars,
+            // twice the width of delete, for the two actions that change the least.
+            val allGrouped = groupedCount == count
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Not equal weights. "Mute 1h" is seven characters and the group
+                // action is up to twenty-nine; splitting the row down the middle
+                // made both fall back to `shortText`, so it read "Mute · Group"
+                // and neither chip said what it would do.
+                NightbellButton(
+                    text = "Mute 1h",
+                    shortText = "Mute",
+                    onClick = onMute,
+                    icon = NightbellIcons.BellOff,
+                    tone = ButtonTone.Secondary,
+                    modifier = Modifier.weight(1f),
                 )
-                Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    NightbellButton(
-                        text = "Keep them",
-                        onClick = { confirmDelete = false },
-                        tone = ButtonTone.Secondary,
-                        modifier = Modifier.weight(1f),
-                    )
-                    NightbellButton(
-                        text = "Delete",
-                        onClick = {
-                            confirmDelete = false
-                            onDelete()
-                        },
-                        tone = ButtonTone.Danger,
-                        icon = NightbellIcons.Trash,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            } else {
-                // Two rows of two, not four across. Four weighted buttons plus an
-                // icon left roughly 55 dp of text width each, which wrapped the
-                // labels to "Pau / se" and "Res / um / e" on a normal phone.
-                //
-                // Delete is a labelled button rather than a bare trash icon for the
-                // same reason: it is the one action here that destroys history for
-                // several monitors at once, and it should be the least ambiguous
-                // thing on the bar rather than the most.
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    NightbellButton(
-                        text = "Pause",
-                        onClick = onPause,
-                        icon = NightbellIcons.Pause,
-                        tone = ButtonTone.Secondary,
-                        modifier = Modifier.weight(1f),
-                    )
-                    NightbellButton(
-                        text = "Resume",
-                        onClick = onResume,
-                        icon = NightbellIcons.Play,
-                        tone = ButtonTone.Secondary,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    NightbellButton(
-                        text = "Mute 1h",
-                        onClick = onMute,
-                        icon = NightbellIcons.BellOff,
-                        tone = ButtonTone.Secondary,
-                        modifier = Modifier.weight(1f),
-                    )
-                    NightbellButton(
-                        text = "Delete",
-                        onClick = { confirmDelete = true },
-                        icon = NightbellIcons.Trash,
-                        tone = ButtonTone.Danger,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                // Grouping gets its own rows, full width. Every other action here
-                // changes monitors that already exist; these arrange them, and
-                // pairing one with Delete would put "arrange" and "destroy" side by
-                // side at identical weight.
-                //
-                // Which rows appear depends on where the selection already lives.
-                // Offering "add to a group" for a monitor that is *in* a group,
-                // with no way to take it out, was the bar answering a question
-                // nobody asked. Remove comes first when it applies, because pulling
-                // a card out is the likelier reason to have long-pressed it.
-                val allGrouped = groupedCount == count
-                Spacer(Modifier.height(8.dp))
-                if (groupedCount > 0) {
-                    NightbellButton(
-                        // Names the group when there is exactly one to name.
-                        // "Remove from group" is fine; "Remove from Nightbell" is
-                        // better, because it is the sentence the user can check.
-                        text = when {
-                            holderTitles.size == 1 -> "Remove from “${holderTitles.single()}”"
-                            else -> "Remove from their groups"
-                        },
-                        onClick = onRemoveFromGroup,
-                        icon = NightbellIcons.Close,
-                        tone = ButtonTone.Secondary,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Spacer(Modifier.height(8.dp))
-                }
                 NightbellButton(
                     // "Move" once everything selected is already in a group,
                     // because that is what happens: one group per monitor, so
@@ -1343,12 +1301,47 @@ private fun SelectionBar(
                         count == 1 -> "Add this to a group"
                         else -> "Add these $count to a group"
                     },
+                    shortText = if (allGrouped && hasGroups) "Move" else "Group",
                     onClick = onGroup,
                     icon = NightbellIcons.Layers,
+                    tone = ButtonTone.Secondary,
+                    modifier = Modifier.weight(1.9f),
+                )
+            }
+            // Its own row, and full width, because the label names the group it
+            // will pull the selection out of and that sentence is the whole point
+            // of it: "Remove from group" is fine, "Remove from Payments" is
+            // checkable. Full width is no longer the loudest thing on this bar
+            // now that the primary action and the delete are too, which is what
+            // made the old layout wrong: grouping was the only thing with the
+            // whole width, at twice the size of pause, mute and delete.
+            if (groupedCount > 0) {
+                Spacer(Modifier.height(8.dp))
+                NightbellButton(
+                    text = if (holderTitles.size == 1) {
+                        "Remove from “${holderTitles.single()}”"
+                    } else {
+                        "Remove from their groups"
+                    },
+                    shortText = "Ungroup",
+                    onClick = onRemoveFromGroup,
+                    icon = NightbellIcons.Close,
                     tone = ButtonTone.Secondary,
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
+            // A rule and a real gap, then the only thing here that destroys
+            // anything. Below everything else so no thumb reaches it on the way to
+            // something ordinary, and full width because it has to be unmistakable
+            // rather than because it is important.
+            Spacer(Modifier.height(14.dp))
+            GlassDivider()
+            Spacer(Modifier.height(14.dp))
+            HoldToConfirmButton(
+                text = "Hold to delete ${theseN(count)}",
+                onConfirm = onDelete,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }

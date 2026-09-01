@@ -323,7 +323,10 @@ class RevisionVerificationTest {
         composeRule.onNodeWithText("2 selected").assertIsDisplayed()
         composeRule.captureScreenshot("bulk-02-two-selected")
 
-        composeRule.onNodeWithText("Pause").performClick()
+        // "Pause these 2 monitors": one button that switches on the selection's
+        // state, rather than a Pause and a Resume side by side of which one was
+        // always inert.
+        composeRule.onNodeWithText("Pause these", substring = true).performClick()
         composeRule.waitForIdle()
         NightbellTestSupport.awaitTrue(description = "both monitors paused") {
             runBlocking {
@@ -334,29 +337,48 @@ class RevisionVerificationTest {
         composeRule.captureScreenshot("bulk-03-after-pause")
     }
 
+    /**
+     * The two-step "Delete / Keep them" confirmation this used to assert is gone,
+     * replaced by a hold on the button itself. The reason is the reason that
+     * pattern exists: a dialog punishes every correct deletion for the sake of the
+     * rare wrong one, and it teaches the hand to dismiss it unread. What is
+     * asserted here is the same guarantee stated the other way round, and more
+     * strictly: a tap must not be able to delete anything.
+     */
     @Test
-    fun bulkDeleteAsksFirstAndThenRemovesThem() {
+    fun bulkDeleteNeedsAHoldAndNotATap() {
         seed()
         launch()
         scrollDashboardTo("Checkout API")
         composeRule.onNodeWithText("Checkout API").performTouchInput { longClick() }
         composeRule.waitForIdle()
-        // "Delete" is a labelled button rather than a bare trash icon, and it is
-        // unique within each state of the bar: alongside "Mute 1h" before, and
-        // alongside "Keep them" once the confirmation is up.
-        composeRule.onNodeWithText("Delete").performClick()
-        composeRule.waitForIdle()
-        // The confirmation must exist — this destroys history for several monitors.
-        composeRule.onNodeWithText("Keep them").assertIsDisplayed()
-        composeRule.captureScreenshot("bulk-04-delete-confirm")
 
-        composeRule.onNodeWithText("Keep them").performClick()
+        val delete = composeRule.onNodeWithText("Hold to delete", substring = true)
+        // The frame clock has to be driven by hand: the hold times itself off
+        // `withFrameNanos` so that platform animation settings cannot shorten it,
+        // which also means nothing advances it here unless this test does.
+        composeRule.mainClock.autoAdvance = false
+        delete.performTouchInput { down(center) }
+        composeRule.mainClock.advanceTimeByFrame()
+        composeRule.mainClock.advanceTimeBy(80)
+        composeRule.mainClock.advanceTimeByFrame()
+        delete.performTouchInput { up() }
+        composeRule.mainClock.autoAdvance = true
         composeRule.waitForIdle()
-        assertEquals(6, runBlocking { Nightbell.require().store.currentSnapshot().monitors.size })
+        assertEquals(
+            "a tap must delete nothing",
+            6,
+            runBlocking { Nightbell.require().store.currentSnapshot().monitors.size },
+        )
+        composeRule.captureScreenshot("bulk-04-tap-deleted-nothing")
 
-        composeRule.onNodeWithText("Delete").performClick()
-        composeRule.waitForIdle()
-        composeRule.onNodeWithText("Delete").performClick()
+        composeRule.mainClock.autoAdvance = false
+        delete.performTouchInput { down(center) }
+        composeRule.mainClock.advanceTimeByFrame()
+        composeRule.mainClock.advanceTimeBy(1_500)
+        composeRule.mainClock.advanceTimeByFrame()
+        delete.performTouchInput { up() }
+        composeRule.mainClock.autoAdvance = true
         NightbellTestSupport.awaitTrue(description = "one monitor deleted") {
             runBlocking { Nightbell.require().store.currentSnapshot().monitors.size } == 5
         }
