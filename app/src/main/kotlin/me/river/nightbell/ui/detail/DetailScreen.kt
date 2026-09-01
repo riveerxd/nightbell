@@ -253,7 +253,17 @@ fun DetailScreen(
                                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             runCatching { context.startActivity(intent) }
                         },
-                        onMarkSeen = viewModel::markGitHubSeen,
+                        // Only offered when there is something to mark. Drawn
+                        // unconditionally it was a button whose only visible
+                        // effect was a row reporting when it was last pressed:
+                        // nothing on this screen shows unseen news, so on a quiet
+                        // repository it cancelled a notification that was not
+                        // there and updated a label about itself.
+                        onMarkSeen = if (GitHubActivity.hasNews(activity)) {
+                            viewModel::markGitHubSeen
+                        } else {
+                            null
+                        },
                         onMute = { viewModel.mute(24) },
                     )
                 }
@@ -1222,7 +1232,8 @@ private fun GitHubHealthCard(
     nowMs: Long,
     accent: Color,
     onOpen: (String) -> Unit,
-    onMarkSeen: () -> Unit,
+    /** Null when this repository has no news to mark, which hides the button. */
+    onMarkSeen: (() -> Unit)?,
     onMute: () -> Unit,
 ) {
     val repo = monitor.github.repository
@@ -1338,13 +1349,15 @@ private fun GitHubHealthCard(
         }
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            NightbellButton(
-                text = "Mark seen",
-                onClick = onMarkSeen,
-                icon = NightbellIcons.Check,
-                tone = ButtonTone.Secondary,
-                modifier = Modifier.weight(1f).testTag("github-mark-seen"),
-            )
+            if (onMarkSeen != null) {
+                NightbellButton(
+                    text = "Mark seen",
+                    onClick = onMarkSeen,
+                    icon = NightbellIcons.Check,
+                    tone = ButtonTone.Secondary,
+                    modifier = Modifier.weight(1f).testTag("github-mark-seen"),
+                )
+            }
             NightbellButton(
                 text = "Mute 24h",
                 onClick = onMute,

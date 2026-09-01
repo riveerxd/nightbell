@@ -316,10 +316,20 @@ class GitHubSetupUiTest {
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("github-open-repo").assertIsDisplayed()
 
-        list.performScrollToNode(hasTestTag("github-mark-seen"))
+        list.performScrollToNode(hasTestTag("github-mute-24h"))
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("github-mark-seen").assertIsDisplayed()
         composeRule.onNodeWithTag("github-mute-24h").assertIsDisplayed()
+        // And "Mark seen" is *not* here, because this repository was created a
+        // moment ago and has nothing to mark. Drawn unconditionally it was a
+        // button whose only visible effect was a row reporting when it was last
+        // pressed. `GitHubActivityTest` covers the other side of the guard: two
+        // readings with different star counts are news, a first reading is a
+        // baseline and is not.
+        assertEquals(
+            "a repository with no news must not offer Mark seen",
+            0,
+            composeRule.onAllNodesWithTag("github-mark-seen").fetchSemanticsNodes().size,
+        )
         composeRule.captureScreenshot("gh-06b-detail-actions")
 
         // And no response-time chart anywhere on the screen. It plots the round
