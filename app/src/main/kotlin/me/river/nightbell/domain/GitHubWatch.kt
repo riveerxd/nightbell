@@ -72,6 +72,40 @@ data class GitHubWatch(
 
     /** Separate from the issue watcher on purpose. See [GitHubEvents]. */
     val watchPullRequests: Boolean = false,
+
+    /**
+     * Comments on issues, closed ones included.
+     *
+     * Off by default, and that is load bearing rather than taste. A watch written
+     * by an older build carries no key for this, so it takes the default when the
+     * update lands, and defaulting to true would switch a fourth endpoint on for
+     * every repository monitor already on a phone. It is also the loudest thing
+     * here: [notifyOnIssues] asks GitHub for open issues only, while comments
+     * arrive from every thread the repository has ever had.
+     */
+    val notifyOnComments: Boolean = false,
+
+    /**
+     * Let comments posted by GitHub Apps through.
+     *
+     * The test is App identity and never the text of the login. Five of the six
+     * automation accounts on one page of rust-lang/rust reported `type: "User"`,
+     * because they are machine accounts driven by a token rather than Apps, so a
+     * substring test is the only thing that reaches them and that same test also
+     * reaches talbot and botond. Silently skipping a person's comment is the one
+     * failure this track cannot have, so the exact signals are the default and
+     * the rest goes in [commentMutedText] where the user can see it.
+     */
+    val notifyOnBotComments: Boolean = false,
+
+    /**
+     * Logins whose comments never page, exactly as the user typed them.
+     *
+     * Raw text, which inverts the arrangement [issueKeywords] uses, because
+     * re-parsing on every keystroke erases the comma that separates two entries
+     * on the keystroke that produced it and the second login cannot be typed.
+     */
+    val commentMutedText: String = "",
 ) {
     val repository: GitHubRepo get() = GitHubRepo(owner, repo)
 
@@ -81,6 +115,9 @@ data class GitHubWatch(
     val keywordsText: String get() = issueKeywords.joinToString(", ")
 
     val authorsText: String get() = issueAuthors.joinToString(", ")
+
+    /** Parsed on read, so the stored string stays whatever was typed. */
+    val commentMutedAuthors: List<String> get() = splitTerms(commentMutedText)
 
     fun withKeywordsText(raw: String): GitHubWatch = copy(issueKeywords = splitTerms(raw))
 
@@ -94,6 +131,31 @@ data class GitHubWatch(
         }
         if (issueKeywords.isNotEmpty()) {
             val haystack = (item.title + "\n" + item.body).lowercase()
+            val terms = issueKeywords.map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+            if (terms.isNotEmpty() && terms.none { haystack.contains(it) }) return false
+        }
+        return true
+    }
+
+    /**
+     * Whether a comment survives the bot rules and the filters.
+     *
+     * Its own function rather than a [GitHubItem] with a blank title, because
+     * [accepts] reads [issueAuthors] as an allowlist and a user who typed one
+     * login there to narrow the issue track must not silently stop hearing every
+     * comment from everyone else. That list is deliberately not consulted here.
+     */
+    fun acceptsComment(comment: GitHubComment): Boolean {
+        // GitHub has already folded this one away as off topic or spam. No
+        // setting: a comment the repository hid is not news.
+        if (comment.minimized) return false
+        if (comment.isApp && !notifyOnBotComments) return false
+        val muted = commentMutedAuthors.map { it.lowercase() }
+        if (comment.author.lowercase() in muted) return false
+        if (issueKeywords.isNotEmpty()) {
+            // The body alone. A comment has no title, unlike the issues this
+            // keyword list is shared with.
+            val haystack = comment.body.lowercase()
             val terms = issueKeywords.map { it.trim().lowercase() }.filter { it.isNotEmpty() }
             if (terms.isNotEmpty() && terms.none { haystack.contains(it) }) return false
         }
@@ -115,6 +177,7 @@ data class GitHubWatch(
             }
             if (notifyOnIssues) add("issues")
             if (watchPullRequests) add("pull requests")
+            if (notifyOnComments) add("comments")
             if (watchReleases) add("releases")
         }.joinToString(" · ").ifBlank { "Nothing selected" }
 
@@ -175,6 +238,15 @@ data class GitHubState(
     val issuesSeeded: Boolean = false,
     val releasesSeeded: Boolean = false,
 
+    /**
+     * The comment track's own first sighting, for the reason above.
+     *
+     * Worse here than anywhere else if it is missed: the endpoint answers with a
+     * page of up to a hundred, and a repository with years of conversation would
+     * have the whole first page announced as news.
+     */
+    val commentsSeeded: Boolean = false,
+
     val lastStarCount: Int = 0,
     val lastIssueId: Long = 0L,
     val lastIssueNumber: Int = 0,
@@ -185,6 +257,17 @@ data class GitHubState(
     val lastPullNumber: Int = 0,
     val lastPullTitle: String = "",
     val lastPullUrl: String = "",
+    /**
+     * Two comment watermarks, split the way [lastIssueId] and [lastPullId] are.
+     *
+     * Both advance on every poll whatever the toggles say, so the day the user
+     * switches pull requests on is not the day a handful of old pull request
+     * comments arrive as news. Ids rather than timestamps: `updated_at` moves
+     * every time anyone edits, and the heaviest editors are bots rewriting one
+     * progress comment, so a timestamp watermark would page continuously.
+     */
+    val lastIssueCommentId: Long = 0L,
+    val lastPullCommentId: Long = 0L,
     val lastReleaseId: Long = 0L,
     val lastReleaseTag: String = "",
     val lastReleaseName: String = "",
@@ -198,6 +281,17 @@ data class GitHubState(
     val repoEtag: String = "",
     val issuesEtag: String = "",
     val releasesEtag: String = "",
+    val commentsEtag: String = "",
+
+    // ---- comment track back-off ---------------------------------------------
+    // Persisted rather than held in a field, for the same reason the ETags are:
+    // a check pass usually runs in a process that did not run the last one, so an
+    // in-memory counter would reset before it backed anything off. Set only by a
+    // refusal that will still be a refusal next time (403, 404, 410), never by a
+    // timeout or a 5xx: backing a track off because the wifi dropped is wrong.
+    val commentsFailures: Int = 0,
+    val commentsRetryAt: Long = 0L,
+    val commentsFailedCode: Int = 0,
 
     // ---- repo health card ---------------------------------------------------
     val openIssues: Int = 0,
@@ -269,6 +363,33 @@ data class GitHubItem(
     val isPullRequest: Boolean,
 )
 
+/**
+ * One comment, as the repository-wide issue comments endpoint returns it.
+ *
+ * No timestamp field, because nothing here sorts or renders by one: the id is the
+ * ordering. The payload carries no parent issue title and no parent state either,
+ * only [issueNumber], which is parsed out of `issue_url`.
+ */
+data class GitHubComment(
+    val id: Long,
+    val issueNumber: Int,
+    val author: String,
+    val body: String,
+    val url: String,
+    /**
+     * The parent is a pull request rather than an issue.
+     *
+     * GitHub answers both from this one endpoint and there is no flag on the
+     * comment saying which, so the only signal is the path segment in `html_url`.
+     * The `pull_request` object the issues endpoint carries does not exist here.
+     */
+    val onPullRequest: Boolean,
+    /** GitHub has hidden it as off topic, spam or a duplicate. */
+    val minimized: Boolean,
+    /** Posted by a GitHub App. See [GitHubWatch.notifyOnBotComments]. */
+    val isApp: Boolean,
+)
+
 /** One release, from either `releases/latest` or the releases list. */
 data class GitHubRelease(
     val id: Long,
@@ -309,6 +430,19 @@ data class GitHubSnapshot(
     val issuesChanged: Boolean = false,
     val release: GitHubRelease? = null,
     val releaseChanged: Boolean = false,
+    val comments: List<GitHubComment> = emptyList(),
+    /** A 200 arrived and [comments] is what it said. */
+    val commentsChanged: Boolean = false,
+    /**
+     * A 200 or a 304 arrived, which is what clears the back-off.
+     *
+     * Separate from [commentsChanged] because a 304 is a successful look that
+     * learned nothing: it must reset the failure ladder without being mistaken
+     * for a page of comments.
+     */
+    val commentsAnswered: Boolean = false,
+    /** The code of a refusal that should back the track off, or 0. */
+    val commentsRefusedCode: Int = 0,
     val etags: GitHubEtags = GitHubEtags(),
     val rate: GitHubRate = GitHubRate(),
 )
@@ -317,4 +451,5 @@ data class GitHubEtags(
     val repo: String = "",
     val issues: String = "",
     val releases: String = "",
+    val comments: String = "",
 )

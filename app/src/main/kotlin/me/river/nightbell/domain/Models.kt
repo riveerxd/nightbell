@@ -44,7 +44,7 @@ enum class MonitorKind {
             HTTP_STATUS -> "Ping a URL and expect a status code."
             ADVANCED_REQUEST -> "Send a crafted request, assert on what comes back."
             WEBSITE_ELEMENT -> "Watch one element on a real rendered page."
-            GITHUB_REPO -> "Stars, issues and releases on one repository."
+            GITHUB_REPO -> "Stars, issues, comments and releases on one repository."
         }
 }
 
@@ -710,6 +710,18 @@ data class RepoFacts(
     val issueTitle: String = "",
     /** `pushed_at` as epoch millis, or 0 when GitHub did not say. */
     val pushedAt: Long = 0L,
+    /**
+     * The newest comment id this check saw, and who wrote it.
+     *
+     * Appended rather than inserted, so a positional construction elsewhere keeps
+     * meaning what it did. The id never reaches a screen: it is a ten digit
+     * number whose only job is to say that the value moved. There is no count
+     * here and there will not be one, because GitHub publishes no repository-wide
+     * comment total, so any number would be Nightbell counting its own polls.
+     */
+    val commentId: Long = 0L,
+    val commentIssue: Int = 0,
+    val commentAuthor: String = "",
 ) {
     val measured: Boolean get() = stars >= 0
 }

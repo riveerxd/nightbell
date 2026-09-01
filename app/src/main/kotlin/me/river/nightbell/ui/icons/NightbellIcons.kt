@@ -197,6 +197,23 @@ object NightbellIcons {
      * one glyph in the app with a different optical weight, and the thing being
      * named here is a repository rather than the company hosting it.
      */
+    /**
+     * A reply on a thread.
+     *
+     * A rounded rectangle with a tail rather than the more usual rounded blob,
+     * because at the 11 dp a row icon draws it the blob loses its corners and
+     * reads as a circle, which is what the star and the target already are. The
+     * tail hangs off the lower left so the shape is not symmetrical with the
+     * layers glyph either. No dots inside: three 1.7 px dots inside an 11 dp box
+     * fill it in.
+     */
+    val Comment = stroke(
+        "Comment",
+        "M4.6 6.2 C4.6 5.2 5.4 4.4 6.4 4.4 L17.6 4.4 C18.6 4.4 19.4 5.2 19.4 6.2 " +
+            "L19.4 14 C19.4 15 18.6 15.8 17.6 15.8 L10.2 15.8 L6.4 19.2 L6.4 15.8 " +
+            "C5.4 15.8 4.6 15 4.6 14 Z",
+    )
+
     val Repo = stroke(
         "Repo",
         circle(7f, 5.4f, 2.3f) + " " + circle(7f, 18.6f, 2.3f) + " " + circle(17f, 5.4f, 2.3f) +

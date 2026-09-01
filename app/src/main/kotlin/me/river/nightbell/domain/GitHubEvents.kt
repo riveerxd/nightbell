@@ -13,6 +13,14 @@ sealed interface GitHubEvent {
     val url: String
 
     /**
+     * What the expanded notification shows, when that differs from [body].
+     *
+     * Every shipped event says the same thing either way: one line about a count
+     * or a tag has no second paragraph to give.
+     */
+    val expanded: String get() = body
+
+    /**
      * Stable identity for one piece of news.
      *
      * What decides whether two notifications share a row. Three new issues are
@@ -83,6 +91,58 @@ sealed interface GitHubEvent {
         override val key: String get() = "pull-${item.number}"
     }
 
+    /**
+     * Replies on one thread since the last poll.
+     *
+     * One event per parent rather than per comment, because five replies to the
+     * same issue are one conversation with one tap target and the fifth notice
+     * has nothing the fourth did not. That is the argument [key] already makes
+     * for stars being a single replacing row, applied one level down.
+     *
+     * No parent issue title anywhere in here. The payload does not carry one, and
+     * fetching it costs a request per thread out of an hourly budget that a
+     * refusal mid-poll would then spend on nothing.
+     */
+    data class NewComments(
+        val issueNumber: Int,
+        val count: Int,
+        val author: String,
+        val text: String,
+        val commentUrl: String,
+    ) : GitHubEvent {
+        override fun title(slug: String): String =
+            if (count == 1) "New comment on $slug" else "$count new comments on $slug"
+
+        override val body: String get() = buildString {
+            append('#').append(issueNumber)
+            append(if (count == 1) " by " else ", latest by ").append(author)
+            val line = text.excerpt(COMMENT_EXCERPT)
+            if (line.isNotBlank()) append(": ").append(line)
+        }
+
+        /** The comment anchor, so a tap lands on the reply and not the thread top. */
+        override val url: String get() = commentUrl
+
+        /**
+         * Pulling the row down is the one place a comment's own words earn more
+         * than the single line the shade shows collapsed.
+         */
+        override val expanded: String get() = buildString {
+            append('#').append(issueNumber)
+            append(if (count == 1) " by " else ", latest by ").append(author)
+            val line = text.excerpt(COMMENT_EXPANDED)
+            if (line.isNotBlank()) append('\n').append('\n').append(line)
+        }
+
+        /**
+         * Per thread, never constant.
+         *
+         * Issue and pull request numbers share one space per repository, so this
+         * cannot collide between the two sub-tracks.
+         */
+        override val key: String get() = "comment-issue-$issueNumber"
+    }
+
     data class NewRelease(val release: GitHubRelease) : GitHubEvent {
         override fun title(slug: String): String = "New release on $slug"
 
@@ -98,6 +158,26 @@ sealed interface GitHubEvent {
 
         override val key: String get() = "release-${release.id}"
     }
+}
+
+/** How much of a comment reaches the collapsed row, and the expanded one. */
+private const val COMMENT_EXCERPT = 120
+private const val COMMENT_EXPANDED = 400
+
+/**
+ * A comment body as one readable line.
+ *
+ * Quoted lines go first, because a reply that opens by quoting the message above
+ * it would otherwise show the user their own words back. Markdown is left exactly
+ * as it arrived: a flattener that half understands it reads worse than the raw
+ * text and cannot be tested against every bot that will ever post.
+ */
+private fun String.excerpt(max: Int): String {
+    val unquoted = lineSequence()
+        .filterNot { it.trimStart().startsWith(">") }
+        .joinToString(" ")
+        .collapseWhitespace()
+    return unquoted.ifBlank { collapseWhitespace() }.ellipsize(max)
 }
 
 /** "2h", "1d". Only ever spans a digest window covers. */
@@ -130,6 +210,10 @@ object GitHubEvents {
      * issue is new and the first eleven never come back.
      */
     const val MAX_ITEMS_PER_CHECK = 5
+
+    /** First wait after the comment endpoint refuses, and how many doublings. */
+    const val COMMENTS_RETRY_BASE_MS = 15L * 60 * 1000
+    const val COMMENTS_BACKOFF_STEPS = 6
 
     data class Outcome(val events: List<GitHubEvent>, val state: GitHubState)
 
@@ -256,6 +340,83 @@ object GitHubEvents {
                     lastPullTitle = newestPull.title,
                     lastPullUrl = newestPull.url,
                 )
+            }
+        }
+
+        // ---- comments on issues ----------------------------------------------
+        //
+        // One endpoint answers issue threads and pull request threads alike, so
+        // the split is here rather than in another request, and the pull half is
+        // gated on the switch the user already set for pull requests.
+        //
+        // Both watermarks advance whatever the toggles say, exactly as the issue
+        // and pull tracks do above, so switching pull requests on later cannot
+        // replay a backlog of old conversation.
+        if (snapshot.commentsAnswered) {
+            state = state.copy(
+                commentsSeeded = true,
+                commentsFailures = 0,
+                commentsRetryAt = 0L,
+                commentsFailedCode = 0,
+            )
+        } else if (snapshot.commentsRefusedCode != 0) {
+            // 15m, 30m, 1h, 2h, 4h, then 8h for as long as it keeps refusing.
+            // A repository whose issue and pull request tabs are both off answers
+            // 404 forever, and asking every quarter of an hour wastes a budget
+            // that the other three tracks need.
+            val failures = (previous.commentsFailures + 1).coerceAtMost(COMMENTS_BACKOFF_STEPS)
+            state = state.copy(
+                commentsFailures = failures,
+                commentsRetryAt = nowMs + (COMMENTS_RETRY_BASE_MS shl (failures - 1)),
+                commentsFailedCode = snapshot.commentsRefusedCode,
+            )
+        }
+
+        if (snapshot.commentsChanged) {
+            val issueComments = snapshot.comments.filter { !it.onPullRequest }
+            val pullComments = snapshot.comments.filter { it.onPullRequest }
+            val known = previous.commentsSeeded
+
+            if (known) {
+                val fresh = buildList {
+                    addAll(issueComments.filter { it.id > previous.lastIssueCommentId })
+                    if (watch.watchPullRequests) {
+                        addAll(pullComments.filter { it.id > previous.lastPullCommentId })
+                    }
+                }
+                fresh.filter(watch::acceptsComment)
+                    .groupBy { it.issueNumber }
+                    // One cap across both halves rather than one each: comments
+                    // are a single toggle and a single request, so five threads
+                    // is five threads however they are split.
+                    .entries
+                    .sortedBy { entry -> entry.value.maxOf { it.id } }
+                    .takeLast(MAX_ITEMS_PER_CHECK)
+                    .forEach { (issueNumber, group) ->
+                        val newest = group.maxByOrNull { it.id } ?: return@forEach
+                        events += GitHubEvent.NewComments(
+                            issueNumber = issueNumber,
+                            count = group.size,
+                            author = newest.author,
+                            text = newest.body,
+                            commentUrl = newest.url,
+                        )
+                    }
+            }
+
+            // Guarded by a comparison rather than assigned, so deleting the
+            // newest comment cannot walk a watermark backwards. Row order is
+            // never trusted: sorting by creation does not tie-break by id, so a
+            // page is not reliably id-descending.
+            issueComments.maxOfOrNull { it.id }?.let { newest ->
+                if (newest > state.lastIssueCommentId) {
+                    state = state.copy(lastIssueCommentId = newest)
+                }
+            }
+            pullComments.maxOfOrNull { it.id }?.let { newest ->
+                if (newest > state.lastPullCommentId) {
+                    state = state.copy(lastPullCommentId = newest)
+                }
             }
         }
 

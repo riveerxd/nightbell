@@ -27,7 +27,23 @@ class GitHubActivityTest {
         issueNumber: Int = 0,
         issueTitle: String = "",
         pushedAt: Long = 0L,
-    ) = RepoFacts(stars, openIssues, forks, releaseTag, issueNumber, issueTitle, pushedAt)
+        commentId: Long = 0L,
+        commentIssue: Int = 0,
+        commentAuthor: String = "",
+        // Named rather than positional, so the next field appended to RepoFacts
+        // cannot quietly land in the wrong slot here.
+    ) = RepoFacts(
+        stars = stars,
+        openIssues = openIssues,
+        forks = forks,
+        releaseTag = releaseTag,
+        issueNumber = issueNumber,
+        issueTitle = issueTitle,
+        pushedAt = pushedAt,
+        commentId = commentId,
+        commentIssue = commentIssue,
+        commentAuthor = commentAuthor,
+    )
 
     private fun ok(index: Int, facts: RepoFacts?) = Sample(
         at = start + index * step,
@@ -221,5 +237,86 @@ class GitHubActivityTest {
     @Test
     fun anEmptyHistoryHasNoRows() {
         assertTrue(GitHubActivity.of(emptyList()).isEmpty())
+    }
+
+    @Test
+    fun aRisingCommentIdBecomesOneRowNamingTheThread() {
+        val rows = GitHubActivity.of(
+            listOf(
+                ok(0, facts(commentId = 500L, commentIssue = 12, commentAuthor = "river")),
+                ok(1, facts(commentId = 640L, commentIssue = 47, commentAuthor = "bob")),
+            ),
+        )
+        val comment = rows.filterIsInstance<GitHubActivity.Comment>().single()
+        assertEquals(47, comment.issue)
+        assertEquals("bob", comment.author)
+    }
+
+    @Test
+    fun theFirstSightingOfACommentIdIsNotAnEvent() {
+        // The poll that switches the comment track on takes the id from zero to a
+        // real one. That is the track learning where it is, not a new comment, and
+        // the comment it names could be years old.
+        val rows = GitHubActivity.of(
+            listOf(
+                ok(0, facts(commentId = 0L)),
+                ok(1, facts(commentId = 900L, commentIssue = 3, commentAuthor = "old")),
+            ),
+        )
+        assertTrue(
+            rows.toString(),
+            rows.none { it is GitHubActivity.Comment },
+        )
+    }
+
+    @Test
+    fun aCommentThatOnlyMovedTheIdStillBreaksAQuietRun() {
+        // The phone buzzed, so the history must not read "nothing changed".
+        val rows = GitHubActivity.of(
+            listOf(
+                ok(0, facts(commentId = 100L)),
+                ok(1, facts(commentId = 100L)),
+                ok(2, facts(commentId = 100L)),
+                ok(3, facts(commentId = 200L, commentIssue = 9, commentAuthor = "river")),
+            ),
+        )
+        assertEquals(1, rows.filterIsInstance<GitHubActivity.Comment>().size)
+        assertTrue("the quiet run before it is still collapsed", rows.any { it is GitHubActivity.Quiet })
+    }
+
+    @Test
+    fun aCommentArrivingWithAnIssueReadsInTheFixedOrder() {
+        val rows = GitHubActivity.of(
+            listOf(
+                ok(0, facts(issueNumber = 40, commentId = 100L)),
+                ok(
+                    1,
+                    facts(
+                        issueNumber = 41,
+                        issueTitle = "Crash on rotate",
+                        commentId = 200L,
+                        commentIssue = 41,
+                        commentAuthor = "river",
+                    ),
+                ),
+            ),
+        )
+        // Newest first overall, and within the one poll the issue precedes the
+        // comment, so reversed the comment comes out ahead of it.
+        val kinds = rows.map { it::class.simpleName }
+        assertEquals(listOf("Comment", "Issue", "Baseline"), kinds)
+    }
+
+    @Test
+    fun aCommentIdThatFallsBackIsNotAnEvent() {
+        // The newest comment being deleted leaves a lower maximum behind. Nothing
+        // arrived, so nothing is reported.
+        val rows = GitHubActivity.of(
+            listOf(
+                ok(0, facts(commentId = 500L)),
+                ok(1, facts(commentId = 300L)),
+            ),
+        )
+        assertTrue(rows.none { it is GitHubActivity.Comment })
     }
 }

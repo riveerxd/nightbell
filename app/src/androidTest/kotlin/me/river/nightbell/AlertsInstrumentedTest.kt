@@ -130,6 +130,43 @@ class AlertsInstrumentedTest {
         assertFalse("silent channel must not vibrate", channel.shouldVibrate())
     }
 
+    /**
+     * Comments get a channel of their own, at the importance news gets.
+     *
+     * Both halves can only be seen here. The importance arm is the one branch in
+     * `channelFor` the compiler does not demand, so without it a comment would
+     * peek over the screen with a sound; and importance freezes when the channel
+     * is created, so shipping it wrong once cannot be repaired by fixing the code.
+     */
+    @Test
+    fun commentsGetTheirOwnChannelAtNewsImportance() {
+        val policy = AlertPolicy(sound = SoundChoice.DEFAULT_NOTIFICATION, vibrate = true)
+        val comments = graph.alerts.channelFor(policy, AlertCenter.Severity.COMMENTS, silent = false)
+        val news = graph.alerts.channelFor(policy, AlertCenter.Severity.NEWS, silent = false)
+        assertTrue("comments must be mutable without touching news", comments != news)
+
+        val channel = notificationManager.getNotificationChannel(comments)
+        assertNotNull("channel $comments was not created", channel)
+        assertEquals(
+            "a reply must never peek over the screen",
+            NotificationManager.IMPORTANCE_DEFAULT,
+            channel!!.importance,
+        )
+        // Its own group, because a group whose children sit on two channels has
+        // no defined alerting behaviour.
+        assertEquals("nightbell.group.comments", channel.group)
+        assertTrue(
+            "the id must name the family it belongs to",
+            comments.startsWith("nightbell.comments."),
+        )
+        // Turning comments all the way down must leave the news channel alone.
+        assertEquals(
+            NotificationManager.IMPORTANCE_DEFAULT,
+            notificationManager.getNotificationChannel(news)!!.importance,
+        )
+        assertEquals("nightbell.group.news", notificationManager.getNotificationChannel(news)!!.group)
+    }
+
     @Test
     fun differentPoliciesGetDistinctChannels() {
         val a = AlertPolicy(sound = SoundChoice.DEFAULT_NOTIFICATION, vibrationStyle = VibrationStyle.TICK)

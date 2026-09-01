@@ -73,6 +73,64 @@ class GitHubCheckerTest {
         }
     """.trimIndent()
 
+    /**
+     * A comment page shaped the way GitHub really sends one.
+     *
+     * The null `minimized` and null `performed_via_github_app` on the first row
+     * are the point of this fixture, not padding: GitHub sends both keys on every
+     * comment, so a presence check on the key rather than the value answers the
+     * opposite of the question and does it silently. The third row is a comment on
+     * a repository literally named `pull`, which a substring test for "/pull/"
+     * mistakes for a pull request thread.
+     */
+    private val commentsJson = """
+        [
+          {
+            "id": 5483773325,
+            "issue_url": "https://api.github.com/repos/riveerxd/nightbell/issues/47",
+            "html_url": "https://github.com/riveerxd/nightbell/issues/47#issuecomment-5483773325",
+            "body": "Still happens on a fresh install of 3.7.0.",
+            "created_at": "2026-08-31T19:59:33Z",
+            "updated_at": "2026-08-31T19:59:33Z",
+            "author_association": "NONE",
+            "user": { "login": "river", "type": "User", "node_id": "MDQ6VXNlcjc4MzM4Mg==" },
+            "performed_via_github_app": null,
+            "minimized": null
+          },
+          {
+            "id": 5483773000,
+            "issue_url": "https://api.github.com/repos/riveerxd/nightbell/issues/8",
+            "html_url": "https://github.com/riveerxd/nightbell/pull/8#issuecomment-5483773000",
+            "body": "Bumps okhttp from 4.12.0 to 5.0.0.",
+            "author_association": "CONTRIBUTOR",
+            "user": { "login": "rust-bors[bot]", "type": "Bot", "node_id": "BOT_kgDOB0XiZw" },
+            "performed_via_github_app": { "id": 278306, "slug": "rust-bors" },
+            "minimized": null
+          },
+          {
+            "id": 5483772000,
+            "issue_url": "https://api.github.com/repos/wei/pull/issues/1",
+            "html_url": "https://github.com/wei/pull/issues/1#issuecomment-5483772000",
+            "body": "A comment on a repository named pull.",
+            "user": { "login": "wei", "type": "User" },
+            "performed_via_github_app": null,
+            "minimized": null
+          },
+          {
+            "id": 5483771000,
+            "issue_url": "https://api.github.com/repos/riveerxd/nightbell/issues/9",
+            "html_url": "https://github.com/riveerxd/nightbell/issues/9#issuecomment-5483771000",
+            "body": "off topic",
+            "user": { "login": "spammer", "type": "User" },
+            "performed_via_github_app": null,
+            "minimized": { "reason": "off-topic" }
+          }
+        ]
+    """.trimIndent()
+
+    private val commentWatch =
+        GitHubWatch(owner = "riveerxd", repo = "nightbell", notifyOnComments = true)
+
     private fun monitor(watch: GitHubWatch = GitHubWatch(owner = "riveerxd", repo = "nightbell")) =
         Monitor(
             id = "gh",
@@ -115,6 +173,7 @@ class GitHubCheckerTest {
             )
         }
         val body = when {
+            path.endsWith("/issues/comments") -> commentsJson
             path.endsWith("/issues") -> issuesJson
             path.endsWith("/releases/latest") -> releaseJson
             else -> repoJson
@@ -460,6 +519,163 @@ class GitHubCheckerTest {
             assertFalse(result.message.contains(TOKEN))
             assertFalse(result.detail.contains(TOKEN))
             assertFalse(result.bodyPreview.contains(TOKEN))
+        }
+    }
+
+    // ---- comments ------------------------------------------------------------
+
+    @Test
+    fun `the comments endpoint is asked once, at the page size GitHub allows`() {
+        val paths = CopyOnWriteArrayList<String>()
+        apiServer(onRequest = { paths += it.path }).use { server ->
+            runBlocking { checker(server).poll(monitor(commentWatch), GitHubState()) }
+        }
+        val commentCalls = paths.filter { it.substringBefore('?').endsWith("/issues/comments") }
+        assertEquals("exactly one request, never a page walk", 1, commentCalls.size)
+        assertTrue(commentCalls.single(), commentCalls.single().contains("per_page=100"))
+        assertTrue(commentCalls.single(), commentCalls.single().contains("sort=created"))
+        assertTrue(commentCalls.single(), commentCalls.single().contains("direction=desc"))
+        // `since` filters on updated_at, so it drags edited old comments back up.
+        assertFalse(commentCalls.single(), commentCalls.single().contains("since="))
+    }
+
+    @Test
+    fun `the comments endpoint is never touched when the option is off`() {
+        val paths = CopyOnWriteArrayList<String>()
+        apiServer(onRequest = { paths += it.path }).use { server ->
+            runBlocking { checker(server).poll(monitor(), GitHubState()) }
+        }
+        assertTrue(
+            paths.toString(),
+            paths.none { it.substringBefore('?').endsWith("/issues/comments") },
+        )
+    }
+
+    @Test
+    fun `a null minimized and a null app are read as absent, not as present`() {
+        apiServer().use { server ->
+            val snapshot = runBlocking {
+                checker(server).poll(monitor(commentWatch), GitHubState())
+            }.snapshot!!
+            val river = snapshot.comments.single { it.author == "river" }
+            assertFalse("null minimized is not hidden", river.minimized)
+            assertFalse("null performed_via_github_app is not an app", river.isApp)
+            assertEquals(47, river.issueNumber)
+            assertFalse(river.onPullRequest)
+
+            val hidden = snapshot.comments.single { it.author == "spammer" }
+            assertTrue("a minimized object really is hidden", hidden.minimized)
+        }
+    }
+
+    @Test
+    fun `an app comment is recognised even though it claims to be a contributor`() {
+        apiServer().use { server ->
+            val snapshot = runBlocking {
+                checker(server).poll(monitor(commentWatch), GitHubState())
+            }.snapshot!!
+            val bot = snapshot.comments.single { it.author == "rust-bors[bot]" }
+            assertTrue(bot.isApp)
+            assertTrue("its parent is a pull request", bot.onPullRequest)
+        }
+    }
+
+    @Test
+    fun `a repository named pull does not have its issue comments mistaken for one`() {
+        apiServer().use { server ->
+            val snapshot = runBlocking {
+                checker(server).poll(monitor(commentWatch), GitHubState())
+            }.snapshot!!
+            val wei = snapshot.comments.single { it.author == "wei" }
+            assertFalse(
+                "github.com/wei/pull is a real repository and this is an issue thread",
+                wei.onPullRequest,
+            )
+        }
+    }
+
+    @Test
+    fun `a refused comments endpoint is not a failed check, and is not asked again`() {
+        val paths = CopyOnWriteArrayList<String>()
+        var now = 10_000L
+        TinyHttpServer { request ->
+            paths += request.path
+            val headers = mapOf(
+                "x-ratelimit-limit" to "60",
+                "x-ratelimit-remaining" to "59",
+                "x-ratelimit-reset" to "1787776320",
+            )
+            val path = request.path.substringBefore('?')
+            when {
+                path.endsWith("/issues/comments") -> TinyHttpServer.Response(
+                    code = 404,
+                    reason = "Not Found",
+                    extraHeaders = headers,
+                )
+                path.endsWith("/issues") -> TinyHttpServer.Response(
+                    body = issuesJson,
+                    contentType = "application/json",
+                    extraHeaders = headers,
+                )
+                path.endsWith("/releases/latest") -> TinyHttpServer.Response(
+                    body = releaseJson,
+                    contentType = "application/json",
+                    extraHeaders = headers,
+                )
+                else -> TinyHttpServer.Response(
+                    body = repoJson,
+                    contentType = "application/json",
+                    extraHeaders = headers,
+                )
+            }
+        }.use { server ->
+            val gh = GitHubChecker(
+                nowMs = { now },
+                settingsFor = { GlobalSettings() },
+                apiBase = server.baseUrl,
+                minGapMs = 0L,
+            )
+            val outcome = runBlocking { gh.poll(monitor(commentWatch), GitHubState()) }
+            // The repository answered, so the monitor is up. One endpoint being
+            // refused is not a claim about the thing being watched.
+            assertTrue(outcome.result!!.ok)
+            assertEquals(13, outcome.snapshot!!.stars)
+            assertEquals(404, outcome.snapshot!!.commentsRefusedCode)
+            assertFalse("a refusal is not a look", outcome.snapshot!!.commentsAnswered)
+
+            // Back off, then confirm the window is respected and that a user
+            // gesture gets through it anyway.
+            val backedOff = GitHubState(commentsRetryAt = now + 60_000L)
+            paths.clear()
+            runBlocking { gh.poll(monitor(commentWatch), backedOff) }
+            assertTrue(
+                "inside the window the endpoint is left alone",
+                paths.none { it.substringBefore('?').endsWith("/issues/comments") },
+            )
+
+            paths.clear()
+            runBlocking { gh.poll(monitor(commentWatch), backedOff, force = true) }
+            assertTrue(
+                "a hand-driven re-check looks anyway",
+                paths.any { it.substringBefore('?').endsWith("/issues/comments") },
+            )
+        }
+    }
+
+    @Test
+    fun `comments yield rather than taking the whole poll down when the budget is thin`() {
+        val paths = CopyOnWriteArrayList<String>()
+        apiServer(rateRemaining = 1, onRequest = { paths += it.path }).use { server ->
+            val outcome = runBlocking {
+                checker(server).poll(monitor(commentWatch), GitHubState())
+            }
+            assertTrue(
+                "the last of four steps aside rather than spending the reserve",
+                paths.none { it.substringBefore('?').endsWith("/issues/comments") },
+            )
+            // The three tracks that shipped first still got their answers.
+            assertNotNull(outcome.result)
+            assertEquals(13, outcome.snapshot!!.stars)
         }
     }
 

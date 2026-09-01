@@ -1,6 +1,7 @@
 package me.river.nightbell
 
 import me.river.nightbell.domain.DigestMode
+import me.river.nightbell.domain.GitHubComment
 import me.river.nightbell.domain.GitHubEtags
 import me.river.nightbell.domain.GitHubEvent
 import me.river.nightbell.domain.GitHubEvents
@@ -35,6 +36,10 @@ class GitHubEventsTest {
         repoChanged: Boolean = true,
         issuesChanged: Boolean = true,
         releaseChanged: Boolean = true,
+        comments: List<GitHubComment> = emptyList(),
+        commentsChanged: Boolean = false,
+        commentsAnswered: Boolean = commentsChanged,
+        commentsRefusedCode: Int = 0,
     ) = GitHubSnapshot(
         stars = stars,
         openIssues = openIssues,
@@ -46,7 +51,42 @@ class GitHubEventsTest {
         issuesChanged = issuesChanged,
         release = release,
         releaseChanged = releaseChanged,
+        comments = comments,
+        commentsChanged = commentsChanged,
+        commentsAnswered = commentsAnswered,
+        commentsRefusedCode = commentsRefusedCode,
         etags = GitHubEtags(repo = "\"r1\"", issues = "\"i1\"", releases = "\"v1\""),
+    )
+
+    private fun comment(
+        id: Long,
+        issueNumber: Int = 47,
+        author: String = "river",
+        body: String = "Still happens on a fresh install of 3.7.0.",
+        onPullRequest: Boolean = false,
+        minimized: Boolean = false,
+        isApp: Boolean = false,
+    ) = GitHubComment(
+        id = id,
+        issueNumber = issueNumber,
+        author = author,
+        body = body,
+        url = "https://github.com/riveerxd/nightbell/issues/$issueNumber#issuecomment-$id",
+        onPullRequest = onPullRequest,
+        minimized = minimized,
+        isApp = isApp,
+    )
+
+    /** A watch with comments on, and a state that has already looked once. */
+    private val commentWatch = watch.copy(notifyOnComments = true)
+
+    private fun commentsSeen(
+        issueId: Long = 100L,
+        pullId: Long = 100L,
+    ) = seeded().copy(
+        commentsSeeded = true,
+        lastIssueCommentId = issueId,
+        lastPullCommentId = pullId,
     )
 
     private fun issue(
@@ -641,5 +681,380 @@ class GitHubEventsTest {
         val outcome = GitHubEvents.evaluate(watch, before, snapshot(stars = 10), before.lastPolledAt)
         assertSame(GitHubState::class.java, outcome.state::class.java)
         assertNull(outcome.events.firstOrNull())
+    }
+
+    // ---- comments ------------------------------------------------------------
+
+    @Test
+    fun `the first page of comments is never announced, however old it is`() {
+        val page = (1L..100L).map { comment(id = it, issueNumber = it.toInt()) }
+        val outcome = GitHubEvents.evaluate(
+            watch = commentWatch,
+            previous = seeded(watch = commentWatch),
+            snapshot = snapshot(comments = page, commentsChanged = true),
+            nowMs = 2_000L,
+        )
+        assertTrue(
+            "a decade of conversation must not arrive as news",
+            outcome.events.none { it is GitHubEvent.NewComments },
+        )
+        assertTrue("the track has now looked", outcome.state.commentsSeeded)
+        assertEquals(100L, outcome.state.lastIssueCommentId)
+    }
+
+    @Test
+    fun `turning comments on later does not announce the backlog`() {
+        // Seeded long ago with comments off, so the star track knows the repo and
+        // the comment track has never seen a response.
+        val before = seeded()
+        assertFalse("precondition: the comment track is unseeded", before.commentsSeeded)
+        val outcome = GitHubEvents.evaluate(
+            watch = commentWatch,
+            previous = before,
+            snapshot = snapshot(comments = listOf(comment(id = 900L)), commentsChanged = true),
+            nowMs = 3_000L,
+        )
+        assertTrue(outcome.events.none { it is GitHubEvent.NewComments })
+        assertEquals(900L, outcome.state.lastIssueCommentId)
+    }
+
+    @Test
+    fun `a comment on a closed issue is announced like any other`() {
+        // Nothing in the decider knows or cares about the parent's state: the
+        // endpoint has no state filter, which is the whole reason this works.
+        val outcome = GitHubEvents.evaluate(
+            watch = commentWatch,
+            previous = commentsSeen(),
+            snapshot = snapshot(
+                comments = listOf(comment(id = 101L, issueNumber = 12)),
+                commentsChanged = true,
+            ),
+            nowMs = 4_000L,
+        )
+        val event = outcome.events.filterIsInstance<GitHubEvent.NewComments>().single()
+        assertEquals("New comment on riveerxd/nightbell", event.title("riveerxd/nightbell"))
+        assertEquals("#12 by river: Still happens on a fresh install of 3.7.0.", event.body)
+        assertEquals("comment-issue-12", event.key)
+    }
+
+    @Test
+    fun `many replies to one issue are one row carrying the count`() {
+        val flood = (101L..140L).map { comment(id = it, issueNumber = 47, author = "bob") }
+        val outcome = GitHubEvents.evaluate(
+            watch = commentWatch,
+            previous = commentsSeen(),
+            snapshot = snapshot(comments = flood, commentsChanged = true),
+            nowMs = 5_000L,
+        )
+        val event = outcome.events.filterIsInstance<GitHubEvent.NewComments>().single()
+        assertEquals(40, event.count)
+        assertEquals("40 new comments on riveerxd/nightbell", event.title("riveerxd/nightbell"))
+        assertTrue("the latest author leads the line", event.body.startsWith("#47, latest by bob"))
+        assertEquals(140L, outcome.state.lastIssueCommentId)
+    }
+
+    @Test
+    fun `comments on many threads are capped, and the cap does not make them repeat`() {
+        val spread = (101L..111L).map { comment(id = it, issueNumber = it.toInt()) }
+        val first = GitHubEvents.evaluate(
+            watch = commentWatch,
+            previous = commentsSeen(),
+            snapshot = snapshot(comments = spread, commentsChanged = true),
+            nowMs = 6_000L,
+        )
+        assertEquals(
+            GitHubEvents.MAX_ITEMS_PER_CHECK,
+            first.events.filterIsInstance<GitHubEvent.NewComments>().size,
+        )
+        // The state moved past all eleven, so the same page is quiet next time.
+        val again = GitHubEvents.evaluate(
+            watch = commentWatch,
+            previous = first.state,
+            snapshot = snapshot(comments = spread, commentsChanged = true),
+            nowMs = 7_000L,
+        )
+        assertTrue(again.events.none { it is GitHubEvent.NewComments })
+    }
+
+    @Test
+    fun `an edited comment is not a new one`() {
+        val before = commentsSeen()
+        val original = comment(id = 101L, body = "first")
+        val first = GitHubEvents.evaluate(
+            watch = commentWatch,
+            previous = before,
+            snapshot = snapshot(comments = listOf(original), commentsChanged = true),
+            nowMs = 8_000L,
+        )
+        assertEquals(1, first.events.filterIsInstance<GitHubEvent.NewComments>().size)
+        // Same id, rewritten body: this is what a bot editing its progress
+        // comment looks like, and it must not page a second time.
+        val edited = original.copy(body = "first, now with a build log")
+        val second = GitHubEvents.evaluate(
+            watch = commentWatch,
+            previous = first.state,
+            snapshot = snapshot(comments = listOf(edited), commentsChanged = true),
+            nowMs = 9_000L,
+        )
+        assertTrue(second.events.none { it is GitHubEvent.NewComments })
+    }
+
+    @Test
+    fun `deleting the newest comment does not walk the watermark backwards`() {
+        val before = commentsSeen(issueId = 500L)
+        val outcome = GitHubEvents.evaluate(
+            watch = commentWatch,
+            previous = before,
+            snapshot = snapshot(comments = listOf(comment(id = 300L)), commentsChanged = true),
+            nowMs = 10_000L,
+        )
+        assertEquals(500L, outcome.state.lastIssueCommentId)
+        assertTrue(outcome.events.none { it is GitHubEvent.NewComments })
+    }
+
+    @Test
+    fun `pull request comments stay out until pull requests are watched`() {
+        val reply = comment(id = 101L, issueNumber = 8, onPullRequest = true)
+        val quiet = GitHubEvents.evaluate(
+            watch = commentWatch,
+            previous = commentsSeen(),
+            snapshot = snapshot(comments = listOf(reply), commentsChanged = true),
+            nowMs = 11_000L,
+        )
+        assertTrue(quiet.events.none { it is GitHubEvent.NewComments })
+        // The watermark still advanced, which is what stops the day the user
+        // switches pull requests on from being the day old threads arrive.
+        assertEquals(101L, quiet.state.lastPullCommentId)
+
+        val later = GitHubEvents.evaluate(
+            watch = commentWatch.copy(watchPullRequests = true),
+            previous = quiet.state,
+            snapshot = snapshot(comments = listOf(reply), commentsChanged = true),
+            nowMs = 12_000L,
+        )
+        assertTrue(
+            "switching pull requests on must not replay them",
+            later.events.none { it is GitHubEvent.NewComments },
+        )
+    }
+
+    @Test
+    fun `an app comment is skipped by default and let through when asked`() {
+        val bot = comment(id = 101L, author = "rust-bors[bot]", isApp = true)
+        val skipped = GitHubEvents.evaluate(
+            watch = commentWatch,
+            previous = commentsSeen(),
+            snapshot = snapshot(comments = listOf(bot), commentsChanged = true),
+            nowMs = 13_000L,
+        )
+        assertTrue(skipped.events.none { it is GitHubEvent.NewComments })
+        // Filtered out is not unseen: the watermark moved anyway, so turning the
+        // switch on is not a request for everything the bot has ever said.
+        assertEquals(101L, skipped.state.lastIssueCommentId)
+
+        val allowed = GitHubEvents.evaluate(
+            watch = commentWatch.copy(notifyOnBotComments = true),
+            previous = commentsSeen(),
+            snapshot = snapshot(comments = listOf(bot), commentsChanged = true),
+            nowMs = 14_000L,
+        )
+        assertEquals(1, allowed.events.filterIsInstance<GitHubEvent.NewComments>().size)
+    }
+
+    @Test
+    fun `a hidden comment is skipped even when bots are allowed`() {
+        val outcome = GitHubEvents.evaluate(
+            watch = commentWatch.copy(notifyOnBotComments = true),
+            previous = commentsSeen(),
+            snapshot = snapshot(
+                comments = listOf(comment(id = 101L, minimized = true)),
+                commentsChanged = true,
+            ),
+            nowMs = 15_000L,
+        )
+        assertTrue(outcome.events.none { it is GitHubEvent.NewComments })
+    }
+
+    @Test
+    fun `a muted login never pages, whatever case it was typed in`() {
+        val muted = commentWatch.copy(commentMutedText = "RustBot, rust-timer")
+        val outcome = GitHubEvents.evaluate(
+            watch = muted,
+            previous = commentsSeen(),
+            snapshot = snapshot(
+                comments = listOf(
+                    comment(id = 101L, author = "rustbot", issueNumber = 1),
+                    comment(id = 102L, author = "river", issueNumber = 2),
+                ),
+                commentsChanged = true,
+            ),
+            nowMs = 16_000L,
+        )
+        val events = outcome.events.filterIsInstance<GitHubEvent.NewComments>()
+        assertEquals(1, events.size)
+        assertEquals(2, events.single().issueNumber)
+    }
+
+    @Test
+    fun `a login that merely contains a muted name still gets through`() {
+        val muted = commentWatch.copy(commentMutedText = "bot")
+        val outcome = GitHubEvents.evaluate(
+            watch = muted,
+            previous = commentsSeen(),
+            snapshot = snapshot(
+                comments = listOf(comment(id = 101L, author = "talbot")),
+                commentsChanged = true,
+            ),
+            nowMs = 17_000L,
+        )
+        assertEquals(1, outcome.events.filterIsInstance<GitHubEvent.NewComments>().size)
+    }
+
+    @Test
+    fun `the keyword filter reads a comment's body, and the author allowlist does not apply`() {
+        val filtered = commentWatch.copy(
+            issueKeywords = listOf("crash"),
+            // An allowlist for issues must not silence everyone else's comments.
+            issueAuthors = listOf("octocat"),
+        )
+        val outcome = GitHubEvents.evaluate(
+            watch = filtered,
+            previous = commentsSeen(),
+            snapshot = snapshot(
+                comments = listOf(
+                    comment(id = 101L, issueNumber = 1, body = "it crashes on rotate"),
+                    comment(id = 102L, issueNumber = 2, body = "thanks for the fix"),
+                ),
+                commentsChanged = true,
+            ),
+            nowMs = 18_000L,
+        )
+        val events = outcome.events.filterIsInstance<GitHubEvent.NewComments>()
+        assertEquals(1, events.size)
+        assertEquals(1, events.single().issueNumber)
+    }
+
+    @Test
+    fun `a quoted reply shows its own words rather than the ones it quotes`() {
+        val outcome = GitHubEvents.evaluate(
+            watch = commentWatch,
+            previous = commentsSeen(),
+            snapshot = snapshot(
+                comments = listOf(
+                    comment(id = 101L, body = "> does it still happen\n\nYes, on 3.7.0."),
+                ),
+                commentsChanged = true,
+            ),
+            nowMs = 19_000L,
+        )
+        val event = outcome.events.filterIsInstance<GitHubEvent.NewComments>().single()
+        assertEquals("#47 by river: Yes, on 3.7.0.", event.body)
+    }
+
+    @Test
+    fun `an empty comment body leaves no trailing colon`() {
+        val outcome = GitHubEvents.evaluate(
+            watch = commentWatch,
+            previous = commentsSeen(),
+            snapshot = snapshot(
+                comments = listOf(comment(id = 101L, body = "   ")),
+                commentsChanged = true,
+            ),
+            nowMs = 20_000L,
+        )
+        assertEquals("#47 by river", outcome.events.filterIsInstance<GitHubEvent.NewComments>().single().body)
+    }
+
+    @Test
+    fun `a long comment is cut short in the row and runs longer when expanded`() {
+        val long = "x".repeat(600)
+        val outcome = GitHubEvents.evaluate(
+            watch = commentWatch,
+            previous = commentsSeen(),
+            snapshot = snapshot(
+                comments = listOf(comment(id = 101L, body = long)),
+                commentsChanged = true,
+            ),
+            nowMs = 21_000L,
+        )
+        val event = outcome.events.filterIsInstance<GitHubEvent.NewComments>().single()
+        assertTrue("the collapsed row stays short", event.body.length < 160)
+        assertTrue("the expanded card says more", event.expanded.length > event.body.length)
+        assertTrue(event.body.endsWith("…"))
+    }
+
+    @Test
+    fun `a not-modified comment response announces nothing and moves nothing`() {
+        val before = commentsSeen(issueId = 400L)
+        val outcome = GitHubEvents.evaluate(
+            watch = commentWatch,
+            previous = before,
+            snapshot = snapshot(commentsChanged = false, commentsAnswered = true),
+            nowMs = 22_000L,
+        )
+        assertTrue(outcome.events.none { it is GitHubEvent.NewComments })
+        assertEquals(400L, outcome.state.lastIssueCommentId)
+    }
+
+    @Test
+    fun `a refusal backs the track off, doubling to a ceiling, and never seeds it`() {
+        var state = seeded(watch = commentWatch)
+        val waits = mutableListOf<Long>()
+        var now = 1_000L
+        repeat(8) {
+            val outcome = GitHubEvents.evaluate(
+                watch = commentWatch,
+                previous = state,
+                snapshot = snapshot(commentsChanged = false, commentsRefusedCode = 404),
+                nowMs = now,
+            )
+            state = outcome.state
+            waits += state.commentsRetryAt - now
+            now += 1_000L
+        }
+        val base = GitHubEvents.COMMENTS_RETRY_BASE_MS
+        assertEquals(
+            listOf(base, base * 2, base * 4, base * 8, base * 16, base * 32, base * 32, base * 32),
+            waits,
+        )
+        assertEquals(404, state.commentsFailedCode)
+        assertFalse(
+            "a refusal is not a look, so the next real page is not news",
+            state.commentsSeeded,
+        )
+    }
+
+    @Test
+    fun `an answer clears the back-off`() {
+        val refused = GitHubEvents.evaluate(
+            watch = commentWatch,
+            previous = seeded(watch = commentWatch),
+            snapshot = snapshot(commentsChanged = false, commentsRefusedCode = 403),
+            nowMs = 1_000L,
+        ).state
+        assertTrue(refused.commentsRetryAt > 0L)
+
+        val answered = GitHubEvents.evaluate(
+            watch = commentWatch,
+            previous = refused,
+            snapshot = snapshot(commentsChanged = false, commentsAnswered = true),
+            nowMs = 2_000L,
+        ).state
+        assertEquals(0, answered.commentsFailures)
+        assertEquals(0L, answered.commentsRetryAt)
+        assertEquals(0, answered.commentsFailedCode)
+    }
+
+    @Test
+    fun `a comments-only watch says so rather than reading as nothing selected`() {
+        val only = GitHubWatch(
+            owner = "riveerxd",
+            repo = "nightbell",
+            notifyOnStars = false,
+            notifyOnIssues = false,
+            watchReleases = false,
+            notifyOnComments = true,
+        )
+        assertEquals("comments", only.summary)
     }
 }

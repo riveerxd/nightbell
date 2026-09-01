@@ -286,7 +286,7 @@ object Validation {
         repoNote(watch.repository.slug.takeIf { watch.repository.isSet } ?: "")?.let { notes += it }
 
         if (!watch.notifyOnStars && !watch.notifyOnIssues &&
-            !watch.watchReleases && !watch.watchPullRequests
+            !watch.watchReleases && !watch.watchPullRequests && !watch.notifyOnComments
         ) {
             notes += Note(
                 Field.GITHUB, Severity.WARNING,
@@ -306,11 +306,21 @@ object Validation {
                 "The author filter only applies to issues and pull requests",
             )
         }
+        if (watch.notifyOnComments && monitor.intervalMinutes >= 15) {
+            // A hint rather than a warning: this configuration works, it just
+            // costs, and the interval warning above already covers the case where
+            // the cadence is the problem.
+            notes += Note(
+                Field.GITHUB, Severity.HINT,
+                "Comments are one more request on every check. Without a token this device " +
+                    "gets 60 an hour, shared by every repository it watches.",
+            )
+        }
         if (monitor.intervalMinutes < 15) {
             notes += Note(
                 Field.INTERVAL, Severity.WARNING,
                 "GitHub allows 60 requests an hour without a token, and one check spends up " +
-                    "to three. Add a token in Settings, or check less often.",
+                    "to four. Add a token in Settings, or check less often.",
             )
         }
         if (monitor.useProxy) {

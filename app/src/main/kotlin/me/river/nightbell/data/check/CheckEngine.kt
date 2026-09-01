@@ -279,7 +279,10 @@ class CheckEngine(
                 // half of a repository check is not the verdict: it is the ETags,
                 // the rate-limit headers and the diff against last time, none of
                 // which fit in a CheckResult.
-                val outcome = github.poll(monitor, before.github)
+                // `force` is a user gesture every time it is true, and it is the
+                // way past a backed-off comment track: somebody who taps
+                // re-check has asked to look now, whatever the ladder says.
+                val outcome = github.poll(monitor, before.github, force = force)
                 githubOutcome = outcome
                 outcome.result
             } else {

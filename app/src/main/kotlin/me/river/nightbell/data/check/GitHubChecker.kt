@@ -2,6 +2,7 @@ package me.river.nightbell.data.check
 
 import me.river.nightbell.domain.CheckResult
 import me.river.nightbell.domain.FailureKind
+import me.river.nightbell.domain.GitHubComment
 import me.river.nightbell.domain.GitHubEtags
 import me.river.nightbell.domain.GitHubItem
 import me.river.nightbell.domain.GitHubRate
@@ -31,6 +32,8 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
@@ -112,7 +115,7 @@ class GitHubChecker(
      * the caller always receives a complete snapshot and never has to reason
      * about which endpoint answered.
      */
-    suspend fun poll(monitor: Monitor, previous: GitHubState): Outcome =
+    suspend fun poll(monitor: Monitor, previous: GitHubState, force: Boolean = false): Outcome =
         withContext(Dispatchers.IO) {
             val settings = settingsFor()
             val token = settings.githubToken.trim()
@@ -247,6 +250,70 @@ class GitHubChecker(
                 }
             }
 
+            // ---- comments on issues ------------------------------------------
+            //
+            // Last of the four on purpose. An unauthenticated device gets 60 an
+            // hour for every app behind its address, so a fleet of repository
+            // monitors lives close to the ceiling and something has to be the
+            // endpoint that yields. It is this one: the other three shipped in
+            // 3.2.0 and nobody asked for them to get quieter.
+            var comments = emptyList<GitHubComment>()
+            var commentsChanged = false
+            var commentsAnswered = false
+            var commentsRefusedCode = 0
+            var commentsEtag = previous.commentsEtag
+            val commentsDue = force || nowMs() >= previous.commentsRetryAt
+            val budgetLeft = rate.remaining < 0 || rate.remaining >= COMMENTS_BUDGET_FLOOR
+            if (watch.notifyOnComments && commentsDue && budgetLeft) {
+                // One request, and deliberately never a second one. A bounded
+                // page walk reads as the safe choice and is not: page two of a
+                // newest-first list holds only rows older than every row on page
+                // one, and the decider announces the newest few above the
+                // watermark, so a page-two row can only matter when page one had
+                // already reached back past the previous poll. The walk would fire
+                // exactly where its results are guaranteed to be discarded, and
+                // `page=2` is a separate resource whose ETag has nowhere to live.
+                //
+                // No `since` either: it filters on `updated_at`, so it drags
+                // years-old comments back up every time somebody edits one.
+                val url = "$apiBase/repos/${repo.owner}/${repo.name}/issues/comments" +
+                    "?sort=created&direction=desc&per_page=$COMMENTS_PER_PAGE"
+                val answer = call(client, url, previous.commentsEtag, token)
+                answer.rate?.let { rate = it }
+                when (answer) {
+                    // Not `limited()`. Being refused the last of four requests
+                    // must not throw away the stars, issues and releases this
+                    // pass already read, which is what discarding the poll would
+                    // do to every check once a device sits near its ceiling.
+                    // The reset clock is still recorded, because a secondary
+                    // limit has its own and walking back into it costs the hour.
+                    is Answer.Limited -> {
+                        rate = rate.copy(resetAt = answer.retryAt ?: rate.resetAt)
+                    }
+                    is Answer.Ok -> {
+                        comments = parseComments(answer.array)
+                        commentsChanged = true
+                        commentsAnswered = true
+                        commentsEtag = answer.etag.ifBlank { previous.commentsEtag }
+                    }
+                    is Answer.NotModified -> {
+                        commentsAnswered = true
+                        commentsEtag = answer.etag.ifBlank { previous.commentsEtag }
+                    }
+                    // Deliberately not the releases rule, where a 404 counts as
+                    // having looked. `releases/latest` answers with at most one
+                    // release, so seeding off its absence can only ever announce
+                    // one genuinely new thing; this endpoint answers with a
+                    // hundred, and seeding off a refusal would hand the first
+                    // working response a watermark of zero and a page of old
+                    // conversation to call news.
+                    is Answer.Failed ->
+                        if (answer.code == 403 || answer.code == 404 || answer.code == 410) {
+                            commentsRefusedCode = answer.code
+                        }
+                }
+            }
+
             val snapshot = GitHubSnapshot(
                 stars = stars,
                 openIssues = openIssues,
@@ -258,7 +325,16 @@ class GitHubChecker(
                 issuesChanged = issuesChanged,
                 release = release,
                 releaseChanged = releaseChanged,
-                etags = GitHubEtags(repo = repoEtag, issues = issuesEtag, releases = releasesEtag),
+                comments = comments,
+                commentsChanged = commentsChanged,
+                commentsAnswered = commentsAnswered,
+                commentsRefusedCode = commentsRefusedCode,
+                etags = GitHubEtags(
+                    repo = repoEtag,
+                    issues = issuesEtag,
+                    releases = releasesEtag,
+                    comments = commentsEtag,
+                ),
                 rate = rate,
             )
 
@@ -269,6 +345,9 @@ class GitHubChecker(
             // count that simply had not changed would read as the repository losing
             // its stars and getting them back.
             val newestIssue = issues.filter { !it.isPullRequest }.maxByOrNull { it.number }
+            // Never the first row: sorting by creation does not tie-break by id,
+            // so a page is not reliably ordered by id even when it looks it.
+            val newestComment = comments.maxByOrNull { it.id }
             val facts = RepoFacts(
                 stars = stars,
                 openIssues = openIssues,
@@ -282,6 +361,18 @@ class GitHubChecker(
                     previous.lastIssueTitle
                 },
                 pushedAt = githubInstantMs(pushedAt),
+                // The newest comment the repository has, whatever the toggles
+                // say, because this list is a record of the repository and not of
+                // what was announced. Carried forward from the watermarks when
+                // the endpoint answered 304 or was never asked, so a sample
+                // cannot read as the repository losing a comment and regaining
+                // it. Only the id has to survive: the issue number and the author
+                // are read on the poll the value rises, and that poll has the
+                // page in hand.
+                commentId = newestComment?.id
+                    ?: maxOf(previous.lastIssueCommentId, previous.lastPullCommentId),
+                commentIssue = newestComment?.issueNumber ?: 0,
+                commentAuthor = newestComment?.author.orEmpty(),
             )
 
             Outcome(
@@ -521,6 +612,52 @@ class GitHubChecker(
         }
     }
 
+    private fun parseComments(array: JsonArray?): List<GitHubComment> {
+        if (array == null) return emptyList()
+        return array.mapNotNull { element ->
+            val obj = element as? JsonObject ?: return@mapNotNull null
+            val id = obj.long("id") ?: return@mapNotNull null
+            val user = obj["user"] as? JsonObject
+            val login = user?.string("login").orEmpty()
+            val htmlUrl = obj.string("html_url").orEmpty()
+            GitHubComment(
+                id = id,
+                // The payload has no number field. `issue_url` uses the shared
+                // number space, so this is right for a pull request parent too.
+                issueNumber = obj.string("issue_url")?.substringAfterLast('/')?.toIntOrNull() ?: 0,
+                author = login,
+                body = obj.string("body").orEmpty(),
+                url = htmlUrl,
+                onPullRequest = isPullThread(htmlUrl),
+                // Present on every row with a null value, so a bare presence
+                // check reads every comment on GitHub as hidden and the track
+                // then announces nothing at all, silently.
+                minimized = obj["minimized"].isPresent(),
+                isApp = user?.string("type") == "Bot" ||
+                    // Same shape as `minimized`, failing the other way: read as a
+                    // presence check it marks every comment as an App, and with
+                    // bot comments off the track is silent again.
+                    obj["performed_via_github_app"].isPresent() ||
+                    user?.string("node_id")?.startsWith("BOT_") == true ||
+                    login.endsWith("[bot]") ||
+                    user?.string("html_url")?.contains("/apps/") == true,
+            )
+        }
+    }
+
+    /**
+     * Whether a comment's `html_url` points at a pull request thread.
+     *
+     * Tests the path segment rather than searching for "/pull/", because
+     * github.com/wei/pull is a real repository whose issue comments live at
+     * /wei/pull/issues/1#issuecomment-393287464. A substring test reads that as a
+     * pull request and silently drops every comment for anyone watching it.
+     */
+    private fun isPullThread(htmlUrl: String): Boolean =
+        htmlUrl.substringAfter("github.com/", "")
+            .split('/')
+            .let { it.size > 2 && it[2] == "pull" }
+
     private fun parseReleases(array: JsonArray?): List<GitHubRelease> {
         if (array == null) return emptyList()
         return array.mapNotNull { (it as? JsonObject)?.let(::parseRelease) }
@@ -552,6 +689,25 @@ class GitHubChecker(
         const val ITEMS_PER_PAGE = 20
         const val RELEASES_PER_PAGE = 10
 
+        /**
+         * Comments per poll, and the reason it is the maximum GitHub allows.
+         *
+         * The server does not filter this list. On one page of a hundred from a
+         * busy repository, 76 rows were pull request conversation and 31 were
+         * bots, which put the fifth comment on an actual issue at row 44. Twenty
+         * rows would have found two of them. The page is a ceiling rather than a
+         * fixed cost, so a quiet repository still pays for what it has.
+         */
+        const val COMMENTS_PER_PAGE = 100
+
+        /**
+         * Requests that must be left when the comment call is considered.
+         *
+         * One of headroom, so the last of four on a device near its hourly
+         * ceiling cannot take another monitor's repository call down with it.
+         */
+        const val COMMENTS_BUDGET_FLOOR = 2
+
         /** Shortest gap between two calls, so a due fleet never bursts. */
         const val MIN_GAP_MS = 350L
     }
@@ -574,3 +730,12 @@ private fun JsonObject.long(key: String): Long? =
 
 private fun JsonObject.bool(key: String): Boolean? =
     (this[key] as? JsonPrimitive)?.content?.toBooleanStrictOrNull()
+
+/**
+ * A key that is there and carries something.
+ *
+ * GitHub sends `minimized` and `performed_via_github_app` on every comment with a
+ * null value, so `!= null` on the element is true for all of them and answers the
+ * opposite of the question anyone is asking.
+ */
+private fun JsonElement?.isPresent(): Boolean = this != null && this !is JsonNull

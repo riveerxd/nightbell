@@ -625,7 +625,8 @@ class AlertCenter(private val context: Context) {
         silent: Boolean,
     ): Boolean {
         val repo = monitor.github.repository
-        val channelId = channelFor(policy, Severity.NEWS, silent)
+        val severity = severityOf(event)
+        val channelId = channelFor(policy, severity, silent)
         val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_stat_brand)
             .setContentTitle(event.title(repo.slug))
@@ -633,7 +634,7 @@ class AlertCenter(private val context: Context) {
             .setStyle(
                 NotificationCompat.BigTextStyle().bigText(
                     buildString {
-                        append(event.body)
+                        append(event.expanded)
                         append("\n\n").append(repo.url)
                     },
                 ),
@@ -647,7 +648,13 @@ class AlertCenter(private val context: Context) {
             .setSilent(silent)
             .setShowWhen(true)
             .setWhen(System.currentTimeMillis())
-            .setGroup(githubGroupOf(monitor.id))
+            .setGroup(
+                if (severity == Severity.COMMENTS) {
+                    githubCommentsGroupOf(monitor.id)
+                } else {
+                    githubGroupOf(monitor.id)
+                },
+            )
             .addAction(
                 R.drawable.ic_stat_brand,
                 "Open repo",
@@ -693,6 +700,34 @@ class AlertCenter(private val context: Context) {
     fun githubTag(monitorId: String): String = GITHUB_TAG_PREFIX + monitorId
 
     private fun githubGroupOf(monitorId: String) = "$NOTIFICATION_GROUP.github.$monitorId"
+
+    /**
+     * Comments group separately because they sit on a different channel.
+     *
+     * A group whose children are spread across two channels has no defined
+     * alerting behaviour, so the split follows the channel rather than being a
+     * decision of its own. The tag is unchanged, so "Mark seen" still clears both
+     * without knowing they were ever separate.
+     */
+    private fun githubCommentsGroupOf(monitorId: String) =
+        "$NOTIFICATION_GROUP.github.comments.$monitorId"
+
+    /**
+     * Which channel family one piece of repository news belongs to.
+     *
+     * Over the sealed interface rather than at the call site, so the next event
+     * type has to say where it belongs instead of quietly inheriting a channel.
+     */
+    private fun severityOf(event: GitHubEvent): Severity = when (event) {
+        is GitHubEvent.NewComments -> Severity.COMMENTS
+        is GitHubEvent.Stars,
+        is GitHubEvent.Milestone,
+        is GitHubEvent.Digest,
+        is GitHubEvent.NewIssue,
+        is GitHubEvent.NewPull,
+        is GitHubEvent.NewRelease,
+        -> Severity.NEWS
+    }
 
     // ---- Nightbell's own updates --------------------------------------------
 
@@ -895,6 +930,21 @@ class AlertCenter(private val context: Context) {
          * which is the first thing anyone watching a busy repo will want to do.
          */
         NEWS,
+
+        /**
+         * Comments on a watched repository, and only those.
+         *
+         * Split out of [NEWS] because it is the one track that can produce a row
+         * per reply. A repository can go a month without a release and take fifty
+         * comments in an afternoon, and the remedy anyone reaches for is a long
+         * press on the notification: under NEWS that press also silences stars,
+         * releases and Nightbell's own update notice, which has no other route.
+         *
+         * This is the axis the class already works on, one channel per sound,
+         * vibration style and severity, so `silent` keeps being passed through
+         * exactly as before and nothing here revisits that.
+         */
+        COMMENTS,
     }
 
     private fun ensureGroups() {
@@ -912,6 +962,9 @@ class AlertCenter(private val context: Context) {
         )
         manager.createNotificationChannelGroup(
             NotificationChannelGroup(GROUP_NEWS, "Repository and update news"),
+        )
+        manager.createNotificationChannelGroup(
+            NotificationChannelGroup(GROUP_COMMENTS, "Repository comments"),
         )
         manager.createNotificationChannelGroup(
             NotificationChannelGroup(GROUP_URGENT, "Urgent"),
@@ -1052,6 +1105,7 @@ class AlertCenter(private val context: Context) {
             Severity.RECOVERY -> "nightbell.recovery."
             Severity.CERT -> "nightbell.cert."
             Severity.NEWS -> "nightbell.news."
+            Severity.COMMENTS -> "nightbell.comments."
         }
         val id = buildString {
             append(prefix)
@@ -1070,6 +1124,12 @@ class AlertCenter(private val context: Context) {
             severity == Severity.CERT -> NotificationManager.IMPORTANCE_DEFAULT
             // News, by definition, is never worth a full-screen interruption.
             severity == Severity.NEWS -> NotificationManager.IMPORTANCE_DEFAULT
+            // The one arm the compiler does not ask for, and the reason this line
+            // exists: without it a comment falls to the HIGH default below and
+            // every reply peeks over the screen with a sound, louder than a
+            // degraded alert. Importance freezes when the channel is created, so
+            // that would only ever be repairable with a second channel id.
+            severity == Severity.COMMENTS -> NotificationManager.IMPORTANCE_DEFAULT
             sound == SoundChoice.SILENT && !vibrateOn -> NotificationManager.IMPORTANCE_DEFAULT
             else -> NotificationManager.IMPORTANCE_HIGH
         }
@@ -1081,6 +1141,7 @@ class AlertCenter(private val context: Context) {
                     Severity.RECOVERY -> "Recovery · "
                     Severity.CERT -> "Certificate · "
                     Severity.NEWS -> "News · "
+                    Severity.COMMENTS -> "Comments · "
                 },
             )
             append(sound.label)
@@ -1094,14 +1155,18 @@ class AlertCenter(private val context: Context) {
                 Severity.RECOVERY -> GROUP_RECOVERY
                 Severity.CERT -> GROUP_CERT
                 Severity.NEWS -> GROUP_NEWS
+                Severity.COMMENTS -> GROUP_COMMENTS
             }
             description = when (severity) {
                 Severity.DOWN -> "Raised when a monitor starts failing (${sound.label.lowercase()})."
                 Severity.DEGRADED -> "Raised when a monitor breaches its latency budget."
                 Severity.RECOVERY -> "Raised when a monitor recovers (${sound.label.lowercase()})."
                 Severity.CERT -> "Raised when a TLS certificate is approaching its expiry date."
-                Severity.NEWS -> "Stars, issues and releases on watched repositories, and " +
-                    "Nightbell's own updates."
+                Severity.NEWS -> "Stars, new issues, pull requests and releases on watched " +
+                    "repositories, and Nightbell's own updates. Comments have a channel of " +
+                    "their own."
+                Severity.COMMENTS -> "New comments on issues and pull requests in watched " +
+                    "repositories, including issues that are already closed."
             }
             enableVibration(vibrateOn)
             if (vibrateOn) vibrationPattern = style.pattern
@@ -1110,7 +1175,7 @@ class AlertCenter(private val context: Context) {
                 Severity.DOWN -> DOWN_COLOR
                 Severity.DEGRADED, Severity.CERT -> DEGRADED_COLOR
                 Severity.RECOVERY -> UP_COLOR
-                Severity.NEWS -> NEWS_COLOR
+                Severity.NEWS, Severity.COMMENTS -> NEWS_COLOR
             }
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             setShowBadge(true)
@@ -1242,6 +1307,7 @@ class AlertCenter(private val context: Context) {
         /** Date only: an expiry to the second is precision nobody can act on. */
         private val certDateFormat = SimpleDateFormat("d MMM yyyy", Locale.getDefault())
         private const val GROUP_NEWS = "nightbell.group.news"
+        private const val GROUP_COMMENTS = "nightbell.group.comments"
         private const val GROUP_URGENT = "nightbell.group.urgent"
         private const val GROUP_HEALTH = "nightbell.group.health"
         private const val NOTIFICATION_GROUP = "nightbell.alerts"

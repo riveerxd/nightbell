@@ -11,6 +11,7 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.performScrollToNode
 import androidx.test.espresso.Espresso
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -114,7 +115,8 @@ class GitHubSetupUiTest {
         composeRule.waitForIdle()
 
         composeRule.onNodeWithText("GitHub repo").performScrollTo().performClick()
-        composeRule.onNodeWithText("Stars, issues and releases on one repository.").assertIsDisplayed()
+        composeRule.onNodeWithText("Stars, issues, comments and releases on one repository.")
+            .assertIsDisplayed()
         composeRule.captureScreenshot("gh-02-kind")
         composeRule.onNodeWithText("Continue").performClick()
         composeRule.waitForIdle()
@@ -142,6 +144,7 @@ class GitHubSetupUiTest {
         composeRule.onNodeWithText("Milestones").assertIsDisplayed()
         composeRule.onNodeWithText("New issues").assertIsDisplayed()
         composeRule.onNodeWithText("Pull requests").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("New comments").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("New releases").performScrollTo().assertIsDisplayed()
         composeRule.captureScreenshot("gh-04-watch-options")
 
@@ -165,6 +168,10 @@ class GitHubSetupUiTest {
         assertTrue(monitor.github.notifyOnIssues)
         assertTrue(monitor.github.watchReleases)
         assertTrue("pull requests must stay off by default", !monitor.github.watchPullRequests)
+        // A comment watcher that defaulted on would make the first poll of any
+        // busy repository the loudest thing this app has ever done.
+        assertTrue("comments must stay off by default", !monitor.github.notifyOnComments)
+        assertTrue("bot comments must stay off by default", !monitor.github.notifyOnBotComments)
         assertTrue("a repo monitor must never default to paging", !monitor.urgent)
         assertTrue("cadence must respect the anonymous budget", monitor.intervalMinutes >= 15)
 
@@ -173,6 +180,85 @@ class GitHubSetupUiTest {
         }
         composeRule.onAllNodesWithText("riveerxd/nightbell").onFirst().assertIsDisplayed()
         composeRule.captureScreenshot("gh-05-dashboard")
+    }
+
+    /**
+     * The comment option, driven the way a user reaches it.
+     *
+     * Every assertion here is about something that can only be seen on a device:
+     * that the row is where the section puts it, that turning it on reveals the
+     * two controls that belong to it, that the filter field a comments-only
+     * monitor needs is reachable, and that the subtitle tells the truth about
+     * pull requests in both of its states.
+     */
+    @Test
+    fun theCommentOptionRevealsItsControlsAndStoresWhatWasChosen() {
+        launchApp()
+        composeRule.onNodeWithText("A GitHub repository").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithContentDescription("Repository").performTextInput("riveerxd/nightbell")
+        Espresso.closeSoftKeyboard()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("Continue").performClick()
+        composeRule.waitForIdle()
+
+        // Off to begin with, and the subtitle says so rather than leaving the user
+        // to work it out from an unlit switch.
+        composeRule.onNodeWithText("New comments").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Comments are ignored").assertIsDisplayed()
+        composeRule.captureScreenshot("gh-comments-off")
+
+        composeRule.onNodeWithTag("github-watch-comments").performScrollTo().performClick()
+        composeRule.waitForIdle()
+
+        // On, with pull requests still off, so the subtitle has to explain that
+        // pull request threads come from the same endpoint and stay out.
+        composeRule.onNodeWithText("Comments from bots").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Comments posted by a GitHub app are skipped").assertIsDisplayed()
+        composeRule.onNodeWithTag("github-comment-muted").performScrollTo().assertIsDisplayed()
+        composeRule.captureScreenshot("gh-comments-on")
+
+        // Addressed by its label rather than its tag: the tag sits on the field's
+        // frame, and the node that takes focus is the text field inside it, which
+        // carries the raw label as its content description.
+        composeRule.onNodeWithTag("github-comment-muted").performScrollTo()
+        composeRule.onNodeWithContentDescription("Never from (optional)")
+            .performTextInput("rustbot, rust-timer")
+        Espresso.closeSoftKeyboard()
+        composeRule.waitForIdle()
+
+        // Two logins, typed as one string with a comma in the middle. The field
+        // stores raw text precisely so the comma survives being typed.
+        composeRule.onNodeWithText("rustbot, rust-timer").assertIsDisplayed()
+
+        // Issues and pull requests both off, comments on: the keyword field must
+        // still be reachable, because it still filters.
+        composeRule.onNodeWithTag("github-watch-issues").performScrollTo().performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("github-keywords").performScrollTo().assertIsDisplayed()
+        // The author allowlist does not reach comments, so it must not be offered
+        // to a monitor that only watches them.
+        composeRule.onAllNodesWithTag("github-authors").assertCountEquals(0)
+        composeRule.captureScreenshot("gh-comments-only")
+
+        composeRule.onNodeWithText("Continue").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("Create monitor").performClick()
+        composeRule.waitForIdle()
+
+        awaitTrue(description = "the comment watcher to be stored") {
+            runBlocking { Nightbell.require().store.currentSnapshot().monitors.size } == 1
+        }
+        val watch = runBlocking {
+            Nightbell.require().store.currentSnapshot()
+        }.monitors.single().github
+        assertTrue(watch.notifyOnComments)
+        assertFalse("the bot switch was never touched", watch.notifyOnBotComments)
+        assertEquals(listOf("rustbot", "rust-timer"), watch.commentMutedAuthors)
+        assertFalse("issues were switched off", watch.notifyOnIssues)
+        // A comments-only monitor is watching something, so the config row must
+        // not read as though nothing was selected.
+        assertTrue(watch.summary.contains("comments"))
     }
 
     @Test

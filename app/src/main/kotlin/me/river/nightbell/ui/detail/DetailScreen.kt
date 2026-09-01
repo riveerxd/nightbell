@@ -1139,6 +1139,16 @@ private fun ActivityRow(row: GitHubActivity.Row, nowMs: Long) {
             trailing = ""
         }
 
+        is GitHubActivity.Comment -> {
+            // Sky, the same as an opened issue: a comment is tracker news and the
+            // glyph is what separates the two, not a hue invented for it.
+            icon = NightbellIcons.Comment
+            accent = NightbellColors.Sky
+            title = if (row.issue > 0) "Comment on #${row.issue}" else "New comment"
+            subtitle = if (row.author.isNotBlank()) "by ${row.author}" else "Author not recorded"
+            trailing = ""
+        }
+
         is GitHubActivity.Release -> {
             icon = NightbellIcons.Import
             accent = NightbellColors.Mint

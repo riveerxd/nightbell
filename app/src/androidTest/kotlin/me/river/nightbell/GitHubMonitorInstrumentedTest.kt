@@ -3,9 +3,12 @@ package me.river.nightbell
 import android.Manifest
 import android.app.Notification
 import android.app.NotificationManager
+import android.graphics.Bitmap
 import android.service.notification.StatusBarNotification
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
+import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import me.river.nightbell.NightbellTestSupport.appContext
@@ -64,6 +67,7 @@ class GitHubMonitorInstrumentedTest {
     private val release = AtomicReference<FakeRelease?>(null)
     private val forced = AtomicReference<TinyHttpServer.Response?>(null)
     private val repoEtag = AtomicReference("\"repo-1\"")
+    private val comments = AtomicReference(listOf<FakeComment>())
 
     private data class FakeIssue(
         val id: Long,
@@ -74,6 +78,15 @@ class GitHubMonitorInstrumentedTest {
     )
 
     private data class FakeRelease(val id: Long, val tag: String)
+
+    private data class FakeComment(
+        val id: Long,
+        val issue: Int,
+        val author: String = "river",
+        val body: String = "Still happens on a fresh install of 3.7.0.",
+        val pull: Boolean = false,
+        val app: Boolean = false,
+    )
 
     @Before
     fun setUp() {
@@ -110,6 +123,14 @@ class GitHubMonitorInstrumentedTest {
         )
         val path = request.path.substringBefore('?')
         return when {
+            // Before the issues branch: this path ends in "/comments", but a
+            // careless matcher on "/issues" would swallow it.
+            path.endsWith("/issues/comments") -> TinyHttpServer.Response(
+                body = comments.get().joinToString(",", "[", "]") { it.json() },
+                contentType = "application/json",
+                extraHeaders = headers,
+            )
+
             path.endsWith("/issues") -> TinyHttpServer.Response(
                 body = issues.get().joinToString(",", "[", "]") { it.json() },
                 contentType = "application/json",
@@ -162,6 +183,25 @@ class GitHubMonitorInstrumentedTest {
         append(""""user":{"login":"$author"}""")
         if (pull) append(""","pull_request":{"url":"x"}""")
         append("}")
+    }
+
+    /** Shaped the way GitHub really sends one, nulls included. */
+    private fun FakeComment.json(): String = buildString {
+        val kind = if (pull) "pull" else "issues"
+        append("""{"id":$id,""")
+        append(""""issue_url":"https://api.github.com/repos/riveerxd/nightbell/issues/$issue",""")
+        append(
+            """"html_url":"https://github.com/riveerxd/nightbell/$kind/$issue""" +
+                """#issuecomment-$id",""",
+        )
+        append(""""body":"$body","created_at":"2026-08-31T19:59:33Z",""")
+        append(""""updated_at":"2026-08-31T19:59:33Z","author_association":"NONE",""")
+        append(""""user":{"login":"$author","type":"${if (app) "Bot" else "User"}"},""")
+        // Both keys present with a null value on an ordinary comment, which is
+        // the case that decides whether this feature says anything at all.
+        append(""""performed_via_github_app":""")
+        append(if (app) """{"id":278306,"slug":"ci"}""" else "null")
+        append(""","minimized":null}""")
     }
 
     private fun FakeRelease.json(): String =
@@ -474,6 +514,168 @@ class GitHubMonitorInstrumentedTest {
         assertFalse(runBlocking { engine.checkForAppUpdate(force = true) })
         val state = runBlocking { graph.store.currentSnapshot() }.update
         assertTrue("the attempt should still be recorded", state.lastCheckedAt > 0L)
+    }
+
+    /**
+     * The feature end to end: a comment lands and the phone says so.
+     *
+     * Everything before this proves a rule in isolation. This is the one that
+     * says the whole chain works: the fourth request goes out, the payload
+     * parses, the decider announces, and a row appears in the shade with the
+     * comment's own words on it.
+     */
+    @Test
+    fun l_a_new_comment_reaches_the_shade_with_what_was_said() {
+        val watch = GitHubWatch(
+            owner = "riveerxd",
+            repo = "nightbell",
+            notifyOnComments = true,
+            // Off, so the only rows in play are the comment rows.
+            notifyOnStars = false,
+            notifyOnIssues = false,
+            watchReleases = false,
+        )
+        comments.set(listOf(FakeComment(id = 100L, issue = 12)))
+        seed(watch)
+        check()
+        // The first look is the track learning where it is, however old the page.
+        assertTrue("a first look must be silent: " + titles(), repoNotifications().isEmpty())
+        assertEquals(100L, state().lastIssueCommentId)
+
+        comments.set(
+            listOf(
+                FakeComment(id = 101L, issue = 47, author = "river", body = "Reproduced on 3.7.0."),
+                FakeComment(id = 100L, issue = 12),
+            ),
+        )
+        check()
+
+        awaitTitle("New comment on riveerxd/nightbell")
+        assertEquals(1, repoNotifications().size)
+        val posted = repoNotifications().single()
+        val text = posted.notification.extras.getString(Notification.EXTRA_TEXT).orEmpty()
+        assertEquals("#47 by river: Reproduced on 3.7.0.", text)
+        // On its own channel, so muting replies leaves releases alone.
+        assertTrue(
+            "a comment must not post on the news channel: " + posted.notification.channelId,
+            posted.notification.channelId.startsWith("nightbell.comments."),
+        )
+        assertEquals(101L, state().lastIssueCommentId)
+
+        // The same page again says nothing more.
+        val before = repoNotifications().size
+        check()
+        assertEquals(before, repoNotifications().size)
+    }
+
+    @Test
+    fun m_replies_on_separate_threads_get_separate_rows_and_one_thread_gets_one() {
+        val watch = GitHubWatch(
+            owner = "riveerxd",
+            repo = "nightbell",
+            notifyOnComments = true,
+            notifyOnStars = false,
+            notifyOnIssues = false,
+            watchReleases = false,
+        )
+        comments.set(listOf(FakeComment(id = 100L, issue = 1)))
+        seed(watch)
+        check()
+        assertTrue(repoNotifications().isEmpty())
+
+        // Three threads: three separate things to read, so three rows.
+        comments.set(
+            listOf(
+                FakeComment(id = 101L, issue = 11),
+                FakeComment(id = 102L, issue = 12),
+                FakeComment(id = 103L, issue = 13),
+            ),
+        )
+        check()
+        awaitTrue(description = "three comment rows") { repoNotifications().size == 3 }
+        assertEquals(3, titles().count { it.contains("New comment on") })
+
+        notifications.cancelAll()
+
+        // Five replies to one thread: one conversation, one tap target, one row.
+        comments.set((201L..205L).map { FakeComment(id = it, issue = 50, author = "bob") })
+        check()
+        awaitTitle("5 new comments on riveerxd/nightbell")
+        assertEquals(1, repoNotifications().size)
+        val text = repoNotifications().single().notification.extras
+            .getString(Notification.EXTRA_TEXT).orEmpty()
+        assertTrue(text, text.startsWith("#50, latest by bob"))
+    }
+
+    @Test
+    fun n_a_bot_comment_is_silent_until_the_switch_says_otherwise() {
+        val watch = GitHubWatch(
+            owner = "riveerxd",
+            repo = "nightbell",
+            notifyOnComments = true,
+            notifyOnStars = false,
+            notifyOnIssues = false,
+            watchReleases = false,
+        )
+        comments.set(listOf(FakeComment(id = 100L, issue = 1)))
+        seed(watch)
+        check()
+
+        comments.set(
+            listOf(FakeComment(id = 101L, issue = 60, author = "ci-bot[bot]", app = true)),
+        )
+        check()
+        assertTrue("a build bot must not page: " + titles(), repoNotifications().isEmpty())
+        // Skipped is not unseen. The watermark moved, so turning the switch on is
+        // not a request for everything the bot has ever said.
+        assertEquals(101L, state().lastIssueCommentId)
+    }
+
+    /**
+     * Photographs two comment rows in the real shade.
+     *
+     * Captured inside the test rather than left on screen for `adb` to find,
+     * because [tearDown] clears the shade the moment this returns. Follows the
+     * pattern the urgent heads-up tests already use: post, open the shade, ask
+     * the platform for the pixels, write the file the runner will pull.
+     */
+    @Test
+    fun zz_posts_comment_rows_for_eyeballing() {
+        val watch = GitHubWatch(
+            owner = "riveerxd",
+            repo = "nightbell",
+            notifyOnComments = true,
+            notifyOnStars = false,
+            notifyOnIssues = false,
+            watchReleases = false,
+        )
+        comments.set(listOf(FakeComment(id = 100L, issue = 1)))
+        seed(watch)
+        check()
+        comments.set(
+            listOf(
+                FakeComment(
+                    id = 101L,
+                    issue = 47,
+                    author = "shortwavesurfer2009",
+                    body = "Still happens on a fresh install of 3.7.0, on a Pixel 6.",
+                ),
+                FakeComment(id = 102L, issue = 8, author = "river", body = "Fixed on master."),
+            ),
+        )
+        check()
+        awaitTrue(description = "two comment rows to photograph") { repoNotifications().size == 2 }
+
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.uiAutomation.executeShellCommand("cmd statusbar expand-notifications").close()
+        // Long enough for the shade to finish sliding down.
+        Thread.sleep(2_000)
+        val shot: Bitmap = instrumentation.uiAutomation.takeScreenshot()
+        val dir = File(appContext.filesDir, "screenshots").apply { mkdirs() }
+        File(dir, "gh-comment-shade.png").outputStream().use {
+            shot.compress(Bitmap.CompressFormat.PNG, 100, it)
+        }
+        instrumentation.uiAutomation.executeShellCommand("cmd statusbar collapse").close()
     }
 
     private companion object {

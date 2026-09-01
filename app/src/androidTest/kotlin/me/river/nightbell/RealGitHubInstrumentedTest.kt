@@ -193,6 +193,75 @@ class RealGitHubInstrumentedTest {
         assertNull(outcome.snapshot)
     }
 
+    /**
+     * The comment track against a real payload, which is the only thing that can
+     * prove the parsing.
+     *
+     * GitHub sends `minimized` and `performed_via_github_app` on every comment
+     * with a null value. A fixture can be written to match that, but only the
+     * real endpoint proves the fixture was right about it, and reading either key
+     * as merely present makes the whole feature silent with nothing in a log to
+     * say why. Read against a busier repository than this one, because
+     * riveerxd/nightbell may have no comments at all and an empty page proves
+     * nothing about parsing.
+     */
+    @Test
+    fun g_real_comments_parse_and_the_first_look_announces_nothing() {
+        val busy = monitor.copy(
+            github = GitHubWatch(owner = "kotlin", repo = "kotlinx.coroutines", notifyOnComments = true),
+        )
+        val outcome = runBlocking { checker.poll(busy, GitHubState()) }
+        assumeFalse("GitHub is rate limiting this address", outcome.rateLimited)
+
+        val snapshot = outcome.snapshot!!
+        assumeTrue("the comment endpoint did not answer", snapshot.commentsAnswered)
+        assumeTrue("this repository has no comments to read", snapshot.comments.isNotEmpty())
+        Log.i(TAG, "read ${snapshot.comments.size} real comments")
+
+        // Every row parsed into something usable. A silent parse failure shows up
+        // here as an id of zero or an empty url rather than as an exception.
+        snapshot.comments.forEach { comment ->
+            assertTrue("a comment with no id: $comment", comment.id > 0L)
+            assertTrue("a comment with no parent number: $comment", comment.issueNumber > 0)
+            assertTrue("a comment with no url: $comment", comment.url.startsWith("https://"))
+        }
+
+        // The traps, against the real thing. Almost nothing on GitHub is hidden,
+        // and a build that read a null `minimized` as present would mark every
+        // one of these as hidden instead.
+        assertTrue(
+            "reading null minimized as present would hide everything",
+            snapshot.comments.any { !it.minimized },
+        )
+        assertTrue(
+            "reading a null app field as present would call everyone a bot",
+            snapshot.comments.any { !it.isApp },
+        )
+
+        // A busy repository serves pull request conversation from this endpoint
+        // too, and the path segment is the only thing that separates them.
+        val onPulls = snapshot.comments.count { it.onPullRequest }
+        Log.i(TAG, "$onPulls of ${snapshot.comments.size} were pull request threads")
+
+        // The first look at a repository with years of conversation must be silent.
+        val evaluation = GitHubEvents.evaluate(
+            watch = busy.github,
+            previous = GitHubState(),
+            snapshot = snapshot,
+            nowMs = System.currentTimeMillis(),
+        )
+        assertTrue(
+            "a real backlog was announced as news",
+            evaluation.events.none { it is me.river.nightbell.domain.GitHubEvent.NewComments },
+        )
+        assertTrue("the track must record that it looked", evaluation.state.commentsSeeded)
+        assertTrue(
+            "the watermark must have moved past the whole page",
+            evaluation.state.lastIssueCommentId > 0L ||
+                evaluation.state.lastPullCommentId > 0L,
+        )
+    }
+
     private companion object {
         const val TAG = "RealGitHubTest"
     }

@@ -47,6 +47,21 @@ object GitHubActivity {
         val closed: Int get() = from - to
     }
 
+    /**
+     * A comment arrived on a thread.
+     *
+     * No count, deliberately. GitHub publishes no repository-wide comment total,
+     * so a number here would be Nightbell counting its own polls rather than
+     * anything that can be checked against the repository. The issue track
+     * already behaves this way: three new issues in one poll are three
+     * notifications and one row.
+     */
+    data class Comment(
+        val issue: Int,
+        val author: String,
+        override val at: Long,
+    ) : Row
+
     data class Release(val tag: String, override val at: Long) : Row
 
     data class Forks(val from: Int, val to: Int, override val at: Long) : Row
@@ -138,6 +153,13 @@ object GitHubActivity {
                 // count, and saying so twice for one event is the noise this list
                 // exists to remove.
                 changes += IssueCount(before.openIssues, facts.openIssues, sample.at)
+            }
+            // Guarded on the previous reading being a real one, not just on the
+            // value moving. Without that, the first poll after the comment track
+            // is switched on takes the id from zero to a real one and posts a row
+            // about a conversation that may be years old.
+            if (before.commentId > 0L && facts.commentId > before.commentId) {
+                changes += Comment(facts.commentIssue, facts.commentAuthor, sample.at)
             }
             if (facts.stars != before.stars) {
                 changes += Stars(before.stars, facts.stars, sample.at)

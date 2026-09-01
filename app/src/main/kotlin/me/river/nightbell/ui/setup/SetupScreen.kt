@@ -2163,8 +2163,66 @@ private fun GitHubWatchCard(
         accent = accent,
         modifier = Modifier.testTag("github-watch-pulls"),
     )
+    ToggleRow(
+        title = "New comments",
+        subtitle = when {
+            !watch.notifyOnComments -> "Comments are ignored"
+            // Named by its exact label rather than by position, because the row
+            // above can move and this sentence is the whole gating explanation.
+            !watch.watchPullRequests -> "On issues, closed ones included. Pull request " +
+                "threads stay out."
+            else -> "On issues and pull requests, closed and merged threads included"
+        },
+        checked = watch.notifyOnComments,
+        onCheckedChange = { v -> viewModel.updateGitHub { it.copy(notifyOnComments = v) } },
+        icon = NightbellIcons.Comment,
+        accent = accent,
+        modifier = Modifier.testTag("github-watch-comments"),
+    )
     AnimatedVisibility(
-        visible = watch.notifyOnIssues || watch.watchPullRequests,
+        visible = watch.notifyOnComments,
+        enter = fadeIn() + expandVertically(),
+        exit = fadeOut() + shrinkVertically(),
+    ) {
+        Column {
+            ToggleRow(
+                title = "Comments from bots",
+                subtitle = if (watch.notifyOnBotComments) {
+                    "Build bots and app comments page too"
+                } else {
+                    "Comments posted by a GitHub app are skipped"
+                },
+                checked = watch.notifyOnBotComments,
+                onCheckedChange = { v ->
+                    viewModel.updateGitHub { it.copy(notifyOnBotComments = v) }
+                },
+                icon = NightbellIcons.Server,
+                accent = accent,
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "The issue row above only asks for open issues, so a thread closed " +
+                    "months ago can still reach the phone. Pull request threads follow the " +
+                    "Pull requests switch. Many automation accounts look like ordinary " +
+                    "users to GitHub, so name those below.",
+                style = MaterialTheme.typography.bodySmall,
+                color = NightbellColors.TextTertiary,
+            )
+            Spacer(Modifier.height(10.dp))
+            GlassField(
+                value = watch.commentMutedText,
+                onValueChange = { v -> viewModel.updateGitHub { it.copy(commentMutedText = v) } },
+                label = "Never from (optional)",
+                placeholder = "rustbot, dependabot",
+                helper = "GitHub logins, comma separated. Their comments never page.",
+                leadingIcon = NightbellIcons.BellOff,
+                accent = accent,
+                modifier = Modifier.testTag("github-comment-muted"),
+            )
+        }
+    }
+    AnimatedVisibility(
+        visible = watch.notifyOnIssues || watch.watchPullRequests || watch.notifyOnComments,
         enter = fadeIn() + expandVertically(),
         exit = fadeOut() + shrinkVertically(),
     ) {
@@ -2175,19 +2233,34 @@ private fun GitHubWatchCard(
                 onValueChange = { v -> viewModel.updateGitHub { it.withKeywordsText(v) } },
                 label = "Only if it mentions (optional)",
                 placeholder = "crash, security, android",
-                helper = "Comma separated, matched against the title and body, case insensitive. " +
-                    "Empty means everything gets through.",
+                helper = "Comma separated, case insensitive. Matched against the title and " +
+                    "body of an issue, and against the text of a comment. Empty means " +
+                    "everything gets through.",
                 leadingIcon = NightbellIcons.Search,
                 accent = accent,
                 modifier = Modifier.testTag("github-keywords"),
             )
+        }
+    }
+    AnimatedVisibility(
+        // Narrower than the keyword field above on purpose. This one is an
+        // allowlist over issue and pull request authors and it does not reach
+        // comments, so a comments-only monitor must not be shown a control that
+        // would do nothing. Muting a commenter is the field inside the comment
+        // block instead.
+        visible = watch.notifyOnIssues || watch.watchPullRequests,
+        enter = fadeIn() + expandVertically(),
+        exit = fadeOut() + shrinkVertically(),
+    ) {
+        Column {
             Spacer(Modifier.height(10.dp))
             GlassField(
                 value = watch.authorsText,
                 onValueChange = { v -> viewModel.updateGitHub { it.withAuthorsText(v) } },
                 label = "Only from (optional)",
                 placeholder = "octocat, riveerxd",
-                helper = "GitHub logins, comma separated. Empty means anyone.",
+                helper = "GitHub logins, comma separated. Empty means anyone. Issues and " +
+                    "pull requests only, not comments.",
                 leadingIcon = NightbellIcons.Filter,
                 accent = accent,
                 modifier = Modifier.testTag("github-authors"),
