@@ -16,12 +16,16 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -79,14 +83,31 @@ enum class ToastKind { SUCCESS, WARNING, ERROR }
 data class ToastMessage(
     val text: String,
     val kind: ToastKind = ToastKind.SUCCESS,
+    val action: ToastAction? = null,
     val serial: Long = System.nanoTime(),
 ) {
     companion object {
         fun success(text: String) = ToastMessage(text, ToastKind.SUCCESS)
         fun warning(text: String) = ToastMessage(text, ToastKind.WARNING)
         fun error(text: String) = ToastMessage(text, ToastKind.ERROR)
+
+        /**
+         * A message with a way back out of what it just reported.
+         *
+         * The counterpart to [HoldToConfirmButton]: the hold stops an accident,
+         * this covers a change of mind, and between them there is no "are you
+         * sure?" anywhere in the app. Always a warning, because a message
+         * offering to undo something is by definition reporting that something
+         * was taken away.
+         */
+        fun undoable(text: String, label: String = "Undo", onUndo: () -> Unit) =
+            ToastMessage(text, ToastKind.WARNING, ToastAction(label, onUndo))
     }
 }
+
+/** One trailing action. One, deliberately: a toast is not a menu. */
+@Immutable
+data class ToastAction(val label: String, val onAction: () -> Unit)
 
 /**
  * How long a message stays up, by what it is saying.
@@ -101,6 +122,16 @@ internal fun toastDwellMs(kind: ToastKind): Long = when (kind) {
     ToastKind.WARNING -> 3_600L
     ToastKind.ERROR -> 5_000L
 }
+
+/**
+ * How long [message] stays up.
+ *
+ * A message carrying an action gets five seconds whatever kind it is, because its
+ * dwell has stopped being about reading time and become the window in which the
+ * action can still be taken. Long enough to notice it, look at it and reach.
+ */
+internal fun toastDwellMs(message: ToastMessage): Long =
+    if (message.action != null) 5_000L else toastDwellMs(message.kind)
 
 /**
  * Status colour for [kind], off the dark anchors in both schemes.
@@ -168,7 +199,7 @@ fun ToastHost(
 ) {
     LaunchedEffect(message) {
         if (message == null) return@LaunchedEffect
-        delay(toastDwellMs(message.kind))
+        delay(toastDwellMs(message))
         onDismissed()
     }
 
@@ -254,6 +285,7 @@ fun ToastHost(
 @Composable
 internal fun ToastCapsule(message: ToastMessage, onDismissed: () -> Unit = {}) {
     val accent = toastAccent(message.kind)
+    val action = message.action
     // 22dp and not `RoundedCornerShape(100)`, which is a percentage of the
     // shorter side. At one line the two are the same thing, a true pill: 12dp of
     // padding either side of a 20dp line is 44dp tall and half of that is 22. The
@@ -272,7 +304,21 @@ internal fun ToastCapsule(message: ToastMessage, onDismissed: () -> Unit = {}) {
             // Tap anywhere to take it down, with no ripple: it is a message, not
             // a button, and a control that lights up invites a second look at
             // something already on its way out.
-            .clickable(interactionSource = interaction, indication = null, onClick = onDismissed)
+            // Except when it carries an action, where tap-anywhere is exactly
+            // wrong: the one tap this surface wants is the one on "Undo", and a
+            // dismiss target wrapped around it would swallow the near misses that
+            // were reaching for it.
+            .then(
+                if (action == null) {
+                    Modifier.clickable(
+                        interactionSource = interaction,
+                        indication = null,
+                        onClick = onDismissed,
+                    )
+                } else {
+                    Modifier
+                },
+            )
             .padding(start = 16.dp, end = 18.dp, top = 13.dp, bottom = 13.dp)
             .semantics { contentDescription = "${toastRole(message.kind)}: ${message.text}" },
         // Centred against the whole text block, not pinned to the first line.
@@ -303,7 +349,35 @@ internal fun ToastCapsule(message: ToastMessage, onDismissed: () -> Unit = {}) {
             color = ToastText,
             maxLines = TOAST_MAX_LINES,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(start = 13.dp),
+            // Gives up its own width to the action rather than pushing it off the
+            // edge: a long sentence wraps, the way out never disappears.
+            modifier = Modifier.padding(start = 13.dp).weight(1f, fill = false),
         )
+        if (action != null) {
+            Spacer(Modifier.width(12.dp))
+            // A rule, not a gap. Without it the label reads as the last word of
+            // the sentence rather than as the thing to press.
+            Box(
+                Modifier
+                    .width(1.dp)
+                    .height(22.dp)
+                    .background(ToastText.copy(alpha = 0.16f)),
+            )
+            Text(
+                text = action.label,
+                style = MaterialTheme.typography.labelLarge,
+                // The accent, so the way out is the one coloured word in the
+                // sentence and answers the mark at the other end of it.
+                color = accent,
+                maxLines = 1,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(100))
+                    .clickable {
+                        action.onAction()
+                        onDismissed()
+                    }
+                    .padding(horizontal = 14.dp, vertical = 9.dp),
+            )
+        }
     }
 }

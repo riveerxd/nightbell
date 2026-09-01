@@ -264,6 +264,89 @@ class NightbellStore(
         else snap.copy(monitors = monitors)
     }
 
+    /**
+     * Everything a delete took away, and where it was.
+     *
+     * Held in memory only, for as long as an undo is on offer. Not persisted on
+     * purpose: if the process dies inside the undo window the deletion stands,
+     * which is the safe direction to fail and the one the user already committed
+     * to by holding the button. A "trash" that survives a restart is a different
+     * feature with its own screen.
+     *
+     * [index] and [groupIndex] are why this is a record rather than just the
+     * monitor. `upsert` appends, so restoring through it would move a monitor to
+     * the end of the dashboard and give it a fresh empty runtime, losing the
+     * uptime history that is the only thing here nobody can retype.
+     */
+    data class DeletedMonitor(
+        val monitor: Monitor,
+        val runtime: MonitorRuntime?,
+        val index: Int,
+        val groupId: String?,
+        val groupIndex: Int,
+    )
+
+    /**
+     * Reads what deleting [ids] would remove, in one pass over one snapshot.
+     *
+     * Called immediately before the delete rather than inside it, because the
+     * screens that offer an undo are the only writers of these ids and a second
+     * read is cheaper than threading a return value out through [mutate].
+     */
+    suspend fun captureForRestore(ids: Collection<String>): List<DeletedMonitor> {
+        val snap = currentSnapshot()
+        return ids.mapNotNull { id ->
+            val index = snap.monitors.indexOfFirst { it.id == id }
+            if (index < 0) return@mapNotNull null
+            val holder = snap.groups.firstOrNull { id in it.memberIds }
+            DeletedMonitor(
+                monitor = snap.monitors[index],
+                runtime = snap.runtimes[id],
+                index = index,
+                groupId = holder?.id,
+                groupIndex = holder?.memberIds?.indexOf(id) ?: -1,
+            )
+        }
+    }
+
+    /**
+     * Puts captured monitors back where they were, in one write.
+     *
+     * One write and not one per record: several monitors deleted together come
+     * back together, and a partial restore visible on the dashboard would be a
+     * worse thing to look at than either end state. Group membership is only
+     * restored into a group that still exists, since the group may have been
+     * deleted in the meantime and inventing it again would resurrect more than
+     * was undone.
+     */
+    suspend fun restore(records: List<DeletedMonitor>) = mutate { snap ->
+        if (records.isEmpty()) return@mutate snap
+        val monitors = snap.monitors.toMutableList()
+        val runtimes = snap.runtimes.toMutableMap()
+        var groups = snap.groups
+        // Ascending, so each insertion index still means what it meant when the
+        // records were captured.
+        records.sortedBy { it.index }.forEach { record ->
+            val id = record.monitor.id
+            if (monitors.any { it.id == id }) return@forEach
+            monitors.add(record.index.coerceIn(0, monitors.size), record.monitor)
+            if (record.runtime != null) runtimes[id] = record.runtime
+            val groupId = record.groupId
+            if (groupId != null) {
+                groups = groups.map { group ->
+                    if (group.id != groupId || id in group.memberIds) {
+                        group
+                    } else {
+                        val members = group.memberIds.toMutableList()
+                        members.add(record.groupIndex.coerceIn(0, members.size), id)
+                        group.copy(memberIds = members)
+                    }
+                }
+            }
+        }
+        snap.copy(monitors = monitors, runtimes = runtimes, groups = groups)
+    }
+
     suspend fun delete(id: String) = mutate { snap ->
         snap.copy(
             monitors = snap.monitors.filterNot { it.id == id },

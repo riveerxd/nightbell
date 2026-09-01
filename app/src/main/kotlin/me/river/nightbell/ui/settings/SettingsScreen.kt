@@ -104,6 +104,7 @@ import me.river.nightbell.ui.components.rememberEntranceLog
 import me.river.nightbell.ui.components.StepperRow
 import me.river.nightbell.ui.components.ToggleRow
 import me.river.nightbell.ui.components.ToastMessage
+import me.river.nightbell.ui.components.HoldToConfirmButton
 import me.river.nightbell.ui.icons.NightbellIcons
 import me.river.nightbell.ui.rememberSettingsViewModel
 import me.river.nightbell.ui.theme.Backdrop
@@ -1780,11 +1781,14 @@ private fun GitHubTokenCard(
                     tone = ButtonTone.Secondary,
                     modifier = Modifier.weight(1f),
                 )
-                NightbellButton(
-                    text = "Remove",
-                    onClick = { onSave("") },
-                    icon = NightbellIcons.Trash,
-                    tone = ButtonTone.Danger,
+                // Held, like every other button in the app that takes something
+                // away. No undo on this one and that is deliberate: an undo would
+                // mean keeping the token in memory after the user asked for it to
+                // be gone, and a credential is the one thing here where "we still
+                // have a copy for five seconds" is the wrong favour.
+                HoldToConfirmButton(
+                    text = "Hold to remove",
+                    onConfirm = { onSave("") },
                     modifier = Modifier.weight(1f).testTag("remove-github-token"),
                 )
             }

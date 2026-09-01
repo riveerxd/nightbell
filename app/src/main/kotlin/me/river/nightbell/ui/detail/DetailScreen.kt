@@ -83,6 +83,7 @@ import me.river.nightbell.ui.components.UptimeRing
 import me.river.nightbell.ui.components.formatLatency
 import me.river.nightbell.ui.components.formatRelative
 import me.river.nightbell.ui.components.formatSpan
+import me.river.nightbell.ui.components.HoldToConfirmButton
 import me.river.nightbell.ui.dashboard.kindIcon
 import me.river.nightbell.ui.icons.NightbellIcons
 import me.river.nightbell.ui.rememberDetailViewModel
@@ -112,7 +113,6 @@ fun DetailScreen(
     val card by viewModel.card.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val offline by viewModel.offline.collectAsStateWithLifecycle()
-    var confirmDelete by remember { mutableStateOf(false) }
     var showAllChecks by remember { mutableStateOf(false) }
     /** Repository monitors show activity; this is the way back to the poll list. */
     var showRawChecks by remember { mutableStateOf(false) }
@@ -424,63 +424,37 @@ fun DetailScreen(
 
         item(key = "danger") {
             Spacer(Modifier.height(6.dp))
-            AnimatedVisibility(
-                visible = !confirmDelete,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically(),
-            ) {
-                NightbellButton(
-                    text = "Delete monitor",
-                    onClick = { confirmDelete = true },
-                    icon = NightbellIcons.Trash,
-                    tone = ButtonTone.Danger,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-            AnimatedVisibility(
-                visible = confirmDelete,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically(),
-            ) {
-                GlassCard(accent = NightbellColors.Rose) {
-                    Text(
-                        text = "Delete “${monitor.displayName}”?",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = NightbellColors.TextPrimary,
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        text = "Its history and scheduled checks go with it. This can't be undone.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = NightbellColors.TextTertiary,
-                    )
-                    Spacer(Modifier.height(14.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        NightbellButton(
-                            text = "Keep it",
-                            onClick = { confirmDelete = false },
-                            tone = ButtonTone.Secondary,
-                            modifier = Modifier.weight(1f),
-                        )
-                        NightbellButton(
-                            text = "Delete",
-                            onClick = {
-                                // Reported from here rather than from the view
-                                // model: `delete` ends in a back-stack pop, which
-                                // takes this screen and its toast state with it,
-                                // so the confirmation had nowhere to be read from.
-                                viewModel.delete {
-                                    onToast(ToastMessage.warning("Monitor deleted"))
-                                    onBack()
-                                }
-                            },
-                            tone = ButtonTone.Danger,
-                            icon = NightbellIcons.Trash,
-                            modifier = Modifier.weight(1f),
-                        )
+            // One hold, no two-step. This used to be a "Delete monitor" button
+            // that opened a card asking again, with Keep it and Delete side by
+            // side; the same protection now lives in the button, which an
+            // accident cannot complete and which nobody learns to dismiss unread.
+            // What is lost with the card is its sentence, so the sentence stays
+            // above the button instead of appearing after the first tap: the
+            // history going with it is the part worth knowing *before* you press,
+            // and "this can't be undone" is no longer true anyway, because the
+            // toast that reports it carries an undo.
+            Text(
+                text = "Deleting “${monitor.displayName}” takes its history and its " +
+                    "scheduled checks with it. There is an undo for a few seconds " +
+                    "afterwards, and then it is gone.",
+                style = MaterialTheme.typography.bodySmall,
+                color = NightbellColors.TextTertiary,
+            )
+            Spacer(Modifier.height(10.dp))
+            HoldToConfirmButton(
+                text = "Hold to delete this monitor",
+                onConfirm = {
+                    // Reported from here rather than from the view model: `delete`
+                    // ends in a back-stack pop, which takes this screen and its
+                    // toast state with it, so a message set there would never be
+                    // read.
+                    viewModel.delete { reported ->
+                        onToast(reported)
+                        onBack()
                     }
-                }
-            }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }

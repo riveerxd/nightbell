@@ -11,6 +11,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import me.river.nightbell.BuildConfig
 import me.river.nightbell.data.Nightbell
+import me.river.nightbell.data.NightbellStore
 import me.river.nightbell.data.transfer.BackupCodec
 import me.river.nightbell.data.transfer.BackupError
 import me.river.nightbell.data.transfer.toImportableSnapshot
@@ -492,11 +493,21 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
      */
     fun ungroupDraft() {
         val draft = groupDraft ?: return
+        val group = draft.group
         groupDraft = null
         viewModelScope.launch {
-            graph.store.deleteGroup(draft.group.id)
+            graph.store.deleteGroup(group.id)
             graph.notifyStateChanged()
-            toast = ToastMessage.success("Ungrouped ${draft.group.size} ${plural(draft.group.size)}")
+            // Undoable but not held: the monitors are all still there, so the
+            // worst case is retyping a title, and a hold on a rearrangement is
+            // the modal-fatigue problem in a new costume.
+            toast = ToastMessage.undoable("Ungrouped ${group.size} ${plural(group.size)}") {
+                viewModelScope.launch {
+                    graph.store.upsertGroup(group)
+                    graph.notifyStateChanged()
+                    toast = ToastMessage.success("Group restored")
+                }
+            }
         }
     }
 
@@ -599,6 +610,10 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
         val ids = selection.toList()
         if (ids.isEmpty()) return
         viewModelScope.launch {
+            // Captured before anything is torn down, and the whole set at once, so
+            // an undo puts them back in their old order and their old groups
+            // rather than in a heap at the end of the dashboard.
+            val undo = graph.store.captureForRestore(ids)
             ids.forEach { id ->
                 graph.scheduler.cancel(id)
                 graph.alerts.cancelAll(id)
@@ -606,8 +621,37 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
                 graph.store.delete(id)
             }
             graph.notifyStateChanged()
-            toast = ToastMessage.warning("${ids.size} ${plural(ids.size)} deleted")
+            toast = ToastMessage.undoable("${ids.size} ${plural(ids.size)} deleted") {
+                restore(undo)
+            }
             clearSelection()
+        }
+    }
+
+    /**
+     * Puts deleted monitors back, schedule and all.
+     *
+     * The schedule is the part that has to be rebuilt rather than resurrected:
+     * `delete` cancelled the work request, and the restored monitor needs a new
+     * one built from its own interval and the settings in force now. Reaching for
+     * the cancelled request would leave a monitor that exists and never checks,
+     * which looks exactly like the app being broken.
+     */
+    private fun restore(records: List<NightbellStore.DeletedMonitor>) {
+        if (records.isEmpty()) return
+        viewModelScope.launch {
+            graph.store.restore(records)
+            val snapshot = graph.store.currentSnapshot()
+            records.forEach { record ->
+                snapshot.monitors.firstOrNull { it.id == record.monitor.id }?.let {
+                    graph.scheduler.schedule(it, snapshot.settings)
+                }
+            }
+            graph.scheduler.ensureSweep(snapshot.settings)
+            graph.notifyStateChanged()
+            toast = ToastMessage.success(
+                if (records.size == 1) "Monitor restored" else "${records.size} monitors restored",
+            )
         }
     }
 
@@ -755,6 +799,7 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
 
     fun delete(monitorId: String) {
         viewModelScope.launch {
+            val undo = graph.store.captureForRestore(listOf(monitorId))
             graph.store.delete(monitorId)
             graph.scheduler.cancel(monitorId)
             // All three id spaces. Cancelling only the down one used to strand
@@ -762,7 +807,7 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
             // once the monitor is gone no per-monitor loop ever visits it again.
             graph.alerts.cancelAll(monitorId)
             graph.engine.forgetMonitor(monitorId)
-            toast = ToastMessage.warning("Monitor deleted")
+            toast = ToastMessage.undoable("Monitor deleted") { restore(undo) }
         }
     }
 
@@ -1316,15 +1361,43 @@ class DetailViewModel(
      */
     private var deleting = false
 
-    fun delete(onDone: () -> Unit) {
+    fun delete(onDone: (ToastMessage) -> Unit) {
         if (deleting) return
         deleting = true
         viewModelScope.launch {
+            val undo = graph.store.captureForRestore(listOf(monitorId))
             graph.store.delete(monitorId)
             graph.scheduler.cancel(monitorId)
             graph.alerts.cancelAll(monitorId)
             graph.engine.forgetMonitor(monitorId)
-            onDone()
+            // Handed out rather than reported from here, and the undo runs on the
+            // application scope rather than this one. Both for the same reason:
+            // the next thing that happens is a back stack pop that takes this
+            // view model with it, so a message set here would never be read and a
+            // restore launched here would be cancelled halfway through.
+            onDone(ToastMessage.undoable("Monitor deleted") { restoreOnAppScope(undo) })
+        }
+    }
+
+    /**
+     * Puts the monitor back after this screen is gone.
+     *
+     * No confirming toast: by the time the undo can be pressed the user is
+     * looking at the dashboard, and the card reappearing in its old position is a
+     * better answer than a sentence claiming it did.
+     */
+    private fun restoreOnAppScope(records: List<NightbellStore.DeletedMonitor>) {
+        if (records.isEmpty()) return
+        graph.appScope.launch {
+            graph.store.restore(records)
+            val snapshot = graph.store.currentSnapshot()
+            records.forEach { record ->
+                snapshot.monitors.firstOrNull { it.id == record.monitor.id }?.let {
+                    graph.scheduler.schedule(it, snapshot.settings)
+                }
+            }
+            graph.scheduler.ensureSweep(snapshot.settings)
+            graph.notifyStateChanged()
         }
     }
 
