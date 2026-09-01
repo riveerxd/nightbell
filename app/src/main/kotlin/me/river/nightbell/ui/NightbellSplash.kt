@@ -52,8 +52,8 @@ import me.river.nightbell.ui.theme.rememberSystemAnimationsEnabled
  * The app is composed underneath this from the first frame and keeps loading
  * while it plays, so the splash covers work that was happening anyway rather than
  * adding a wait. If the store resolves early the animation still finishes, which
- * is the one deliberate cost: about 2.8 s, of which the last 0.7 s is the finished
- * lockup simply sitting there. That hold is the point rather than padding, because
+ * is the one deliberate cost: about 1.75 s, of which the last 0.45 s is the
+ * finished lockup sitting there. That hold is the point rather than padding, because
  * an opening that dissolves the instant it resolves reads as a glitch. It is still
  * a real tax on an app people open to check one thing, which is why it runs on
  * cold start only, and why the whole thing is skipped outright when the system
@@ -66,21 +66,44 @@ import me.river.nightbell.ui.theme.rememberSystemAnimationsEnabled
  * and re-timing the sequence is editing the table below rather than chasing
  * delays through nested coroutines.
  */
-private const val TOTAL_MS = 2800
+/**
+ * The whole sequence, and the number is smaller than it looks.
+ *
+ * It was 2800, and every note in this file about how a beat felt was written while
+ * watching it on a phone with the developer-options animator scale at 0.5. This is
+ * a Compose `tween`, so the platform scales it: at 0.5 the sequence played in
+ * 1400 ms for the person tuning it and in 2800 ms for everybody else, and the
+ * judgement that it was about right was a judgement about a splash half this long.
+ *
+ * 1750 is a quarter slower than that 1400, which is what was asked for once the
+ * discrepancy came out. It is a real cut from where the constant stood, and it
+ * lands where the sequence still reads: the two swings get 306 ms each, past the
+ * 200 ms that was rejected below as a wobble, and the finished lockup still holds
+ * for 0.45 s before it goes, which is what stops it looking like a glitch.
+ *
+ * The windows underneath are fractions, so they all move with it. The millisecond
+ * figures in the comments are this total, and have to be redone if it changes
+ * again.
+ */
+private const val TOTAL_MS = 1750
 
 private const val ARRIVE_FROM = 0.00f
-private const val ARRIVE_TO = 0.14f    //    0 -  390 ms  bell fades and scales in
-private const val RING_FROM = 0.11f    //  310 - 1290 ms  the strike, and the settle
+private const val ARRIVE_TO = 0.14f    //    0 -  245 ms  bell fades and scales in
+private const val RING_FROM = 0.11f    //  193 -  805 ms  the strike, and the settle
 private const val RING_TO = 0.46f
-private const val WORD_FROM = 0.30f    //  840 - 1570 ms  the word wipes in
+private const val WORD_FROM = 0.30f    //  525 -  980 ms  the word wipes in
 private const val WORD_TO = 0.56f
-private const val LEAVE_FROM = 0.82f   // 2300 - 2800 ms  fade to the app
+private const val LEAVE_FROM = 0.82f   // 1435 - 1750 ms  fade to the app
 
 /**
  * Two full swings, not two and a half. At 1.65 s the extra half read as a wobble
  * because each one was over in under 200 ms; with the longer window the swings
  * are slow enough to see individually, and three of them starts to look like a
  * pendulum rather than a bell that was struck once.
+ *
+ * Worth rechecking against [TOTAL_MS] if that number is cut again: the ring window
+ * is 35 per cent of the total, so two swings have 306 ms each at 1750 and would be
+ * back under 200 at anything below about 1150.
  */
 private const val SWINGS = 2.0f
 
