@@ -496,7 +496,6 @@ private fun HeroCard(
             UptimeRing(
                 percent = window?.percent ?: 0f,
                 modifier = Modifier.size(124.dp),
-                accent = healthColor(health),
                 label = UptimeWindows.ringLabel(window),
                 unknown = window == null,
             )

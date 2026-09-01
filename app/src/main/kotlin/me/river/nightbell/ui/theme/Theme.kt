@@ -11,6 +11,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.colorspace.ColorSpaces
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -20,6 +21,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.river.nightbell.domain.Health
 import me.river.nightbell.domain.ThemeChoice
+import kotlin.math.PI
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.hypot
+import kotlin.math.pow
+import kotlin.math.sin
 
 /**
  * One palette, resolved per scheme.
@@ -246,6 +253,148 @@ fun healthColor(health: Health): Color = when (health) {
     Health.PAUSED -> NightbellColors.TextTertiary
     Health.UNKNOWN -> NightbellColors.Sky
 }
+
+/**
+ * Where an uptime reading sits on the red to green ramp.
+ *
+ * Off the palette rather than off fixed hex, so the light scheme's darkened
+ * anchors are the ones its dial uses. The work is in [uptimeRamp].
+ */
+@Composable
+@ReadOnlyComposable
+fun uptimeColor(percent: Float): Color = uptimeRamp(
+    rose = NightbellColors.Rose,
+    amber = NightbellColors.Amber,
+    mint = NightbellColors.Mint,
+    percent = percent,
+)
+
+/**
+ * Rose at 0, amber at 50, mint from 70 up.
+ *
+ * Three things here are deliberate and all three were arrived at by drawing the
+ * dial and looking at it, so changing one of them means doing that again.
+ *
+ * **Red holds.** The lower half is weighted [RED_HOLD] rather than linear. A
+ * monitor at 18% spent twenty hours of the day unreachable, and a straight
+ * interpolation had already turned that orange.
+ *
+ * **The top of the range is one colour.** Everything from [MINT_FROM] up is
+ * exactly mint, the colour the rest of the app uses for a monitor that is up.
+ * The alternative, a ramp that keeps travelling to 100, spends its last stretch
+ * in yellow-greens, and a dial at 74% came out a vivid grass green that had
+ * nothing to do with the mint at 100 two steps along from it. Length says how
+ * good a good reading is; colour only says which of the three it is.
+ *
+ * **The fade between them crosses Oklab, not the hue wheel.** Rotating the hue
+ * from amber to mint goes the long way round through chartreuse, which is the
+ * loud green that was wrong. A straight line between the two in Oklab passes
+ * through muted golds instead, and weighting it [YELLOW_HOLD] holds it amber
+ * until the last few points of the band, so what a person sees is yellow turning
+ * into green and not a light green stage of its own.
+ *
+ * The lower half does rotate the hue, because there the wheel is going the right
+ * way anyway: rose to amber through orange is exactly the arc between them.
+ */
+internal fun uptimeRamp(rose: Color, amber: Color, mint: Color, percent: Float): Color {
+    val value = percent.coerceIn(0f, 100f)
+    return when {
+        value >= MINT_FROM -> mint
+        value <= 50f -> aroundTheWheel(rose, amber, (value / 50f).pow(RED_HOLD))
+        else -> straightAcross(amber, mint, ((value - 50f) / (MINT_FROM - 50f)).pow(YELLOW_HOLD))
+    }
+}
+
+/** The reading at which the dial is simply mint, and stays mint. */
+private const val MINT_FROM = 70f
+
+/** Weighting of the red half. Above 1 keeps it red for longer. */
+private const val RED_HOLD = 2.2f
+
+/**
+ * Weighting of the fade into mint. Above 1 keeps it amber for longer.
+ *
+ * At 4 the band is amber to about 64 and green by 68, so the sage in between is
+ * two or three readings wide rather than ten. Lower values spread it out, and
+ * spread out it reads as a light green stage of its own, which is the thing this
+ * ramp is not allowed to have.
+ */
+private const val YELLOW_HOLD = 4f
+
+/**
+ * Interpolates by rotating the hue, keeping the chroma the anchors were chosen
+ * with. The short way round: rose sits just past zero, so its path to amber
+ * crosses it and read literally would sweep backwards through green and blue.
+ */
+private fun aroundTheWheel(start: Color, end: Color, fraction: Float): Color {
+    val from = start.convert(ColorSpaces.Oklab)
+    val to = end.convert(ColorSpaces.Oklab)
+    val fromHue = atan2(from.blue, from.green)
+    var arc = atan2(to.blue, to.green) - fromHue
+    if (arc > PI.toFloat()) arc -= TAU
+    if (arc < -PI.toFloat()) arc += TAU
+    val fromChroma = hypot(from.green, from.blue)
+    val toChroma = hypot(to.green, to.blue)
+    return inGamut(
+        lightness = from.red + (to.red - from.red) * fraction,
+        chroma = fromChroma + (toChroma - fromChroma) * fraction,
+        hue = fromHue + arc * fraction,
+    )
+}
+
+/** Interpolates in a straight line through Oklab, which dips in chroma rather
+ * than travelling round the wheel. */
+private fun straightAcross(start: Color, end: Color, fraction: Float): Color {
+    val from = start.convert(ColorSpaces.Oklab)
+    val to = end.convert(ColorSpaces.Oklab)
+    val a = from.green + (to.green - from.green) * fraction
+    val b = from.blue + (to.blue - from.blue) * fraction
+    return inGamut(
+        lightness = from.red + (to.red - from.red) * fraction,
+        chroma = hypot(a, b),
+        hue = atan2(b, a),
+    )
+}
+
+/**
+ * An Oklch colour, walked back into what the display can show.
+ *
+ * Out of gamut the conversion clamps each channel on its own, and clamping a
+ * channel moves the hue, so an over-bright colour arrives as a different one
+ * rather than as a duller version of what was asked for. Extended sRGB is linear
+ * and unclamped, so it can be asked whether a colour fits before anything is
+ * rounded, and chroma comes off in small steps until it does. Nothing on this
+ * ramp currently needs more than a step or two of that, and the guard is here so
+ * that a repainted palette cannot quietly bend a hue instead.
+ */
+private fun inGamut(lightness: Float, chroma: Float, hue: Float): Color {
+    var paint = chroma
+    repeat(GAMUT_STEPS) {
+        val candidate = Color(
+            red = lightness,
+            green = paint * cos(hue),
+            blue = paint * sin(hue),
+            colorSpace = ColorSpaces.Oklab,
+        )
+        val linear = candidate.convert(ColorSpaces.LinearExtendedSrgb)
+        if (linear.red in 0f..1f && linear.green in 0f..1f && linear.blue in 0f..1f) {
+            return candidate.convert(ColorSpaces.Srgb)
+        }
+        paint *= 0.97f
+    }
+    return Color(
+        red = lightness,
+        green = paint * cos(hue),
+        blue = paint * sin(hue),
+        colorSpace = ColorSpaces.Oklab,
+    ).convert(ColorSpaces.Srgb)
+}
+
+/** 0.97 to the fortieth is about 0.3 of the chroma asked for, which is further
+ * than any anchor in this palette reaches. */
+private const val GAMUT_STEPS = 40
+
+private const val TAU = (PI * 2).toFloat()
 
 /**
  * Rim colour for a card representing [health].

@@ -45,6 +45,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -88,6 +89,7 @@ import me.river.nightbell.ui.theme.LocalNightbellMotion
 import me.river.nightbell.ui.theme.NightbellColors
 import me.river.nightbell.ui.theme.NightbellRadii
 import me.river.nightbell.ui.theme.healthColor
+import me.river.nightbell.ui.theme.uptimeColor
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.max
@@ -555,29 +557,66 @@ fun LatencyBudgetLegend(
     }
 }
 
-/** Big animated uptime dial. */
+/**
+ * Big animated uptime dial.
+ *
+ * The colour is the reading, not the current health: rose at 0, amber halfway,
+ * mint at 100, interpolated by [uptimeColor]. The health of a monitor right now
+ * is already said three ways on this card, by the orb, the word next to it and
+ * the rim, and none of those can tell you that a monitor which is up at this
+ * second spent a fifth of the day down.
+ */
 @Composable
 fun UptimeRing(
     percent: Float,
     modifier: Modifier = Modifier,
-    accent: Color = NightbellColors.Mint,
     label: String = "uptime",
     /** No reading available — show a dash rather than a confident 0%. */
     unknown: Boolean = false,
 ) {
     val motion = LocalNightbellMotion.current
+    val target = percent.coerceIn(0f, 100f)
+    // Fills from empty when the dial first appears, rather than being drawn
+    // already full. Saveable and not merely remembered because the dial sits in
+    // the first row of a LazyColumn: with a plain `remember` the reveal ran again
+    // every time the row was recycled back into view, which turns a one-off
+    // reading of the value into a twitch that happens while you scroll.
+    var revealed by rememberSaveable { mutableStateOf(!motion.enabled) }
+    LaunchedEffect(motion.enabled) { revealed = true }
     val animated by animateFloatAsState(
-        targetValue = percent.coerceIn(0f, 100f),
+        targetValue = if (revealed) target else 0f,
         animationSpec = if (motion.enabled) {
-            tween(900, easing = FastOutSlowInEasing)
+            // Held for the length of the screen it arrives on, then eased out.
+            //
+            // Recorded off the emulator: the detail screen enters over 320ms and
+            // the fill was finishing inside that, so the dial was already at 100%
+            // in the first frame a person could see. The delay is the entrance in
+            // `NightbellApp`, and the sweep is what happens once the screen has
+            // landed.
+            //
+            // 900ms is longer than the 200 to 300ms a transition gets, and it is
+            // deliberate. This is not a panel moving, it is a count from 0 to a
+            // figure a person is meant to read on the way past; at 250ms the
+            // digits are a flicker. Reduced motion skips all of it.
+            tween(900, delayMillis = RING_REVEAL_DELAY, easing = RingReveal)
         } else {
             spring(stiffness = Spring.StiffnessHigh)
         },
         label = "uptime",
     )
+    // The reading's colour, not the sweep's. Taken off `animated` instead, the
+    // reveal climbed the ramp as it filled: a dial reporting 100% spent the first
+    // half of its own entrance red and amber, which reads as a monitor recovering
+    // in front of you rather than as one that has been up all day. The arc is one
+    // colour from the first frame it is drawn, and that colour is the answer.
+    val fill = uptimeColor(target)
     // One node, one sentence. Left as two Texts inside a Canvas, TalkBack read
     // "ninety-three percent" and then spelled U-P-T-I-M-E as a separate item.
-    val spoken = if (unknown) label else "${animated.roundToInt()} percent, $label"
+    //
+    // Spoken from the target and not from the animation: mid-reveal this node
+    // would otherwise change its own description sixty times a second, and
+    // TalkBack announces "0 percent" for the dial of a monitor at 100.
+    val spoken = if (unknown) label else "${target.roundToInt()} percent, $label"
     val track = NightbellColors.sheen(0.07f)
     Box(
         modifier.clearAndSetSemantics { contentDescription = spoken },
@@ -598,11 +637,19 @@ fun UptimeRing(
             )
             if (unknown) return@Canvas
             drawArc(
-                // Stays in one hue: a green dial that fades through brand blue
-                // reads as a gradient, not as "93% up".
-                brush = Brush.sweepGradient(
-                    listOf(accent.copy(alpha = 0.45f), accent, accent),
-                ),
+                // One flat colour across the whole sweep, and not a brush.
+                //
+                // A sweep gradient is anchored to the canvas axis and not to the
+                // arc it paints. The first stop of the alpha ramp this used to
+                // carry therefore sat at three o'clock, which is 225 degrees into
+                // this dial's own 270 degrees of travel: a full ring came out
+                // solid until three o'clock and then dropped to 0.45 alpha for the
+                // last 45 degrees with a hard seam at the join, so 100% uptime was
+                // reported by a ring that looked three quarters full.
+                //
+                // The gradient is now in the value instead of along the arc, where
+                // it means something.
+                color = fill,
                 startAngle = 135f,
                 sweepAngle = 270f * (animated / 100f),
                 useCenter = false,
@@ -659,6 +706,33 @@ fun UptimeRing(
 
 /** Share of the ring's width the text inside it may occupy. */
 private const val RING_TEXT_WIDTH = 0.68f
+
+/**
+ * How long the dial stays empty before it fills, in milliseconds.
+ *
+ * Longer than the 320ms slide the detail screen enters on, and deliberately so.
+ * At exactly the length of that entrance the sweep began on the frame the card
+ * stopped moving, which lands while the eye is still catching up with the screen:
+ * the fill is technically visible and still reads as having already happened.
+ * The extra quarter second is a beat of stillness first.
+ *
+ * It is not free. The dial reads "0%" while it waits, so this is as far as it
+ * goes: much past two thirds of a second the zero stops looking like a dial about
+ * to fill and starts looking like an answer.
+ */
+private const val RING_REVEAL_DELAY = 550
+
+/**
+ * The curve the dial fills on.
+ *
+ * An entrance, so it decelerates rather than easing in and out. A harder curve
+ * was tried first, the (0.16, 1, 0.3, 1) that panels and sheets get, and at that
+ * shape half the sweep is over in the first 110ms: the arc appears to snap to
+ * roughly its final length and then creep, and the number in the middle never
+ * reads as counting. A cubic ease out spreads it enough to be read and still
+ * settles rather than stopping.
+ */
+private val RingReveal = EaseOutCubic
 
 /** Slim horizontal strip of pass/fail ticks — a compact outage history. */
 @Composable
