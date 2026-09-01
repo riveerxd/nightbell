@@ -1375,21 +1375,25 @@ private fun CertificateTrustSection(
     val couldBecomeHttps = url.startsWith("http://", ignoreCase = true) && draft.followRedirects
     if (!https && !couldBecomeHttps) return
 
+    // A `SectionHeader` and a `SegmentedSelector`, which is what every other
+    // section of this wizard and the update-source control in Settings both use.
+    // This one was the odd one out on both counts: a bare uppercase caption with
+    // no icon and no rule, over a `ChipSelector` whose chips carry their own
+    // padding, so three loose pills sat in a pool of space between a label that
+    // did not look like the other labels and a sentence a long way underneath.
     Spacer(Modifier.height(4.dp))
-    Text(
-        text = "CERTIFICATE",
-        style = MaterialTheme.typography.labelSmall,
-        color = NightbellColors.TextTertiary,
-    )
-    Spacer(Modifier.height(8.dp))
-    ChipSelector(
+    SectionHeader("Certificate", icon = NightbellIcons.Shield, accent = accent)
+    // No spacers around the selector. It already pads itself vertically to reach
+    // the 44dp touch floor, so an 8dp gap either side doubled into the two holes
+    // that made this section look broken: a header floating well above three
+    // pills, and the sentence explaining them a long way below.
+    SegmentedSelector(
         options = TlsTrust.entries.toList(),
         selected = draft.tlsTrust,
         onSelect = { mode -> viewModel.update { it.copy(tlsTrust = mode) } },
         label = { it.label },
         accent = if (draft.tlsTrust == TlsTrust.ANY) NightbellColors.Rose else accent,
     )
-    Spacer(Modifier.height(8.dp))
     Text(
         text = draft.tlsTrust.summary,
         style = MaterialTheme.typography.bodySmall,
@@ -1406,6 +1410,29 @@ private fun CertificateTrustSection(
                 "the check to https and its certificate will be judged by this setting.",
             style = MaterialTheme.typography.bodySmall,
             color = NightbellColors.TextTertiary,
+        )
+    }
+    // Only for the one kind whose own check cannot see a certificate. An HTTP
+    // status check reads the leaf on every pass, so offering it there would be a
+    // switch for something already happening.
+    if (draft.kind == MonitorKind.WEBSITE_ELEMENT) {
+        Spacer(Modifier.height(4.dp))
+        ToggleRow(
+            // Named for what it watches rather than for what it watches *of*.
+            // "Watch the expiry date" was the first attempt and it does not say
+            // whose expiry, which is the only question a reader has here.
+            title = "Watch certificate expiry",
+            subtitle = if (draft.watchCertificate) {
+                "One extra HEAD request a day, just to read the expiry date."
+            } else {
+                "A page check runs in a WebView, which only reports a certificate " +
+                    "when the phone rejects it, so nothing here can warn you before " +
+                    "a working certificate expires."
+            },
+            checked = draft.watchCertificate,
+            onCheckedChange = { on -> viewModel.update { it.copy(watchCertificate = on) } },
+            icon = NightbellIcons.Shield,
+            accent = accent,
         )
     }
     FieldNote(report.of(Validation.Field.TLS))

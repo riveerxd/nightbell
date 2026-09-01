@@ -546,6 +546,26 @@ data class Monitor(
     /** How much this monitor's certificate has to prove. See [TlsTrust]. */
     val tlsTrust: TlsTrust = TlsTrust.SYSTEM,
     /**
+     * Watch the certificate's expiry date on a monitor whose own check cannot see
+     * it.
+     *
+     * Only means anything for [MonitorKind.WEBSITE_ELEMENT], and only because of
+     * a platform limitation. A page-element check runs in a WebView, and WebView
+     * hands an app the certificate it negotiated *only* inside
+     * `onReceivedSslError`. So an element monitor can be told that a certificate
+     * is broken and can never see a good one, which meant it could never warn
+     * anybody that a working certificate was about to expire, silently, while the
+     * setup screen still asked how much that certificate had to prove.
+     *
+     * Switched on, the engine does one extra HEAD request a day purely to read the
+     * expiry. Off by default: it is a second request against somebody's server
+     * and it should be asked for rather than assumed.
+     *
+     * Not needed for [MonitorKind.HTTP_STATUS], whose own check already reads the
+     * leaf certificate on every pass.
+     */
+    val watchCertificate: Boolean = false,
+    /**
      * Send this monitor's requests through the SOCKS5 proxy set up in settings
      * rather than straight out of the device.
      *

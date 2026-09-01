@@ -26,6 +26,9 @@ import me.river.nightbell.domain.TlsTrust
 import me.river.nightbell.domain.UrgentAlerts
 import me.river.nightbell.domain.runCatchingCancellable
 import me.river.nightbell.domain.Reachability
+import me.river.nightbell.domain.StatusExpectation
+import me.river.nightbell.domain.StatusMode
+import me.river.nightbell.domain.HttpMethod
 import java.util.Calendar
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.cancellation.CancellationException
@@ -119,6 +122,92 @@ class CheckEngine(
         // baseline or announce anything. Which is exactly what "Test now" means.
         MonitorKind.GITHUB_REPO -> githubDryRun(monitor)
         else -> http.check(monitor, certPin)
+    }
+
+    /**
+     * When each monitor's certificate was last probed. In memory, on purpose.
+     *
+     * Persisting it would mean a new runtime field threaded through
+     * [me.river.nightbell.domain.AlertDecider], and the only cost of losing it is
+     * one extra HEAD request after a process restart. A cheap wrong answer beats
+     * an expensive right one here.
+     */
+    private val certProbedAt = mutableMapOf<String, Long>()
+
+    /**
+     * Fills in the certificate expiry for a check that could not see it itself.
+     *
+     * Only for [MonitorKind.WEBSITE_ELEMENT] with
+     * [Monitor.watchCertificate] on, and only once a day. A WebView never reports
+     * the certificate of a page that loaded cleanly, so without this an element
+     * monitor on an https page can never warn that the certificate is about to
+     * expire: see the field's own comment.
+     *
+     * The probe is a HEAD through [HttpChecker] rather than a hand-rolled socket,
+     * which is the point of doing it this way. That path already honours the
+     * monitor's [TlsTrust] mode, its SOCKS routing, its timeout and its redirect
+     * setting, and a second TLS stack next to the first would be a second set of
+     * answers to all four.
+     *
+     * Only the certificate fields are taken from it. The verdict, the status code
+     * and the latency belong to the page-element check that just ran, and letting
+     * a HEAD to the same host overwrite them would report on the wrong thing
+     * entirely: a page whose element is missing is down even when a HEAD to its
+     * front door says 200.
+     *
+     * Once a day, not once a check. An expiry date does not move between two
+     * checks fifteen minutes apart, and the warning thresholds are in days.
+     */
+    private suspend fun withCertificateExpiry(
+        monitor: Monitor,
+        before: MonitorRuntime,
+        result: CheckResult,
+    ): CheckResult {
+        if (monitor.kind != MonitorKind.WEBSITE_ELEMENT) return result
+        if (!monitor.watchCertificate) return result
+        if (!monitor.url.startsWith("https://", ignoreCase = true)) return result
+        val now = nowMs()
+        val last = certProbedAt[monitor.id] ?: 0L
+        // Carried forward rather than dropped between probes, so the card and the
+        // alert see a date on every check and not one a day.
+        if (last > 0L && now - last < CERT_PROBE_INTERVAL_MS) {
+            return result.copy(
+                certExpiresAt = before.certExpiresAt,
+                certIssuer = before.certIssuer,
+                certSpki = before.certPin,
+            )
+        }
+        val probe = runCatchingCancellable {
+            http.check(
+                monitor.copy(
+                    kind = MonitorKind.HTTP_STATUS,
+                    method = HttpMethod.HEAD,
+                    // The front door, whatever the element check was told to look
+                    // at. A path that needs JavaScript to exist may well 404 to a
+                    // HEAD, and the certificate is the host's, not the page's.
+                    status = StatusExpectation(mode = StatusMode.ANY),
+                    // The element assertions describe a node in a rendered page,
+                    // which a HEAD has no body to satisfy. Cleared so the probe
+                    // cannot fail for a reason that has nothing to do with TLS.
+                    elements = emptyList(),
+                ),
+                before.certPin,
+            )
+        }.getOrNull()
+        // A failed probe leaves the previous date standing rather than zeroing it.
+        // Losing the expiry because the network blinked would take the card off the
+        // screen and silence the warning at the same time.
+        val seen = probe?.takeIf { it.certExpiresAt > 0L } ?: return result.copy(
+            certExpiresAt = before.certExpiresAt,
+            certIssuer = before.certIssuer,
+            certSpki = before.certPin,
+        )
+        certProbedAt[monitor.id] = now
+        return result.copy(
+            certExpiresAt = seen.certExpiresAt,
+            certIssuer = seen.certIssuer,
+            certSpki = seen.certSpki,
+        )
     }
 
     private suspend fun githubDryRun(monitor: Monitor): CheckResult {
@@ -286,7 +375,7 @@ class CheckEngine(
                 githubOutcome = outcome
                 outcome.result
             } else {
-                dryRun(monitor, before.certPin)
+                withCertificateExpiry(monitor, before, dryRun(monitor, before.certPin))
             }
         } catch (cancellation: CancellationException) {
             // The single most important catch in this app.
@@ -1435,6 +1524,9 @@ class CheckEngine(
 
     companion object {
         private const val TAG = "CheckEngine"
+
+        /** A certificate's expiry does not move between two checks. Once a day is enough. */
+        private const val CERT_PROBE_INTERVAL_MS = 24L * 60 * 60 * 1000
         private const val DUE_SLACK_MS = DueCheck.SLACK_MS
 
         /** Never wake more often than this, however tight the configured cadence. */
