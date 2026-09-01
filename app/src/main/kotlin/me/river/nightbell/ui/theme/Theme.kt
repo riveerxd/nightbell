@@ -103,6 +103,28 @@ class NightbellColorScheme(
     val TextTertiary: Color,
 
     val ToastFill: Color,
+
+    /**
+     * The toast's own fill, and the reason it is not [ToastFill].
+     *
+     * [ToastFill] is `#171717`, which is nine per cent lighter than the black the
+     * app is painted on. Over a card it was invisible, over the aurora it was
+     * invisible, and the one report that started this said the confirmation
+     * "splits into the app". That value is still right for the two places it is
+     * left in: the pull puck and the icon well are meant to sit *in* the surface
+     * under them. A message that arrives unasked has to sit clearly above it.
+     *
+     * Dark in both schemes, which is the one place Nightbell gives up on
+     * following the scheme it is in. A white capsule on `#F3F4F7` has exactly the
+     * same problem as `#171717` on black, and every other answer to it needs the
+     * toast to carry its own text and status palette anyway. So it does: the
+     * light scheme's value is a shade *below* the page instead of above it, the
+     * text is white in both, and [me.river.nightbell.ui.components.ToastHost]
+     * takes its accents off the dark anchors regardless of scheme, because the
+     * darkened mint and amber were picked to pass against white and do not pass
+     * against this.
+     */
+    val ToastSurface: Color,
     val SheetScrim: Color,
 
     val GlassFill: Color,
@@ -171,6 +193,9 @@ val NightbellDarkColors = NightbellColorScheme(
     // Opaque on purpose: the toast capsule floats over cards and charts, and a
     // translucent fill lets whatever it covers show through as noise.
     ToastFill = Color(0xFF171717),
+    // Lifted well clear of the black ground and of a card's #0A0A0A. Slightly
+    // cool, so it does not read as a lighter patch of the same grey.
+    ToastSurface = Color(0xFF22232A),
     // Painted over a real backdrop blur. Translucent enough to see the blur move
     // underneath, opaque enough that body text on top never fights it.
     SheetScrim = Color(0xD40C0C0C),
@@ -215,6 +240,7 @@ val NightbellLightColors = NightbellColorScheme(
     // 5.3:1 on Void — the old #8A8A8A would have been 2.5:1 and unreadable.
     TextTertiary = Color(0xFF5E6573),
     ToastFill = Color(0xFFFFFFFF),
+    ToastSurface = Color(0xFF14161B),
     SheetScrim = Color(0xD9F7F8FA),
     GlassFill = Color(0xF7FFFFFF),
     GlassFillStrong = Color(0xFFFFFFFF),

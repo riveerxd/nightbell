@@ -69,6 +69,7 @@ import me.river.nightbell.ui.components.GlassDivider
 import me.river.nightbell.ui.components.GlassIconButton
 import me.river.nightbell.ui.components.IconBadge
 import me.river.nightbell.ui.components.LabelledRow
+import me.river.nightbell.ui.components.ToastMessage
 import me.river.nightbell.ui.components.LatencyBars
 import me.river.nightbell.ui.components.LatencyBudgetLegend
 import me.river.nightbell.ui.components.MetricTile
@@ -105,7 +106,7 @@ fun DetailScreen(
     monitorId: String,
     onBack: () -> Unit,
     onEdit: (String) -> Unit,
-    onToast: (String) -> Unit,
+    onToast: (ToastMessage) -> Unit,
 ) {
     val viewModel = rememberDetailViewModel(monitorId)
     val card by viewModel.card.collectAsStateWithLifecycle()
@@ -463,7 +464,16 @@ fun DetailScreen(
                         )
                         NightbellButton(
                             text = "Delete",
-                            onClick = { viewModel.delete(onBack) },
+                            onClick = {
+                                // Reported from here rather than from the view
+                                // model: `delete` ends in a back-stack pop, which
+                                // takes this screen and its toast state with it,
+                                // so the confirmation had nowhere to be read from.
+                                viewModel.delete {
+                                    onToast(ToastMessage.warning("Monitor deleted"))
+                                    onBack()
+                                }
+                            },
                             tone = ButtonTone.Danger,
                             icon = NightbellIcons.Trash,
                             modifier = Modifier.weight(1f),

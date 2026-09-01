@@ -103,6 +103,7 @@ import me.river.nightbell.ui.components.StaggeredEntrance
 import me.river.nightbell.ui.components.rememberEntranceLog
 import me.river.nightbell.ui.components.StepperRow
 import me.river.nightbell.ui.components.ToggleRow
+import me.river.nightbell.ui.components.ToastMessage
 import me.river.nightbell.ui.icons.NightbellIcons
 import me.river.nightbell.ui.rememberSettingsViewModel
 import me.river.nightbell.ui.theme.Backdrop
@@ -120,7 +121,7 @@ import kotlinx.coroutines.withContext
 import me.river.nightbell.ui.theme.NightbellRadii
 
 @Composable
-fun SettingsScreen(onBack: () -> Unit, onToast: (String) -> Unit) {
+fun SettingsScreen(onBack: () -> Unit, onToast: (ToastMessage) -> Unit) {
     val viewModel = rememberSettingsViewModel()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val checkerHealth by viewModel.checkerHealth.collectAsStateWithLifecycle()

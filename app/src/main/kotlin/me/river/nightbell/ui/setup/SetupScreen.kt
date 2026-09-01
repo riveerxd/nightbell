@@ -96,6 +96,7 @@ import me.river.nightbell.ui.components.SegmentedSelector
 import me.river.nightbell.ui.components.StepperRow
 import me.river.nightbell.ui.components.ToggleRow
 import me.river.nightbell.ui.components.formatLatency
+import me.river.nightbell.ui.components.ToastMessage
 import me.river.nightbell.ui.dashboard.kindIcon
 import me.river.nightbell.ui.icons.NightbellIcons
 import me.river.nightbell.ui.rememberSetupViewModel
@@ -116,9 +117,17 @@ fun SetupScreen(
     monitorId: String?,
     onClose: () -> Unit,
     onSaved: () -> Unit,
+    onToast: (ToastMessage) -> Unit = {},
     templateId: String? = null,
 ) {
     val viewModel = rememberSetupViewModel(monitorId, templateId)
+    val toast = viewModel.toast
+    LaunchedEffect(toast) {
+        if (toast != null) {
+            onToast(toast)
+            viewModel.consumeToast()
+        }
+    }
     val draft = viewModel.draft
     val report = viewModel.report
     val (accent, accentEnd) = accentFor(draft.accent)

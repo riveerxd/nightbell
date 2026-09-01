@@ -114,6 +114,7 @@ import me.river.nightbell.ui.components.rememberEntranceLog
 import me.river.nightbell.ui.components.rememberFavicon
 import me.river.nightbell.ui.components.StatusOrb
 import me.river.nightbell.ui.components.StatusPill
+import me.river.nightbell.ui.components.ToastMessage
 import me.river.nightbell.ui.components.formatLatency
 import me.river.nightbell.ui.components.formatRelative
 import me.river.nightbell.ui.icons.NightbellIcons
@@ -161,7 +162,7 @@ fun DashboardScreen(
     onAddMonitor: () -> Unit,
     onOpenMonitor: (String) -> Unit,
     onOpenSettings: () -> Unit,
-    onToast: (String) -> Unit,
+    onToast: (ToastMessage) -> Unit,
     onPickTemplate: (String) -> Unit = { onAddMonitor() },
 ) {
     val viewModel = rememberDashboardViewModel()

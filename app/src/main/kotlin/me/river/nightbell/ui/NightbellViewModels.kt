@@ -42,6 +42,7 @@ import me.river.nightbell.domain.StatusMode
 import me.river.nightbell.domain.Validation
 import me.river.nightbell.domain.isCancellation
 import me.river.nightbell.domain.runCatchingCancellable
+import me.river.nightbell.ui.components.ToastMessage
 import me.river.nightbell.ui.dashboard.DashboardRow
 import me.river.nightbell.ui.dashboard.GroupDraft
 import me.river.nightbell.ui.dashboard.GroupTarget
@@ -60,8 +61,24 @@ import kotlinx.coroutines.launch
  * Shown when a human asks for a check with no connectivity. Worth saying out
  * loud: silently doing nothing would read as the app being broken, and running
  * the check would produce a false outage.
+ *
+ * An error rather than a warning: the tap did not do the thing it was for.
  */
-private const val OFFLINE_TOAST = "You're offline, checks are paused"
+private val OFFLINE_TOAST get() = ToastMessage.error("You're offline, checks are paused")
+
+/**
+ * Copy for the operations a user can reach from more than one screen.
+ *
+ * Held here because they had drifted. Acknowledging an outage said "Urgent alert
+ * acknowledged" on the dashboard and "Acknowledged, no more urgent alerts for this
+ * outage" on the monitor, and un-muting said "Alerts un-muted" in one place and
+ * "Alerts back on" in the other. Same button, same effect, two answers, and the
+ * longer of each pair was also the string that wrapped to three lines at the
+ * largest font scale.
+ */
+private const val ACKNOWLEDGED = "Acknowledged, no more pages for this outage"
+private const val ALERTS_BACK_ON = "Alerts back on"
+private fun mutedFor(hours: Int) = "Alerts muted for ${hours}h"
 
 // ------------------------------------------------------------------ dashboard
 
@@ -93,7 +110,7 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
     var refreshing by mutableStateOf(false)
         private set
 
-    var toast by mutableStateOf<String?>(null)
+    var toast by mutableStateOf<ToastMessage?>(null)
         private set
 
     /** The standing pause, if any. Drives the banner and the button's label. */
@@ -401,7 +418,7 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
                 ),
             )
             graph.notifyStateChanged()
-            toast = "Added ${ids.size} ${plural(ids.size)} to “${group.displayTitle}”"
+            toast = ToastMessage.success("Added ${ids.size} ${plural(ids.size)} to “${group.displayTitle}”")
             clearSelection()
         }
     }
@@ -426,11 +443,13 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
             }
             graph.store.removeFromGroups(ids)
             graph.notifyStateChanged()
-            toast = if (holders.size == 1) {
-                "Removed $moved ${plural(moved)} from “${holders.single().displayTitle}”"
-            } else {
-                "Removed $moved ${plural(moved)} from their groups"
-            }
+            toast = ToastMessage.success(
+                if (holders.size == 1) {
+                    "Removed $moved ${plural(moved)} from “${holders.single().displayTitle}”"
+                } else {
+                    "Removed $moved ${plural(moved)} from their groups"
+                },
+            )
             clearSelection()
         }
     }
@@ -456,7 +475,9 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
         viewModelScope.launch {
             graph.store.upsertGroup(group)
             graph.notifyStateChanged()
-            toast = if (creating) "Grouped ${group.size} ${plural(group.size)}" else "Group updated"
+            toast = ToastMessage.success(
+                if (creating) "Grouped ${group.size} ${plural(group.size)}" else "Group updated",
+            )
             if (creating) clearSelection()
         }
     }
@@ -475,7 +496,7 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
         viewModelScope.launch {
             graph.store.deleteGroup(draft.group.id)
             graph.notifyStateChanged()
-            toast = "Ungrouped ${draft.group.size} ${plural(draft.group.size)}"
+            toast = ToastMessage.success("Ungrouped ${draft.group.size} ${plural(draft.group.size)}")
         }
     }
 
@@ -483,10 +504,25 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
         viewModelScope.launch { graph.store.setGroupCollapsed(groupId, collapsed) }
     }
 
+    /**
+     * Pulls one monitor back out to the top level.
+     *
+     * Reports it, because the bulk path beside it always did and this is the same
+     * event: the row disappears from the group card and reappears somewhere else
+     * in the list, possibly below the fold. Silence made one monitor leaving a
+     * group look like one monitor being deleted, which is the same confusion
+     * [addSelectionToGroup] expands a collapsed group to avoid.
+     */
     fun removeFromGroup(groupId: String, monitorId: String) {
         viewModelScope.launch {
+            val group = graph.store.currentSnapshot().groups.firstOrNull { it.id == groupId }
             graph.store.removeFromGroup(groupId, monitorId)
             graph.notifyStateChanged()
+            toast = ToastMessage.success(
+                group?.displayTitle
+                    ?.let { "Removed 1 monitor from “$it”" }
+                    ?: "Removed 1 monitor from its group",
+            )
         }
     }
 
@@ -540,7 +576,11 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
                 graph.scheduler.schedule(it, snapshot.settings)
             }
             graph.notifyStateChanged()
-            toast = "${ids.size} ${plural(ids.size)} ${if (enabled) "resumed" else "paused"}"
+            toast = if (enabled) {
+                ToastMessage.success("${ids.size} ${plural(ids.size)} resumed")
+            } else {
+                ToastMessage.warning("${ids.size} ${plural(ids.size)} paused")
+            }
             clearSelection()
         }
     }
@@ -550,7 +590,7 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
         if (ids.isEmpty()) return
         viewModelScope.launch {
             ids.forEach { graph.engine.mute(it, hours * 60 * 60 * 1000L) }
-            toast = "${ids.size} ${plural(ids.size)} muted for ${hours}h"
+            toast = ToastMessage.warning("${ids.size} ${plural(ids.size)} muted for ${hours}h")
             clearSelection()
         }
     }
@@ -566,7 +606,7 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
                 graph.store.delete(id)
             }
             graph.notifyStateChanged()
-            toast = "${ids.size} ${plural(ids.size)} deleted"
+            toast = ToastMessage.warning("${ids.size} ${plural(ids.size)} deleted")
             clearSelection()
         }
     }
@@ -608,12 +648,18 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
                 PauseState.timed(now, minutes, scope)
             }
             graph.engine.pauseAll(state)
-            toast = when {
-                minutes == null && scope == PauseScope.STOP_CHECKS -> "Paused until you resume"
-                minutes == null -> "Silenced until you resume"
-                scope == PauseScope.STOP_CHECKS -> "Paused for ${durationLabel(minutes)}"
-                else -> "Silenced for ${durationLabel(minutes)}"
-            }
+            // Every one of these is a warning, including the ones that worked.
+            // A pause is the app saying it will not page you, which is the state
+            // a monitoring app should never confirm in the same green it uses for
+            // "your fleet is fine".
+            toast = ToastMessage.warning(
+                when {
+                    minutes == null && scope == PauseScope.STOP_CHECKS -> "Paused until you resume"
+                    minutes == null -> "Silenced until you resume"
+                    scope == PauseScope.STOP_CHECKS -> "Paused for ${durationLabel(minutes)}"
+                    else -> "Silenced for ${durationLabel(minutes)}"
+                },
+            )
         }
     }
 
@@ -623,7 +669,7 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
         viewModelScope.launch {
             try {
                 graph.engine.resumeAll()
-                toast = "Monitoring again"
+                toast = ToastMessage.success("Monitoring again")
             } finally {
                 refreshing = false
             }
@@ -642,10 +688,20 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
         viewModelScope.launch {
             try {
                 val count = graph.engine.runAllDue(force = true)
+                // Zero is a warning and not a success: the button ran and
+                // nothing happened, which is the one answer here a user would
+                // want to look at twice.
+                //
+                // And it says which nothing. This pass is forced, so due-ness
+                // cannot be why a monitor was skipped, and offline and a standing
+                // fleet pause are both handled before we get here. What is left is
+                // that every monitor is individually paused, which "Nothing to
+                // check yet" described as a matter of timing and told the user to
+                // come back later for something no amount of waiting fixes.
                 toast = when (count) {
-                    0 -> "Nothing to check yet"
-                    1 -> "1 monitor checked"
-                    else -> "$count monitors checked"
+                    0 -> ToastMessage.warning("Every monitor is paused")
+                    1 -> ToastMessage.success("1 monitor checked")
+                    else -> ToastMessage.success("$count monitors checked")
                 }
             } finally {
                 refreshing = false
@@ -689,7 +745,11 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
             }
             // A paused monitor can no longer support a checker-crash claim.
             if (!enabled) graph.engine.forgetMonitor(monitorId)
-            toast = if (enabled) "Monitor resumed" else "Monitor paused"
+            toast = if (enabled) {
+                ToastMessage.success("Monitor resumed")
+            } else {
+                ToastMessage.warning("Monitor paused")
+            }
         }
     }
 
@@ -702,28 +762,28 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
             // once the monitor is gone no per-monitor loop ever visits it again.
             graph.alerts.cancelAll(monitorId)
             graph.engine.forgetMonitor(monitorId)
-            toast = "Monitor deleted"
+            toast = ToastMessage.warning("Monitor deleted")
         }
     }
 
     fun mute(monitorId: String, hours: Int) {
         viewModelScope.launch {
             graph.engine.mute(monitorId, hours * 60 * 60 * 1000L)
-            toast = "Alerts muted for ${hours}h"
+            toast = ToastMessage.warning(mutedFor(hours))
         }
     }
 
     fun unmute(monitorId: String) {
         viewModelScope.launch {
             graph.engine.unmute(monitorId)
-            toast = "Alerts un-muted"
+            toast = ToastMessage.success(ALERTS_BACK_ON)
         }
     }
 
     fun acknowledgeUrgent(monitorId: String) {
         viewModelScope.launch {
             graph.engine.acknowledgeUrgent(monitorId)
-            toast = "Urgent alert acknowledged"
+            toast = ToastMessage.warning(ACKNOWLEDGED)
         }
     }
 
@@ -936,10 +996,32 @@ class SetupViewModel(
      * a property of the phone rather than of one repository, and asking for it
      * again per monitor would be asking the user to paste a credential twice.
      */
+    /**
+     * A toast channel, for the one thing on this screen that is not the draft.
+     *
+     * Everything else the wizard does is reported by the wizard: a step advances,
+     * a test result appears, a field turns red. Saving the token is the exception
+     * because it writes a global setting from inside a form about one monitor, and
+     * the only visible answer was the field collapsing.
+     */
+    var toast by mutableStateOf<ToastMessage?>(null)
+        private set
+
+    fun consumeToast() {
+        toast = null
+    }
+
     fun setGitHubToken(value: String) {
         val cleaned = value.trim()
         settings = settings.copy(githubToken = cleaned)
         viewModelScope.launch { graph.store.updateSettings { it.copy(githubToken = cleaned) } }
+        // The same words the Settings screen uses for the same write, which is a
+        // different screen writing the same key.
+        toast = if (cleaned.isBlank()) {
+            ToastMessage.warning("Token removed")
+        } else {
+            ToastMessage.success("Token saved on this device")
+        }
     }
 
     // ---- multi-element editing ---------------------------------------------
@@ -1134,7 +1216,7 @@ class DetailViewModel(
         .map { !it }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), !graph.network.isOnline())
 
-    var toast by mutableStateOf<String?>(null)
+    var toast by mutableStateOf<ToastMessage?>(null)
         private set
 
     fun checkNow() {
@@ -1161,13 +1243,22 @@ class DetailViewModel(
                 graph.scheduler.schedule(it, snapshot.settings)
             }
             if (!enabled) graph.engine.forgetMonitor(monitorId)
+            // The dashboard's pause has said this since it shipped and this one
+            // said nothing, so the same switch answered on one screen and not on
+            // the other. Pausing from here changes whether the phone will ring
+            // tonight, which is not a thing to leave to a toggle's own position.
+            toast = if (enabled) {
+                ToastMessage.success("Monitor resumed")
+            } else {
+                ToastMessage.warning("Monitor paused")
+            }
         }
     }
 
     fun mute(hours: Int) {
         viewModelScope.launch {
             graph.engine.mute(monitorId, hours * 60 * 60 * 1000L)
-            toast = "Muted for ${hours}h"
+            toast = ToastMessage.warning(mutedFor(hours))
         }
     }
 
@@ -1175,14 +1266,14 @@ class DetailViewModel(
     fun repinCertificate() {
         viewModelScope.launch {
             graph.engine.repinCertificate(monitorId)
-            toast = "The next successful check will record the new key"
+            toast = ToastMessage.warning("The next successful check will record the new key")
         }
     }
 
     fun unmute() {
         viewModelScope.launch {
             graph.engine.unmute(monitorId)
-            toast = "Alerts back on"
+            toast = ToastMessage.success(ALERTS_BACK_ON)
         }
     }
 
@@ -1193,7 +1284,7 @@ class DetailViewModel(
     fun acknowledgeUrgent() {
         viewModelScope.launch {
             graph.engine.acknowledgeUrgent(monitorId)
-            toast = "Acknowledged, no more urgent alerts for this outage"
+            toast = ToastMessage.warning(ACKNOWLEDGED)
         }
     }
 
@@ -1211,7 +1302,7 @@ class DetailViewModel(
             graph.store.updateRuntime(monitorId) {
                 it.copy(github = it.github.copy(seenAt = System.currentTimeMillis()))
             }
-            toast = "Marked as seen"
+            toast = ToastMessage.success("Marked as seen")
         }
     }
 
@@ -1299,7 +1390,7 @@ class SettingsViewModel(private val graph: Nightbell.Graph) : ViewModel() {
         }
     }
 
-    var toast by mutableStateOf<String?>(null)
+    var toast by mutableStateOf<ToastMessage?>(null)
         private set
 
     var refetchingFavicons by mutableStateOf(false)
@@ -1344,12 +1435,17 @@ class SettingsViewModel(private val graph: Nightbell.Graph) : ViewModel() {
                 val count = snapshot.monitors.size
                 val secrets = snapshot.settings.includeSecretsInExport &&
                     snapshot.settings.githubToken.isNotBlank()
-                toast = "Exported $count monitor" + (if (count == 1) "" else "s") +
+                val line = "Exported $count monitor" + (if (count == 1) "" else "s") +
                     if (secrets) ", token included" else ""
+                // Amber when the token went with it. The export worked either
+                // way, so this is not a failure, but a file that now contains a
+                // credential is the one outcome here worth reading twice, and
+                // green is the colour this app uses for "nothing to see".
+                toast = if (secrets) ToastMessage.warning(line) else ToastMessage.success(line)
             } catch (error: Throwable) {
                 if (isCancellation(error)) throw error
                 Log.w(TAG, "Export failed", error)
-                toast = "Couldn't write that file"
+                toast = ToastMessage.error("Couldn't write that file")
             } finally {
                 transfer = null
             }
@@ -1375,8 +1471,10 @@ class SettingsViewModel(private val graph: Nightbell.Graph) : ViewModel() {
             try {
                 val raw = source()
                 val backup = BackupCodec.decode(raw).getOrElse { error ->
-                    toast = (error as? BackupCodec.BackupFailure)?.error?.message
-                        ?: BackupError.Unreadable.message
+                    toast = ToastMessage.error(
+                        (error as? BackupCodec.BackupFailure)?.error?.message
+                            ?: BackupError.Unreadable.message,
+                    )
                     return@launch
                 }
                 // The pause belongs to this device and this afternoon, not to the
@@ -1395,7 +1493,7 @@ class SettingsViewModel(private val graph: Nightbell.Graph) : ViewModel() {
                 graph.engine.clearCheckerHealth("store replaced by import")
                 graph.notifyStateChanged()
                 val count = imported.monitors.size
-                toast = "Imported $count monitor" + if (count == 1) "" else "s"
+                toast = ToastMessage.success("Imported $count monitor" + if (count == 1) "" else "s")
 
                 // The import is done at this point: the monitors are in the store
                 // and on screen. The first check pass is not part of it, and
@@ -1417,7 +1515,7 @@ class SettingsViewModel(private val graph: Nightbell.Graph) : ViewModel() {
             } catch (error: Throwable) {
                 if (isCancellation(error)) throw error
                 Log.w(TAG, "Import failed", error)
-                toast = "Couldn't read that file"
+                toast = ToastMessage.error("Couldn't read that file")
             } finally {
                 transfer = null
             }
@@ -1447,9 +1545,10 @@ class SettingsViewModel(private val graph: Nightbell.Graph) : ViewModel() {
                 val result = graph.favicons.refetch(urls)
                 val sites = "${result.sites} site" + if (result.sites == 1) "" else "s"
                 toast = when {
-                    result.sites == 0 -> "No website monitors to fetch icons for"
-                    result.changed == 0 -> "Checked $sites — icons unchanged"
-                    else -> "${result.changed} of $sites updated"
+                    result.sites == 0 ->
+                        ToastMessage.warning("No website monitors to fetch icons for")
+                    result.changed == 0 -> ToastMessage.success("Checked $sites, icons unchanged")
+                    else -> ToastMessage.success("${result.changed} of $sites updated")
                 }
             } finally {
                 refetchingFavicons = false
@@ -1473,7 +1572,14 @@ class SettingsViewModel(private val graph: Nightbell.Graph) : ViewModel() {
     fun setGitHubToken(raw: String) {
         val cleaned = raw.trim()
         update { it.copy(githubToken = cleaned) }
-        toast = if (cleaned.isBlank()) "Token removed" else "Token saved on this device"
+        toast = if (cleaned.isBlank()) {
+            // Warned rather than confirmed: with no token the repository monitors
+            // fall back to the unauthenticated budget, which is a real change to
+            // how often they can poll.
+            ToastMessage.warning("Token removed")
+        } else {
+            ToastMessage.success("Token saved on this device")
+        }
     }
 
     // ---- Nightbell's own updates --------------------------------------------
@@ -1499,7 +1605,7 @@ class SettingsViewModel(private val graph: Nightbell.Graph) : ViewModel() {
     fun unignoreUpdate() {
         viewModelScope.launch {
             graph.store.updateAppUpdate { AppUpdate.unignore(it) }
-            toast = "That version will be announced again"
+            toast = ToastMessage.success("That version will be announced again")
         }
     }
 
@@ -1524,10 +1630,11 @@ class SettingsViewModel(private val graph: Nightbell.Graph) : ViewModel() {
                 val state = graph.store.currentSnapshot().update
                 val latest = state.latestVersion
                 toast = when {
-                    latest.isBlank() -> "Couldn't reach ${settings.value.updateSource.label}"
+                    latest.isBlank() ->
+                        ToastMessage.error("Couldn't reach ${settings.value.updateSource.label}")
                     AppUpdate.isNewer(latest, BuildConfig.VERSION_NAME) ->
-                        "Version $latest is available"
-                    else -> "You're on the newest version"
+                        ToastMessage.success("Version $latest is available")
+                    else -> ToastMessage.success("You're on the newest version")
                 }
             } finally {
                 checkingForUpdate = false
@@ -1568,11 +1675,11 @@ class SettingsViewModel(private val graph: Nightbell.Graph) : ViewModel() {
             try {
                 val policy = graph.store.currentSnapshot().settings.defaultAlert
                 if (!graph.alerts.hasNotificationPermission()) {
-                    toast = "Notifications are blocked, enable them in system settings"
+                    toast = ToastMessage.error("Notifications are blocked, enable them in system settings")
                     return@launch
                 }
                 graph.alerts.previewPolicy(policy)
-                toast = "Test alert sent"
+                toast = ToastMessage.success("Test alert sent")
             } finally {
                 sendingTestAlert = false
             }

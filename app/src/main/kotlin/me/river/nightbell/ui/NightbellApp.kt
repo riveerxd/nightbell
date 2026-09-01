@@ -1,7 +1,6 @@
 package me.river.nightbell.ui
 
 import android.app.Activity
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -11,22 +10,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -36,11 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.zIndex
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -52,6 +32,8 @@ import androidx.navigation.navArgument
 import me.river.nightbell.data.Nightbell
 import me.river.nightbell.ui.components.AuroraBackground
 import me.river.nightbell.ui.components.DismissKeyboardOnOutsideTap
+import me.river.nightbell.ui.components.ToastHost
+import me.river.nightbell.ui.components.ToastMessage
 import me.river.nightbell.ui.dashboard.DashboardScreen
 import me.river.nightbell.ui.detail.DetailScreen
 import me.river.nightbell.ui.settings.SettingsScreen
@@ -61,12 +43,10 @@ import me.river.nightbell.ui.theme.NightbellColors
 import me.river.nightbell.ui.theme.NightbellTheme
 import me.river.nightbell.ui.theme.rememberNowMs
 import me.river.nightbell.ui.theme.rememberSystemAnimationsEnabled
-import me.river.nightbell.ui.theme.softShadow
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import me.river.nightbell.domain.PagerReadiness
 import me.river.nightbell.ui.permissions.PagerSetupScreen
-import kotlinx.coroutines.delay
 
 /** One reading of what the platform currently allows. */
 private fun pagerReadinessNow(graph: Nightbell.Graph): PagerReadiness.State {
@@ -149,7 +129,7 @@ fun NightbellApp(
     val graph = Nightbell.require()
     val settings by graph.store.snapshot.collectAsStateWithLifecycle()
     val navController = rememberNavController()
-    var toastMessage by remember { mutableStateOf<String?>(null) }
+    var toastMessage by remember { mutableStateOf<ToastMessage?>(null) }
 
     // Decided once, from the first snapshot that has loaded: making this reactive
     // would yank the user back to the gate the moment a grant was revoked, and
@@ -199,7 +179,7 @@ fun NightbellApp(
                         onToast = { toastMessage = it },
                     )
                 }
-                GlassToast(
+                ToastHost(
                     message = toastMessage,
                     onDismissed = { toastMessage = null },
                     modifier = Modifier.align(Alignment.TopCenter),
@@ -213,7 +193,7 @@ fun NightbellApp(
 private fun NightbellNavHost(
     navController: NavHostController,
     startDestination: String,
-    onToast: (String) -> Unit,
+    onToast: (ToastMessage) -> Unit,
 ) {
     NavHost(
         navController = navController,
@@ -271,8 +251,9 @@ private fun NightbellNavHost(
                 monitorId = null,
                 templateId = entry.arguments?.getString("template").orEmpty().ifBlank { null },
                 onClose = { navController.popBackStack() },
+                onToast = onToast,
                 onSaved = {
-                    onToast("Monitor created")
+                    onToast(ToastMessage.success("Monitor created"))
                     navController.popBackStack()
                 },
             )
@@ -283,8 +264,9 @@ private fun NightbellNavHost(
             SetupScreen(
                 monitorId = id,
                 onClose = { navController.popBackStack() },
+                onToast = onToast,
                 onSaved = {
-                    onToast("Changes saved")
+                    onToast(ToastMessage.success("Changes saved"))
                     navController.popBackStack()
                 },
             )
@@ -328,69 +310,3 @@ private fun SyncSystemBarIcons(light: Boolean) {
         }
     }
 }
-
-/**
- * Confirmation capsule. Slides down from the top and fades itself out.
- *
- * Sized to its text rather than to the screen, and parked over the wordmark
- * row: a transient "saved" message has no business covering the fleet banner's
- * verdict, which is the one line on the screen someone opened Nightbell to read.
- */
-@Composable
-private fun GlassToast(
-    message: String?,
-    onDismissed: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    LaunchedEffect(message) {
-        if (message != null) {
-            delay(2_400)
-            onDismissed()
-        }
-    }
-    val topInset = WindowInsets.systemBars.asPaddingValues().calculateTopPadding()
-    val shape = RoundedCornerShape(100)
-    AnimatedVisibility(
-        visible = message != null,
-        enter = slideInVertically(tween(280)) { -it } + fadeIn(tween(200)),
-        exit = slideOutVertically(tween(220)) { -it } + fadeOut(tween(180)),
-        modifier = modifier
-            .zIndex(Float.MAX_VALUE)
-            .padding(top = topInset + TOAST_TOP_GAP, start = 20.dp, end = 20.dp),
-    ) {
-        Row(
-            Modifier
-                // Deliberately heavier than a card's shadow. The capsule floats
-                // over lighter glass surfaces, and without a real pool of dark
-                // underneath it reads as part of whatever it happens to cover.
-                .softShadow(corner = 100.dp, radius = 26.dp, strength = 2.4f)
-                .clip(shape)
-                .background(NightbellColors.ToastFill)
-                .border(1.dp, NightbellColors.sheen(0.14f), shape)
-                .padding(start = 15.dp, end = 20.dp, top = 11.dp, bottom = 11.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                Modifier
-                    .size(7.dp)
-                    .clip(CircleShape)
-                    .background(NightbellColors.Mint),
-            )
-            Spacer(Modifier.width(11.dp))
-            Text(
-                text = message.orEmpty(),
-                style = MaterialTheme.typography.titleMedium,
-                color = NightbellColors.TextPrimary,
-            )
-        }
-    }
-}
-
-/**
- * Parks the capsule over the wordmark row and nothing else.
- *
- * The fleet verdict moved out of a subtitle and into the banner below, so the
- * cheap row to cover is now the app's own name — and the banner, which is the
- * line someone opened Nightbell to read, stays clear.
- */
-private val TOAST_TOP_GAP = 10.dp

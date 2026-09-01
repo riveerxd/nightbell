@@ -160,6 +160,19 @@ object NightbellIcons {
         "Warning",
         "M12 3.4 L21.6 20 L2.4 20 Z M12 9.4 L12 14 M12 16.6 L12 17.3",
     )
+
+    /**
+     * Failure. A ring around a bang, and deliberately not [Close].
+     *
+     * The cross is what dismisses things everywhere else in this app, so a toast
+     * that reported a failure with one was offering a button that was not there.
+     * The triangle stays with [Warning]: the two have to be told apart at a
+     * glance and at 17dp a red triangle and an amber one are not.
+     */
+    val AlertCircle = stroke(
+        "AlertCircle",
+        circle(12f, 12f, 8.6f) + " M12 7.2 L12 12.8 M12 15.6 L12 16.3",
+    )
     val Sparkle = stroke(
         "Sparkle",
         "M11 2.8 L12.7 8.4 L18.3 10.1 L12.7 11.8 L11 17.4 L9.3 11.8 L3.7 10.1 L9.3 8.4 Z " +
