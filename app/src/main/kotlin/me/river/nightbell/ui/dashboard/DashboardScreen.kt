@@ -131,6 +131,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import me.river.nightbell.ui.theme.rememberLoopingFloat
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.zIndex
 import me.river.nightbell.ui.theme.NightbellRadii
 
@@ -1274,7 +1275,14 @@ private fun SelectionBar(
             // half the old layout had inverted: grouping was two full-width bars,
             // twice the width of delete, for the two actions that change the least.
             val allGrouped = groupedCount == count
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Side by side while both labels fit, a line each once they stop, the
+            // same shape and the same threshold the wizard footer uses. Weighting
+            // alone was not enough: at 200 per cent "Mute 1h" fell back to "Mute"
+            // and then ellipsised to "M…", which is not a word.
+            val stacked = LocalDensity.current.fontScale >= 1.45f
+            val chip = if (stacked) Modifier.fillMaxWidth() else Modifier
+            @Composable
+            fun secondaryActions() {
                 // Not equal weights. "Mute 1h" is seven characters and the group
                 // action is up to twenty-nine; splitting the row down the middle
                 // made both fall back to `shortText`, so it read "Mute · Group"
@@ -1285,7 +1293,7 @@ private fun SelectionBar(
                     onClick = onMute,
                     icon = NightbellIcons.BellOff,
                     tone = ButtonTone.Secondary,
-                    modifier = Modifier.weight(1f),
+                    modifier = if (stacked) chip else Modifier.weight(1f),
                 )
                 NightbellButton(
                     // "Move" once everything selected is already in a group,
@@ -1305,8 +1313,13 @@ private fun SelectionBar(
                     onClick = onGroup,
                     icon = NightbellIcons.Layers,
                     tone = ButtonTone.Secondary,
-                    modifier = Modifier.weight(1.9f),
+                    modifier = if (stacked) chip else Modifier.weight(1.9f),
                 )
+            }
+            if (stacked) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { secondaryActions() }
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { secondaryActions() }
             }
             // Its own row, and full width, because the label names the group it
             // will pull the selection out of and that sentence is the whole point
@@ -1339,6 +1352,7 @@ private fun SelectionBar(
             Spacer(Modifier.height(14.dp))
             HoldToConfirmButton(
                 text = "Hold to delete ${theseN(count)}",
+                shortText = "Hold to delete",
                 onConfirm = onDelete,
                 modifier = Modifier.fillMaxWidth(),
             )

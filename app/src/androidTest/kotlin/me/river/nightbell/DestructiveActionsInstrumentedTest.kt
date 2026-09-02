@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -15,6 +16,11 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.up
 import androidx.compose.ui.test.down
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlinx.coroutines.runBlocking
 import me.river.nightbell.NightbellTestSupport.appContext
@@ -106,9 +112,13 @@ class DestructiveActionsInstrumentedTest {
         }
     }
 
-    private fun dashboard() {
+    private fun dashboard(fontScale: Float = 1f) {
         composeRule.setContent {
             NightbellTheme(motionIntensity = 0f) {
+                val base = LocalDensity.current
+                CompositionLocalProvider(
+                    LocalDensity provides Density(base.density, fontScale),
+                ) {
                 AuroraBackground(modifier = Modifier.fillMaxSize()) {
                     DashboardScreen(
                         onAddMonitor = {},
@@ -122,19 +132,30 @@ class DestructiveActionsInstrumentedTest {
                         modifier = Modifier.align(Alignment.TopCenter),
                     )
                 }
+                }
             }
         }
+        // Waits for the button that is pinned rather than for a card. At the 200
+        // per cent font scale the first monitor is pushed below the fold, and a
+        // lazy list does not put what it has not composed into the semantics tree,
+        // so waiting for the card timed out on a screen that was drawing perfectly.
         composeRule.waitUntil(15_000) {
-            composeRule.onAllNodesWithText("Checkout API").fetchSemanticsNodes().isNotEmpty()
+            composeRule.onAllNodesWithContentDescription("Add a monitor")
+                .fetchSemanticsNodes().isNotEmpty()
         }
     }
 
     private fun monitorCount() = runBlocking { store.currentSnapshot().monitors.size }
 
-    private fun selectFirst() {
-        composeRule.onNodeWithText("Checkout API").performTouchInput { longClick() }
+    private fun select(name: String) {
+        composeRule.onNodeWithTag("dashboard-list")
+            .performScrollToNode(hasText(name, substring = true))
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(name, substring = true).performTouchInput { longClick() }
         composeRule.waitForIdle()
     }
+
+    private fun selectFirst() = select("Checkout API")
 
     /** Presses the hold button, waits [heldMs] of real clock, and releases. */
     private fun hold(label: String, heldMs: Long) {
@@ -172,6 +193,29 @@ class DestructiveActionsInstrumentedTest {
         )
     }
 
+    /**
+     * The bar and the undo at the largest font scale Android offers.
+     *
+     * 200 per cent is where every layout bug in this repository has been found, and
+     * this bar is a new arrangement of five controls with a held button whose label
+     * names what it will destroy. The undo is caught at the same scale because it
+     * is the one toast that has to fit a sentence and a tappable action on one
+     * surface.
+     */
+    @Test
+    fun theBarAndTheUndoSurviveTheLargestFontScale() {
+        dashboard(fontScale = 2f)
+        selectFirst()
+        composeRule.captureScreenshot("destructive-04-bar-at-200")
+
+        hold("Hold to delete", heldMs = 1_500)
+        awaitTrue(description = "the monitor to be deleted") { monitorCount() == 2 }
+        composeRule.waitUntil(8_000) {
+            composeRule.onAllNodesWithText("Undo").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.captureScreenshot("destructive-05-undo-at-200")
+    }
+
     @Test
     fun aTapOnTheDeleteButtonDeletesNothing() {
         dashboard()
@@ -204,8 +248,7 @@ class DestructiveActionsInstrumentedTest {
         dashboard()
         // The grouped one, so the restore has a position and a membership to get
         // right rather than just an existence.
-        composeRule.onNodeWithText("Billing API").performTouchInput { longClick() }
-        composeRule.waitForIdle()
+        select("Billing API")
         val before = runBlocking { store.currentSnapshot() }
         val index = before.monitors.indexOfFirst { it.id == "m1" }
         val samples = before.runtimes["m1"]?.samples?.size ?: 0

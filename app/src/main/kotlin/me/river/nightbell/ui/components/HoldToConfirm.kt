@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -31,9 +32,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.withFrameNanos
 import kotlinx.coroutines.coroutineScope
@@ -93,6 +98,16 @@ fun HoldToConfirmButton(
     text: String,
     onConfirm: () -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * What the label becomes when [text] will not fit on one line.
+     *
+     * The same escape [NightbellButton] has, and needed here for the same reason
+     * plus a sharper one: at the 200 per cent font scale "Hold to delete this
+     * monitor" came out as "Hold to delete this mo…", and a destructive control
+     * that trails off is the last label in the app that should. A button is one
+     * phrase for one action, and the honest way to lose words is deliberately.
+     */
+    shortText: String? = null,
     icon: ImageVector? = NightbellIcons.Trash,
     holdMs: Int = HOLD_TO_DELETE_MS,
     enabled: Boolean = true,
@@ -157,6 +172,8 @@ fun HoldToConfirmButton(
                 )
             }
             .semantics {
+                // The whole phrase, whatever the button had room to print.
+                contentDescription = text
                 onClick(label = text) {
                     confirm()
                     true
@@ -175,13 +192,34 @@ fun HoldToConfirmButton(
             )
             Spacer(Modifier.width(9.dp))
         }
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelLarge,
-            color = rose.copy(alpha = alpha),
-            maxLines = 1,
-            softWrap = false,
-            overflow = TextOverflow.Ellipsis,
-        )
+        // Measured against the room actually left, so the full phrase comes back
+        // on a tablet or in landscape rather than being lost for good once a
+        // narrow layout has been seen.
+        val style = MaterialTheme.typography.labelLarge
+        val measurer = rememberTextMeasurer()
+        BoxWithConstraints {
+            val roomFor = constraints.maxWidth
+            val fits = remember(text, style, roomFor, LocalDensity.current) {
+                measurer.measure(AnnotatedString(text), style, softWrap = false)
+                    .size.width <= roomFor
+            }
+            val shown = if (fits || shortText.isNullOrBlank()) text else shortText
+            Text(
+                text = shown,
+                // Trimming is a layout concession and not a change of meaning, so
+                // the whole phrase stays on the node. A screen reader still hears
+                // what will be deleted.
+                modifier = if (shown == text) {
+                    Modifier
+                } else {
+                    Modifier.semantics { contentDescription = shown }
+                },
+                style = style,
+                color = rose.copy(alpha = alpha),
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
