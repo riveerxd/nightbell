@@ -415,8 +415,31 @@ android {
         // The home screen widget fills the size it was dragged to rather than
         // drawing a fixed count and reporting the remainder as "+N more" with
         // room going spare. Placed widgets keep whatever they were set to.
-        versionCode = 36
-        versionName = "3.7.0"
+        // 3.8.0 answers what happened. Every message the app shows now says which
+        // of three things it is reporting: mint that the thing you asked for
+        // happened, amber that it happened and left you with less cover than you
+        // had, rose that it did not happen. All of them used to be one capsule
+        // with one mint dot, in a grey nine per cent lighter than the black behind
+        // it, so a failure and a confirmation arrived looking identical and both
+        // of them were hard to see at all.
+        //
+        // Nothing asks "are you sure?" any more. A button that destroys something
+        // has to be held, and what it reports afterwards offers the way back for
+        // five seconds. Deleting a monitor used to be final and is not: it returns
+        // to its old place in the list, in its old group, with the uptime history
+        // that is the one thing here nobody can retype.
+        //
+        // The long-press bar leads with the action it is for. It offered Pause and
+        // Resume side by side whatever was selected, so a running fleet was handed
+        // a Resume that could do nothing, first; grouping had the whole width at
+        // twice the size of everything else; and delete sat where a right thumb
+        // rests. A page element monitor can watch its certificate's expiry, which
+        // it could not before, because a WebView only reports a certificate the
+        // phone has already rejected. The opening sequence is 1.75 s rather than
+        // 2.8 s, which was 2.8 because it was tuned on a phone with the animator
+        // scale at half.
+        versionCode = 37
+        versionName = "3.8.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

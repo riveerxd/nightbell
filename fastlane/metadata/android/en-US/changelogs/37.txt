@@ -1,0 +1,15 @@
+Every message Nightbell shows you now says which of three things happened. Green when what you asked for worked, amber when it worked but left you with less cover than you had, red when it did not happen at all. They used to be one shape in one colour, so "imported 12 monitors" and "couldn't read that file" arrived looking identical, and both were hard to see: the old capsule was almost exactly the colour of the app behind it.
+
+Nothing asks whether you are sure any more. A button that destroys something has to be held for a moment instead, with the fill showing how much longer, and letting go early cancels it. Nothing dies by accident and nothing makes you read a dialog you have already learned to dismiss.
+
+Deleting a monitor used to be final. Now the message that reports it offers an undo for five seconds, and taking it puts the monitor back where it was in the list, in the group it belonged to, with its uptime history. That history is the one thing in this app you cannot recreate by typing it again.
+
+Long-press a card and the bar that comes up leads with the thing you opened it for. It used to offer Pause and Resume side by side whatever you had selected, so a fleet that was running was handed a Resume that could not do anything, as the first control on the bar. Grouping had the full width at twice the size of everything else, and delete sat exactly where a right thumb rests. One button now says Pause or Resume depending on what you picked, mute and grouping share a line, and the delete is held and set apart below a rule.
+
+A monitor that watches an element on a page can now warn you before that page's certificate expires. It could not before, and it never said so: a page check runs the page in a browser, and Android only hands an app a certificate that the phone has already rejected, so a working certificate was invisible and no warning could be raised. Switch it on per monitor in the setup screen and Nightbell reads the expiry date once a day.
+
+A repository monitor stops offering to mark news as seen when there is no news. That button always appeared, and on a quiet repository the only thing it changed was a line recording when you last pressed it.
+
+The opening animation is a little over a second and a half rather than nearly three seconds. It was the longer figure because it was timed on a phone whose animation speed was set to half, so it had always played twice as slowly for everyone else as for the person who chose the number.
+
+Two smaller things in the setup screens. The Continue button reaches the right edge of its footer instead of stopping short, and the certificate section looks like every other section rather than three loose buttons floating between a heading and a paragraph.
