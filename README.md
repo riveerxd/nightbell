@@ -38,8 +38,9 @@
 
 </div>
 
-Point it at anything that answers over HTTP, or at one element on a rendered web
-page, and it watches it, charts it, and gets loud when it breaks. **No server, no
+Point it at anything that answers over HTTP, at one element on a rendered web
+page, or at a GitHub repository, and it watches it, charts it, and gets loud when
+it breaks. **No server, no
 account, no middleman.** The phone in your pocket does the checking, and the only
 host it contacts that you did not choose is a connectivity probe you can change or
 switch off.
@@ -75,17 +76,64 @@ wakes the screen if the phone is locked.
 | **Status check** | Hit a URL, assert on the status code. Exact, any 2xx, a range, or any response at all. |
 | **Request and response** | Pick the method, set headers and a body, then assert on what comes back. Contains, does not contain, equals, regex, or a JSON field by path. |
 | **Page element** | Loads the real page in an embedded WebView and watches DOM nodes you picked by tapping them. Existence, text, or an attribute. |
+| **GitHub repository** | Polls one repository and reports what changed about it: stars, issues, releases, pull requests and comments. |
 
 Page-element monitors watch any number of nodes per page and resolve them all
 against one page load, so watching six costs about what watching one costs. The
-expensive part is booting the WebView, not the assertions.
+expensive part is booting the WebView, not the assertions. If the thing you want
+sits behind a cookie banner or an age gate, press through it once in the live
+preview and every check afterwards arrives on the other side of it.
+
+The repository kind is the odd one out, and worth saying why it belongs here
+anyway. Every other kind answers whether something is up; this one answers what
+happened. They share the cadence, the store, the alert policy and the
+notification plumbing, which is most of a monitor, so the alternative was a
+second app carrying a second copy of all of it.
+
+Each track switches on its own: every star or only the milestones, issues
+narrowed by keyword or by author, releases with or without prereleases, pull
+requests, and comments with bot accounts filtered out. Its history lists what it
+saw rather than how fast GitHub answered, so a row reads "13 stars, was 12" or
+"Issue #6 opened" and runs of checks that found nothing collapse into one line.
+A digest mode holds changes for an hour or a day, for a repository that has grown
+past the point where a plus one is news.
+
+A personal access token is optional. Without one you get GitHub's 60 requests an
+hour per IP, which a couple of repositories on a fifteen-minute cadence fit inside
+comfortably; with one you get 5,000, and an unchanged check answers 304 without
+spending any of that budget. The token is stored on the device, never logged,
+never put in a notification, and left out of an export unless you say otherwise.
 
 Setting one up is a four-step wizard: pick a kind, point it somewhere, say what
 "healthy" means, and choose a cadence. Everything is changeable later.
 
+Monitors that answer one question can be grouped, and a group is one card with
+one verdict. "Is Nightbell up" was never a question about the website or about
+the repository, it was a question about both, and the dashboard used to answer it
+one row at a time with you doing the and-ing. A group says it directly: all 2
+operational, or 1 of 2 is down. The worst member decides it, and pausing one
+member never decides it unless every member is paused, because a pause you set
+last week must not be able to hide an outage.
+
 <div align="center">
   <img src="docs/screens/create-monitor.png" width="880" alt="The new-monitor wizard: What to watch, Target, Expectations, Cadence and alerts" />
 </div>
+
+### Certificates
+
+The expiry date arrives free with every HTTPS handshake the checker already
+performs, so Nightbell reads it and keeps it on its own track, measured in days
+rather than minutes. A certificate about to lapse is the one outage you can see
+coming, and it is not an outage yet: the site is up and will stay up for days, so
+this never wakes anyone.
+
+Servers no public CA vouches for are watchable too. **Pinned key** records the key
+on the next successful check and requires exactly that key afterwards, which
+covers a NAS, a homelab box behind a private CA, and a Tor hidden service. It is
+stronger than trusting the system store rather than weaker: a CA can be talked
+into issuing for a name it should not, and no amount of that produces the key the
+monitor already recorded. Certificates from CAs you installed on the phone
+yourself are trusted as well.
 
 ---
 
@@ -157,17 +205,20 @@ clipping both. `Columns: Auto` in the widget settings, or pin it to 1, 2 or 3.
 ## How it works
 
 One `CheckEngine` runs a check, folds the result into persisted state, and
-decides whether to interrupt you. Four alert tracks come off that, deliberately
-separate, so a bug in Nightbell never gets reported as your website being down.
+decides whether to interrupt you. Six alert tracks come off that, deliberately
+separate, so a bug in Nightbell never gets reported as your website being down,
+and a certificate expiring next Tuesday never gets reported as an outage tonight.
 
 ```mermaid
 flowchart LR
-    M["Monitors<br/>HTTP · request · page element"] --> E["CheckEngine"]
+    M["Monitors<br/>HTTP · request · page element · repository"] --> E["CheckEngine"]
     E -->|folds each result| DB[("State<br/>one JSON doc")]
     E --> A1["Down and recovery"]
     E --> A2["Degraded on latency"]
     E --> A3["Urgent paging"]
     E --> A4["Checker health"]
+    E --> A5["Certificate expiry"]
+    E --> A6["Repository activity"]
     A3 --> PG["Full-screen red page<br/>looping alarm until you ack"]
     style A3 fill:#2F6BFF,stroke:#2F6BFF,color:#ffffff
     style PG fill:#FF4D57,stroke:#FF4D57,color:#ffffff
@@ -312,6 +363,9 @@ the broken version first.
 > migration rather than a flipped constant.
 
 - Element checks need a WebView per page load. They are the slow kind of check.
+- Repository monitors share GitHub's unauthenticated budget of 60 requests an hour
+  per IP until you add a token. Several repositories on a short cadence will find
+  the ceiling.
 - Strict mode costs battery and a permanent notification. That is Android's price
   for a real cadence, not a design choice.
 - No CI. The test commands above are run by hand.
