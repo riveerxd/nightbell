@@ -260,9 +260,14 @@ export const DOWNLOAD_PATH = '/download';
  * carries and exactly the one it would then stop carrying. Set it once, to the
  * day the video actually became public, and edit it when a new cut replaces this
  * one.
+ *
+ * It carries a time and an offset because Google's rich results validator rejects
+ * a bare date: it reports both "invalid datetime value" and "missing a timezone"
+ * against uploadDate, and VideoObject is the only rich result this page is
+ * eligible for. The value is the commit that produced the cut now being served.
  */
 export const MEDIA = {
-  promoUploaded: '2026-08-10',
+  promoUploaded: '2026-08-28T23:59:47+02:00',
   promoPoster: '/media/nightbell-promo-poster.webp',
   promoFile: '/media/nightbell-promo.mp4',
   promoName: 'Nightbell: uptime monitoring that runs on your phone',
