@@ -13,3 +13,5 @@ A repository monitor stops offering to mark news as seen when there is no news. 
 The opening animation is a little over a second and a half rather than nearly three seconds. It was the longer figure because it was timed on a phone whose animation speed was set to half, so it had always played twice as slowly for everyone else as for the person who chose the number.
 
 Two smaller things in the setup screens. The Continue button reaches the right edge of its footer instead of stopping short, and the certificate section looks like every other section rather than three loose buttons floating between a heading and a paragraph.
+
+The live preview you pick an element in now lays a page out for the size it is actually shown at. It had been telling every page it had no height, so anything a site sizes against the height of the window came out as nothing: on one wine shop the age gate drew as a white strip with its buttons pushed out of sight, and there was no way to press through it and reach the page behind. Any site with a dialog sized that way was affected, not just that one.
