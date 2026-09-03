@@ -5,6 +5,7 @@ package me.river.nightbell.ui.setup
 import android.annotation.SuppressLint
 import android.os.Handler
 import android.os.Looper
+import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceError
@@ -467,6 +468,28 @@ private fun PickerContent(
                         modifier = Modifier.fillMaxSize(),
                         factory = { ctx ->
                             WebView(ctx).apply {
+                                // AndroidView gives its child WRAP_CONTENT, and a
+                                // wrap-content height is what Chromium turns into a
+                                // zero-height initial containing block. Every `vh`
+                                // length in the page then resolves against nothing:
+                                // `window.innerHeight` reads correctly and `100vh`
+                                // comes out as 0. Reported on issue #8 as a preview
+                                // that drew only the top strip of an age gate, which
+                                // was a card sized `max-height: calc(100vh - 110px)`
+                                // computing to 0px and collapsing to its padding.
+                                //
+                                // Nothing else moves it. Deferring the load until
+                                // after the first layout, laying the view out by hand
+                                // at the right size before loading, and reloading the
+                                // page afterwards were all tried and all still gave
+                                // `100vh` of 0. A bare WebView in a bare FrameLayout
+                                // never has the problem, whatever order it is sized
+                                // and loaded in, because a FrameLayout child gets
+                                // real layout params. So the params are the fix.
+                                layoutParams = ViewGroup.LayoutParams(
+                                    ViewGroup.LayoutParams.MATCH_PARENT,
+                                    ViewGroup.LayoutParams.MATCH_PARENT,
+                                )
                                 setBackgroundColor(webBackground)
                                 settings.apply {
                                     // Required, and the reason this screen exists. The
