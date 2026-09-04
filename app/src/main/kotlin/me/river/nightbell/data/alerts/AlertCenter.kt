@@ -11,6 +11,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.net.Uri
+import androidx.core.net.toUri
 import android.os.Build
 import android.os.CombinedVibration
 import android.os.VibrationEffect
@@ -344,7 +345,7 @@ class AlertCenter(private val context: Context) {
 
     fun fullScreenIntentSettingsIntent(): Intent =
         Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT)
-            .setData(Uri.parse("package:${context.packageName}"))
+            .setData("package:${context.packageName}".toUri())
 
     /**
      * Whether `setBypassDnd(true)` on the urgent channel actually took effect.
@@ -821,7 +822,7 @@ class AlertCenter(private val context: Context) {
      * about which parts of an ACTION_VIEW intent are compared.
      */
     private fun linkIntent(url: String): Intent =
-        Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        Intent(Intent.ACTION_VIEW, url.toUri())
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
     /**
@@ -844,7 +845,7 @@ class AlertCenter(private val context: Context) {
             // by one would be brought to the front without `onNewIntent` ever
             // firing. See MainActivity.wantsUpdateFrom.
             AppUpdate.NoticeRoute.OpenApp -> appIntent("").apply {
-                data = Uri.parse("nightbell://update")
+                data = "nightbell://update".toUri()
                 putExtra(MainActivity.EXTRA_SHOW_UPDATE, true)
             }
 
@@ -1289,7 +1290,7 @@ class AlertCenter(private val context: Context) {
             action = Intent.ACTION_VIEW
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             if (monitorId.isNotBlank()) {
-                data = Uri.parse("nightbell://monitor/$monitorId")
+                data = "nightbell://monitor/$monitorId".toUri()
                 putExtra(MainActivity.EXTRA_MONITOR_ID, monitorId)
             }
         }

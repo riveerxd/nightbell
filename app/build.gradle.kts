@@ -438,8 +438,30 @@ android {
         // phone has already rejected. The opening sequence is 1.75 s rather than
         // 2.8 s, which was 2.8 because it was tuned on a phone with the animator
         // scale at half.
-        versionCode = 37
-        versionName = "3.8.0"
+        // 3.9.0 can tell you what it is doing. A problem you cannot describe
+        // becomes a file you can hand over: Settings, About, Diagnostic log,
+        // switch it on, reproduce, read it, export it. There is no logging call
+        // in this app that takes a string any more, only an event and typed
+        // fields, so the addresses in it are cut back to the host and the
+        // passwords, tokens, saved sessions and monitor names are not in it at
+        // all. A crash is recorded either way, with the minute before it,
+        // because a crash cannot be reproduced on request.
+        //
+        // A page monitor that overruns says which part overran. One sentence
+        // covered every way of running out of budget, including a page that had
+        // loaded and then failed to produce the element, and it sent a report
+        // looking in the wrong place. The embedded browser had no chrome client,
+        // so its progress, its console and its failed subresources were all
+        // unobservable; now they are, and a document that reaches a usable state
+        // and never signals completion is told apart from one that never got
+        // there, because only the second is helped by a longer timeout.
+        //
+        // The update notification opens the app rather than a browser, so the
+        // version it announces can be installed by the thing announcing it. It
+        // had been walking users out to a download page for several releases
+        // while the app itself could fetch and hand over the APK.
+        versionCode = 38
+        versionName = "3.9.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

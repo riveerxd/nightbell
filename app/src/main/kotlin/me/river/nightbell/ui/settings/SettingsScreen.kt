@@ -24,7 +24,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.foundation.background
@@ -2625,7 +2624,7 @@ private fun DiagnosticLogDialog(
                     )
                 }
 
-                else -> {
+                else -> BoxWithConstraints {
                     val scroll = rememberScrollState()
                     // Oldest first, like the file, and opened already scrolled to
                     // the bottom so the newest line is what you land on. It read
@@ -2641,10 +2640,13 @@ private fun DiagnosticLogDialog(
                     Column(
                         Modifier
                             .fillMaxWidth()
-                            // A share of the window rather than a fixed height:
-                            // the same dialog has to work on a 480 dp car head
-                            // unit and on a tablet.
-                            .heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.5f).dp)
+                            // A share of what the dialog was actually given
+                            // rather than a fixed height: the same screen has to
+                            // work on a 480 dp car head unit and on a tablet.
+                            // Measured rather than read off `Configuration`,
+                            // whose screenHeightDp is wrong in multi-window and
+                            // inconsistent about insets.
+                            .heightIn(max = this@BoxWithConstraints.maxHeight * 0.6f)
                             .verticalScroll(scroll)
                             .padding(vertical = 8.dp)
                             .testTag("diagnostic-lines"),

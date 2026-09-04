@@ -1,0 +1,7 @@
+Nightbell can keep a log of what it is doing, so a problem you cannot describe becomes a file you can send. Settings, About, Diagnostic log: switch it on, make the problem happen again, then read it and export it. Addresses are cut back to the host, and passwords, tokens, saved sessions and monitor names are left out, so the file is safe to attach to a public issue.
+
+A page monitor that runs out of time now says which part of it ran out. "Page did not finish loading in 15s" was one sentence for every way of overrunning, including a page that had loaded fine and then failed to produce the element, and that sentence sent a report looking in the wrong place. It now names the stage it stopped at, with the renderer's progress and what the document said about itself. Where a page reaches a usable document and never signals that it finished, it says so, and says a longer timeout will not help.
+
+The update notification opens Nightbell rather than a web page, so the version it is telling you about can be installed from the app that told you. A release with no APK behind it still opens its page, because that is the only route there is.
+
+Crashes are recorded whether or not the log is switched on, to a file of their own, with the minute that preceded them. A crash cannot be reproduced on request.
