@@ -3,9 +3,12 @@ package me.river.nightbell.ui.settings
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Intent
+import android.speech.tts.TextToSpeech
+import androidx.compose.ui.text.input.ImeAction
 import androidx.core.net.toUri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import android.provider.Settings as AndroidSettings
 import androidx.compose.animation.AnimatedVisibility
@@ -14,10 +17,14 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
@@ -60,6 +67,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -93,6 +101,8 @@ import me.river.nightbell.ui.components.GlassCard
 import me.river.nightbell.ui.components.LabelledRow
 import me.river.nightbell.ui.components.GlassIconButton
 import me.river.nightbell.ui.components.IconBadge
+import me.river.nightbell.ui.components.MinTouchTarget
+import me.river.nightbell.ui.components.SpinnerDot
 import me.river.nightbell.ui.components.NightbellButton
 import me.river.nightbell.ui.components.GlassField
 import me.river.nightbell.ui.components.GlassDivider
@@ -105,6 +115,8 @@ import me.river.nightbell.ui.components.StepperRow
 import me.river.nightbell.ui.components.ToggleRow
 import me.river.nightbell.ui.components.ToastMessage
 import me.river.nightbell.ui.components.HoldToConfirmButton
+import me.river.nightbell.data.alerts.PageSpeaker
+import me.river.nightbell.domain.SpokenPage
 import me.river.nightbell.ui.icons.NightbellIcons
 import me.river.nightbell.ui.rememberSettingsViewModel
 import me.river.nightbell.ui.theme.Backdrop
@@ -175,6 +187,20 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (ToastMessage) -> Unit) {
     }
     var notificationsAllowed by remember {
         mutableStateOf(Nightbell.install(context).alerts.hasNotificationPermission())
+    }
+    // Round trip to the system's speech settings, so returning from it re-asks
+    // the engine what it can do. Without the callback the warning the user just
+    // went and fixed would still be on screen when they came back.
+    val speechSettings = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { viewModel.refreshSpeech() }
+    val speakingMonitors by viewModel.monitors.collectAsStateWithLifecycle()
+    // Null means untouched, so the stored sentence still shows on first open.
+    var typedTemplate by rememberSaveable { mutableStateOf<String?>(null) }
+    val monitorCount = speakingMonitors.size
+    val speakingCount = SpokenPage.speakingCount(speakingMonitors, settings)
+    LaunchedEffect(speakingCount > 0) {
+        viewModel.refreshSpeech()
     }
     val entrance = rememberEntranceLog()
 
@@ -396,6 +422,316 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (ToastMessage) -> Unit) {
                                 color = NightbellColors.TextTertiary,
                             )
                         }
+                    }
+                }
+            }
+
+            item(key = "speech") {
+                StaggeredEntrance(index = 5, key = "speech", log = entrance) {
+                    GlassCard {
+                        // Sky, not rose. Rose is what this app calls DOWN, and it is
+                        // spent on severity: the certificate card's "urgent below",
+                        // the down toggle, the page card itself. A settings section
+                        // about how alerts are announced is chrome, and tinting all
+                        // of it in the outage colour spends the one signal that has
+                        // to mean something.
+                        SectionHeader("Spoken alerts", icon = NightbellIcons.Volume, accent = NightbellColors.Sky)
+                        Text(
+                            text = "An alert can read itself out loud: the monitor's name and why " +
+                                "it failed. The voice is the one already installed on this phone, " +
+                                "so nothing is sent anywhere and it still works with no " +
+                                "connection, which is the only time it has to.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NightbellColors.TextTertiary,
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        // The switch itself is per monitor, so this card's job is to
+                        // say where the fleet currently stands and to change all of it
+                        // at once. Thirty monitors visited one at a time is not a
+                        // setting, it is a chore.
+                        Text(
+                            text = when {
+                                monitorCount == 0 ->
+                                    "No monitors yet. Add one and it can read its own alerts out loud."
+                                speakingCount == 0 ->
+                                    "No monitor speaks yet. Each one has its own switch under its " +
+                                        "alert settings, or turn them all on here."
+                                speakingCount == monitorCount ->
+                                    "All $monitorCount monitors speak."
+                                else ->
+                                    "$speakingCount of $monitorCount monitors speak. The switch is " +
+                                        "per monitor, under its alert settings."
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = NightbellColors.TextSecondary,
+                            modifier = Modifier.testTag("speak-count"),
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            // A greyed control that will not say why it is greyed is
+                            // the same dead end on a phone as it is on the web, and
+                            // Android has no `aria-disabled`. The count line above
+                            // carries the reason for anyone looking at the screen;
+                            // this carries it for anyone who is not.
+                            NightbellButton(
+                                text = "Turn on for all",
+                                onClick = { viewModel.setSpeakOnEveryMonitor(true) },
+                                tone = ButtonTone.Secondary,
+                                icon = NightbellIcons.Volume,
+                                enabled = monitorCount > 0 && speakingCount != monitorCount,
+                                loading = viewModel.bulkSpeakInFlight,
+                                accent = NightbellColors.Sky,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .semantics {
+                                        if (monitorCount == 0) {
+                                            stateDescription = "Unavailable, there are no monitors yet"
+                                        } else if (speakingCount == monitorCount) {
+                                            stateDescription = "Unavailable, every monitor already speaks"
+                                        }
+                                    }
+                                    .testTag("speak-all-on"),
+                            )
+                            NightbellButton(
+                                text = "Turn off for all",
+                                onClick = { viewModel.setSpeakOnEveryMonitor(false) },
+                                tone = ButtonTone.Ghost,
+                                icon = NightbellIcons.BellOff,
+                                enabled = speakingCount > 0,
+                                loading = viewModel.bulkSpeakInFlight,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .semantics {
+                                        if (speakingCount == 0) {
+                                            stateDescription = "Unavailable, no monitor speaks"
+                                        }
+                                    }
+                                    .testTag("speak-all-off"),
+                            )
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        // Says the check is happening rather than letting its verdict
+                        // arrive out of nowhere. Binding a cold engine takes seconds
+                        // and the audio probe has an eight second ceiling.
+                        AnimatedVisibility(
+                            visible = viewModel.checkingSpeech,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically(),
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                SpinnerDot(NightbellColors.Sky, size = 12.dp)
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = "Checking this phone's speech engine",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = NightbellColors.TextTertiary,
+                                )
+                            }
+                        }
+                        when (viewModel.speechReadiness) {
+                            PageSpeaker.Readiness.NO_ENGINE -> {
+                                WarningPanel(
+                                    "This phone has no speech engine, so nothing can be said. " +
+                                        "Most have one in the system's own speech settings; a " +
+                                        "de-Googled ROM may need one installing first.",
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                NightbellButton(
+                                    text = "Open speech settings",
+                                    onClick = { openSpeechSettings(speechSettings) },
+                                    tone = ButtonTone.Secondary,
+                                    icon = NightbellIcons.Link,
+                                )
+                                Spacer(Modifier.height(12.dp))
+                            }
+
+                            PageSpeaker.Readiness.ENGINE_SILENT -> {
+                                WarningPanel(
+                                    "The speech engine on this phone accepted a voice and then " +
+                                        "produced no audio. Its voice data is most likely not " +
+                                        "downloaded, so nothing will be said until that is fixed.",
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                NightbellButton(
+                                    text = "Install a voice",
+                                    onClick = { openVoiceData(speechSettings) },
+                                    tone = ButtonTone.Secondary,
+                                    icon = NightbellIcons.Import,
+                                )
+                                Spacer(Modifier.height(12.dp))
+                            }
+
+                            PageSpeaker.Readiness.NO_OFFLINE_VOICE -> {
+                                WarningPanel(
+                                    "The engine has no voice it can use offline. It would speak " +
+                                        "on wifi and go silent during exactly the outage this is " +
+                                        "for, so install a voice for your language first.",
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                NightbellButton(
+                                    text = "Install a voice",
+                                    onClick = { openVoiceData(speechSettings) },
+                                    tone = ButtonTone.Secondary,
+                                    icon = NightbellIcons.Import,
+                                )
+                                Spacer(Modifier.height(12.dp))
+                            }
+
+                            else -> Unit
+                        }
+                        ToggleRow(
+                            title = "Say it again on every repeat",
+                            subtitle = if (settings.speakOnRepeats) {
+                                "Every time the alert comes back, until it is acknowledged"
+                            } else {
+                                "Once, when it first goes down"
+                            },
+                            checked = settings.speakOnRepeats,
+                            onCheckedChange = { value ->
+                                viewModel.update { it.copy(speakOnRepeats = value) }
+                            },
+                            icon = NightbellIcons.Clock,
+                            accent = NightbellColors.Sky,
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        GlassField(
+                            // Local state once touched, the store until then. Bound
+                            // straight to the store this typed appallingly: every
+                            // keystroke wrote the whole snapshot to DataStore and the
+                            // field only got its value back when that write landed,
+                            // with the cursor thrown to the end. Same mistake, and the
+                            // same fix, as the proxy fields under Checks.
+                            value = typedTemplate ?: settings.speakTemplate,
+                            onValueChange = { value ->
+                                typedTemplate = value
+                                viewModel.updateText { it.copy(speakTemplate = value) }
+                            },
+                            label = "What it says",
+                            placeholder = SpokenPage.DEFAULT_TEMPLATE,
+                            helper = "Leave it empty for the sentence above.",
+                            singleLine = false,
+                            minLines = 2,
+                            imeAction = ImeAction.Done,
+                            accent = NightbellColors.Sky,
+                            corner = NightbellRadii.inCard,
+                            modifier = Modifier.testTag("speak-template"),
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        // Always on screen, not folded into a hint under the field.
+                        // Nobody guesses that `{reason}` is a thing you can type, and
+                        // a placeholder you have to know about is not a feature.
+                        Text(
+                            text = "TAP TO ADD",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = NightbellColors.TextTertiary,
+                            modifier = Modifier.padding(start = 2.dp),
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        FlowRow(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("speak-tokens"),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            SpokenPage.Token.all.forEach { token ->
+                                TokenChip(token) {
+                                    val current = typedTemplate ?: settings.speakTemplate
+                                    val base = current.ifBlank { SpokenPage.DEFAULT_TEMPLATE }
+                                    val joined = SpokenPage.withToken(base, token)
+                                    typedTemplate = joined
+                                    viewModel.updateText { it.copy(speakTemplate = joined) }
+                                }
+                            }
+                        }
+                        if (viewModel.speechVoices.size > 1) {
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                text = "VOICE",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = NightbellColors.TextTertiary,
+                                modifier = Modifier.padding(start = 2.dp),
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            // Says what the control does before offering it. A
+                            // synthesiser pronounces, it does not translate, and a
+                            // list of languages next to an English sentence reads
+                            // as a promise the feature cannot keep.
+                            Text(
+                                text = "Nightbell writes its alerts in English. Picking another " +
+                                    "language changes how the words are pronounced, not what " +
+                                    "they say. To hear an alert in your own language, write the " +
+                                    "sentence above yourself and leave out {reason}, which is " +
+                                    "Nightbell's wording.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = NightbellColors.TextTertiary,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            ChipSelector(
+                                options = listOf(ENGINE_DEFAULT_VOICE) + viewModel.speechVoices,
+                                selected = viewModel.speechVoices
+                                    .firstOrNull { it.tag == settings.speakVoice }
+                                    ?: ENGINE_DEFAULT_VOICE,
+                                onSelect = { choice ->
+                                    viewModel.updateText { it.copy(speakVoice = choice.tag) }
+                                },
+                                label = { it.label },
+                                accent = NightbellColors.Sky,
+                                modifier = Modifier.testTag("speak-voices"),
+                            )
+                        }
+                        // Outside the picker, and keyed on the voice that will
+                        // actually be used rather than on the one chosen. A phone
+                        // whose engine ships one non-English language offers no
+                        // choice at all, and that is the case where the warning
+                        // matters most: nothing was selected, so nothing looked
+                        // wrong, and the sentence still came out unintelligible.
+                        AnimatedVisibility(
+                            visible = SpokenPage.voiceMismatch(
+                                template = typedTemplate ?: settings.speakTemplate,
+                                voiceTag = viewModel.effectiveVoice.orEmpty(),
+                            ),
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically(),
+                        ) {
+                          Column {
+                            Spacer(Modifier.height(10.dp))
+                            Box(Modifier.testTag("speak-voice-warning")) {
+                                WarningPanel(
+                                    "The voice on this phone does not speak the language the " +
+                                        "sentence is written in, so it will read English words " +
+                                        "with that language's pronunciation. Either rewrite the " +
+                                        "sentence above in that language, or install an English " +
+                                        "voice in your system speech settings.",
+                                )
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            NightbellButton(
+                                text = "Install a voice",
+                                onClick = { openVoiceData(speechSettings) },
+                                tone = ButtonTone.Secondary,
+                                icon = NightbellIcons.Import,
+                            )
+                          }
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        NightbellButton(
+                            text = "Say it now",
+                            onClick = viewModel::previewAnnouncement,
+                            tone = ButtonTone.Secondary,
+                            icon = NightbellIcons.Volume,
+                            loading = viewModel.speakingSample,
+                            accent = NightbellColors.Sky,
+                            modifier = Modifier.testTag("speak-preview"),
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = "An URGENT page speaks over its own siren, which mutes for the " +
+                                "sentence and comes straight back. Quiet hours, mute and the " +
+                                "ringer switch all apply first: an alert that would make no " +
+                                "sound does not speak either.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NightbellColors.TextTertiary,
+                        )
                     }
                 }
             }
@@ -1931,6 +2267,73 @@ private fun openLink(context: android.content.Context, url: String) {
  * [highlight] tints the value when it is a version the user does not have yet,
  * which is the only state on this card worth drawing the eye to.
  */
+/** The "let the engine decide" entry in the voice list. */
+private val ENGINE_DEFAULT_VOICE = PageSpeaker.Choice(tag = "", label = "Engine default")
+
+/**
+ * Opens the system's own speech settings.
+ *
+ * There is no public constant for it, only the Settings app's action, so the
+ * failure has to be handled rather than assumed away: a ROM without that screen
+ * gets the general accessibility settings, which is where the option lives on
+ * the ones that have moved it.
+ */
+private fun openSpeechSettings(launcher: ActivityResultLauncher<Intent>) {
+    val opened = runCatching { launcher.launch(Intent("com.android.settings.TTS_SETTINGS")) }.isSuccess
+    if (!opened) runCatching { launcher.launch(Intent(AndroidSettings.ACTION_ACCESSIBILITY_SETTINGS)) }
+}
+
+/** Asks the engine to fetch voice data, which is its own screen, not a settings page. */
+private fun openVoiceData(launcher: ActivityResultLauncher<Intent>) {
+    val opened = runCatching {
+        launcher.launch(Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA))
+    }.isSuccess
+    if (!opened) openSpeechSettings(launcher)
+}
+
+/**
+ * One placeholder, as a control rather than as documentation.
+ *
+ * Geometry copied from [ChipSelector]'s chip on purpose, down to the constants:
+ * a fixed 38 dp capsule with the rest of the touch floor taken as padding
+ * outside it, and a minimum width so a five-character label does not come out
+ * as a circle next to a ten-character one. Hand-rolled at 35 dp it was the one
+ * control in this card below the app's own [MinTouchTarget], and it sat directly
+ * under a row of real chips looking almost but not quite like them.
+ *
+ * A button rather than a selector: there is nothing here to select.
+ */
+@Composable
+private fun TokenChip(token: SpokenPage.Token, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(NightbellRadii.chip)
+    Row(
+        modifier = Modifier
+            .padding(vertical = (MinTouchTarget - TOKEN_CHIP_HEIGHT) / 2)
+            .height(TOKEN_CHIP_HEIGHT)
+            .defaultMinSize(minWidth = TOKEN_CHIP_MIN_WIDTH)
+            .clip(shape)
+            .background(NightbellColors.sheen(0.06f))
+            .border(BorderStroke(1.dp, NightbellColors.sheen(0.10f)), shape)
+            .clickable(
+                indication = ripple(color = NightbellColors.Sky),
+                interactionSource = remember { MutableInteractionSource() },
+                onClick = onClick,
+            )
+            .semantics { contentDescription = "Add ${token.label}" }
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = token.token,
+            style = MaterialTheme.typography.labelLarge,
+            color = NightbellColors.TextSecondary,
+        )
+    }
+}
+
+private val TOKEN_CHIP_HEIGHT = 38.dp
+private val TOKEN_CHIP_MIN_WIDTH = 64.dp
+
 @Composable
 private fun VersionRow(label: String, value: String, highlight: Boolean = false) {
     LabelledRow(

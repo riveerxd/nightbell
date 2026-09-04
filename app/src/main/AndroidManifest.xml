@@ -66,6 +66,20 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <!--
+        Spoken pages. Android 11 hides other packages from an app unless it says
+        which ones it needs, and a text-to-speech engine is another package: with
+        no `queries` block `TextToSpeech.getEngines()` comes back empty and the
+        constructor cannot bind, so the feature would be silently unavailable on
+        every device from API 30 up. Nothing is read from the engine's package
+        beyond its voice list. See data/alerts/PageSpeaker.kt.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
+
+    <!--
         Auto Backup is off, deliberately.
 
         `allowBackup="true"` with `fullBackupContent="true"` and no exclusion rules

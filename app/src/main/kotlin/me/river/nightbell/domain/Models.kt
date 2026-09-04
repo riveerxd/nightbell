@@ -461,6 +461,22 @@ data class AlertPolicy(
     val failureThreshold: Int = 1,
     val sound: SoundChoice = SoundChoice.DEFAULT_NOTIFICATION,
     val vibrate: Boolean = true,
+    /**
+     * Read the alert out loud through the phone's own speech engine.
+     *
+     * Per policy, which means per monitor: a monitor on its own alert settings
+     * has its own answer, and one left on the global settings follows
+     * [GlobalSettings.defaultAlert]. Thirty monitors are not meant to be visited
+     * one at a time either, so Settings can write this into all of them at once.
+     *
+     * What is said and which voice says it are app-wide
+     * ([GlobalSettings.speakTemplate], [GlobalSettings.speakVoice]): they are a
+     * preference about the phone, not about a monitor.
+     *
+     * Off by default. A pager that starts talking is a larger surprise than one
+     * that buzzes, and it is the kind that happens in a meeting.
+     */
+    val speak: Boolean = false,
     val vibrationStyle: VibrationStyle = VibrationStyle.DOUBLE_PULSE,
     /** Keep nagging while it stays down. */
     val repeatEnabled: Boolean = false,
@@ -490,6 +506,7 @@ data class AlertPolicy(
         get() = buildList {
             if (!enabled) return "Alerts off"
             add(sound.label)
+            if (speak) add("spoken")
             if (vibrate) add(vibrationStyle.label)
             if (repeatEnabled) add("repeat ${repeatEveryMinutes}m")
             if (failureThreshold > 1) add("after $failureThreshold fails")
@@ -1240,6 +1257,33 @@ data class GlobalSettings(
      * [me.river.nightbell.data.alerts.UrgentAlarm].
      */
     val urgentRespectsRingerMode: Boolean = true,
+
+    /**
+     * What a spoken alert says, or blank for
+     * [me.river.nightbell.domain.SpokenPage.DEFAULT_TEMPLATE].
+     *
+     * Blank rather than the default string copied in, so improving the default
+     * sentence reaches everyone who never edited it instead of only new installs.
+     * Whether anything is spoken at all is [AlertPolicy.speak], per monitor.
+     */
+    val speakTemplate: String = "",
+
+    /**
+     * Say it again on every repeat, not only the first time.
+     *
+     * On, because the repeat is the whole mechanism by which an unacknowledged
+     * page survives being slept through, and a single announcement made while the
+     * user was asleep is one they never heard.
+     */
+    val speakOnRepeats: Boolean = true,
+
+    /**
+     * BCP-47 tag of the voice to use, or blank for whatever the engine defaults to.
+     *
+     * Only ever set to a voice that reported itself installed and offline-capable.
+     * See [me.river.nightbell.data.alerts.PageSpeaker].
+     */
+    val speakVoice: String = "",
     /**
      * The user has been through (or dismissed) the pager-setup screen.
      *

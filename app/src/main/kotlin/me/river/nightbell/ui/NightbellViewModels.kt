@@ -22,7 +22,9 @@ import me.river.nightbell.domain.CheckResult
 import me.river.nightbell.domain.CheckerHealth
 import me.river.nightbell.domain.CheckerLimit
 import me.river.nightbell.domain.ElementTarget
+import me.river.nightbell.data.alerts.PageSpeaker
 import me.river.nightbell.domain.GlobalSettings
+import me.river.nightbell.domain.SpokenPage
 import me.river.nightbell.domain.Monitor
 import me.river.nightbell.domain.GroupRollup
 import me.river.nightbell.domain.MonitorCard
@@ -1408,11 +1410,33 @@ class DetailViewModel(
 
 // ------------------------------------------------------------------- settings
 
+private const val SAMPLE_NAME = "Wireguard gateway"
+private const val SAMPLE_REASON = "Host not found"
+private const val SAMPLE_DOWN_FOR_MS = 4 * 60_000L
+
 class SettingsViewModel(private val graph: Nightbell.Graph) : ViewModel() {
 
     val settings: StateFlow<GlobalSettings> = graph.store.snapshot
         .map { it.settings }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), GlobalSettings())
+
+    /**
+     * Writes a setting that changes nothing about scheduling or alerting state.
+     *
+     * [update] rebuilds every monitor's work request, drops the checker-health
+     * claim and pokes the foreground service, which is right for a setting that
+     * changes how checks run and absurd for one keystroke in a text field. The
+     * spoken sentence is read at the moment something is announced and affects
+     * nothing else.
+     */
+    fun updateText(transform: (GlobalSettings) -> GlobalSettings) {
+        viewModelScope.launch { graph.store.updateSettings(transform) }
+    }
+
+    /** For the spoken-alerts count and the fleet-wide switch. */
+    val monitors: StateFlow<List<Monitor>> = graph.store.snapshot
+        .map { it.monitors }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**
      * The checker's own health — see [me.river.nightbell.domain.CheckerHealth].
@@ -1735,6 +1759,197 @@ class SettingsViewModel(private val graph: Nightbell.Graph) : ViewModel() {
 
     fun previewVibration(style: me.river.nightbell.domain.VibrationStyle) {
         graph.alerts.previewVibration(style)
+    }
+
+    // ---- spoken pages -------------------------------------------------------
+
+    /** Null until the engine has been asked. See [PageSpeaker.Readiness]. */
+    var speechReadiness by mutableStateOf<PageSpeaker.Readiness?>(null)
+        private set
+
+    /** Installed voices that work with no connection, one per language. */
+    var speechVoices by mutableStateOf<List<PageSpeaker.Choice>>(emptyList())
+        private set
+
+    var speakingSample by mutableStateOf(false)
+        private set
+
+    /** The voice that would read the next alert, chosen or fallen back to. */
+    var effectiveVoice by mutableStateOf<String?>(null)
+        private set
+
+    /**
+     * Asks the engine what it can currently do.
+     *
+     * Re-asked whenever the card comes back into view rather than cached for the
+     * session, because the fix for both bad answers is a trip to the system's
+     * speech settings, and a user who installs a language pack has to come back
+     * to a screen that agrees they did.
+     */
+    /**
+     * Turns speech on or off for the whole fleet, in one write, undoably.
+     *
+     * Writes the flag into the global default *and* into every monitor carrying
+     * its own alert settings. Doing only the default would leave anyone who had
+     * ever customised a monitor with a button that silently skipped it, which is
+     * worse than no button.
+     *
+     * Undoable, because the change is lossy in one direction that is easy to miss:
+     * a fleet of thirty with speech on for the two that matter, flattened by one
+     * tap, cannot be restored by tapping the other button. That turns every
+     * monitor on rather than putting the two back. So the previous answers are
+     * captured first and the toast carries the way back, which is the pattern the
+     * rest of the app uses instead of asking "are you sure?".
+     */
+    fun setSpeakOnEveryMonitor(speak: Boolean) {
+        if (bulkSpeakInFlight) return
+        bulkSpeakInFlight = true
+        viewModelScope.launch {
+            try {
+                val before = graph.store.currentSnapshot()
+                val previousDefault = before.settings.defaultAlert.speak
+                val previousPerMonitor = before.monitors.associate { it.id to it.alert.speak }
+                graph.store.updateSettings {
+                    it.copy(defaultAlert = it.defaultAlert.copy(speak = speak))
+                }
+                graph.store.updateAllMonitors { monitor ->
+                    if (monitor.useGlobalAlerts) {
+                        monitor
+                    } else {
+                        monitor.copy(alert = monitor.alert.copy(speak = speak))
+                    }
+                }
+                val after = graph.store.currentSnapshot()
+                val count = SpokenPage.speakingCount(after.monitors, after.settings)
+                val changed = previousPerMonitor.any { (id, was) ->
+                    after.monitors.firstOrNull { it.id == id }?.alert?.speak != was
+                } || previousDefault != speak
+                toast = when {
+                    !changed -> ToastMessage.success(
+                        if (speak) "Every monitor already speaks" else "No monitor was speaking",
+                    )
+
+                    !speak -> ToastMessage.undoable("No monitor will speak") {
+                        restoreSpeak(previousDefault, previousPerMonitor)
+                    }
+
+                    count == 0 -> ToastMessage.undoable(
+                        // Nothing to celebrate: alerts are switched off somewhere
+                        // above this, so the flag is set and still nothing will be
+                        // said. Saying "3 monitors will speak" there would be a lie.
+                        "Speech is on, but no monitor can alert at all",
+                    ) { restoreSpeak(previousDefault, previousPerMonitor) }
+
+                    else -> ToastMessage.undoable(
+                        "$count ${if (count == 1) "monitor" else "monitors"} will speak",
+                    ) { restoreSpeak(previousDefault, previousPerMonitor) }
+                }
+                if (speak) refreshSpeech()
+            } finally {
+                bulkSpeakInFlight = false
+            }
+        }
+    }
+
+    /** True while the fleet write is running, so a second tap is not a second write. */
+    var bulkSpeakInFlight by mutableStateOf(false)
+        private set
+
+    private fun restoreSpeak(default: Boolean, perMonitor: Map<String, Boolean>) {
+        viewModelScope.launch {
+            graph.store.updateSettings {
+                it.copy(defaultAlert = it.defaultAlert.copy(speak = default))
+            }
+            graph.store.updateAllMonitors { monitor ->
+                val was = perMonitor[monitor.id] ?: return@updateAllMonitors monitor
+                if (monitor.alert.speak == was) monitor else monitor.copy(alert = monitor.alert.copy(speak = was))
+            }
+        }
+    }
+
+    /**
+     * True while the engine is being asked what it can do.
+     *
+     * Surfaced because the answer is not instant: binding a cold engine has taken
+     * seconds, and the probe synthesises a word with an eight second ceiling on
+     * top of that. Without this the card sat there looking settled and then
+     * produced "this phone produces no audio" out of nowhere, which reads as a
+     * fault that just happened rather than a check that just finished.
+     */
+    var checkingSpeech by mutableStateOf(false)
+        private set
+
+    fun refreshSpeech() {
+        if (checkingSpeech) return
+        checkingSpeech = true
+        viewModelScope.launch {
+            try {
+                // Probed, not merely asked: an engine can report an installed voice
+                // and then fail every utterance, and this card is the only place that
+                // can tell the user so before they rely on it.
+                speechReadiness = graph.speaker.readiness(probe = true)
+                speechVoices = graph.speaker.offlineVoices()
+                effectiveVoice = graph.speaker
+                    .effectiveVoiceTag(graph.store.currentSnapshot().settings.speakVoice)
+            } finally {
+                checkingSpeech = false
+            }
+        }
+    }
+
+    /**
+     * Says the sample sentence with the user's own template.
+     *
+     * Uses the same usage a real page would, so what the preview sounds like is
+     * what 3am sounds like. When the ringer would silence a page the preview says
+     * nothing and the toast explains that, rather than leaving the user tapping a
+     * button that appears to be broken.
+     */
+    fun previewAnnouncement() {
+        if (speakingSample) return
+        speakingSample = true
+        viewModelScope.launch {
+            try {
+                val current = graph.store.currentSnapshot().settings
+                val usage = graph.alarm.speechUsage(current.urgentRespectsRingerMode)
+                if (usage == null) {
+                    toast = ToastMessage.warning("Silent or vibrate: a page would not speak")
+                    return@launch
+                }
+                when (graph.speaker.readiness()) {
+                    PageSpeaker.Readiness.NO_ENGINE -> {
+                        toast = ToastMessage.error("No speech engine on this phone")
+                        return@launch
+                    }
+
+                    PageSpeaker.Readiness.NO_OFFLINE_VOICE -> {
+                        toast = ToastMessage.error("No offline voice installed")
+                        return@launch
+                    }
+
+                    PageSpeaker.Readiness.ENGINE_SILENT -> {
+                        toast = ToastMessage.error("The speech engine produces no audio")
+                        return@launch
+                    }
+
+                    PageSpeaker.Readiness.READY -> Unit
+                }
+                val spoken = graph.speaker.say(
+                    text = SpokenPage.render(
+                        template = current.speakTemplate,
+                        name = SAMPLE_NAME,
+                        reason = SAMPLE_REASON,
+                        downForMs = SAMPLE_DOWN_FOR_MS,
+                    ),
+                    usage = usage,
+                    voice = current.speakVoice,
+                )
+                if (!spoken) toast = ToastMessage.error("The engine would not say it")
+            } finally {
+                speakingSample = false
+                refreshSpeech()
+            }
+        }
     }
 
     /** True while a test alert is on its way, so a second tap is not a second page. */

@@ -1,7 +1,9 @@
 package me.river.nightbell.data
 
 import android.content.Context
+import android.util.Log
 import me.river.nightbell.data.alerts.AlertCenter
+import me.river.nightbell.data.alerts.PageSpeaker
 import me.river.nightbell.data.alerts.UrgentAlarm
 import me.river.nightbell.data.check.CheckEngine
 import me.river.nightbell.data.check.ElementChecker
@@ -20,12 +22,17 @@ import me.river.nightbell.domain.Summary
 import me.river.nightbell.domain.runCatchingCancellable
 import me.river.nightbell.widget.NightbellWidgetProvider
 import me.river.nightbell.domain.AppUpdate
+import me.river.nightbell.domain.CheckResult
+import me.river.nightbell.domain.Monitor
+import me.river.nightbell.domain.SpokenPage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+
+private const val TAG = "Nightbell"
 
 /**
  * Hand-rolled service locator. A DI framework would be ceremony for a graph this
@@ -47,6 +54,13 @@ object Nightbell {
          * [me.river.nightbell.data.work.NightbellMonitorService] ever calls `start`.
          */
         val alarm = UrgentAlarm(context)
+
+        /**
+         * The spoken page. Given the alarm so it can mute the siren while it
+         * talks, and shared with Settings so a preview and the readiness warning
+         * ask the same engine the pager will use.
+         */
+        val speaker = PageSpeaker(context, alarm)
         /**
          * Reads the proxy settings per check rather than capturing them, so an
          * address corrected in Settings applies to the next check instead of the
@@ -84,6 +98,46 @@ object Nightbell {
             updates = updates,
             installedVersion = { BuildConfig.VERSION_NAME },
         )
+        init {
+            // Ordinary alerts are spoken from here rather than from the service:
+            // only an URGENT monitor keeps a service alive, and the monitor a user
+            // has just created and wants to hear about is not urgent. Fire and
+            // forget on the app scope, because a check pass must not wait several
+            // seconds for a synthesiser to finish a sentence.
+            engine.announceAlert = { monitor, result, repeat ->
+                appScope.launch { speakAlert(monitor, result, repeat) }
+            }
+        }
+
+        /**
+         * Says one ordinary alert out loud.
+         *
+         * The ringer is asked the same question the page asks it, so a phone set
+         * to vibrate stays quiet here too. Usage is `NOTIFICATION` rather than the
+         * page's ringtone or alarm usage: this is an alert, not a page, and it
+         * should sit on the same volume as the notification that carries it.
+         */
+        private suspend fun speakAlert(monitor: Monitor, result: CheckResult, repeat: Boolean) {
+            val settings = runCatching { store.currentSnapshot().settings }.getOrNull() ?: return
+            if (repeat && !settings.speakOnRepeats) return
+            if (!alarm.ringerAllowsSound()) return
+            val text = SpokenPage.render(
+                template = settings.speakTemplate,
+                name = monitor.displayName,
+                reason = result.message.ifBlank { result.failureKind.headline },
+                downForMs = 0L,
+            )
+            runCatching {
+                speaker.say(
+                    text = text,
+                    usage = android.media.AudioAttributes.USAGE_NOTIFICATION,
+                    voice = settings.speakVoice,
+                )
+            }.onFailure { Log.w(TAG, "Could not say the alert", it) }
+            // Nothing is paging, so nothing else will release the engine.
+            if (!anythingPaging()) speaker.release()
+        }
+
         val scheduler = MonitorScheduler(context)
         val network = NetworkMonitor(context)
         val favicons = FaviconStore(context, isOnline = network::isOnline)

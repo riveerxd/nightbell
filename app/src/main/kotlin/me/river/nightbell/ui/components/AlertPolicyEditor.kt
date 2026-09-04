@@ -27,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -200,6 +201,27 @@ fun AlertPolicyEditor(
                     style = MaterialTheme.typography.bodySmall,
                     color = NightbellColors.TextTertiary,
                     modifier = Modifier.padding(top = 8.dp, start = 2.dp),
+                )
+
+                ToggleRow(
+                    title = "Say it out loud",
+                    subtitle = if (policy.speak) {
+                        "Reads the name and the reason through the phone's voice"
+                    } else {
+                        "Alerts arrive as sound and text only"
+                    },
+                    checked = policy.speak,
+                    onCheckedChange = { onChange(policy.copy(speak = it)) },
+                    icon = NightbellIcons.Volume,
+                    accent = accent,
+                    modifier = Modifier.testTag("policy-speak"),
+                )
+                Text(
+                    text = "Never on silent or vibrate, and never during quiet hours. The " +
+                        "sentence and the voice are under Settings, Alerts, Spoken alerts.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = NightbellColors.TextTertiary,
+                    modifier = Modifier.padding(top = 6.dp, start = 2.dp),
                 )
 
                 Spacer(Modifier.height(14.dp))

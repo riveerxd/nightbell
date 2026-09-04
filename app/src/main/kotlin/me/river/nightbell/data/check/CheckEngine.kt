@@ -94,6 +94,17 @@ class CheckEngine(
     var onStateChanged: (() -> Unit)? = null
 
     /**
+     * Reads an alert out loud. Wired by [me.river.nightbell.data.Nightbell]; a
+     * lambda for the same reason as [onStateChanged], and null in the unit tests,
+     * which have no speech engine and no business starting one.
+     *
+     * Called only for an alert that actually made a sound, so speech inherits
+     * quiet hours, mute, the failure threshold and the master switch by
+     * construction rather than by repeating their rules here.
+     */
+    var announceAlert: ((Monitor, CheckResult, Boolean) -> Unit)? = null
+
+    /**
      * Whether the device can reach anything. Wired to
      * [me.river.nightbell.data.net.NetworkMonitor] by the graph — a lambda
      * for the same reason as [onStateChanged], and defaulting to online so the
@@ -528,13 +539,23 @@ class CheckEngine(
         }
 
         when (decision.kind) {
-            AlertDecider.Kind.DOWN, AlertDecider.Kind.REPEAT -> alerts.notifyDown(
-                monitor = monitor,
-                result = result,
-                policy = policy,
-                silent = decision.forceSilent,
-                repeat = decision.kind == AlertDecider.Kind.REPEAT,
-            )
+            AlertDecider.Kind.DOWN, AlertDecider.Kind.REPEAT -> {
+                alerts.notifyDown(
+                    monitor = monitor,
+                    result = result,
+                    policy = policy,
+                    silent = decision.forceSilent,
+                    repeat = decision.kind == AlertDecider.Kind.REPEAT,
+                )
+                // Speech follows the notification's own verdict: a silenced alert
+                // stays silent, and an alert that never fired says nothing. An
+                // URGENT monitor is deliberately left out here, because its page
+                // is spoken by the service that owns the siren, and saying it
+                // twice over the top of itself is worse than not saying it.
+                if (policy.speak && !decision.forceSilent && !monitor.urgent) {
+                    announceAlert?.invoke(monitor, result, decision.kind == AlertDecider.Kind.REPEAT)
+                }
+            }
 
             AlertDecider.Kind.RECOVERY -> alerts.notifyRecovery(
                 monitor = monitor,

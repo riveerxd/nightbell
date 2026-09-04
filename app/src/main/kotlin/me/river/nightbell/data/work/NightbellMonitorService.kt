@@ -13,7 +13,12 @@ import me.river.nightbell.data.Nightbell
 import me.river.nightbell.data.alerts.AlertCenter
 import me.river.nightbell.data.alerts.LiveCard
 import me.river.nightbell.data.alerts.UrgentAlarm
+import me.river.nightbell.domain.AlertPolicy
+import me.river.nightbell.domain.GlobalSettings
 import me.river.nightbell.domain.LiveTimeline
+import me.river.nightbell.domain.Monitor
+import me.river.nightbell.domain.MonitorRuntime
+import me.river.nightbell.domain.SpokenPage
 import me.river.nightbell.domain.Summary
 import me.river.nightbell.domain.runCatchingCancellable
 import kotlinx.coroutines.CoroutineScope
@@ -226,6 +231,18 @@ class NightbellMonitorService : Service() {
                         respectRinger = respectRinger,
                     )
                     paging_ = true
+                    // Said after the siren is already looping, on purpose. The
+                    // noise is the part that wakes someone; the sentence is the
+                    // part that tells them what for, and it mutes the siren for
+                    // the few seconds it takes to say it.
+                    announce(
+                        monitor = monitor,
+                        runtime = runtime,
+                        policy = policy,
+                        settings = snapshot2.settings,
+                        otherPending = others,
+                        respectRinger = respectRinger,
+                    )
                     // The per-monitor fallback copy, if an earlier pass posted one
                     // before this service could start, would now be a duplicate.
                     graph.alerts.cancelUrgent(monitor.id)
@@ -239,6 +256,15 @@ class NightbellMonitorService : Service() {
             // Nothing to page about: silence, and go back to the strict-mode notice.
             alarm.stop()
             paging_ = false
+            // Forgotten with the outage. The page counter restarts at one for the
+            // next one, so a remembered key would silence the announcement for
+            // the second outage of the same monitor.
+            lastSpokenKey = null
+            // The page is over, so the engine binding goes with it: holding a TTS
+            // service bound for the life of the app keeps another process alive
+            // for something that speaks a sentence a minute at most. Deferred by
+            // the speaker itself if it happens to be mid-sentence.
+            Nightbell.install(applicationContext).speaker.release()
 
             val latest = runCatchingCancellable { graph.store.currentSnapshot() }.getOrNull()
             val fleet = latest?.let { Summary.of(it.monitors, it.runtimes) }
@@ -307,6 +333,62 @@ class NightbellMonitorService : Service() {
      * schedule. `sync()` could not help: it re-delivers `onStartCommand`, which
      * sees the loop already running and returns.
      */
+    /**
+     * Reads the page out loud, if the user asked for that and the ringer allows it.
+     *
+     * Held to one announcement per page rather than one per tick by
+     * [SpokenPage.isDue], keyed on the outage's page counter, so a fifteen-second
+     * loop cannot turn into a fifteen-second stutter and what is spoken can never
+     * disagree with what the notification says.
+     *
+     * Failures are swallowed deliberately. A missing engine, a language pack the
+     * user removed, an engine that hangs: none of those may take down the loop
+     * that is at that moment the only thing paging anybody. Settings reports the
+     * same readiness for whoever wants to know why it went quiet.
+     */
+    private suspend fun announce(
+        monitor: Monitor,
+        runtime: MonitorRuntime,
+        policy: AlertPolicy,
+        settings: GlobalSettings,
+        otherPending: Int,
+        respectRinger: Boolean,
+    ) {
+        val pageCount = runtime.urgentPageCount.coerceAtLeast(1)
+        val usage = alarm.speechUsage(respectRinger)
+        val key = SpokenPage.keyOf(monitor.id, pageCount)
+        val due = SpokenPage.isDue(
+            enabled = policy.speak,
+            audible = usage != null,
+            onRepeats = settings.speakOnRepeats,
+            pageCount = pageCount,
+            key = key,
+            lastSpokenKey = lastSpokenKey,
+        )
+        if (!due || usage == null) return
+        val graph = Nightbell.install(applicationContext)
+        val evidence = graph.engine.pageEvidence(runtime)
+        val since = runtime.urgentSinceAt.takeIf { it > 0L } ?: System.currentTimeMillis()
+        val text = SpokenPage.render(
+            template = settings.speakTemplate,
+            name = monitor.displayName,
+            reason = evidence.message.ifBlank { evidence.failureKind.headline },
+            downForMs = System.currentTimeMillis() - since,
+            otherPending = otherPending,
+        )
+        // Marked spoken before the engine is asked, not after. An engine that
+        // takes eight seconds would otherwise let the next tick conclude the same
+        // announcement was still owed.
+        lastSpokenKey = key
+        val spoken = runCatchingCancellable {
+            graph.speaker.say(text = text, usage = usage, voice = settings.speakVoice)
+        }.getOrDefault(false)
+        if (!spoken) Log.w(TAG, "Nothing was said for ${monitor.displayName}")
+    }
+
+    /** The last announcement this service made, so one page is read out once. */
+    private var lastSpokenKey: String? = null
+
     private suspend fun sleepUnlessWoken(ms: Long) {
         withTimeoutOrNull(ms) { wakeSignal.receive() }
     }

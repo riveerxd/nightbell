@@ -78,6 +78,63 @@ monitor are serialised behind a per-monitor lock, and every tick sweeps
 last one is the only way to catch a notification belonging to a monitor that has
 since been deleted. See HANDOFF for the field bug that prompted all three.
 
+### Spoken alerts
+
+Off by default, and the switch is per monitor: **Say it out loud**, under a
+monitor's alert settings, next to its sound and haptics. A monitor left on the
+global alert settings follows the default policy's switch, so turning it on
+under Settings, Alerts, Default alert policy covers the whole fleet in one go.
+Settings, Alerts, Spoken alerts says how many monitors currently speak and has
+"Turn on for all" and "Turn off for all" for the case where thirty monitors have
+their own policies.
+
+When it fires, the alert reads itself out: "Nightbell alert. Checkout API is
+down. Host not found." The sentence is a template you can edit, and the four
+placeholders sit under the field as buttons that add themselves: `{name}`,
+`{reason}`, `{duration}` and `{others}`, filled in from the same facts the
+notification carries. `{duration}` is left out of the default because an ordinary
+alert fires the moment a check fails and would say "down for just now"; it earns
+its place on an URGENT page.
+
+A voice pronounces, it does not translate, and Nightbell's alerts are written in
+English: there is one `values/strings.xml` and no translations. So an English
+voice is the default even on a phone whose own language is something else,
+because handing English words to another language's phoneme set produces
+something that is neither language. The voice list is still offered, since
+someone who writes their own sentence wants a voice to match it, and the card
+says plainly that it changes pronunciation rather than language. To hear an alert
+in another language, write the sentence yourself and leave out `{reason}`, which
+is the one part Nightbell words. When the voice that will actually be used cannot
+speak the language the sentence is in, including the case where the engine ships
+only one language and there was never a choice, the card says so.
+
+The voice is the phone's own text-to-speech engine, so nothing about a monitor
+leaves the device. Only voices the engine reports as installed and usable
+without a connection are offered: a synthesiser that fetches its voice over the
+network would be silent during exactly the outage it was installed for. The card
+also synthesises one word to a file before claiming the engine works, because an
+engine can report an installed voice and then produce no audio at all, and
+offers the system screen where voice data is installed when that happens.
+
+An ordinary alert is spoken once when it goes down, and again on each repeat if
+"Say it again on every repeat" is on. An URGENT page is spoken by the service
+that owns the siren instead: once per page, so it inherits
+`urgentRepeatMinutes`, with the siren muted for the sentence and restored
+immediately after. Haptics keep going through it.
+
+Everything that can silence an alert silences the announcement first, because
+speech follows the notification's own verdict rather than re-deciding: the master
+switch, the monitor's alert switch, mute, the failure threshold and quiet hours.
+The ringer is checked on top of that, so a phone set to vibrate or silent never
+speaks.
+
+`domain/SpokenPage.kt` builds the sentence and resolves which policy applies, so
+what gets said and the count Settings shows cannot disagree. It is pure, and
+unit-tested: URLs are read as hostnames rather than spelled out with their
+scheme, durations are words rather than `4m 12s`, and a failure message carrying
+half a JSON body is cut at a word boundary. `data/alerts/PageSpeaker.kt` owns the
+engine.
+
 ### Latency SLOs and DEGRADED
 
 `Health.DEGRADED` now means something. Give a monitor a **latency budget** (or

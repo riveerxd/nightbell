@@ -53,6 +53,11 @@ class UrgentAlarm(private val context: Context) {
 
     val isPlaying: Boolean get() = player != null
 
+    private var ducked = false
+
+    /** True while an announcement is being read over the top of the siren. */
+    val isDucked: Boolean get() = ducked
+
     /**
      * What the ringer switch says this page is allowed to do.
      *
@@ -94,6 +99,7 @@ class UrgentAlarm(private val context: Context) {
      * vibrate during an outage quietens the page it is already making — and
      * flipping it back makes it loud again — without waiting for the next repeat.
      */
+    @Synchronized
     fun start(style: VibrationStyle, vibrate: Boolean, respectRinger: Boolean = true) {
         val output = outputFor(respectRinger, vibrate)
         if (output.sound) {
@@ -125,6 +131,7 @@ class UrgentAlarm(private val context: Context) {
      * normally, so re-issuing it from a screen-off receiver keeps it buzzing until the
      * page is actually acknowledged. Idempotent and a no-op when nothing should vibrate.
      */
+    @Synchronized
     fun reassertVibration() {
         val style = vibeStyle ?: return
         runCatching { resolveVibrator()?.cancel() }
@@ -132,8 +139,31 @@ class UrgentAlarm(private val context: Context) {
         startVibration(style)
     }
 
+    /**
+     * Mutes the siren without tearing it down, for as long as something is
+     * speaking over it.
+     *
+     * Volume rather than [MediaPlayer.pause]: the page's whole contract is that it
+     * keeps making noise until acknowledged, and a paused player is one bug away
+     * from a page that never resumes. A muted one is still looping, still owned by
+     * the same service, and restored by a single call that cannot fail
+     * differently. Idempotent, so the speaker's `finally` can call it blindly.
+     *
+     * Haptics are left alone. A phone buzzing under an announcement is still
+     * carrying the same message, and stopping the vibration is the one part of a
+     * page a sleeping user might actually need.
+     */
+    @Synchronized
+    fun setDucked(quiet: Boolean) {
+        ducked = quiet
+        runCatching { player?.setVolume(if (quiet) 0f else 1f, if (quiet) 0f else 1f) }
+            .onFailure { Log.w(TAG, "Could not change the alarm volume", it) }
+    }
+
+    @Synchronized
     fun stop() {
         stopSound()
+        ducked = false
         vibeStyle = null
         if (vibrating) {
             runCatching { resolveVibrator()?.cancel() }
@@ -141,16 +171,44 @@ class UrgentAlarm(private val context: Context) {
         }
     }
 
+    /**
+     * Releases the player, at most once.
+     *
+     * The field is cleared *before* the player is touched, and every public entry
+     * point above is `@Synchronized`, because two threads genuinely do stop this
+     * at the same moment: acknowledging a page calls `alarm.stop()` directly from
+     * whichever thread the tap arrived on (so the phone goes quiet immediately
+     * rather than at the loop's next tick) and the service loop then calls it
+     * again when it notices nothing is paging. Both used to read the same non-null
+     * player, and the second one called `isPlaying` on an already released
+     * instance: `IllegalStateException`, caught and logged, "Alarm would not stop
+     * cleanly", once per acknowledged page.
+     */
     private fun stopSound() {
-        player?.let { active ->
-            runCatching {
-                if (active.isPlaying) active.stop()
-                active.release()
-            }.onFailure { Log.w(TAG, "Alarm would not stop cleanly", it) }
-        }
+        val active = player
         player = null
         usage = null
+        if (active == null) return
+        runCatching {
+            if (active.isPlaying) active.stop()
+            active.release()
+        }.onFailure {
+            stopFaults++
+            Log.w(TAG, "Alarm would not stop cleanly", it)
+        }
     }
+
+    /**
+     * How many times a player refused to be released.
+     *
+     * Zero is the only acceptable value and it is asserted under concurrent stops,
+     * because the race above cannot be seen any other way: the failure is caught,
+     * so without a count it shows up as a line in logcat that a green test run
+     * says nothing about.
+     */
+    @Volatile
+    var stopFaults: Int = 0
+        private set
 
     private fun startSound(soundUsage: Int) {
         val uri = Settings.System.DEFAULT_ALARM_ALERT_URI ?: return
@@ -168,6 +226,10 @@ class UrgentAlarm(private val context: Context) {
                 // coroutine, and a page that starts making noise a second late
                 // is worse than one that blocks a background thread briefly.
                 prepare()
+                // Built muted when an announcement is in progress: a ringer flip
+                // rebuilds the player, and a fresh one at full volume would talk
+                // over the sentence that muted the last one.
+                if (ducked) setVolume(0f, 0f)
                 start()
                 player = this
                 usage = soundUsage
@@ -244,6 +306,32 @@ class UrgentAlarm(private val context: Context) {
             @Suppress("DEPRECATION")
             context.getSystemService(Vibrator::class.java)
         }
+
+    /**
+     * The [AudioAttributes] usage a spoken announcement should use right now, or
+     * null when nothing should be spoken at all.
+     *
+     * Asks exactly the question the siren asks itself, so speech cannot become the
+     * loophole that makes a phone set to vibrate start talking. Null also when the
+     * relevant volume is at zero: the words would not be heard, and synthesising
+     * them anyway would only cost the battery.
+     */
+    fun speechUsage(respectRinger: Boolean): Int? {
+        val output = outputFor(respectRinger, vibratePreferred = true)
+        if (!output.sound) return null
+        if (!alarmStreamAudible(respectRinger)) return null
+        return output.usage
+    }
+
+    /**
+     * Whether a sound would be heard at all right now.
+     *
+     * The same question [speechUsage] asks, without the page's answer about which
+     * stream to use, for the ordinary alerts that are spoken from
+     * [me.river.nightbell.data.Nightbell] on notification usage. Lives here so
+     * there is exactly one place that reads the ringer.
+     */
+    fun ringerAllowsSound(): Boolean = speechUsage(respectRinger = true) != null
 
     /**
      * Whether the alarm stream can actually be heard.

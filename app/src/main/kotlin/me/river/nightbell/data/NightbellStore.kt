@@ -463,6 +463,17 @@ class NightbellStore(
      * Doing that as N `updateRuntime` calls would be N DataStore writes with a
      * check able to land between any two of them.
      */
+    /**
+     * Applies [transform] to every monitor in one commit.
+     *
+     * One write rather than thirty: a per-monitor loop through [upsert] rebuilds
+     * the schedule and notifies the widgets once per monitor, and a fleet-wide
+     * change made that way is visibly slow and interruptible half way through.
+     */
+    suspend fun updateAllMonitors(transform: (Monitor) -> Monitor) = mutate { snap ->
+        snap.copy(monitors = snap.monitors.map(transform))
+    }
+
     suspend fun updateAllRuntimes(transform: (MonitorRuntime) -> MonitorRuntime) = mutate { snap ->
         snap.copy(runtimes = snap.runtimes.mapValues { (_, runtime) -> transform(runtime) })
     }
