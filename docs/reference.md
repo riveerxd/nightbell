@@ -597,6 +597,27 @@ something, and the alert bookkeeping resets with it. Importing an in-progress
 alert state would suppress the first real outage on the new device, see the
 1.7.0 and 2.0.0 sections of HANDOFF for why that is the same trap twice.
 
+## Being told about a new Nightbell
+
+**Settings → About → Nightbell updates** switches the check on, picks the source
+and offers **Check now**. When a newer version exists the app says so twice: a
+notification, once per version, and a modal banner on the dashboard that keeps
+saying it until the user answers.
+
+**The notification opens the app, not a browser**, whenever the release has an
+APK behind it. Both GitHub and F-Droid publish one, so the route turns on whether
+there is a file rather than on which source published it. The tap lands on the
+dashboard where the banner offers **Install**, and it clears any "Remind later"
+deferral on the way, because that deferral quietens the surfaces that appear on
+their own and a deliberate tap is not one of those. A release with no APK is the
+one case where a page is the only route, and there the notification still opens
+it.
+
+Nothing is downloaded until Install is pressed, and Android asks again before it
+replaces the app. Where Android has not been told to allow installs, the button
+reads **Settings** and says what it will do, rather than being an Install button
+that opens a settings screen.
+
 ## The diagnostic log
 
 **Settings → About → Diagnostic log** records what Nightbell is doing to a text

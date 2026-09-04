@@ -118,6 +118,66 @@ object AppUpdate {
     )
 
     /**
+     * Where the update notification should send somebody who taps it.
+     *
+     * It sent them to a web page, always, and that was wrong from the release the
+     * in-app installer shipped in: the app can fetch and hand over the APK
+     * itself, the dashboard banner has offered exactly that ever since, and the
+     * notification was still routing around it into a browser. The user then
+     * downloaded the file by hand and installed it by hand, twice as much work
+     * as the app already knew how to do for them.
+     *
+     * [OpenApp] whenever there is an APK to install. Not the install itself:
+     * "Nightbell never installs anything by itself" is a promise the app makes
+     * out loud, so a notification tap opens the screen where Install is a
+     * deliberate press, and Android still asks after that.
+     *
+     * [OpenLink] only when the release has no APK behind it, which is the one
+     * case where a page is the only route there is.
+     */
+    sealed interface NoticeRoute {
+        /** Open Nightbell, where the banner offers Install. */
+        data object OpenApp : NoticeRoute
+
+        /** Open a page, because there is nothing to install from here. */
+        data class OpenLink(val url: String) : NoticeRoute
+    }
+
+    fun noticeRoute(release: Release): NoticeRoute =
+        if (release.apkUrl.isNotBlank()) {
+            NoticeRoute.OpenApp
+        } else {
+            NoticeRoute.OpenLink(release.url.ifBlank { DOWNLOAD_URL })
+        }
+
+    /**
+     * What the notification's body says, which has to match where it goes.
+     *
+     * Kept next to [noticeRoute] rather than in `AlertCenter`, because the two
+     * were allowed to disagree once already: the body promised "this opens the
+     * download page" while the app had been able to install the update itself
+     * for several releases.
+     */
+    fun noticeBody(release: Release, installedVersion: String): String = buildString {
+        append("You are on ").append(installedVersion)
+        append(". Version ").append(release.version)
+        append(" is available from ").append(release.source.label).append(".")
+        append("\n\n")
+        when (noticeRoute(release)) {
+            is NoticeRoute.OpenApp -> append(
+                "Tap to open Nightbell and install it from there. Nothing is " +
+                    "downloaded until you press Install, and Android asks before " +
+                    "anything is installed.",
+            )
+
+            is NoticeRoute.OpenLink -> append(
+                "This release has no APK to install from here, so this opens its " +
+                    "page.",
+            )
+        }
+    }
+
+    /**
      * Whether the dashboard should be carrying an update banner, and what it says.
      *
      * 3.2.0 shipped the check and gave it one surface: a notification, once per
@@ -266,6 +326,21 @@ object AppUpdate {
         state = state.copy(notifiedVersion = release.version)
         return Decision(Action.NOTIFY, state, release)
     }
+
+    /**
+     * The user tapped the notice and is asking to see the update now.
+     *
+     * Clears the deferral, and it has to: "Remind later" quietens the surfaces
+     * that appear on their own, and a tap on the notification is not one of
+     * those. Without this the notice led to the dashboard and the banner it
+     * leads to was suppressed by [remindLater], so the tap was a dead end for
+     * anybody who had ever dismissed the banner once.
+     *
+     * `ignoredVersion` is deliberately left alone. Refusing a version is a
+     * standing answer about that version, and a stale notification for one the
+     * user has since refused should not undo it.
+     */
+    fun showNow(state: UpdateState): UpdateState = state.copy(remindAfter = 0L)
 
     /** "Remind later": quiet for a day, then this same version may speak again. */
     fun remindLater(state: UpdateState, nowMs: Long): UpdateState = state.copy(

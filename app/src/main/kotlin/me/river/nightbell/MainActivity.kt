@@ -22,6 +22,17 @@ class MainActivity : ComponentActivity() {
 
     private var pendingMonitorId by mutableStateOf<String?>(null)
 
+    /**
+     * Set when the update notice was tapped, cleared once the app has shown it.
+     *
+     * The notice promises somewhere to install the update from, so it has to
+     * land somewhere that offers one. Resuming the task alone was not enough:
+     * the app is a single activity, so a tap put the user back on whatever
+     * screen they had left it on, and a monitor's detail screen carries no
+     * update anything.
+     */
+    private var pendingUpdate by mutableStateOf(false)
+
     private val notificationPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { /* Result surfaced in Settings; nothing to do inline. */ }
@@ -33,6 +44,7 @@ class MainActivity : ComponentActivity() {
 
         Nightbell.install(applicationContext)
         pendingMonitorId = monitorIdFrom(intent)
+        pendingUpdate = wantsUpdateFrom(intent)
         requestNotificationPermissionIfNeeded()
 
         setContent {
@@ -46,6 +58,8 @@ class MainActivity : ComponentActivity() {
             NightbellApp(
                 pagedMonitorId = monitorId,
                 onPagedMonitorOpened = { pendingMonitorId = null },
+                showUpdate = pendingUpdate,
+                onUpdateShown = { pendingUpdate = false },
             )
             if (!splashDone) {
                 NightbellSplash(onFinished = { splashDone = true })
@@ -57,6 +71,23 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         pendingMonitorId = monitorIdFrom(intent)
+        pendingUpdate = wantsUpdateFrom(intent)
+    }
+
+    /**
+     * Whether this intent came from the update notice.
+     *
+     * Read from the data URI rather than only from the extra, and the notice
+     * carries a URI for the same reason widget rows do: `Intent.filterEquals`
+     * ignores extras, so an intent that differed from a monitor page only by an
+     * extra would look identical to the activity manager, which would bring the
+     * task to the front without ever calling [onNewIntent].
+     */
+    private fun wantsUpdateFrom(intent: Intent?): Boolean {
+        if (intent == null) return false
+        if (intent.getBooleanExtra(EXTRA_SHOW_UPDATE, false)) return true
+        val data = intent.data ?: return false
+        return data.scheme == "nightbell" && data.host == "update"
     }
 
     /**
@@ -91,5 +122,6 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_MONITOR_ID = "nightbell.monitor_id"
+        const val EXTRA_SHOW_UPDATE = "nightbell.show_update"
     }
 }

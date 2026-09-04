@@ -361,4 +361,144 @@ class AppUpdateTest {
         const val HOUR = 60L * 60 * 1000
         const val DAY = 24 * HOUR
     }
+
+    // ---- where the notification sends somebody -----------------------------
+
+    /**
+     * The bug: the update notification opened a web page even though the app had
+     * been able to fetch and install the APK itself for several releases. The
+     * user downloaded by hand and installed by hand, twice the work the app
+     * already knew how to do.
+     */
+    @Test
+    fun `a release with an apk routes into the app rather than into a browser`() {
+        val release = AppUpdate.Release(
+            version = "3.9.0",
+            url = "https://github.com/riveerxd/nightbell/releases/tag/v3.9.0",
+            source = UpdateSource.GITHUB,
+            apkUrl = "https://github.com/riveerxd/nightbell/releases/download/v3.9.0/app.apk",
+            apkSize = 15_000_000L,
+        )
+        assertEquals(AppUpdate.NoticeRoute.OpenApp, AppUpdate.noticeRoute(release))
+    }
+
+    @Test
+    fun `an f-droid release with an apk routes into the app too`() {
+        // Both sources publish an APK, so both can be installed from inside the
+        // app. Routing on the source rather than on whether there is a file
+        // would have fixed this for GitHub only.
+        val release = AppUpdate.Release(
+            version = "3.9.0",
+            url = AppUpdate.FDROID_URL,
+            source = UpdateSource.FDROID,
+            apkUrl = "https://f-droid.org/repo/me.river.nightbell_38.apk",
+        )
+        assertEquals(AppUpdate.NoticeRoute.OpenApp, AppUpdate.noticeRoute(release))
+    }
+
+    @Test
+    fun `a release with nothing to install still has somewhere to send somebody`() {
+        val release = AppUpdate.Release(
+            version = "3.9.0",
+            url = "https://example.com/notes",
+            source = UpdateSource.GITHUB,
+            apkUrl = "",
+        )
+        assertEquals(
+            AppUpdate.NoticeRoute.OpenLink("https://example.com/notes"),
+            AppUpdate.noticeRoute(release),
+        )
+    }
+
+    @Test
+    fun `a release with no page and no apk falls back to the download page`() {
+        val release = AppUpdate.Release(version = "3.9.0", url = "", source = UpdateSource.GITHUB)
+        assertEquals(
+            AppUpdate.NoticeRoute.OpenLink(AppUpdate.DOWNLOAD_URL),
+            AppUpdate.noticeRoute(release),
+        )
+    }
+
+    /**
+     * The body and the destination are not allowed to disagree.
+     *
+     * They did: the notification said "this opens the download page" while the
+     * app could install the update itself, and the sentence was the only thing
+     * telling the user what to expect.
+     */
+    @Test
+    fun `the notification body says what the tap will actually do`() {
+        val installable = AppUpdate.Release(
+            version = "3.9.0",
+            url = "https://example.com/notes",
+            source = UpdateSource.GITHUB,
+            apkUrl = "https://example.com/app.apk",
+        )
+        val body = AppUpdate.noticeBody(installable, installedVersion = "3.8.0")
+        assertTrue(body.contains("open Nightbell and install it from there"))
+        assertFalse(body.contains("opens the download page"))
+        // And the promise the app makes everywhere else about installing is kept.
+        assertTrue(body.contains("Android asks before anything is installed"))
+        assertTrue(body.contains("3.8.0"))
+        assertTrue(body.contains("3.9.0"))
+
+        val pageOnly = installable.copy(apkUrl = "")
+        val pageBody = AppUpdate.noticeBody(pageOnly, installedVersion = "3.8.0")
+        assertTrue(pageBody.contains("no APK to install from here"))
+        assertFalse(pageBody.contains("open Nightbell and install"))
+    }
+
+    /**
+     * Tapping the notice overrides a deferral.
+     *
+     * This is the bug the first version of the notification fix still had: the
+     * tap led to the dashboard, and the banner it led to was hidden by
+     * `remindLater`, so anybody who had dismissed the banner once got a
+     * notification that opened a screen with nothing on it.
+     */
+    @Test
+    fun `tapping the notice clears a remind-later deferral`() {
+        val deferred = AppUpdate.remindLater(
+            UpdateState(latestVersion = "3.9.0", latestUrl = "https://example.com"),
+            nowMs = 1_000L,
+        )
+        // Proof the deferral is what hides the banner in the first place.
+        assertNull(
+            AppUpdate.bannerFor(
+                state = deferred,
+                installedVersion = "3.8.0",
+                enabled = true,
+                nowMs = 2_000L,
+            ),
+        )
+        val asked = AppUpdate.showNow(deferred)
+        assertNotNull(
+            AppUpdate.bannerFor(
+                state = asked,
+                installedVersion = "3.8.0",
+                enabled = true,
+                nowMs = 2_000L,
+            ),
+        )
+    }
+
+    @Test
+    fun `tapping the notice does not undo a refused version`() {
+        // "Ignore this version" is a standing answer about that version. A stale
+        // notification for one the user has since refused must not revive it.
+        val refused = AppUpdate.ignore(
+            UpdateState(latestVersion = "3.9.0", latestUrl = "https://example.com"),
+            version = "3.9.0",
+        )
+        val asked = AppUpdate.showNow(refused)
+        assertEquals("3.9.0", asked.ignoredVersion)
+        assertNull(
+            AppUpdate.bannerFor(
+                state = asked,
+                installedVersion = "3.8.0",
+                enabled = true,
+                nowMs = 2_000L,
+            ),
+        )
+    }
 }

@@ -741,34 +741,54 @@ class AlertCenter(private val context: Context) {
      */
     fun notifyUpdate(release: AppUpdate.Release, installedVersion: String, policy: AlertPolicy) {
         val channelId = channelFor(policy, Severity.NEWS, silent = true)
+        val route = AppUpdate.noticeRoute(release)
+        // Both of these used to be `openLinkIntent`, which walked the user out of
+        // the app and into a browser to fetch a file the app can fetch itself.
+        // See AppUpdate.noticeRoute.
+        val tap = PendingIntent.getActivity(
+            context,
+            "update.${release.version}".hashCode() and 0x7FFFFFF,
+            updateTapIntent(release),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
         val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_stat_brand)
             .setContentTitle("Nightbell update available")
             .setContentText("Version ${release.version} is ready")
             .setStyle(
-                NotificationCompat.BigTextStyle().bigText(
-                    buildString {
-                        append("You are on ").append(installedVersion)
-                        append(". Version ").append(release.version)
-                        append(" is available from ").append(release.source.label).append(".")
-                        append("\n\nNightbell never installs anything by itself: this opens the ")
-                        append("download page, and Android asks before anything is installed.")
-                    },
-                ),
+                NotificationCompat.BigTextStyle()
+                    .bigText(AppUpdate.noticeBody(release, installedVersion)),
             )
             .setColor(NEWS_COLOR)
             .setColorized(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_RECOMMENDATION)
-            .setContentIntent(openLinkIntent(release.url, "update.${release.version}"))
+            .setContentIntent(tap)
             .setAutoCancel(true)
             .setSilent(true)
             .setOngoing(false)
-            .addAction(
-                R.drawable.ic_stat_brand,
-                "Open download",
-                openLinkIntent(release.url, "update.open.${release.version}"),
-            )
+            .apply {
+                // Android shows three actions, so the first slot goes to whatever
+                // the tap does not already do. When the tap opens the app, the
+                // page is worth one tap for the release notes and nothing else;
+                // when the tap opens the page, there is no app route to offer.
+                when (route) {
+                    AppUpdate.NoticeRoute.OpenApp -> addAction(
+                        R.drawable.ic_stat_brand,
+                        "What's new",
+                        openLinkIntent(
+                            release.url.ifBlank { AppUpdate.DOWNLOAD_URL },
+                            "update.notes.${release.version}",
+                        ),
+                    )
+
+                    is AppUpdate.NoticeRoute.OpenLink -> addAction(
+                        R.drawable.ic_stat_brand,
+                        "Open download",
+                        openLinkIntent(route.url, "update.open.${release.version}"),
+                    )
+                }
+            }
             .addAction(
                 R.drawable.ic_stat_refresh,
                 "Remind later",
@@ -800,9 +820,39 @@ class AlertCenter(private val context: Context) {
      * ignores extras, and varying the request code is cheaper than reasoning
      * about which parts of an ACTION_VIEW intent are compared.
      */
-    private fun openLinkIntent(url: String, key: String): PendingIntent {
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+    private fun linkIntent(url: String): Intent =
+        Intent(Intent.ACTION_VIEW, Uri.parse(url))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+    /**
+     * Where a tap on the update notification actually goes.
+     *
+     * Exposed so a test can assert the intent rather than the decision that
+     * produced it. A `PendingIntent` cannot be unwrapped from outside the
+     * process that made it, so without this the only thing a test could check
+     * was that `noticeRoute` returns the right answer, which is precisely the
+     * assertion that would still have passed while the notification carried the
+     * old browser intent.
+     */
+    internal fun updateTapIntent(release: AppUpdate.Release): Intent =
+        when (val route = AppUpdate.noticeRoute(release)) {
+            // Not a bare `appIntent("")`, which only resumes the task: the app is
+            // one activity, so that put the user back on whatever screen they had
+            // left, and a monitor's detail screen offers no update anything. The
+            // URI is there as well as the extra because `Intent.filterEquals`
+            // ignores extras, and an intent that differed from a monitor page only
+            // by one would be brought to the front without `onNewIntent` ever
+            // firing. See MainActivity.wantsUpdateFrom.
+            AppUpdate.NoticeRoute.OpenApp -> appIntent("").apply {
+                data = Uri.parse("nightbell://update")
+                putExtra(MainActivity.EXTRA_SHOW_UPDATE, true)
+            }
+
+            is AppUpdate.NoticeRoute.OpenLink -> linkIntent(route.url)
+        }
+
+    private fun openLinkIntent(url: String, key: String): PendingIntent {
+        val intent = linkIntent(url)
         return PendingIntent.getActivity(
             context,
             key.hashCode() and 0x7FFFFFF,
@@ -1234,8 +1284,8 @@ class AlertCenter(private val context: Context) {
      * carried this URI since 1.5 for the neighbouring reason, and
      * `MainActivity.monitorIdFrom` already reads both forms.
      */
-    private fun openMonitorIntent(monitorId: String): PendingIntent {
-        val intent = Intent(context, MainActivity::class.java).apply {
+    private fun appIntent(monitorId: String): Intent =
+        Intent(context, MainActivity::class.java).apply {
             action = Intent.ACTION_VIEW
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             if (monitorId.isNotBlank()) {
@@ -1243,6 +1293,9 @@ class AlertCenter(private val context: Context) {
                 putExtra(MainActivity.EXTRA_MONITOR_ID, monitorId)
             }
         }
+
+    private fun openMonitorIntent(monitorId: String): PendingIntent {
+        val intent = appIntent(monitorId)
         return PendingIntent.getActivity(
             context,
             monitorId.notificationId(),

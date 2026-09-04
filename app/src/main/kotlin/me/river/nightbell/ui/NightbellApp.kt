@@ -29,6 +29,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import me.river.nightbell.domain.AppUpdate
 import me.river.nightbell.data.Nightbell
 import me.river.nightbell.ui.components.AuroraBackground
 import me.river.nightbell.ui.components.DismissKeyboardOnOutsideTap
@@ -125,6 +126,8 @@ private fun openPagedMonitor(navController: NavHostController, monitorId: String
 fun NightbellApp(
     pagedMonitorId: String? = null,
     onPagedMonitorOpened: () -> Unit = {},
+    showUpdate: Boolean = false,
+    onUpdateShown: () -> Unit = {},
 ) {
     val graph = Nightbell.require()
     val settings by graph.store.snapshot.collectAsStateWithLifecycle()
@@ -143,6 +146,32 @@ fun NightbellApp(
         } else {
             Routes.DASHBOARD
         }
+    }
+
+    // The update notice asked for the update. The banner lives on the dashboard,
+    // so that is where a tap has to land: resuming the task alone put the user
+    // back on whatever screen they had left the app on, which for anybody who
+    // taps a page notification first is a monitor's detail screen with no update
+    // anything on it. Same one-shot shape as the paged monitor below, and for the
+    // same reason.
+    LaunchedEffect(showUpdate) {
+        if (!showUpdate) return@LaunchedEffect
+        // Before navigating, or the banner this is navigating to is not there:
+        // a deferral set by "Remind later" outlives the notification, and
+        // arriving on a dashboard with nothing on it is worse than the browser
+        // this replaced. See AppUpdate.showNow.
+        graph.store.updateAppUpdate { AppUpdate.showNow(it) }
+        val alreadyHome = runCatching { navController.getBackStackEntry(Routes.DASHBOARD) }
+            .isSuccess
+        navController.navigate(Routes.DASHBOARD) {
+            if (alreadyHome) {
+                popUpTo(Routes.DASHBOARD) { inclusive = true }
+            } else {
+                popUpTo(navController.graph.findStartDestination().id) { inclusive = true }
+            }
+            launchSingleTop = true
+        }
+        onUpdateShown()
     }
 
     LaunchedEffect(pagedMonitorId) {
