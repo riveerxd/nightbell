@@ -1,5 +1,8 @@
 package me.river.nightbell.data.update
 
+import me.river.nightbell.data.diag.Diag
+import me.river.nightbell.domain.LogEvent
+import me.river.nightbell.domain.LogField
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -11,7 +14,6 @@ import android.content.pm.Signature
 import androidx.core.net.toUri
 import android.os.Build
 import android.provider.Settings
-import android.util.Log
 import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
@@ -194,7 +196,7 @@ class UpdateInstaller(
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (error: Throwable) {
-                Log.i(TAG, "Update download failed", error)
+                Diag.log(LogEvent.UPDATE_DOWNLOAD_FAILED, LogField.error("why", error))
                 _stage.value = Stage.Failed(readable(error))
             }
         }
@@ -371,7 +373,11 @@ class UpdateInstaller(
 
             else -> {
                 val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
-                Log.i(TAG, "Install finished with status $status: $message")
+                Diag.log(
+                    LogEvent.UPDATE_INSTALL_STATUS,
+                    LogField.of("status", status),
+                    LogField.text("message", message.orEmpty()),
+                )
                 _stage.value = Stage.Failed(
                     message?.takeIf { it.isNotBlank() }?.let { "Android refused the install: $it" }
                         ?: "Android refused the install.",

@@ -1,5 +1,8 @@
 package me.river.nightbell.data.work
 
+import me.river.nightbell.data.diag.Diag
+import me.river.nightbell.domain.LogEvent
+import me.river.nightbell.domain.LogField
 import android.app.Service
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -8,7 +11,6 @@ import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
-import android.util.Log
 import me.river.nightbell.data.Nightbell
 import me.river.nightbell.data.alerts.AlertCenter
 import me.river.nightbell.data.alerts.LiveCard
@@ -106,7 +108,7 @@ class NightbellMonitorService : Service() {
                 },
             )
             screenReceiverRegistered = true
-        }.onFailure { Log.w(TAG, "Could not register screen receiver", it) }
+        }.onFailure { Diag.log(LogEvent.SCHED_SERVICE_REFUSED, LogField.tag("at", "screen_receiver"), LogField.error("why", it)) }
         // As early as Android allows. `startForegroundService` opens a ~5s window
         // in which this process is killed unless `startForeground` has been
         // called, and that window is not cancelled by the service being stopped
@@ -168,12 +170,17 @@ class NightbellMonitorService : Service() {
             // stopping, every one of these throws CancellationException, and
             // swallowing that made the loop grind through a whole tick's worth of
             // work on a dead scope.
+            Diag.log(
+                LogEvent.SCHED_SERVICE_TICK,
+                LogField.of("strict", strict),
+                LogField.of("paging", isPaging()),
+            )
             if (strict) {
                 runCatchingCancellable { graph.engine.runAllDue() }
-                    .onFailure { Log.e(TAG, "Check pass failed", it) }
+                    .onFailure { Diag.logError(LogEvent.CHECK_FAILED, it, LogField.tag("at", "service_pass")) }
             }
             runCatchingCancellable { graph.engine.tickUrgent() }
-                .onFailure { Log.e(TAG, "Urgent tick failed", it) }
+                .onFailure { Diag.logError(LogEvent.ALERT_URGENT_FAILED, it, LogField.tag("at", "tick")) }
 
             // ---- the page ----------------------------------------------------
             //
@@ -383,7 +390,7 @@ class NightbellMonitorService : Service() {
         val spoken = runCatchingCancellable {
             graph.speaker.say(text = text, usage = usage, voice = settings.speakVoice)
         }.getOrDefault(false)
-        if (!spoken) Log.w(TAG, "Nothing was said for ${monitor.displayName}")
+        if (!spoken) Diag.log(LogEvent.ALERT_SPEAK, LogField.monitor(monitor.id), LogField.of("spoken", false))
     }
 
     /** The last announcement this service made, so one page is read out once. */
@@ -432,7 +439,11 @@ class NightbellMonitorService : Service() {
                     startForeground(AlertCenter.SERVICE_NOTIFICATION_ID, notification)
                 }
                 started = true
-            }.onFailure { Log.e(TAG, "Could not enter the foreground", it) }
+                Diag.log(
+                    LogEvent.SCHED_SERVICE_START,
+                    LogField.of("api", Build.VERSION.SDK_INT),
+                )
+            }.onFailure { Diag.logError(LogEvent.SCHED_SERVICE_REFUSED, it, LogField.tag("at", "foreground")) }
         } else {
             runCatching {
                 androidx.core.app.NotificationManagerCompat.from(this)
@@ -539,7 +550,7 @@ class NightbellMonitorService : Service() {
                         } else {
                             app.startService(intent)
                         }
-                    }.onFailure { Log.w(TAG, "Foreground start refused: ${it.message}") }
+                    }.onFailure { Diag.log(LogEvent.SCHED_SERVICE_REFUSED, LogField.tag("at", "start"), LogField.error("why", it)) }
                 } else {
                     // Deliberately *not* `stopService`. Android does not cancel the
                     // "you must call startForeground" promise when a service is
@@ -549,7 +560,7 @@ class NightbellMonitorService : Service() {
                     // ForegroundServiceDidNotStartInTimeException. The loop already
                     // shuts itself down on the first tick where neither strict mode
                     // nor a page needs it, so there is nothing to command here.
-                    Log.i(TAG, "Nothing needs the service; it will stand down on its next tick")
+                    Diag.log(LogEvent.SCHED_SERVICE_STOP, LogField.tag("why", "nothing_needs_it"))
                 }
             }
         }

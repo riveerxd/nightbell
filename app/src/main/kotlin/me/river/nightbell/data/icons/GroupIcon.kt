@@ -1,12 +1,14 @@
 package me.river.nightbell.data.icons
 
+import me.river.nightbell.data.diag.Diag
+import me.river.nightbell.domain.LogEvent
+import me.river.nightbell.domain.LogField
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.net.Uri
 import android.util.Base64
-import android.util.Log
 import androidx.exifinterface.media.ExifInterface
 import java.io.ByteArrayOutputStream
 import kotlin.math.max
@@ -114,7 +116,7 @@ object GroupIcon {
         return runCatchingCancellable {
             Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
         }.onFailure {
-            Log.w(TAG, "Could not apply the picture's orientation tag", it)
+            Diag.log(LogEvent.ICON_PICTURE_FAILED, LogField.tag("at", "orientation"), LogField.error("why", it))
         }.getOrDefault(bitmap)
     }
 
@@ -132,7 +134,7 @@ object GroupIcon {
         if (scaled !== bitmap) scaled.recycle()
         val encoded = Base64.encodeToString(bytes, Base64.NO_WRAP)
         if (encoded.length > MAX_ENCODED_BYTES) {
-            Log.w(TAG, "Refusing a group picture that encodes to ${encoded.length} bytes")
+            Diag.log(LogEvent.ICON_PICTURE_REFUSED, LogField.of("bytes", encoded.length))
             return null
         }
         return encoded
@@ -162,7 +164,7 @@ object GroupIcon {
             context.contentResolver.openInputStream(uri)?.use {
                 BitmapFactory.decodeStream(it, null, bounds)
             }
-        }.onFailure { Log.w(TAG, "Could not read the picked picture's header", it) }
+        }.onFailure { Diag.log(LogEvent.ICON_PICTURE_FAILED, LogField.tag("at", "header"), LogField.error("why", it)) }
         val longest = max(bounds.outWidth, bounds.outHeight)
         var sample = 1
         while (longest > 0 && longest / (sample * 2) >= MAX_EDGE) sample *= 2
@@ -171,7 +173,7 @@ object GroupIcon {
             context.contentResolver.openInputStream(uri)?.use {
                 BitmapFactory.decodeStream(it, null, options)
             }
-        }.onFailure { Log.w(TAG, "Could not decode the picked picture", it) }.getOrNull()
+        }.onFailure { Diag.log(LogEvent.ICON_PICTURE_FAILED, LogField.tag("at", "decode"), LogField.error("why", it)) }.getOrNull()
     }
 
     /** Scales so the longest edge is [MAX_EDGE], never up, never below one pixel. */

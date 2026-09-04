@@ -1,7 +1,9 @@
 package me.river.nightbell.data
 
+import me.river.nightbell.data.diag.Diag
+import me.river.nightbell.domain.LogEvent
+import me.river.nightbell.domain.LogField
 import android.content.Context
-import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
@@ -175,7 +177,7 @@ class NightbellStore(
         scope.launch {
             context.nightbellDataStore.data
                 .catch { error ->
-                    Log.e(TAG, "DataStore read failed, falling back to empty store", error)
+                    Diag.logError(LogEvent.STORE_READ_FAILED, error)
                     emit(androidx.datastore.preferences.core.emptyPreferences())
                 }
                 .collect { prefs ->
@@ -520,7 +522,7 @@ class NightbellStore(
     private fun decode(raw: String?): NightbellSnapshot {
         if (raw.isNullOrBlank()) return NightbellSnapshot()
         return runCatching { json.decodeFromString<NightbellSnapshot>(raw) }
-            .onFailure { Log.e(TAG, "Corrupt snapshot, resetting", it) }
+            .onFailure { Diag.logError(LogEvent.STORE_CORRUPT, it) }
             .getOrDefault(NightbellSnapshot())
             .let(::migrate)
     }
@@ -593,7 +595,7 @@ class NightbellStore(
     private fun retireGoogleReference(settings: GlobalSettings): GlobalSettings {
         val migrated = ConnectivityReference.migrate(settings.latencyReferenceUrl)
         if (migrated == settings.latencyReferenceUrl) return settings
-        Log.i(TAG, "Moving the latency reference off the Google endpoint it defaulted to")
+        Diag.log(LogEvent.STORE_REPAIR, LogField.tag("what", "latency_reference_endpoint"))
         return settings.copy(latencyReferenceUrl = migrated)
     }
 
@@ -609,7 +611,7 @@ class NightbellStore(
         runtimes: Map<String, MonitorRuntime>,
     ): Map<String, MonitorRuntime> {
         if (!LegacyCrashRepair.needsRepair(runtimes)) return runtimes
-        Log.i(TAG, "Scrubbing fabricated \"${CheckerHealth.LEGACY_CRASH_MESSAGE}\" state")
+        Diag.log(LogEvent.STORE_REPAIR, LogField.tag("what", "fabricated_crash_state"))
         return LegacyCrashRepair.scrub(runtimes)
     }
 

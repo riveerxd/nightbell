@@ -207,7 +207,11 @@ fun NightbellBackup.toImportableSnapshot(): NightbellSnapshot {
     return NightbellSnapshot(
         monitors = monitors,
         runtimes = runtimes,
-        settings = snapshot.settings,
+        // The diagnostic switch is the one setting that does not travel. It
+        // governs whether this device writes a file about itself, so it is a
+        // decision about the device rather than about the fleet, and a backup
+        // carried onto a new phone should not start it writing one.
+        settings = snapshot.settings.copy(diagnosticLogEnabled = false),
         // Grouping is part of how someone has arranged their monitors, so it
         // travels with them. Members that did not survive the filter above are
         // dropped by the store's own read migration, so nothing here has to

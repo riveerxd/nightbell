@@ -1,6 +1,8 @@
 package me.river.nightbell.data.check
 
-import android.util.Log
+import me.river.nightbell.data.diag.Diag
+import me.river.nightbell.domain.LogEvent
+import me.river.nightbell.domain.LogField
 import me.river.nightbell.data.NightbellStore
 import me.river.nightbell.data.alerts.AlertCenter
 import me.river.nightbell.domain.AlertDecider
@@ -344,7 +346,7 @@ class CheckEngine(
         // second apart, which is the duplicate-sample symptom the outer gate was
         // added to fix.
         if (!force && !isDue(monitor, before, nowMs())) {
-            Log.i(TAG, "${monitor.displayName} became not-due while waiting; skipping")
+            Diag.log(LogEvent.CHECK_SKIPPED, LogField.monitor(monitorId), LogField.tag("why", "not_due"))
             return null
         }
 
@@ -352,7 +354,7 @@ class CheckEngine(
         // monitor spinning forever. Callers gate too — this is the backstop that
         // makes it impossible for any of them to record an offline failure.
         if (!isOnline()) {
-            Log.i(TAG, "Offline — skipping ${monitor.displayName}")
+            Diag.log(LogEvent.CHECK_SKIPPED, LogField.monitor(monitorId), LogField.tag("why", "offline"))
             return null
         }
 
@@ -367,10 +369,18 @@ class CheckEngine(
         // all, which is indistinguishable from a dead tap and is the exact
         // complaint this engine has been answering since 1.6.0.
         if (!force && snapshot.pause.stopsChecks(nowMs())) {
-            Log.i(TAG, "Paused: skipping ${monitor.displayName}")
+            Diag.log(LogEvent.CHECK_SKIPPED, LogField.monitor(monitorId), LogField.tag("why", "paused"))
             return null
         }
 
+        Diag.log(
+            LogEvent.CHECK_START,
+            LogField.monitor(monitorId),
+            LogField.of("kind", monitor.kind),
+            LogField.of("forced", force),
+            LogField.of("interval_min", monitor.intervalMinutes),
+            LogField.of("urgent", monitor.urgent),
+        )
         store.markChecking(monitorId, true)
         var githubOutcome: GitHubChecker.Outcome? = null
         val result = try {
@@ -410,7 +420,7 @@ class CheckEngine(
             // ([CheckerHealth.recordCancellation]) instead of being re-assumed
             // here. It is a no-op today; if that ever changes, it changes here too.
             _checkerHealth.value = CheckerHealth.recordCancellation(_checkerHealth.value, nowMs()).state
-            Log.i(TAG, "Check for ${monitor.displayName} was cancelled; no verdict recorded")
+            Diag.log(LogEvent.CHECK_CANCELLED, LogField.monitor(monitorId))
             throw cancellation
         } catch (error: Throwable) {
             // A real escape from checker code. Both checkers classify their own
@@ -419,7 +429,7 @@ class CheckEngine(
             // the monitored service. It goes to the checker-health track and
             // *nowhere near* this monitor's health: "our code broke" has never
             // been evidence that somebody's website is down.
-            Log.e(TAG, "Checker threw while checking ${monitor.displayName}", error)
+            Diag.logError(LogEvent.CHECK_FAILED, error, LogField.monitor(monitorId), LogField.tag("at", "checker"))
             noteInternalError(monitor, settings, snapshot.checkerStreak, error)
             null
         } finally {
@@ -456,10 +466,11 @@ class CheckEngine(
             referenceHasVouched = Reachability.hasVouched(snapshot.reference, nowMs()),
         )
         if (localOutage) {
-            Log.i(
-                TAG,
-                "${monitor.displayName} reached nothing and neither did the reference; " +
-                    "recording nothing rather than paging for this phone's network",
+            Diag.log(
+                LogEvent.CHECK_SKIPPED,
+                LogField.monitor(monitorId),
+                LogField.tag("why", "local_outage"),
+                LogField.of("probe", probe),
             )
         }
 
@@ -483,7 +494,7 @@ class CheckEngine(
                 )
             }
             if (rateState != null) {
-                Log.i(TAG, "${monitor.displayName}: GitHub is rate limiting, nothing recorded")
+                Diag.log(LogEvent.CHECK_SKIPPED, LogField.monitor(monitorId), LogField.tag("why", "rate_limited"))
                 onStateChanged?.invoke()
             }
             return null
@@ -522,6 +533,19 @@ class CheckEngine(
         val muted = before.mutedUntil > nowMs()
         val minute = minuteOfDay()
 
+        Diag.log(
+            LogEvent.CHECK_DONE,
+            LogField.monitor(monitorId),
+            LogField.of("ok", result.ok),
+            LogField.of("kind", result.failureKind),
+            LogField.of("status", result.statusCode),
+            LogField.ms("latency", result.latencyMs),
+            LogField.ms("judged", judgedLatency),
+            LogField.of("health", after.health),
+            LogField.of("failures", after.consecutiveFailures),
+            LogField.text("verdict", result.message),
+        )
+
         // ---- down track -----------------------------------------------------
         val decision = if (muted) {
             AlertDecider.Decision.none(AlertDecider.Suppression.POLICY_DISABLED)
@@ -538,6 +562,17 @@ class CheckEngine(
             )
         }
 
+        Diag.log(
+            LogEvent.ALERT_DECIDED,
+            LogField.monitor(monitorId),
+            LogField.of("verdict", decision.kind),
+            LogField.of("suppression", decision.suppression),
+            LogField.of("ok", result.ok),
+            LogField.of("failures", after.consecutiveFailures),
+            LogField.of("muted", muted),
+            LogField.of("master", settings.masterAlertsEnabled),
+            LogField.of("silent", decision.forceSilent),
+        )
         when (decision.kind) {
             AlertDecider.Kind.DOWN, AlertDecider.Kind.REPEAT -> {
                 alerts.notifyDown(
@@ -937,11 +972,21 @@ class CheckEngine(
         val allowed = !muted && settings.masterAlertsEnabled && policy.enabled
         if (allowed) {
             evaluation.events.forEach { event ->
-                Log.i(TAG, "${monitor.displayName}: ${event.title(monitor.github.slug)}")
+                Diag.log(
+                    LogEvent.ALERT_POSTED,
+                    LogField.monitor(monitor.id),
+                    LogField.tag("track", "github"),
+                    LogField.of("silent", quiet),
+                )
                 alerts.notifyGitHub(monitor, event, policy, silent = quiet)
             }
         } else if (evaluation.events.isNotEmpty()) {
-            Log.i(TAG, "${monitor.displayName}: ${evaluation.events.size} repo event(s), alerts are off")
+            Diag.log(
+                LogEvent.ALERT_SUPPRESSED,
+                LogField.monitor(monitor.id),
+                LogField.tag("track", "github"),
+                LogField.count("events", evaluation.events.size),
+            )
         }
         val state = evaluation.state
         return { runtime -> runtime.copy(github = state) }
@@ -989,7 +1034,12 @@ class CheckEngine(
 
         if (!speaking) return false
         val notice = decision.release ?: return false
-        Log.i(TAG, "Nightbell $installed is behind ${notice.version} on ${notice.source.label}")
+        Diag.log(
+            LogEvent.ALERT_POSTED,
+            LogField.tag("track", "update"),
+            LogField.text("installed", installed),
+            LogField.text("available", notice.version),
+        )
         alerts.notifyUpdate(notice, installed, settings.defaultAlert)
         onStateChanged?.invoke()
         return true
@@ -1070,7 +1120,7 @@ class CheckEngine(
                 // won't be notified at all", so buzzing through it would make that
                 // sentence a lie.
                 if (!settings.masterAlertsEnabled || !policy.enabled) {
-                    Log.i(TAG, "Checker crash verified but alerts are switched off")
+                    Diag.log(LogEvent.ALERT_SUPPRESSED, LogField.tag("track", "checker_crash"))
                 } else {
                     alerts.notifyCheckerCrash(
                         state = outcome.state,
@@ -1111,7 +1161,7 @@ class CheckEngine(
      */
     fun resetCheckerHealth(reason: String) {
         if (_checkerHealth.value != CheckerHealth.State.Healthy) {
-            Log.i(TAG, "Dropping this process's checker-health claim ($reason)")
+            Diag.log(LogEvent.CHECK_HEALTH, LogField.text("dropped", reason))
         }
         _checkerHealth.value = CheckerHealth.reset(_checkerHealth.value).state
         // Unconditional: the notification is the thing the user actually sees, and
@@ -1178,7 +1228,7 @@ class CheckEngine(
     private fun expireCheckerHealth() {
         val outcome = CheckerHealth.expireIfStale(_checkerHealth.value, nowMs())
         if (outcome.action == CheckerHealth.Action.NONE) return
-        Log.i(TAG, "Checker crash claim expired; no supporting error in the last hour")
+        Diag.log(LogEvent.CHECK_HEALTH, LogField.tag("dropped", "expired"))
         _checkerHealth.value = outcome.state
         alerts.cancelCheckerHealth()
     }
@@ -1234,7 +1284,11 @@ class CheckEngine(
             // one observation a quarter of an hour stale — and page about a monitor
             // that had already come back.
             if (outcome.action == UrgentAlerts.Action.REPEAT && staleEvidence(monitor, runtime, now)) {
-                Log.i(TAG, "Re-checking ${monitor.displayName} before paging again")
+                Diag.log(
+                    LogEvent.ALERT_URGENT_START,
+                    LogField.monitor(monitor.id),
+                    LogField.tag("why", "stale_evidence_recheck"),
+                )
                 val fresh = runCatchingCancellable { run(monitor.id, force = true) }.getOrNull()
                 if (fresh == null || fresh.ok) continue
                 // `run` has already folded the failure through this same machine,
@@ -1378,7 +1432,7 @@ class CheckEngine(
      */
     suspend fun runAllDue(force: Boolean = false): Int {
         if (!isOnline()) {
-            Log.i(TAG, "Offline — check pass skipped")
+            Diag.log(LogEvent.CHECK_SKIPPED, LogField.tag("why", "offline_pass"))
             return 0
         }
         // Unlike the single-monitor path above, a whole pass is never something
@@ -1386,7 +1440,7 @@ class CheckEngine(
         // with "Resume monitoring", and resuming lifts the pause before it calls
         // this. So a pass arriving here during a pause is the scheduler.
         if (store.currentSnapshot().pause.stopsChecks(nowMs())) {
-            Log.i(TAG, "Paused: check pass skipped")
+            Diag.log(LogEvent.CHECK_SKIPPED, LogField.tag("why", "paused_pass"))
             return 0
         }
         // Once, before the loop: the whole pass shares one reading of the control.

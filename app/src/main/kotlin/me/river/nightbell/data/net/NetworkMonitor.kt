@@ -1,11 +1,13 @@
 package me.river.nightbell.data.net
 
+import me.river.nightbell.data.diag.Diag
+import me.river.nightbell.domain.LogEvent
+import me.river.nightbell.domain.LogField
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
-import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -70,7 +72,7 @@ class NetworkMonitor(context: Context) {
             caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
                 !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_CAPTIVE_PORTAL)
         } catch (error: Throwable) {
-            Log.w(TAG, "Connectivity lookup failed; assuming online", error)
+            Diag.log(LogEvent.NET_LOOKUP_FAILED, LogField.error("why", error))
             true
         }
     }
@@ -96,7 +98,7 @@ class NetworkMonitor(context: Context) {
             .build()
         runCatching { cm.registerNetworkCallback(request, watcher) }
             .onSuccess { callback = watcher }
-            .onFailure { Log.w(TAG, "Could not watch connectivity", it) }
+            .onFailure { Diag.log(LogEvent.NET_WATCH_FAILED, LogField.error("why", it)) }
     }
 
     private var callback: ConnectivityManager.NetworkCallback? = null
@@ -107,7 +109,7 @@ class NetworkMonitor(context: Context) {
         _online.value = now
         // Worth a line in the log: "why did Nightbell stop checking" is otherwise
         // only answerable by guessing, and this is the answer.
-        if (now != was) Log.i(TAG, "Connectivity changed: online=$now")
+        if (now != was) Diag.log(LogEvent.NET_CHANGED, LogField.of("online", now))
         if (now && !was) onReconnected?.invoke()
     }
 

@@ -1,7 +1,9 @@
 package me.river.nightbell.data
 
+import me.river.nightbell.data.diag.Diag
+import me.river.nightbell.domain.LogEvent
+import me.river.nightbell.domain.LogField
 import android.content.Context
-import android.util.Log
 import me.river.nightbell.data.alerts.AlertCenter
 import me.river.nightbell.data.alerts.PageSpeaker
 import me.river.nightbell.data.alerts.UrgentAlarm
@@ -43,7 +45,13 @@ object Nightbell {
     @Volatile
     private var graph: Graph? = null
 
-    class Graph(private val context: Context) {
+    /**
+     * @param context the application context. Public because the diagnostic
+     *   export needs one to read the device's own facts, and a second copy
+     *   threaded through the settings screen would be the same object under
+     *   another name.
+     */
+    class Graph(val context: Context) {
         val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val store = NightbellStore(context, appScope)
         val alerts = AlertCenter(context)
@@ -133,7 +141,7 @@ object Nightbell {
                     usage = android.media.AudioAttributes.USAGE_NOTIFICATION,
                     voice = settings.speakVoice,
                 )
-            }.onFailure { Log.w(TAG, "Could not say the alert", it) }
+            }.onFailure { Diag.log(LogEvent.ALERT_SPEAK_FAILED, LogField.error("why", it)) }
             // Nothing is paging, so nothing else will release the engine.
             if (!anythingPaging()) speaker.release()
         }

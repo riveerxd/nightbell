@@ -8,13 +8,17 @@ import android.net.http.SslCertificate
 import android.webkit.CookieManager
 import android.net.http.SslError
 import android.webkit.SslErrorHandler
+import android.webkit.ConsoleMessage
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
+import me.river.nightbell.data.diag.Diag
 import me.river.nightbell.data.web.PickerScripts
 import me.river.nightbell.domain.Assertions
 import me.river.nightbell.domain.BrowserState
@@ -22,6 +26,10 @@ import me.river.nightbell.domain.CheckResult
 import me.river.nightbell.domain.ElementTarget
 import me.river.nightbell.domain.FailureKind
 import me.river.nightbell.domain.GlobalSettings
+import me.river.nightbell.domain.LoadStage
+import me.river.nightbell.domain.LogEvent
+import me.river.nightbell.domain.LogField
+import me.river.nightbell.domain.PageExpiry
 import me.river.nightbell.domain.ProxyRoute
 import me.river.nightbell.domain.TlsTrust
 import me.river.nightbell.domain.Monitor
@@ -128,9 +136,19 @@ class ElementChecker(
         val timeout = monitor.effectiveTimeoutSeconds(settings, proxied = endpoint != null)
 
         val started = System.nanoTime()
+        var expiry: PageExpiry? = null
+        val record: (PageExpiry) -> Unit = { expiry = it }
         val page = try {
             if (endpoint == null) {
-                locateAll(monitor.url, targets, timeout, monitor.tlsTrust, certPin, monitor.browserState)
+                locateAll(
+                    monitor.url,
+                    targets,
+                    timeout,
+                    monitor.tlsTrust,
+                    certPin,
+                    monitor.browserState,
+                    record,
+                )
             } else {
                 WebViewProxy.routed(endpoint) {
                     locateAll(
@@ -140,6 +158,7 @@ class ElementChecker(
                         monitor.tlsTrust,
                         certPin,
                         monitor.browserState,
+                        record,
                     )
                 }
             }
@@ -156,12 +175,20 @@ class ElementChecker(
         val latency = ((System.nanoTime() - started) / 1_000_000L).coerceAtLeast(0L)
 
         if (page == null) {
+            // Named by the stage that ran out rather than by one sentence for
+            // every way of running out. The old message claimed the page had not
+            // finished loading even when it had loaded and the element was what
+            // never arrived, and that claim sent at least one reporter looking
+            // in the wrong place. See PageExpiry.
+            val stalled = expiry
             return CheckResult(
                 ok = false,
                 latencyMs = latency,
                 failureKind = FailureKind.TIMEOUT,
-                message = "Page did not finish loading in ${timeout}s",
-                detail = "The embedded browser never reached a usable DOM.",
+                message = stalled?.headline(timeout)
+                    ?: "Page did not finish loading in ${timeout}s",
+                detail = stalled?.detail()
+                    ?: "The embedded browser never reached a usable DOM.",
                 at = nowMs(),
             )
         }
@@ -317,14 +344,27 @@ class ElementChecker(
          * the person who chose the element. See [BrowserState].
          */
         state: BrowserState = BrowserState(),
+        onExpiry: (PageExpiry) -> Unit = {},
     ): PageResult? = withContext(Dispatchers.Main) {
         if (targets.isEmpty()) return@withContext PageResult()
         var webView: WebView? = null
+        // Declared out here so the expiry snapshot survives the block being
+        // cancelled. `withTimeoutOrNull` discards everything inside it, and what
+        // was true at the moment it gave up is the whole diagnostic.
+        val trace = LoadTrace(startedAtMs = System.currentTimeMillis())
         try {
-            withTimeoutOrNull(timeoutSeconds * 1000L + SETTLE_BUDGET_MS) {
+            val outcome = withTimeoutOrNull(timeoutSeconds * 1000L + SETTLE_BUDGET_MS) {
                 val errors = StringBuilder()
                 val view = WebView(context).also { webView = it }
                 configure(view)
+                Diag.log(
+                    LogEvent.PAGE_LOAD_START,
+                    LogField.route("url", url),
+                    LogField.of("timeout_s", timeoutSeconds),
+                    LogField.of("targets", targets.size),
+                    LogField.of("trust", tlsTrust),
+                    LogField.of("session", state.appliesTo(url)),
+                )
 
                 // Reassigned by the storage fallback below, so the client has to
                 // close over the variable rather than over the first latch.
@@ -333,9 +373,96 @@ class ElementChecker(
                 // to it and therefore let us see it. Only ever set on the path that
                 // can read a real certificate; see onReceivedSslError.
                 var presentedPin = ""
+                // Progress and console output are only observable through a chrome
+                // client, and the checker never had one. That is why issue 8 could
+                // not be diagnosed: the picker has one, so the preview could be
+                // watched while the check itself was a black box.
+                view.webChromeClient = object : WebChromeClient() {
+                    override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                        trace.progress = newProgress
+                        // Every decile at most. A page reports progress dozens of
+                        // times and a log nobody can read is not a log.
+                        if (newProgress / 10 > trace.loggedProgress / 10 || newProgress == 100) {
+                            trace.loggedProgress = newProgress
+                            Diag.log(LogEvent.PAGE_PROGRESS, LogField.of("percent", newProgress))
+                        }
+                    }
+
+                    override fun onConsoleMessage(message: ConsoleMessage?): Boolean {
+                        val level = message?.messageLevel() ?: return false
+                        if (level != ConsoleMessage.MessageLevel.ERROR &&
+                            level != ConsoleMessage.MessageLevel.WARNING
+                        ) {
+                            return false
+                        }
+                        if (level == ConsoleMessage.MessageLevel.ERROR) trace.consoleErrors++
+                        // Capped, because one broken script in a loop would
+                        // otherwise be the whole file.
+                        if (trace.consoleLogged < CONSOLE_LINE_CAP) {
+                            trace.consoleLogged++
+                            Diag.log(
+                                LogEvent.PAGE_CONSOLE,
+                                LogField.of("level", level),
+                                LogField.text("text", message.message().orEmpty()),
+                                LogField.of("line", message.lineNumber()),
+                            )
+                        }
+                        return false
+                    }
+                }
                 view.webViewClient = object : WebViewClient() {
+                    override fun onPageStarted(
+                        view: WebView?,
+                        url: String?,
+                        favicon: android.graphics.Bitmap?,
+                    ) {
+                        trace.stage = if (trace.stage == LoadStage.RELOADING) {
+                            LoadStage.RELOADING
+                        } else {
+                            LoadStage.LOADING
+                        }
+                    }
+
+                    /**
+                     * Counted, not intercepted.
+                     *
+                     * Returning null leaves the WebView to fetch the resource
+                     * itself, so this costs a counter and changes nothing about
+                     * the load. Counting completions would mean handling every
+                     * response in this process, which is a different feature
+                     * with a different risk profile.
+                     */
+                    override fun shouldInterceptRequest(
+                        view: WebView?,
+                        request: WebResourceRequest?,
+                    ): WebResourceResponse? {
+                        trace.requestsStarted++
+                        return null
+                    }
+
                     override fun onPageFinished(view: WebView?, url: String?) {
+                        trace.pageFinished = true
+                        Diag.log(
+                            LogEvent.PAGE_FINISHED,
+                            LogField.ms("after", System.currentTimeMillis() - trace.startedAtMs),
+                            LogField.of("requests", trace.requestsStarted),
+                        )
                         pageDone.complete()
+                    }
+
+                    override fun onReceivedHttpError(
+                        view: WebView?,
+                        request: WebResourceRequest?,
+                        errorResponse: WebResourceResponse?,
+                    ) {
+                        val main = request?.isForMainFrame == true
+                        if (!main) trace.resourceErrors++
+                        Diag.log(
+                            LogEvent.PAGE_HTTP_ERROR,
+                            LogField.of("status", errorResponse?.statusCode ?: 0),
+                            LogField.of("main_frame", main),
+                            LogField.host("host", request?.url?.toString().orEmpty()),
+                        )
                     }
 
                     /**
@@ -359,6 +486,12 @@ class ElementChecker(
                         handler: SslErrorHandler?,
                         error: SslError?,
                     ) {
+                        Diag.log(
+                            LogEvent.PAGE_SSL_ERROR,
+                            LogField.of("code", error?.primaryError ?: -1),
+                            LogField.of("trust", tlsTrust),
+                            LogField.present("pin", pin),
+                        )
                         when (tlsTrust) {
                             TlsTrust.SYSTEM -> {
                                 errors.append(
@@ -401,12 +534,26 @@ class ElementChecker(
                         request: WebResourceRequest?,
                         error: WebResourceError?,
                     ) {
-                        if (request?.isForMainFrame == true) {
-                            val description = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                                error?.description?.toString() ?: "unknown"
-                            } else {
-                                "unknown"
-                            }
+                        val main = request?.isForMainFrame == true
+                        val description = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                            error?.description?.toString() ?: "unknown"
+                        } else {
+                            "unknown"
+                        }
+                        if (!main) trace.resourceErrors++
+                        // A subresource failure was invisible before, and it is
+                        // the most likely reason a load event never arrives: the
+                        // page is waiting on something that will not answer.
+                        if (main || trace.resourceErrorsLogged < RESOURCE_ERROR_CAP) {
+                            if (!main) trace.resourceErrorsLogged++
+                            Diag.log(
+                                LogEvent.PAGE_RESOURCE_ERROR,
+                                LogField.of("main_frame", main),
+                                LogField.text("why", description),
+                                LogField.host("host", request?.url?.toString().orEmpty()),
+                            )
+                        }
+                        if (main) {
                             errors.append("main frame: $description")
                             pageDone.complete()
                         }
@@ -417,6 +564,14 @@ class ElementChecker(
                 view.measure(VIEWPORT_WIDTH, VIEWPORT_HEIGHT)
                 view.layout(0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT)
 
+                Diag.log(
+                    LogEvent.PAGE_CONFIG,
+                    LogField.tag("cache", "no_cache"),
+                    LogField.of("images", false),
+                    LogField.of("js", true),
+                    LogField.of("viewport_w", VIEWPORT_WIDTH),
+                    LogField.of("viewport_h", VIEWPORT_HEIGHT),
+                )
                 val applies = state.appliesTo(url)
                 if (applies) seedCookies(url, state.cookies)
                 // Storage has to exist before the page's own scripts read it, and
@@ -426,19 +581,37 @@ class ElementChecker(
                 // on an old device beats a gate that never opens.
                 val seededEarly = applies && state.localStorage.isNotBlank() &&
                     seedStorageAtDocumentStart(view, state)
+                if (applies) {
+                    Diag.log(
+                        LogEvent.PAGE_SEED,
+                        LogField.secret("cookies", state.cookies),
+                        LogField.secret("storage", state.localStorage),
+                        LogField.of("at_document_start", seededEarly),
+                    )
+                }
+                trace.stage = LoadStage.NAVIGATING
                 view.loadUrl(url)
                 pageDone.await()
 
                 if (applies && state.localStorage.isNotBlank() && !seededEarly) {
                     view.evalJs(PickerScripts.seedStorage(state.localStorage))
                     pageDone = PageLatch()
+                    trace.stage = LoadStage.RELOADING
+                    trace.pageFinished = false
                     view.reload()
                     pageDone.await()
                 }
+                trace.readyState = readyState(view)
+                Diag.log(
+                    LogEvent.PAGE_READY_STATE,
+                    LogField.tag("state", trace.readyState),
+                    LogField.ms("after", System.currentTimeMillis() - trace.startedAtMs),
+                )
 
                 val script = PickerScripts.locateMany(targets)
                 var attempt = 0
                 var best: PageResult? = null
+                trace.stage = LoadStage.POLLING
                 while (attempt < MAX_ATTEMPTS) {
                     delay(if (attempt == 0) FIRST_SETTLE_MS else RETRY_DELAY_MS)
                     val parsed = parsePage(view.evalJs(script), targets.size)
@@ -446,7 +619,21 @@ class ElementChecker(
                         val foundCount = parsed.results.count { it.found }
                         val bestCount = best?.results?.count { it.found } ?: -1
                         if (foundCount > bestCount) best = parsed
+                        Diag.log(
+                            LogEvent.PAGE_POLL,
+                            LogField.of("attempt", attempt + 1),
+                            LogField.of("found", foundCount),
+                            LogField.of("of", targets.size),
+                            LogField.of("nodes", parsed.nodeCount),
+                        )
                         if (foundCount == targets.size) {
+                            Diag.log(
+                                LogEvent.PAGE_DONE,
+                                LogField.of("found", foundCount),
+                                LogField.of("of", targets.size),
+                                LogField.ms("total", System.currentTimeMillis() - trace.startedAtMs),
+                                LogField.of("requests", trace.requestsStarted),
+                            )
                             return@withTimeoutOrNull parsed.copy(
                                 loadError = errors.toString(),
                                 certSpki = presentedPin,
@@ -458,10 +645,53 @@ class ElementChecker(
                 // Only asked once the page has had every chance to produce the
                 // elements, because the answer is only interesting as an
                 // explanation for their absence.
+                trace.stage = LoadStage.GATE_PROBE
                 val gate = gateLabel(view)
+                if (gate.isNotBlank()) Diag.log(LogEvent.PAGE_GATE, LogField.text("label", gate))
+                Diag.log(
+                    LogEvent.PAGE_DONE,
+                    LogField.of("found", best?.results?.count { it.found } ?: 0),
+                    LogField.of("of", targets.size),
+                    LogField.ms("total", System.currentTimeMillis() - trace.startedAtMs),
+                    LogField.of("requests", trace.requestsStarted),
+                    LogField.of("resource_errors", trace.resourceErrors),
+                )
                 (best ?: PageResult(results = List(targets.size) { Located(found = false) }))
                     .copy(loadError = errors.toString(), certSpki = presentedPin, gateLabel = gate)
             }
+            if (outcome == null) {
+                // The one place the expiry is observable. Reading the document
+                // one last time is worth the half second: whether it says
+                // "interactive" or "complete" is the difference between a page
+                // that is stuck waiting on a request and a page whose load event
+                // simply never fired, and no other field distinguishes them.
+                val ready = webView?.let { view ->
+                    withTimeoutOrNull(EXPIRY_PROBE_MS) { readyState(view) }
+                }.orEmpty()
+                val expiry = PageExpiry(
+                    stage = trace.stage,
+                    progress = trace.progress,
+                    readyState = ready.ifBlank { trace.readyState },
+                    pageFinished = trace.pageFinished,
+                    requestsStarted = trace.requestsStarted,
+                    resourceErrors = trace.resourceErrors,
+                    consoleErrors = trace.consoleErrors,
+                    elapsedMs = System.currentTimeMillis() - trace.startedAtMs,
+                )
+                Diag.log(
+                    LogEvent.PAGE_EXPIRED,
+                    LogField.of("stage", expiry.stage),
+                    LogField.of("percent", expiry.progress),
+                    LogField.tag("ready", expiry.readyState),
+                    LogField.of("load_event", expiry.pageFinished),
+                    LogField.of("requests", expiry.requestsStarted),
+                    LogField.of("resource_errors", expiry.resourceErrors),
+                    LogField.of("console_errors", expiry.consoleErrors),
+                    LogField.ms("elapsed", expiry.elapsedMs),
+                )
+                onExpiry(expiry)
+            }
+            outcome
         } catch (cancellation: CancellationException) {
             // The page is not broken; we were interrupted. Turning this into a
             // `loadError` produced a "Page failed to load" verdict and a false
@@ -470,7 +700,7 @@ class ElementChecker(
             // timeout above, which is a real verdict about a real slow page.
             throw cancellation
         } catch (error: Throwable) {
-            Log.e(TAG, "Element check threw", error)
+            Diag.logError(LogEvent.PAGE_THREW, error, LogField.of("stage", trace.stage))
             PageResult(
                 results = List(targets.size) { Located(found = false) },
                 loadError = error.message ?: error::class.java.simpleName,
@@ -530,6 +760,38 @@ class ElementChecker(
     }
 
     /** The label on whatever is standing over the page, or blank. */
+    /**
+     * What the document says about its own state.
+     *
+     * `loading`, `interactive` or `complete`. This is the field that separates
+     * "nothing rendered" from "rendered but the load event never fired", and the
+     * second of those is invisible from every other signal the WebView offers.
+     */
+    private suspend fun readyState(view: WebView): String {
+        val raw = runCatching { view.evalJs("document.readyState") }.getOrNull().orEmpty()
+        return raw.trim().trim('"').take(16)
+    }
+
+    /**
+     * Mutable state about one load, kept outside the timeout so it survives it.
+     *
+     * Not a data class and deliberately not immutable: it is written from the
+     * WebView's callbacks, which arrive on the main thread while the coroutine
+     * that started the load is suspended, and read once after the budget expires.
+     */
+    private class LoadTrace(val startedAtMs: Long) {
+        var stage: LoadStage = LoadStage.NAVIGATING
+        var progress: Int = -1
+        var loggedProgress: Int = -1
+        var readyState: String = ""
+        var pageFinished: Boolean = false
+        var requestsStarted: Int = 0
+        var resourceErrors: Int = 0
+        var resourceErrorsLogged: Int = 0
+        var consoleErrors: Int = 0
+        var consoleLogged: Int = 0
+    }
+
     private suspend fun gateLabel(view: WebView): String {
         val obj = unwrap(view.evalJs(PickerScripts.GATE_PROBE)) ?: return ""
         val isGate = obj["gate"]?.jsonPrimitive?.booleanOrNull ?: false
@@ -634,6 +896,15 @@ class ElementChecker(
         private const val RETRY_DELAY_MS = 900L
         private const val MAX_ATTEMPTS = 5
         private const val SETTLE_BUDGET_MS = 6_000L
+
+        /** Console lines kept per load. One broken script in a loop is not a log. */
+        private const val CONSOLE_LINE_CAP = 12
+
+        /** Subresource failures kept per load, for the same reason. */
+        private const val RESOURCE_ERROR_CAP = 12
+
+        /** How long the final `readyState` read may take once the budget is gone. */
+        private const val EXPIRY_PROBE_MS = 500L
         const val MOBILE_UA =
             "Mozilla/5.0 (Linux; Android 14; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) " +
                 "Chrome/125.0.0.0 Mobile Safari/537.36 NightbellMonitor/1.0"

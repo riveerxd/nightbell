@@ -1410,6 +1410,23 @@ data class GlobalSettings(
      * their next visit to the switch settles it for good.
      */
     val updateSourceChosen: Boolean = false,
+
+    // ---- Diagnostics ---------------------------------------------------------
+    /**
+     * Whether the app writes its own log to a file the user can hand over.
+     *
+     * Off, and it stays off unless somebody deliberately turns it on. What the
+     * switch governs is only the file: the running trace still goes to logcat as
+     * it always did, and a crash is recorded either way, because a crash cannot
+     * be reproduced on request and asking for it twice is not an option.
+     *
+     * Not carried across an import. See
+     * [me.river.nightbell.data.transfer.BackupCodec], which clears it on the way
+     * in: a backup is a file that moves between phones, and a switch that starts
+     * writing a log on the new one because of a decision made on the old one is
+     * a surprise nobody consented to.
+     */
+    val diagnosticLogEnabled: Boolean = false,
 )
 
 /**

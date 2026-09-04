@@ -1,6 +1,8 @@
 package me.river.nightbell.ui
 
-import android.util.Log
+import me.river.nightbell.data.diag.Diag
+import me.river.nightbell.domain.LogEvent
+import me.river.nightbell.domain.LogField
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -11,6 +13,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import me.river.nightbell.BuildConfig
 import me.river.nightbell.data.Nightbell
+import me.river.nightbell.data.diag.DiagnosticFacts
 import me.river.nightbell.data.NightbellStore
 import me.river.nightbell.data.transfer.BackupCodec
 import me.river.nightbell.data.transfer.BackupError
@@ -1480,6 +1483,75 @@ class SettingsViewModel(private val graph: Nightbell.Graph) : ViewModel() {
 
     fun batterySettingsIntent() = graph.limits.batterySettingsIntent()
 
+    // ---- the diagnostic log --------------------------------------------------
+
+    /**
+     * How much has been captured, in bytes, re-read on the same slow tick the
+     * battery state uses.
+     *
+     * The card has to say this. A switch that writes a file and never says how
+     * big the file is asks the user to trust it with an unbounded amount of
+     * their storage, and the number is also the fastest way to tell "capture is
+     * running" from "capture is on and nothing has happened yet".
+     */
+    val diagnosticBytes: StateFlow<Long> = ticker()
+        .map { Diag.sizeBytes() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0L)
+
+    var diagnosticLines by mutableStateOf<List<String>>(emptyList())
+        private set
+
+    var readingDiagnostics by mutableStateOf(false)
+        private set
+
+    /** Reads the file back for the viewer. */
+    fun readDiagnostics() {
+        if (readingDiagnostics) return
+        readingDiagnostics = true
+        viewModelScope.launch {
+            diagnosticLines = Diag.view()
+            readingDiagnostics = false
+        }
+    }
+
+    /**
+     * Writes the log out through [sink], header first.
+     *
+     * Same shape as [exportBackup] and for the same reason: opening the URI needs
+     * a `ContentResolver`, which belongs to the screen.
+     */
+    var exportingDiagnostics by mutableStateOf(false)
+        private set
+
+    fun exportDiagnostics(sink: suspend (String) -> Unit) {
+        // A second tap while the first write is in flight would compose and write
+        // the document twice into the same stream. `exportBackup` has had this
+        // guard since it was written; this did not.
+        if (exportingDiagnostics) return
+        exportingDiagnostics = true
+        viewModelScope.launch {
+            try {
+                val document = Diag.export(DiagnosticFacts.header(graph.context))
+                sink(document)
+                toast = ToastMessage.success("Log written, ${document.length / 1024} KB")
+            } catch (error: Throwable) {
+                if (isCancellation(error)) throw error
+                toast = ToastMessage.error("Couldn't write that file")
+            } finally {
+                // Released when the write actually resolves, never on a timer.
+                exportingDiagnostics = false
+            }
+        }
+    }
+
+    fun clearDiagnostics() {
+        viewModelScope.launch {
+            Diag.clear()
+            diagnosticLines = emptyList()
+            toast = ToastMessage.success("Log cleared")
+        }
+    }
+
     private fun ticker(): Flow<Unit> = flow {
         while (true) {
             emit(Unit)
@@ -1541,7 +1613,7 @@ class SettingsViewModel(private val graph: Nightbell.Graph) : ViewModel() {
                 toast = if (secrets) ToastMessage.warning(line) else ToastMessage.success(line)
             } catch (error: Throwable) {
                 if (isCancellation(error)) throw error
-                Log.w(TAG, "Export failed", error)
+                Diag.log(LogEvent.STORE_EXPORT, LogField.error("why", error))
                 toast = ToastMessage.error("Couldn't write that file")
             } finally {
                 transfer = null
@@ -1611,7 +1683,7 @@ class SettingsViewModel(private val graph: Nightbell.Graph) : ViewModel() {
                 }
             } catch (error: Throwable) {
                 if (isCancellation(error)) throw error
-                Log.w(TAG, "Import failed", error)
+                Diag.log(LogEvent.STORE_IMPORT, LogField.error("why", error))
                 toast = ToastMessage.error("Couldn't read that file")
             } finally {
                 transfer = null

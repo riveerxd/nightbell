@@ -16,6 +16,17 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.BorderStroke
@@ -185,6 +196,30 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (ToastMessage) -> Unit) {
             }
         }
     }
+    // Plain text, and the same Storage Access Framework path the backup export
+    // uses: no storage permission, no FileProvider, no manifest component, and
+    // the user picks where it lands. A log is a file somebody is about to attach
+    // to an issue, so "wherever you can reach from your phone" is the
+    // requirement, and that is exactly what SAF answers.
+    // The write itself is guarded in the view model, but the round trip out to
+    // the file picker is not, and that is the half a second a second tap lands
+    // in. Cleared on the way back whether or not a file was chosen.
+    var pickingLogFile by remember { mutableStateOf(false) }
+    val exportDiagnostics = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/plain"),
+    ) { uri ->
+        pickingLogFile = false
+        if (uri != null) {
+            viewModel.exportDiagnostics { document ->
+                withContext(Dispatchers.IO) {
+                    context.contentResolver.openOutputStream(uri)?.use { stream ->
+                        stream.write(document.toByteArray())
+                    } ?: error("no output stream for $uri")
+                }
+            }
+        }
+    }
+    val diagnosticBytes by viewModel.diagnosticBytes.collectAsStateWithLifecycle()
     var notificationsAllowed by remember {
         mutableStateOf(Nightbell.install(context).alerts.hasNotificationPermission())
     }
@@ -1539,14 +1574,38 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (ToastMessage) -> Unit) {
                 }
             }
 
+            item(key = "diagnostics") {
+                StaggeredEntrance(index = 2, key = "diagnostics", log = entrance) {
+                    DiagnosticLogCard(
+                        enabled = settings.diagnosticLogEnabled,
+                        bytes = diagnosticBytes,
+                        lines = viewModel.diagnosticLines,
+                        reading = viewModel.readingDiagnostics,
+                        exporting = viewModel.exportingDiagnostics || pickingLogFile,
+                        onEnabledChange = { on ->
+                            viewModel.update { it.copy(diagnosticLogEnabled = on) }
+                        },
+                        onRead = viewModel::readDiagnostics,
+                        onExport = {
+                            pickingLogFile = true
+                            exportDiagnostics.launch(
+                                "nightbell-log-${BuildConfig.VERSION_NAME}-" +
+                                    "${logFileStamp()}.txt",
+                            )
+                        },
+                        onClear = viewModel::clearDiagnostics,
+                    )
+                }
+            }
+
             item(key = "help") {
-                StaggeredEntrance(index = 2, key = "help", log = entrance) {
+                StaggeredEntrance(index = 3, key = "help", log = entrance) {
                     HelpCard()
                 }
             }
 
             item(key = "about") {
-                StaggeredEntrance(index = 3, key = "about", log = entrance) {
+                StaggeredEntrance(index = 4, key = "about", log = entrance) {
                     GlassCard {
                         SectionHeader("About", icon = NightbellIcons.Info, accent = NightbellColors.Sky)
                         AboutRow("Version", "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
@@ -2358,3 +2417,314 @@ private fun VersionRow(label: String, value: String, highlight: Boolean = false)
         },
     )
 }
+
+/**
+ * The diagnostic log, as a card on the About tab.
+ *
+ * Placed between "Backup and transfer" and Help on purpose. Both of its
+ * neighbours are about a file leaving the device, and the reading order that
+ * results is the order somebody actually needs: keep a copy, capture evidence,
+ * report it.
+ *
+ * Three things this card has to be honest about, because all three were
+ * decisions rather than accidents:
+ *
+ *  - The switch governs the **file**, not logcat and not crashes. A crash is
+ *    recorded either way, since it cannot be reproduced on request.
+ *  - Nothing is uploaded, ever. The file goes where the user sends it.
+ *  - The log has had the credentials taken out of it, and the user can read it
+ *    before they publish it. The viewer is not a nicety: this is a file people
+ *    paste into public issue threads, and "look at it first" is only advice you
+ *    can give if looking at it is possible.
+ */
+@Composable
+private fun DiagnosticLogCard(
+    enabled: Boolean,
+    bytes: Long,
+    lines: List<String>,
+    reading: Boolean,
+    exporting: Boolean,
+    onEnabledChange: (Boolean) -> Unit,
+    onRead: () -> Unit,
+    onExport: () -> Unit,
+    onClear: () -> Unit,
+) {
+    var showing by remember { mutableStateOf(false) }
+    // The file, or a run held in memory that has not reached it yet. Either is
+    // something to hand over; neither being true is not.
+    val anything = bytes > 0 || lines.isNotEmpty()
+    GlassCard {
+        SectionHeader(
+            "Diagnostic log",
+            icon = NightbellIcons.Braces,
+            accent = NightbellColors.Violet,
+        )
+        Text(
+            text = "Records what Nightbell is doing so you can send it to someone who " +
+                "can read it. Turn it on, make the problem happen again, then export. " +
+                "Nothing is uploaded: the file is written where you choose to put it " +
+                "and nowhere else.",
+            style = MaterialTheme.typography.bodySmall,
+            color = NightbellColors.TextTertiary,
+        )
+        Spacer(Modifier.height(10.dp))
+        ToggleRow(
+            title = "Record a log",
+            subtitle = if (enabled) {
+                if (bytes > 0) {
+                    "Recording, ${formatLogSize(bytes)} so far"
+                } else {
+                    "Recording, nothing has happened yet"
+                }
+            } else {
+                "Off, nothing is being recorded"
+            },
+            checked = enabled,
+            onCheckedChange = onEnabledChange,
+            icon = NightbellIcons.Activity,
+            accent = NightbellColors.Violet,
+            modifier = Modifier.testTag("diagnostic-toggle"),
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = "Addresses are shortened to the host, so a link with a key in it never " +
+                "reaches the file. Passwords, tokens, saved sessions, request headers, " +
+                "monitor names and page content are left out entirely. Read the log before " +
+                "you send it anywhere.",
+            style = MaterialTheme.typography.bodySmall,
+            color = NightbellColors.TextTertiary,
+        )
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            NightbellButton(
+                text = "Read log",
+                onClick = {
+                    onRead()
+                    showing = true
+                },
+                tone = ButtonTone.Secondary,
+                icon = NightbellIcons.Eye,
+                modifier = Modifier.weight(1f).testTag("diagnostic-read"),
+            )
+            // Nothing to export is not the same as a button that does nothing.
+            // The switch's own subtitle two rows above already says whether
+            // anything is being recorded, so the reason a blocked Export is
+            // blocked is on screen permanently rather than hidden behind a tap.
+            // `NightbellButton` marks a gated button `disabled()` in semantics,
+            // so it still announces as unavailable rather than reading as a
+            // caption.
+            NightbellButton(
+                text = "Export",
+                onClick = onExport,
+                tone = ButtonTone.Primary,
+                icon = NightbellIcons.Export,
+                enabled = anything,
+                loading = exporting,
+                modifier = Modifier.weight(1f).testTag("diagnostic-export"),
+            )
+        }
+    }
+    if (showing) {
+        DiagnosticLogDialog(
+            enabled = enabled,
+            bytes = bytes,
+            lines = lines,
+            reading = reading,
+            exporting = exporting,
+            onClear = onClear,
+            onExport = onExport,
+            onDismiss = { showing = false },
+        )
+    }
+}
+
+/**
+ * The log itself, over the page rather than inside it.
+ *
+ * It started inline, expanding the card, and that was wrong twice over: a
+ * thousand monospace lines make the About tab enormous, and the thing you are
+ * reading scrolls together with the settings behind it, so there is no way to
+ * move through the log without also moving the page. A modal gets its own scroll
+ * and its own bounded height, and closing it puts you back exactly where you
+ * were.
+ */
+@Composable
+private fun DiagnosticLogDialog(
+    enabled: Boolean,
+    bytes: Long,
+    lines: List<String>,
+    reading: Boolean,
+    exporting: Boolean,
+    onClear: () -> Unit,
+    onExport: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        // Sized to this app's own card margins rather than to Material's
+        // measurement, the same as every other dialog here.
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        (LocalView.current.parent as? DialogWindowProvider)?.window?.setDimAmount(0.62f)
+        GlassCard(
+            modifier = Modifier
+                .widthIn(max = 460.dp)
+                .padding(horizontal = 16.dp, vertical = 40.dp),
+            shape = RoundedCornerShape(NightbellRadii.sheet),
+            corner = NightbellRadii.sheet,
+            accent = NightbellColors.Violet,
+            contentPadding = 18.dp,
+        ) {
+            SectionHeader(
+                title = "Diagnostic log",
+                icon = NightbellIcons.Braces,
+                accent = NightbellColors.Violet,
+            )
+            // Counted off the lines on screen rather than off the file, so a run
+            // that has not reached disk yet is not described as nothing. Absent
+            // entirely when there is nothing, because the empty state below
+            // already says so and says what to do about it, and two paragraphs
+            // making the same point is one too many.
+            if (lines.isNotEmpty()) {
+                Text(
+                    text = "${lines.size} line" + (if (lines.size == 1) "" else "s") +
+                        (if (bytes > 0) ", ${formatLogSize(bytes)}" else "") +
+                        ". Read it before you send it.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = NightbellColors.TextTertiary,
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            when {
+                reading -> Text(
+                    text = "Reading…",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = NightbellColors.TextTertiary,
+                )
+
+                lines.isEmpty() -> Column {
+                    // Two lines doing two different jobs: what would be here, and
+                    // the one thing to do to put it here. Not an illustration and
+                    // not a starter template, which is what a marketing empty
+                    // state would add and what this one has no use for.
+                    Text(
+                        text = "Nothing recorded yet",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = NightbellColors.TextSecondary,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = if (enabled) {
+                            "Leave the switch on, use the app until the problem " +
+                                "happens again, then come back."
+                        } else {
+                            "Turn the switch on, then make the problem happen again."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = NightbellColors.TextTertiary,
+                    )
+                }
+
+                else -> {
+                    val scroll = rememberScrollState()
+                    // Oldest first, like the file, and opened already scrolled to
+                    // the bottom so the newest line is what you land on. It read
+                    // newest first for one build, and reading a log upside down
+                    // is not a thing.
+                    LaunchedEffect(lines.size) { scroll.scrollTo(scroll.maxValue) }
+                    // Two hairlines, not a rounded tinted panel. A rounded card
+                    // inside a rounded card is on the refused list in
+                    // DESIGN_NOTES, and the monospace column is already
+                    // distinct enough from the prose above it that a container
+                    // would only be adding a second border to look at.
+                    GlassDivider()
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            // A share of the window rather than a fixed height:
+                            // the same dialog has to work on a 480 dp car head
+                            // unit and on a tablet.
+                            .heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.5f).dp)
+                            .verticalScroll(scroll)
+                            .padding(vertical = 8.dp)
+                            .testTag("diagnostic-lines"),
+                    ) {
+                        lines.forEach { line ->
+                            Text(
+                                text = line,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 10.sp,
+                                lineHeight = 14.sp,
+                                color = logLineColour(line),
+                                modifier = Modifier.padding(vertical = 1.dp),
+                            )
+                        }
+                    }
+                    GlassDivider()
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                NightbellButton(
+                    text = "Close",
+                    onClick = onDismiss,
+                    tone = ButtonTone.Secondary,
+                    modifier = Modifier.weight(1f),
+                )
+                NightbellButton(
+                    text = "Export",
+                    onClick = onExport,
+                    tone = ButtonTone.Primary,
+                    icon = NightbellIcons.Export,
+                    // There is nothing to hand anybody, and the empty state
+                    // directly above says so and says what to do about it.
+                    enabled = lines.isNotEmpty(),
+                    loading = exporting,
+                    modifier = Modifier.weight(1f).testTag("diagnostic-dialog-export"),
+                )
+            }
+            if (bytes > 0) {
+                Spacer(Modifier.height(8.dp))
+                // Held, like every other control in this app that takes
+                // something away, and for the reason the hold pattern exists: a
+                // confirmation dialog on top of a dialog would be two modals
+                // deep for an action nobody needs protecting from twice.
+                HoldToConfirmButton(
+                    text = "Hold to delete the log",
+                    shortText = "Hold to delete",
+                    onConfirm = onClear,
+                    modifier = Modifier.fillMaxWidth().testTag("diagnostic-clear"),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Warnings amber, errors rose, everything else quiet.
+ *
+ * Reads the level marker out of the rendered line rather than being handed one,
+ * because the viewer's input is the file: colouring has to work on text that
+ * came back off disk, not only on lines this process happened to write.
+ */
+@Composable
+private fun logLineColour(line: String): Color {
+    val marker = line.getOrNull(13)
+    return when (marker) {
+        'E' -> NightbellColors.Rose
+        'W' -> NightbellColors.Amber
+        else -> NightbellColors.TextTertiary
+    }
+}
+
+private fun formatLogSize(bytes: Long): String = when {
+    bytes >= 1024 * 1024 -> "%.1f MB".format(bytes / (1024.0 * 1024.0))
+    bytes >= 1024 -> "${bytes / 1024} KB"
+    else -> "$bytes bytes"
+}
+
+/** `20260904-1712`, so two exports on the same day do not collide in a downloads folder. */
+private fun logFileStamp(): String =
+    java.text.SimpleDateFormat("yyyyMMdd-HHmm", java.util.Locale.US)
+        .format(java.util.Date())

@@ -1,6 +1,8 @@
 package me.river.nightbell.data.check
 
-import android.util.Log
+import me.river.nightbell.data.diag.Diag
+import me.river.nightbell.domain.LogEvent
+import me.river.nightbell.domain.LogField
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -57,7 +59,7 @@ class LatencyReference(
                 .header("Cache-Control", "no-cache")
                 .build()
         } catch (error: IllegalArgumentException) {
-            Log.w(TAG, "Bad reference URL: $url", error)
+            Diag.log(LogEvent.REFERENCE_BAD_URL, LogField.route("url", url), LogField.error("why", error))
             return@withContext null
         }
 
@@ -76,7 +78,7 @@ class LatencyReference(
             // endpoint it never got to ask about.
             throw cancellation
         } catch (error: Throwable) {
-            Log.i(TAG, "Reference probe failed (${error::class.java.simpleName}); latency will be judged raw")
+            Diag.log(LogEvent.REFERENCE_FAILED, LogField.error("why", error))
             null
         }
     }
@@ -107,7 +109,7 @@ class LatencyReference(
                 .header("Cache-Control", "no-cache")
                 .build()
         } catch (error: IllegalArgumentException) {
-            Log.w(TAG, "Bad reference URL: $url", error)
+            Diag.log(LogEvent.REFERENCE_BAD_URL, LogField.route("url", url), LogField.error("why", error))
             return@withContext Reachability.Verdict.UNKNOWN
         }
         try {
@@ -126,10 +128,10 @@ class LatencyReference(
             // The failure a dead network produces: no DNS, no route, no reply.
             // Matched on the same class of error the checkers classify as
             // connection-shaped, so the two sides of the comparison agree.
-            Log.i(TAG, "Reference unreachable (${error::class.java.simpleName}); the network looks local")
+            Diag.log(LogEvent.REFERENCE_LOCAL, LogField.error("why", error))
             Reachability.Verdict.UNREACHABLE
         } catch (error: Throwable) {
-            Log.i(TAG, "Reference probe inconclusive (${error::class.java.simpleName})")
+            Diag.log(LogEvent.REFERENCE_FAILED, LogField.tag("verdict", "inconclusive"), LogField.error("why", error))
             Reachability.Verdict.UNKNOWN
         }
     }

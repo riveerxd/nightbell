@@ -1,6 +1,8 @@
 package me.river.nightbell.data.check
 
-import android.util.Log
+import me.river.nightbell.data.diag.Diag
+import me.river.nightbell.domain.LogEvent
+import me.river.nightbell.domain.LogField
 import me.river.nightbell.domain.AppUpdate
 import me.river.nightbell.domain.UpdateSource
 import java.util.concurrent.TimeUnit
@@ -59,7 +61,7 @@ class UpdateChecker(
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (error: Throwable) {
-            Log.i(TAG, "Update check failed (${error::class.java.simpleName}); trying again later")
+            Diag.log(LogEvent.UPDATE_CHECK_FAILED, LogField.error("why", error))
             null
         }
     }

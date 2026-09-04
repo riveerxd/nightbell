@@ -1,5 +1,8 @@
 package me.river.nightbell.data.check
 
+import me.river.nightbell.data.diag.Diag
+import me.river.nightbell.domain.LogEvent
+import me.river.nightbell.domain.LogField
 import me.river.nightbell.domain.Assertions
 import me.river.nightbell.domain.CheckResult
 import me.river.nightbell.domain.FailureKind
@@ -122,7 +125,26 @@ class HttpChecker(
             )
         }
 
-        attempt(client, request, monitor, timeout, tlsSession, retriesLeft = 1)
+        Diag.log(
+            LogEvent.HTTP_REQUEST,
+            LogField.monitor(monitor.id),
+            LogField.of("method", monitor.method),
+            LogField.route("url", monitor.url),
+            LogField.of("timeout_s", timeout),
+            LogField.of("redirects", monitor.followRedirects),
+            LogField.of("trust", monitor.tlsTrust),
+            LogField.count("headers", monitor.headers.size),
+            LogField.of("proxied", endpoint != null),
+        )
+        if (endpoint != null) {
+            Diag.log(
+                LogEvent.HTTP_PROXY,
+                LogField.monitor(monitor.id),
+                LogField.host("host", endpoint.host),
+                LogField.of("port", endpoint.port),
+            )
+        }
+        attempt(client, request, monitor, timeout, tlsSession, retriesLeft = 1, pinnedTo = certPin)
     }
 
     /**
@@ -169,6 +191,8 @@ class HttpChecker(
         timeoutSeconds: Int,
         tlsSession: TlsTrustConfig.Session?,
         retriesLeft: Int,
+        /** Only ever asked whether it is set, for the certificate trace. */
+        pinnedTo: String = "",
     ): CheckResult {
         val watcher = ConnectionWatcher()
         val call = client.newBuilder()
@@ -182,6 +206,24 @@ class HttpChecker(
                 val latency = elapsedMs(started)
                 val leaf = leafCertificate(response, tlsSession)
                 val verdict = Assertions.evaluateHttp(monitor, response.code, body)
+                Diag.log(
+                    LogEvent.HTTP_RESPONSE,
+                    LogField.monitor(monitor.id),
+                    LogField.of("status", response.code),
+                    LogField.ms("latency", latency),
+                    LogField.tag("protocol", response.protocol.name),
+                    LogField.count("body_bytes", body.length),
+                    LogField.of("passed", verdict.passed),
+                    LogField.of("kind", verdict.kind),
+                )
+                if (leaf != null) {
+                    Diag.log(
+                        LogEvent.HTTP_TLS,
+                        LogField.monitor(monitor.id),
+                        LogField.of("expires_in_days", (leaf.notAfter.time - nowMs()) / 86_400_000L),
+                        LogField.text("issuer", issuerOf(leaf)),
+                    )
+                }
                 CheckResult(
                     ok = verdict.passed,
                     latencyMs = latency,
@@ -218,9 +260,36 @@ class HttpChecker(
                 watcher.diedBeforeAnswering(error) &&
                 latency * 2 < timeoutSeconds * 1_000L
             ) {
-                return attempt(client, request, monitor, timeoutSeconds, tlsSession, retriesLeft - 1)
+                // Issue 3 was "IOException: unexpected end of stream" and there
+                // was nothing anywhere saying whether the retry had happened or
+                // what the connection had done first. Both are here now.
+                Diag.log(
+                    LogEvent.HTTP_RETRY,
+                    LogField.monitor(monitor.id),
+                    LogField.error("after", error),
+                    LogField.ms("failed_at", latency),
+                    LogField.of("upgraded", !watcher.schemeUpgradedTo.isNullOrBlank()),
+                )
+                return attempt(client, request, monitor, timeoutSeconds, tlsSession, retriesLeft - 1, pinnedTo)
             }
             val kind = classify(error)
+            if (kind == FailureKind.TLS) {
+                Diag.log(
+                    LogEvent.HTTP_TLS_REFUSED,
+                    LogField.monitor(monitor.id),
+                    LogField.tag("cause", tlsCause(error)::class.java.simpleName.lowercase()),
+                    LogField.of("trust", monitor.tlsTrust),
+                    LogField.present("pin", pinnedTo),
+                )
+            }
+            Diag.log(
+                LogEvent.HTTP_ERROR,
+                LogField.monitor(monitor.id),
+                LogField.of("kind", kind),
+                LogField.ms("failed_at", latency),
+                LogField.of("retries_left", retriesLeft),
+                LogField.error("error", error),
+            )
             CheckResult(
                 ok = false,
                 latencyMs = latency,

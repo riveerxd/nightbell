@@ -1,5 +1,8 @@
 package me.river.nightbell.data.alerts
 
+import me.river.nightbell.data.diag.Diag
+import me.river.nightbell.domain.LogEvent
+import me.river.nightbell.domain.LogField
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
@@ -7,7 +10,6 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
-import android.util.Log
 import me.river.nightbell.MainActivity
 
 /**
@@ -83,7 +85,7 @@ class UrgentPagePreviewService : Service() {
             } else {
                 startForeground(NOTIFICATION_ID, notification)
             }
-        }.onFailure { Log.e(TAG, "Could not post the preview page", it) }
+        }.onFailure { Diag.logError(LogEvent.ALERT_URGENT_FAILED, it, LogField.tag("at", "preview")) }
         return START_NOT_STICKY
     }
 

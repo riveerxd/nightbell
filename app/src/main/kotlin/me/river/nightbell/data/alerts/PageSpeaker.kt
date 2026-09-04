@@ -1,5 +1,8 @@
 package me.river.nightbell.data.alerts
 
+import me.river.nightbell.data.diag.Diag
+import me.river.nightbell.domain.LogEvent
+import me.river.nightbell.domain.LogField
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
@@ -8,7 +11,6 @@ import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.speech.tts.Voice
-import android.util.Log
 import me.river.nightbell.domain.SpokenPage
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
@@ -193,7 +195,7 @@ class PageSpeaker(
                 )
             }
         }.getOrElse {
-            Log.w(TAG, "No text-to-speech engine could be constructed", it)
+            Diag.log(LogEvent.ALERT_SPEAK_FAILED, LogField.tag("at", "construct"), LogField.error("why", it))
             gate.complete(Readiness.NO_ENGINE)
             null
         }
@@ -202,7 +204,7 @@ class PageSpeaker(
         val initial = try {
             withTimeout(INIT_TIMEOUT_MS) { gate.await() }
         } catch (_: TimeoutCancellationException) {
-            Log.w(TAG, "Text-to-speech engine did not initialise in ${INIT_TIMEOUT_MS}ms")
+            Diag.log(LogEvent.ALERT_SPEAK_FAILED, LogField.tag("at", "init"), LogField.ms("waited", INIT_TIMEOUT_MS))
             Readiness.NO_ENGINE
         }
         val tts = created
@@ -302,7 +304,7 @@ class PageSpeaker(
                         .build(),
                 )
                 pickVoice(tts, voice)?.let { tts.voice = it }
-            }.onFailure { Log.w(TAG, "Could not configure the voice", it) }
+            }.onFailure { Diag.log(LogEvent.ALERT_SPEAK_FAILED, LogField.tag("at", "voice"), LogField.error("why", it)) }
 
             lastRequested = text
             requestCount++
@@ -315,7 +317,7 @@ class PageSpeaker(
                 val queued = runCatching {
                     tts.speak(text, TextToSpeech.QUEUE_FLUSH, speechParams(), id)
                 }.getOrElse {
-                    Log.w(TAG, "The engine refused the announcement", it)
+                    Diag.log(LogEvent.ALERT_SPEAK_FAILED, LogField.tag("at", "speak"), LogField.error("why", it))
                     TextToSpeech.ERROR
                 }
                 if (queued != TextToSpeech.SUCCESS) return@withLock false
@@ -330,7 +332,7 @@ class PageSpeaker(
                         }
                     }
                 } catch (_: TimeoutCancellationException) {
-                    Log.w(TAG, "Announcement did not finish in ${SPEAK_TIMEOUT_MS}ms")
+                    Diag.log(LogEvent.ALERT_SPEAK_FAILED, LogField.tag("at", "finish"), LogField.ms("waited", SPEAK_TIMEOUT_MS))
                     runCatching { tts.stop() }
                     false
                 }
@@ -374,7 +376,7 @@ class PageSpeaker(
         runCatching {
             tts?.stop()
             tts?.shutdown()
-        }.onFailure { Log.w(TAG, "Engine would not shut down cleanly", it) }
+        }.onFailure { Diag.log(LogEvent.ALERT_SPEAK_FAILED, LogField.tag("at", "shutdown"), LogField.error("why", it)) }
     }
 
     // ---- internals -----------------------------------------------------------
@@ -394,7 +396,7 @@ class PageSpeaker(
         }
 
         override fun onError(utteranceId: String?, errorCode: Int) {
-            Log.w(TAG, "Announcement failed with code $errorCode")
+            Diag.log(LogEvent.ALERT_SPEAK_FAILED, LogField.tag("at", "engine"), LogField.of("code", errorCode))
             settle(utteranceId, spoken = false)
         }
 

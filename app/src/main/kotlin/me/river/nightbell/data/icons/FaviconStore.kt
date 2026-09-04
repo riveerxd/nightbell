@@ -1,9 +1,11 @@
 package me.river.nightbell.data.icons
 
+import me.river.nightbell.data.diag.Diag
+import me.river.nightbell.domain.LogEvent
+import me.river.nightbell.domain.LogField
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.util.Log
 import android.util.LruCache
 import me.river.nightbell.domain.runCatchingCancellable
 import java.io.File
@@ -207,7 +209,13 @@ class FaviconStore(
 
         val scaled = downscale(bitmap)
         runCatching { write(file, scaled) }
-            .onFailure { Log.w(TAG, "Could not cache icon for ${origin.host}", it) }
+            .onFailure {
+                Diag.log(
+                    LogEvent.ICON_CACHE_FAILED,
+                    LogField.host("host", origin.toString()),
+                    LogField.error("why", it),
+                )
+            }
         misses.remove(key)
         runCatching { missMarker(key).delete() }
         memory.put(key, scaled)

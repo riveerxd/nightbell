@@ -1,10 +1,12 @@
 package me.river.nightbell.data.alerts
 
+import me.river.nightbell.data.diag.Diag
+import me.river.nightbell.domain.LogEvent
+import me.river.nightbell.domain.LogField
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 import me.river.nightbell.data.Nightbell
 import me.river.nightbell.domain.AppUpdate
@@ -36,7 +38,7 @@ class AlertActionReceiver : BroadcastReceiver() {
             } catch (cancellation: kotlin.coroutines.cancellation.CancellationException) {
                 throw cancellation
             } catch (error: Throwable) {
-                Log.e(TAG, "Alert action failed", error)
+                Diag.logError(LogEvent.ALERT_URGENT_FAILED, error, LogField.tag("at", "action"))
             } finally {
                 pending?.finish()
             }
@@ -110,7 +112,7 @@ class AlertActionReceiver : BroadcastReceiver() {
                 else -> AppUpdate.remindLater(state, now)
             }
         }
-        Log.i(TAG, "Update notice dismissed by $action")
+        Diag.log(LogEvent.UPDATE_NOTICE_DISMISSED, LogField.text("action", action))
     }
 
     companion object {

@@ -1,5 +1,8 @@
 package me.river.nightbell.data.work
 
+import me.river.nightbell.data.diag.Diag
+import me.river.nightbell.domain.LogEvent
+import me.river.nightbell.domain.LogField
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -16,6 +19,7 @@ class BootReceiver : BroadcastReceiver() {
             return
         }
         val graph = Nightbell.install(context)
+        Diag.log(LogEvent.SCHED_BOOT, LogField.tag("cause", if (intent.action == Intent.ACTION_BOOT_COMPLETED) "boot" else "package_replaced"))
         val pending = runCatching { goAsync() }.getOrNull()
         graph.appScope.launch {
             try {

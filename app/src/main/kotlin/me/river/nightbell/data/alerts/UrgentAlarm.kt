@@ -1,5 +1,8 @@
 package me.river.nightbell.data.alerts
 
+import me.river.nightbell.data.diag.Diag
+import me.river.nightbell.domain.LogEvent
+import me.river.nightbell.domain.LogField
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioManager
@@ -11,7 +14,6 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.provider.Settings
-import android.util.Log
 import me.river.nightbell.domain.VibrationStyle
 
 /**
@@ -157,11 +159,12 @@ class UrgentAlarm(private val context: Context) {
     fun setDucked(quiet: Boolean) {
         ducked = quiet
         runCatching { player?.setVolume(if (quiet) 0f else 1f, if (quiet) 0f else 1f) }
-            .onFailure { Log.w(TAG, "Could not change the alarm volume", it) }
+            .onFailure { Diag.log(LogEvent.ALERT_URGENT_FAILED, LogField.tag("at", "volume"), LogField.error("why", it)) }
     }
 
     @Synchronized
     fun stop() {
+        Diag.log(LogEvent.ALERT_URGENT_STOP)
         stopSound()
         ducked = false
         vibeStyle = null
@@ -194,7 +197,7 @@ class UrgentAlarm(private val context: Context) {
             active.release()
         }.onFailure {
             stopFaults++
-            Log.w(TAG, "Alarm would not stop cleanly", it)
+            Diag.log(LogEvent.ALERT_URGENT_FAILED, LogField.tag("at", "stop"), LogField.error("why", it))
         }
     }
 
@@ -235,7 +238,7 @@ class UrgentAlarm(private val context: Context) {
                 usage = soundUsage
             }
         }.onFailure {
-            Log.e(TAG, "Could not start the urgent alarm", it)
+            Diag.logError(LogEvent.ALERT_URGENT_FAILED, it, LogField.tag("at", "start"))
             player = null
             usage = null
         }
@@ -296,7 +299,7 @@ class UrgentAlarm(private val context: Context) {
                 )
             }
             vibrating = true
-        }.onFailure { Log.w(TAG, "Could not start urgent haptics", it) }
+        }.onFailure { Diag.log(LogEvent.ALERT_URGENT_FAILED, LogField.tag("at", "haptics"), LogField.error("why", it)) }
     }
 
     private fun resolveVibrator(): Vibrator? =
@@ -331,7 +334,13 @@ class UrgentAlarm(private val context: Context) {
      * [me.river.nightbell.data.Nightbell] on notification usage. Lives here so
      * there is exactly one place that reads the ringer.
      */
-    fun ringerAllowsSound(): Boolean = speechUsage(respectRinger = true) != null
+    fun ringerAllowsSound(): Boolean {
+        val allowed = speechUsage(respectRinger = true) != null
+        // A pager that stayed silent is the hardest report to answer, and half
+        // the time the answer is the ringer switch rather than the app.
+        Diag.log(LogEvent.ALERT_RINGER, LogField.of("allows_sound", allowed))
+        return allowed
+    }
 
     /**
      * Whether the alarm stream can actually be heard.

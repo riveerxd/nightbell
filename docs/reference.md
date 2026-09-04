@@ -597,6 +597,122 @@ something, and the alert bookkeeping resets with it. Importing an in-progress
 alert state would suppress the first real outage on the new device, see the
 1.7.0 and 2.0.0 sections of HANDOFF for why that is the same trap twice.
 
+## The diagnostic log
+
+**Settings → About → Diagnostic log** records what Nightbell is doing to a text
+file the user can export and hand to somebody. It exists because a report used
+to arrive as a sentence and get answered with a guess: `adb logcat` is the only
+place the app's own account of itself lived, and a phone is not a machine that
+can read it.
+
+The switch governs the **file** and nothing else. Three sinks, and only one of
+them is optional:
+
+| Sink | When | Where |
+| --- | --- | --- |
+| logcat | always | `adb logcat -s Nightbell`, unchanged from before this feature |
+| a ring of 500 lines | always | memory only, never disk |
+| the file | while the switch is on | `filesDir/diagnostics/`, capped at 192 KB with one rotation |
+
+A crash is the exception and is recorded whichever way the switch is set, to a
+file of its own, carrying the stack trace plus the ring. A crash cannot be
+reproduced on request, so a switch that has to be on beforehand would record
+nothing the first time, which is what issue 2 arrived with.
+
+The switch is off on a fresh install and does not travel in a backup: it is a
+decision about a device, not about a fleet.
+
+### What is in a line
+
+Lines are for grepping, not for reading as prose:
+
+```
+18:36:25.896 I HTTP  http.request monitor=7f3a1c2e url=https://checkout.example.com/*2?*1 headers=1
+18:36:25.902 W PAGE  page.expired stage=LOADING percent=43 ready=interactive load_event=false requests=87
+```
+
+Time is local. Level is at a fixed column, which is what the in-app viewer
+colours by. The area names one of the surfaces the app has actually been
+reported broken on: `SCHED`, `CHECK`, `HTTP`, `PAGE`, `ALERT`, `STORE`, `NET`,
+`APP`, `WIDGET`, `UPDATE`. After the event code, everything is `key=value`.
+
+An exported file opens with a block of facts about the device: version and
+whether the build was minified, API level, model, **the WebView package and
+version**, whether battery optimisation is on, which alert permissions are
+granted, the network state, and the fleet as counts. Those are the fields issue
+threads kept having to ask for one at a time.
+
+### What is left out, and how that is enforced
+
+The file is going to end up in a public issue thread, so the danger is not
+somebody reading the device. It is the owner publishing their own credentials
+because of a line they never read.
+
+Censoring is therefore an allowlist rather than a filter. There is no logging
+call that takes a string: `Diag.log` takes an event whose text is a constant and
+a list of `LogField`s, and every factory on `LogField` states what class of
+value it will accept. `Log.i(TAG, "checking $url")` is not a call this app can
+make any more, because no overload accepts it.
+
+- **Addresses** keep scheme, host and port. The path becomes a segment count and
+  the query a parameter count, so a link with a key in it cannot reach the file.
+- **Credentials** are never content. A token, a session cookie or a stored
+  localStorage blob renders as `[length:hash6]`, which is enough to say "the same
+  one as last time" and useless to replay.
+- **Monitor names** have no factory at all, and are also fed through a second
+  pass over every finished line, so a name that got into a line some other way
+  is fingerprinted anyway. Monitors are identified by the first eight characters
+  of their id.
+- **Request headers, request bodies, page content, element selectors and
+  response snippets** are not written. A count or a length is what a line may
+  say about them.
+- **Free text this app did not author**, which is exception messages and browser
+  console output, goes through a pattern sweep for bearer tokens, basic auth,
+  GitHub token prefixes, JWTs, named header values, named query parameters, URL
+  userinfo, email addresses and anything else long enough to be an identifier.
+
+There is no way to turn any of it off, in any build. A flag for "log the real
+values" is a flag that reaches a release by accident.
+
+`LogSentinelTest` is what keeps this true. It fills every string a monitor, the
+settings and a verdict can hold with a unique sentinel, points every factory at
+them, and fails if any survives. It also reflects over those models and fails
+when one grows a string field that has not been classified, so deciding whether
+a new field may be published happens when the field is added rather than the
+first time somebody logs it.
+
+### Reading it before sending it
+
+**Read log** opens the file in a dialog over the page, and that is not a
+nicety. Somebody about to paste this into a public thread should be looking at
+the thing they are about to paste, so the viewer reads the file rather than an
+approximation of it, and warnings and errors are coloured. It is a dialog rather
+than an expanding panel in the card because a thousand monospace lines make the
+About tab enormous, and because a panel inside the settings list scrolls with
+the list, so there is no way to move through the log without also moving the
+page. The dialog gets its own scroll and is capped at half the window height, so
+the same screen works on a phone and on a 480 dp head unit.
+
+Lines run oldest first, like the file, and it opens already scrolled to the
+newest one. **Delete the log** removes both generations and the crash file, and
+leaves one line saying so, because a file that silently begins in the middle
+cannot be told from one that only just started.
+
+With the switch off the viewer shows nothing, even though the in-memory ring is
+still filling for the crash handler's benefit. Showing the ring would contradict
+the switch two rows above it.
+
+**Export is blocked while there is nothing to hand anybody**, and the switch's
+own subtitle two rows above it says why, so the reason a blocked button is
+blocked is on screen permanently rather than behind a tap. A blocked button still
+announces as unavailable rather than reading as a caption; see `NightbellButton`.
+Deleting is held rather than confirmed, like every other control in the app that
+takes something away.
+
+Export goes through the Storage Access Framework, like the backup export, so
+there is no storage permission, no `FileProvider`, no exported component, and the
+destination is the user's to pick.
+
 ## The element picker
 
 1. Enter a URL and tap **Open live preview**.

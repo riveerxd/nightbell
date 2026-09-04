@@ -1,7 +1,6 @@
 package me.river.nightbell.data.work
 
 import android.content.Context
-import android.util.Log
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
@@ -15,6 +14,9 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import me.river.nightbell.data.Nightbell
+import me.river.nightbell.data.diag.Diag
+import me.river.nightbell.domain.LogEvent
+import me.river.nightbell.domain.LogField
 import me.river.nightbell.domain.GlobalSettings
 import me.river.nightbell.domain.Monitor
 import java.util.concurrent.TimeUnit
@@ -74,10 +76,16 @@ class MonitorWorker(context: Context, params: WorkerParameters) : CoroutineWorke
             // document behind DataStore, so re-reading it here would decode the
             // whole thing a second time for one timestamp.
             if (!force && !graph.engine.isDue(monitor, snapshot.runtimes[monitorId])) {
-                Log.i(TAG, "$monitorId is not due yet; skipping")
+                Diag.log(LogEvent.SCHED_WORKER_NOT_DUE, LogField.monitor(monitorId))
                 return Result.success()
             }
 
+            Diag.log(
+                LogEvent.SCHED_WORKER_START,
+                LogField.monitor(monitorId),
+                LogField.of("forced", force),
+                LogField.of("attempt", runAttemptCount),
+            )
             graph.engine.run(monitorId, force = force)
             Result.success()
         } catch (cancellation: CancellationException) {
@@ -85,10 +93,15 @@ class MonitorWorker(context: Context, params: WorkerParameters) : CoroutineWorke
             // over, work replaced, app force-stopped. Nothing failed, so nothing
             // is reported. Propagating lets WorkManager record this as cancelled
             // instead of retrying a run nobody is waiting for.
-            Log.i(TAG, "Monitor worker for $monitorId was stopped by WorkManager")
+            Diag.log(LogEvent.SCHED_WORKER_STOPPED, LogField.monitor(monitorId))
             throw cancellation
         } catch (error: Throwable) {
-            Log.e(TAG, "Monitor worker failed for $monitorId", error)
+            Diag.logError(
+                LogEvent.SCHED_WORKER_FAILED,
+                error,
+                LogField.monitor(monitorId),
+                LogField.of("attempt", runAttemptCount),
+            )
             if (runAttemptCount < MAX_ATTEMPTS) Result.retry() else Result.success()
         }
     }
@@ -119,6 +132,10 @@ class SweepWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
             val graph = Nightbell.install(applicationContext)
             val snapshot = graph.store.currentSnapshot()
             if (!snapshot.settings.backgroundChecksEnabled) return Result.success()
+            Diag.log(
+                LogEvent.SCHED_SWEEP_START,
+                LogField.count("monitors", snapshot.monitors.size),
+            )
             val ran = graph.engine.runAllDue()
             // Repair after the pass. This used to be the single biggest source of
             // false crash alerts: `syncAll` REPLACEd the unique work of every
@@ -136,8 +153,12 @@ class SweepWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
             // user next opened the app. Which is exactly the moment they no longer
             // need paging. Driving it from here too means the escalation survives
             // the phone being in a pocket.
+            val limit = runCatching { graph.limits.diagnose(snapshot) }.getOrNull()
+            if (limit != null && limit.name != "NONE") {
+                Diag.log(LogEvent.SCHED_LIMIT, LogField.of("limit", limit))
+            }
             val paged = graph.engine.tickUrgent()
-            if (paged > 0) Log.i(TAG, "Sweep re-paged $paged monitor(s)")
+            if (paged > 0) Diag.log(LogEvent.SCHED_SWEEP_DONE, LogField.count("repaged", paged))
 
             // Nightbell's own version, at most once every six hours and gated on
             // its own setting. Here rather than on a schedule of its own: this is
@@ -145,15 +166,15 @@ class SweepWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
             // one to ask a question this slow would be spending the user's battery
             // to save nothing.
             runCatchingCancellable { graph.engine.checkForAppUpdate() }
-                .onFailure { Log.i(TAG, "Update check skipped: ${it::class.java.simpleName}") }
+                .onFailure { Diag.log(LogEvent.UPDATE_CHECK_FAILED, LogField.error("why", it)) }
 
-            Log.i(TAG, "Sweep ran $ran monitor(s)")
+            Diag.log(LogEvent.SCHED_SWEEP_DONE, LogField.count("ran", ran))
             Result.success()
         } catch (cancellation: CancellationException) {
-            Log.i(TAG, "Sweep was stopped by WorkManager")
+            Diag.log(LogEvent.SCHED_SWEEP_STOPPED)
             throw cancellation
         } catch (error: Throwable) {
-            Log.e(TAG, "Sweep failed", error)
+            Diag.logError(LogEvent.SCHED_SWEEP_FAILED, error)
             Result.success()
         }
     }
@@ -250,6 +271,14 @@ class MonitorScheduler(private val context: Context) {
                 cancel(monitor.id)
             }
         }
+        Diag.log(
+            LogEvent.SCHED_SYNC,
+            LogField.count("monitors", monitors.size),
+            LogField.count("scheduled", monitors.count { it.enabled && settings.backgroundChecksEnabled }),
+            LogField.of("background", settings.backgroundChecksEnabled),
+            LogField.of("unmetered_only", settings.onlyOnUnmeteredNetwork),
+            LogField.of("strict", settings.strictForegroundMonitoring),
+        )
         ensureSweep(settings)
     }
 
@@ -298,7 +327,7 @@ class MonitorScheduler(private val context: Context) {
             infos.isNotEmpty() && infos.all { it.state.isFinished }
         }.getOrDefault(false)
         if (dead) {
-            Log.w(TAG, "$uniqueName had reached a terminal state; clearing so it can re-arm")
+            Diag.log(LogEvent.SCHED_WORKER_REARMED, LogField.text("work", uniqueName))
             workManager.cancelUniqueWork(uniqueName)
         }
     }

@@ -1,12 +1,14 @@
 package me.river.nightbell.widget
 
+import me.river.nightbell.data.diag.Diag
+import me.river.nightbell.domain.LogEvent
+import me.river.nightbell.domain.LogField
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.util.Log
 import android.widget.RemoteViews
 import me.river.nightbell.MainActivity
 import me.river.nightbell.R
@@ -79,7 +81,7 @@ class NightbellWidgetProvider : AppWidgetProvider() {
                 val manager = AppWidgetManager.getInstance(app) ?: return
                 val ids = manager.getAppWidgetIds(ComponentName(app, NightbellWidgetProvider::class.java))
                 ids.forEach { render(app, manager, it) }
-            }.onFailure { Log.w(TAG, "Widget refresh failed", it) }
+            }.onFailure { Diag.log(LogEvent.WIDGET_REFRESH_FAILED, LogField.error("why", it)) }
         }
 
         private fun render(context: Context, manager: AppWidgetManager, appWidgetId: Int) {
@@ -99,7 +101,7 @@ class NightbellWidgetProvider : AppWidgetProvider() {
             // store's own collector fires a refresh the moment the load lands, which
             // is milliseconds away.
             if (!graph.store.loaded) {
-                Log.i(TAG, "Store still loading; leaving widget $appWidgetId as it is")
+                Diag.log(LogEvent.WIDGET_NOT_LOADED, LogField.of("widget", appWidgetId))
                 return
             }
             val snapshot = graph.store.snapshot.value
@@ -114,7 +116,9 @@ class NightbellWidgetProvider : AppWidgetProvider() {
                     appWidgetId,
                     build(app, config, fleet, appWidgetId, size.first, size.second),
                 )
-            }.onFailure { Log.e(TAG, "Could not update widget $appWidgetId", it) }
+            }.onFailure {
+                Diag.logError(LogEvent.WIDGET_UPDATE_FAILED, it, LogField.of("widget", appWidgetId))
+            }
         }
 
         /**

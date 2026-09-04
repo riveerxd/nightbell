@@ -1,6 +1,8 @@
 package me.river.nightbell.data.check
 
-import android.util.Log
+import me.river.nightbell.data.diag.Diag
+import me.river.nightbell.domain.LogEvent
+import me.river.nightbell.domain.LogField
 import androidx.webkit.ProxyConfig
 import androidx.webkit.ProxyController
 import androidx.webkit.WebViewFeature
@@ -146,7 +148,7 @@ object WebViewProxy {
         runCatching {
             ProxyController.getInstance().clearProxyOverride(immediate) { cont.resume(Unit) }
         }.onFailure {
-            Log.w(TAG, "Could not clear the WebView proxy override", it)
+            Diag.log(LogEvent.PROXY_CLEAR_FAILED, LogField.error("why", it))
             cont.resume(Unit)
         }
     }
