@@ -164,11 +164,15 @@ fun PagerSetupScreen(
                     size = 38.dp,
                 )
                 Spacer(Modifier.width(14.dp))
+                // Same row, same size, same colour as the Settings header this
+                // screen is now reached from. Arriving at a screen whose title
+                // sits somewhere else and in another weight reads as a different
+                // app, and the eyebrow-over-headline shape below belongs to a
+                // first run, not to a page somebody navigated to.
                 Text(
-                    "Alert permissions",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = NightbellColors.Aqua,
-                    letterSpacing = 2.4.sp,
+                    text = "Alert permissions",
+                    style = MaterialTheme.typography.displayMedium,
+                    color = NightbellColors.TextPrimary,
                 )
             }
         } else {
@@ -178,13 +182,13 @@ fun PagerSetupScreen(
                 color = NightbellColors.Aqua,
                 letterSpacing = 2.4.sp,
             )
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "Let Nightbell wake you when something breaks",
+                style = MaterialTheme.typography.displayMedium,
+                color = NightbellColors.TextPrimary,
+            )
         }
-        Spacer(Modifier.height(10.dp))
-        Text(
-            "Let Nightbell wake you when something breaks",
-            style = MaterialTheme.typography.displayMedium,
-            color = NightbellColors.TextPrimary,
-        )
         Spacer(Modifier.height(12.dp))
         Text(
             "Android keeps two of these behind its own settings screens — no app " +
@@ -294,14 +298,19 @@ fun PagerSetupScreen(
             )
         }
 
-        Spacer(Modifier.height(14.dp))
-        Text(
-            "Settings has all of this again, under Alerts.",
-            style = MaterialTheme.typography.bodySmall,
-            color = NightbellColors.TextTertiary,
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Center,
-        )
+        // Only worth saying to somebody who has not been there. Told to a user
+        // who arrived from that exact screen it reads as the app having lost
+        // track of where they are.
+        if (mode == PagerSetupMode.GATE) {
+            Spacer(Modifier.height(14.dp))
+            Text(
+                "Settings has all of this again, under Alerts.",
+                style = MaterialTheme.typography.bodySmall,
+                color = NightbellColors.TextTertiary,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }
 

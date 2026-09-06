@@ -164,8 +164,12 @@ class PagerSetupInstrumentedTest {
         composeRule.onNodeWithTag("open-pager-setup").performClick()
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithText("Let Nightbell wake you when something breaks").assertIsDisplayed()
+        // Titled and laid out like the Settings screen behind it: one heading on
+        // the row with the back button. The first-run headline is not repeated,
+        // and neither is the offer to stop asking.
         composeRule.onNodeWithText("Alert permissions").assertIsDisplayed()
+        composeRule.onNodeWithText("Let Nightbell wake you when something breaks")
+            .assertDoesNotExist()
         composeRule.onNodeWithTag(TAG_SILENCE).assertDoesNotExist()
         composeRule.captureScreenshot("pager-03-revisited-from-settings")
 
