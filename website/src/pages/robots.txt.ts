@@ -27,6 +27,12 @@ export const GET: APIRoute = () => {
     : [
         'User-agent: *',
         'Allow: /',
+        // The release manifest the app reads. Disallowed because every crawler
+        // that fetches it lands in the census log as an install that does not
+        // exist, and the count is the whole reason that log is written. Crawlers
+        // are filtered on the way out too, in deploy/scripts/census.sh, because a
+        // robots rule is a request rather than a control.
+        'Disallow: /v1/',
         '',
         `Sitemap: ${new URL('/sitemap.xml', SITE_URL).href}`,
         '',

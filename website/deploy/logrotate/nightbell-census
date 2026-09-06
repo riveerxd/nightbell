@@ -1,0 +1,69 @@
+# Rotation for the version check census log.
+#
+#   install to  /etc/logrotate.d/nightbell-census
+#   check with  sudo logrotate --debug /etc/logrotate.d/nightbell-census
+#
+# ## Why this is a second file and not a second line in nightbell-download
+#
+# It could be a second path inside that stanza and it is not, because the two logs
+# answer different questions and will end up wanting different policies. The
+# download log is one line per human pressing a button and will stay small
+# forever. This one is one line per install per six hours, so it grows with the
+# user base rather than with anybody's attention, and it is the file that will
+# eventually need a decision about volume.
+#
+# What it must not be is a second stanza naming a file the distro's nginx stanza
+# already claims. logrotate refuses to start on a duplicate log entry, and a
+# logrotate that will not start stops rotating the logs of all fifteen sites on
+# this box. That is why both of these live in /var/log/nginx/nightbell/ rather
+# than /var/log/nginx/: the distro's glob is /var/log/nginx/*.log and it is not
+# recursive, so a subdirectory is outside it and this stanza is the only claim.
+#
+# The directory already exists for download.log. If this is ever installed on a
+# box that has not served the download redirect:
+#
+#   sudo mkdir -p /var/log/nginx/nightbell
+#
+# ## The policy, and the volume it is sized for
+#
+# monthly with sixty rotations is five years. One line is about sixty bytes, and
+# an install produces at most four a day, so a thousand installs is roughly
+# seven megabytes a month before compression and a hundred a year. That is
+# comfortable, and it is also the number to revisit rather than to trust forever:
+# census.sh pulls the whole history back over ssh on every run, so past a few
+# hundred megabytes that stops being instant and the totals want precomputing on
+# the box instead.
+#
+# Nothing in this file is personal data, which is the reason a five year retention
+# is a decision about disk and not about anybody's rights. See the
+# nightbell_census log_format in deploy/nginx/nightbell.app.conf for what the
+# lines hold and for the four fields that are deliberately absent.
+/var/log/nginx/nightbell/census.log {
+    monthly
+    rotate 60
+    missingok
+
+    # An empty month should not consume a rotation slot. It would also mean every
+    # install in the world stopped checking, so an empty month is a bug report.
+    notifempty
+
+    compress
+
+    # The most recent rotation stays uncompressed, so the common case of reading
+    # the current and previous file is a plain read. `zcat -f` in census.sh
+    # handles both either way.
+    delaycompress
+
+    # Matches the ownership the distro's nginx stanza uses, which is what makes
+    # these readable by a user in the adm group without sudo.
+    create 0640 www-data adm
+
+    # nginx holds the log open by descriptor, so after the rename it would keep
+    # writing to the rotated file forever. USR1 makes the master reopen every log
+    # it has. Without this the count stops growing at the first rotation, and a
+    # count that quietly stopped is worse than no count.
+    sharedscripts
+    postrotate
+        if [ -f /run/nginx.pid ]; then kill -USR1 "$(cat /run/nginx.pid)"; fi
+    endscript
+}

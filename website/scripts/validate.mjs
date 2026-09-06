@@ -454,6 +454,100 @@ try {
   }
 }
 
+// ------------------------------------------------------- the release manifest
+//
+// /v1/release.json is read by every installed copy of the app, four times a day,
+// and it is the file that answers how many of them there are. Three things about
+// it fail silently, so all three are checked here rather than trusted.
+//
+// One: it has to be in dist. It is written into public/ by
+// gen-version-manifest.mjs and Astro copies it, so a missing file means the
+// generator never ran, and every install would get a 404 and stop seeing releases
+// while the site around it looked perfect.
+//
+// Two: the location has to set no-store. A cached manifest is an uncounted
+// manifest and the count would flatline while continuing to look like a count.
+//
+// Three, and this is the one worth having a machine watch: the log format must
+// not grow an address. The reasoning for that is written out at length in the
+// conf, and a comment is a hope rather than a rule. Somebody adding
+// $remote_addr because they wanted to debug something at four in the morning is
+// the realistic way this becomes a tracking log, so it fails the build.
+//
+// The version inside the manifest is not checked here. That is
+// `scripts/gen-version-manifest.mjs --check`, which owns it and also asks GitHub
+// what the latest tag really is, and `npm run verify` runs both.
+{
+  const MANIFEST = 'v1/release.json';
+  const conf = join(SITE, 'deploy/nginx/nightbell.app.conf');
+  const built = join(DIST, MANIFEST);
+
+  if (!existsSync(built)) {
+    fail(
+      `dist/${MANIFEST} is missing, so every install checking for updates would get a 404. ` +
+        'Run `npm run version-manifest`.',
+    );
+  } else {
+    try {
+      const parsed = JSON.parse(readFileSync(built, 'utf8'));
+      if (!parsed.version) fail(`dist/${MANIFEST} has no "version", which is the one field the app needs.`);
+      else ok(`dist/${MANIFEST} parses and names ${parsed.version}.`);
+    } catch (error) {
+      fail(`dist/${MANIFEST} is not valid JSON (${error.message}). The app would ignore it.`);
+    }
+  }
+
+  if (!existsSync(conf)) {
+    warn(`No deploy/nginx/nightbell.app.conf, so /${MANIFEST} could not be verified.`);
+  } else {
+    const text = readFileSync(conf, 'utf8');
+    const hasLocation = /location\s*=\s*\/v1\/release\.json\s*\{/.test(text);
+    const format = text.match(/log_format\s+nightbell_census\s+'([^']*)'/);
+
+    if (!hasLocation) {
+      fail(
+        'nightbell.app.conf has no "location = /v1/release.json", so the manifest would be served ' +
+          'by the catch-all with no census log and a cacheable response.',
+      );
+    } else if (!/location\s*=\s*\/v1\/release\.json\s*\{[^}]*no-store/.test(text)) {
+      fail('location = /v1/release.json does not set Cache-Control no-store, so the count would stop at the edge.');
+    } else if (!/location\s*=\s*\/v1\/release\.json\s*\{[^}]*census\.log\s+nightbell_census/.test(text)) {
+      fail('location = /v1/release.json has no census access_log of its own, so nothing would be counted.');
+    } else if (!format) {
+      fail('location = /v1/release.json logs with nightbell_census, but no such log_format is defined.');
+    } else {
+      const fields = format[1];
+      const banned = ['$remote_addr', '$http_x_forwarded_for', '$http_cf_connecting_ip', '$binary_remote_addr'];
+      const found = banned.filter((f) => fields.includes(f));
+      if (found.length) {
+        fail(
+          `log_format nightbell_census contains ${found.join(', ')}. The census counts requests and ` +
+            'must not be able to recognise a device. See the format\'s own comment in the conf: an ' +
+            'address here turns a count into a per person record of when somebody\'s phone was awake, ' +
+            'and a salted hash of one is still personal data. If you need it for debugging, use the ' +
+            'shared access log for an hour and take it out again.',
+        );
+      } else if (fields !== '$time_iso8601 $status "$http_user_agent"') {
+        // Not taste. census.sh splits each line on the double quote to reach the
+        // agent and reads $2 as the status, so a reordered or extra field makes
+        // every number it prints wrong without making anything look broken.
+        fail(
+          `log_format nightbell_census is "${fields}". deploy/scripts/census.sh parses ` +
+            '\'$time_iso8601 $status "$http_user_agent"\' positionally, so changing the fields ' +
+            'silently changes every number it reports. Update both together.',
+        );
+      } else {
+        ok('/v1/release.json is a no-store JSON with a census log that cannot identify a device.');
+      }
+    }
+  }
+
+  const robots = join(DIST, 'robots.txt');
+  if (existsSync(robots) && !readFileSync(robots, 'utf8').includes('Disallow: /v1/')) {
+    warn('robots.txt does not disallow /v1/, so crawlers will land in the census as installs that do not exist.');
+  }
+}
+
 // The whole point of a static build is that the first load is one document.
 const scripts = htmlFiles
   .map((f) => readFileSync(f, 'utf8'))

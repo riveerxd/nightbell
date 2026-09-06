@@ -294,6 +294,96 @@ validator fails if the page links to `/download` while the server block has no
 `location` for it, so both halves of that mistake are caught before a deploy. What
 neither can see is the config sitting un-copied on this machine.
 
+## Counting installs
+
+The download log counts clicks on a page. It cannot tell you how many copies of
+the app are running, because a click is not an install and an install that came
+from F-Droid or from a mirror never touched this site at all.
+
+`nightbell.app/v1/release.json` answers that instead. Every install with update
+checks on reads it every six hours to find out whether it is behind, so one log
+line per request is a population count of the app itself. Before 3.10.0 the app
+asked GitHub's API or F-Droid's for the same thing, which meant a third party
+learned an address and a rhythm from every user of an app whose whole pitch is
+that nothing leaves the phone. Moving that request here tells one fewer stranger
+and answers a question that had no answer.
+
+```bash
+NIGHTBELL_HOST=user@host ./deploy/scripts/census.sh
+NIGHTBELL_HOST=user@host ./deploy/scripts/census.sh --days 7
+```
+
+Two numbers, and they are not the same kind of number:
+
+| | How | Trust it for |
+| --- | --- | --- |
+| **New installs** | An install's first ever check appends `new` to its User-Agent, once, ever | An exact count of installs. Overcounts a data wipe or a reinstall as a new one, and nothing else |
+| **Active installs** | Scheduled checks per day over four, the most any install can produce in a day | A floor. Phones in Doze and phones in tunnels push the real figure above it, never below |
+
+Scheduled is load-bearing in that second row. "Check now" in Settings skips the
+six-hour interval, so a tapped check arrives marked `tap` and is left out of the
+division; without that, one person leaning on the button reads as several
+installs. Tapped checks still count toward the version histogram, which comes off
+the same lines and answers something download counts never could: whether anybody
+actually updated.
+
+**Nothing here can identify a device**, and that is enforced rather than intended.
+The log format holds a timestamp, a status and the User-Agent, and
+`npm run validate` fails the build if `$remote_addr` or any of its aliases appears
+in it. No hash of an address either: a salted hash on disk is still personal data
+with a retention obligation attached, and all it buys is retention curves. There
+is no per install identifier anywhere in the app to log even if somebody wanted
+one. The full reasoning is in the `nightbell_census` `log_format` comment in
+`nightbell.app.conf`.
+
+### Installing it
+
+The manifest itself needs nothing: `gen-version-manifest.mjs` writes it into
+`public/`, Astro copies it into `dist/`, and `deploy.sh` ships it with the site.
+There is no per release step and nothing to forget.
+
+The server block and the rotation are one-time, and `nightbell.app.conf` above
+already carries the location:
+
+```bash
+sudo install -m 644 deploy/nginx/nightbell.app.conf /etc/nginx/sites-available/
+sudo install -m 644 deploy/logrotate/nightbell-census /etc/logrotate.d/
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+Then the same ownership fix the download log needed, for the same reason: nginx
+creates the file as `root:root 0644` because the master opens its logs before
+dropping privileges, and the `create` line in the stanza does not take effect
+until the first rotation a month later.
+
+```bash
+sudo chown www-data:adm /var/log/nginx/nightbell/census.log
+sudo chmod 640 /var/log/nginx/nightbell/census.log
+```
+
+Check it from outside. `no-store` is the whole feature, so it is the line to look
+at:
+
+```bash
+curl -sI https://nightbell.app/v1/release.json | grep -i '^HTTP\|^cache-control\|^cf-cache-status'
+curl -s https://nightbell.app/v1/release.json    # expect the current version
+sudo logrotate --debug /etc/logrotate.d/nightbell-census
+```
+
+A `200` whose `Cache-Control` is not `no-store`, or a `cf-cache-status` of `HIT`,
+means Cloudflare is answering and the origin never sees the request. The app keeps
+working perfectly and the count stays at zero, which is the one failure mode here
+that looks like nothing being wrong. Cloudflare does not cache `.json` by default,
+so the realistic cause is a Cache Everything rule added later for something else.
+
+### Deploy the manifest before shipping an app that reads it
+
+Order matters once, at the introduction. An install of 3.10.0 reading a `/v1/`
+that 404s gets null, says nothing, and shows "couldn't reach nightbell.app" on the
+Settings card until the file appears. Harmless and self-healing, but it means the
+site deploy comes first. After that the two move together and the ordering stops
+mattering: the manifest ships in `dist/` on the same deploy as the page.
+
 ### Why not Google Analytics
 
 It cannot answer the question. The APK is served by GitHub, so a direct link makes
