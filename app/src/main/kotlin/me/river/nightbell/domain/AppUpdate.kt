@@ -6,7 +6,31 @@ import kotlinx.serialization.Serializable
 /** Where Nightbell looks for a newer Nightbell. */
 @Serializable
 enum class UpdateSource {
-    /** The APKs the maintainer signs and attaches to a tag. */
+    /**
+     * A small file on the app's own site, listing the newest release.
+     *
+     * The default, and the reason it is the default is worth writing down. Every
+     * copy of this app already asked a stranger for a version number four times a
+     * day: GitHub's API, or F-Droid's, from every install with checks turned on.
+     * That is a third party learning an address and a rhythm, four times a day,
+     * for a number that fits in a sentence.
+     *
+     * This reads the same number off nightbell.app instead, which is the one host
+     * that has a reason to be told. It also happens to answer the only question
+     * about this app that had no answer at all: how many copies are running. The
+     * request carries the version and nothing else, the reply is a static file,
+     * and what is kept is described in `website/deploy/nginx/nightbell.app.conf`
+     * under the census log format. No identifier is generated, sent or stored, and the
+     * address the request came from is never written down.
+     *
+     * [GITHUB] stays selectable for anyone who would rather tell GitHub than tell
+     * me. That is a real preference and removing the option would make this a
+     * decision taken on someone's behalf.
+     */
+    @SerialName("direct")
+    DIRECT,
+
+    /** The APKs the maintainer signs and attaches to a tag, read from GitHub. */
     @SerialName("github")
     GITHUB,
 
@@ -22,16 +46,29 @@ enum class UpdateSource {
     FDROID,
     ;
 
+    /**
+     * Short on purpose. These are three segments of one control now, and the
+     * segment clips rather than wraps, so "GitHub releases" in a third of a
+     * phone's width was a label with its end cut off.
+     */
     val label: String
         get() = when (this) {
-            GITHUB -> "GitHub releases"
+            DIRECT -> "nightbell.app"
+            GITHUB -> "GitHub"
             FDROID -> "F-Droid"
         }
 
     val blurb: String
         get() = when (this) {
-            GITHUB -> "The APK the maintainer signs, available the moment a release goes out."
-            FDROID -> "Matches what your F-Droid client can install, which trails GitHub a little."
+            DIRECT -> "Reads the version from the app's own site. The request says which " +
+                "version you run, and it is counted so I know how many installs are " +
+                "live. Nothing identifies you and your address is not kept."
+
+            GITHUB -> "Asks GitHub's API instead. The same release, and GitHub sees the " +
+                "request rather than me."
+
+            FDROID -> "Matches what your F-Droid client can install, which trails the tags " +
+                "a little."
         }
 }
 
@@ -54,6 +91,23 @@ data class UpdateState(
     /** "Not now." Suppresses every version until this moment passes. */
     val remindAfter: Long = 0L,
     val etag: String = "",
+
+    /**
+     * Whether this install has ever completed a check against its own site.
+     *
+     * Exists so the first one can say so and no later one can. See
+     * [AppUpdate.censusAgent]: this is the flag behind the `new` word, and the
+     * reason a count of installs needs no identifier attached to a device.
+     *
+     * Set only when a manifest actually came back parsed, not merely when a
+     * request was attempted, so an install that is offline for its first three
+     * days is still counted as new on the fourth. The gap that leaves is a reply
+     * that reached the origin and then failed to parse, which logs `new` and
+     * tries again later, counting one install twice. That needs a broken deploy
+     * to happen at all and it is preferred over the opposite mistake, which is
+     * losing a real install because one byte was wrong.
+     */
+    val censusSent: Boolean = false,
 )
 
 /**
@@ -80,6 +134,21 @@ object AppUpdate {
     /** Where "Open download" goes when a release carries no page of its own. */
     const val DOWNLOAD_URL = "https://nightbell.app/download"
     const val FDROID_URL = "https://f-droid.org/en/packages/me.river.nightbell/"
+
+    /** The site's origin, and the release manifest [UpdateSource.DIRECT] reads. */
+    const val SITE_BASE = "https://nightbell.app"
+
+    /**
+     * Versioned in the path, and it has to be.
+     *
+     * Every published APK reads whichever path was compiled into it, forever, and
+     * the oldest install in the wild is the one that decides when a payload shape
+     * can change. A path with a version in it means a future schema can ship at
+     * /v2/ while /v1/ keeps answering the copies that only understand it. Without
+     * that, changing a field name is a choice between breaking old installs and
+     * never changing anything.
+     */
+    const val MANIFEST_PATH = "/v1/release.json"
 
     /** Shortest gap between two version checks. One a day is generous already. */
     const val CHECK_INTERVAL_MS = 6L * 60 * 60 * 1000
@@ -246,7 +315,80 @@ object AppUpdate {
         "com.machiav3lli.fdroid",
         -> UpdateSource.FDROID
 
-        else -> UpdateSource.GITHUB
+        else -> UpdateSource.DIRECT
+    }
+
+    /**
+     * Which source this install should watch, at startup, given everything
+     * already known about it.
+     *
+     * One function rather than two branches at the call site, because the three
+     * inputs interact and the interactions are the part that is easy to get
+     * wrong. It answers, in order:
+     *
+     *  - Nobody has touched the switch: guess from whatever installed this copy.
+     *    A fresh install lands here, and so does an install that has never opened
+     *    the Settings card.
+     *  - The switch has been touched but this install predates
+     *    [UpdateSource.DIRECT]: move it off GitHub and leave every other answer
+     *    alone. An F-Droid user is not moved, because the site's newest tag is as
+     *    unreachable for them as GitHub's was.
+     *  - Otherwise: whatever it already says.
+     *
+     * Both `chosen` and `migrated` are true afterwards regardless of the branch,
+     * which is what makes this run once per install rather than once per launch.
+     *
+     * @param installerPackage the package that installed this copy, as Android
+     *   reports it, and null for a sideload or an adb push.
+     */
+    fun sourceOnStartup(
+        current: UpdateSource,
+        chosen: Boolean,
+        migrated: Boolean,
+        installerPackage: String?,
+    ): UpdateSource = when {
+        !chosen -> sourceForInstaller(installerPackage)
+        !migrated && current == UpdateSource.GITHUB -> UpdateSource.DIRECT
+        else -> current
+    }
+
+    /**
+     * The User-Agent the [UpdateSource.DIRECT] request carries, and the only
+     * place in this app that sends a version number anywhere.
+     *
+     * It goes to nightbell.app and nowhere else. Monitor checks keep
+     * `HttpChecker.USER_AGENT`, which names no version, because the sites a user
+     * chose to watch have no business knowing which build is watching them.
+     *
+     * `new` is appended by the first check an install ever completes, and never
+     * again. That is the whole mechanism behind an install count: one request per
+     * install, ever, carrying one word. It is not an identifier and cannot become
+     * one. Nothing distinguishes two installs that send it on the same day, the
+     * flag says nothing about which install sent it, and it is gone from the log
+     * the moment the line is counted.
+     *
+     * Clearing the app's data resets it, so a wipe and a reinstall count as two.
+     * That is a known overcount and the alternative is a durable identifier,
+     * which is the thing this design exists to avoid.
+     *
+     * `tap` marks a check the user asked for, and it exists because the count
+     * depends on the cadence being known. Active installs are read as requests
+     * per day over four, four being the most [CHECK_INTERVAL_MS] allows in a day,
+     * which makes the result a floor rather than a guess. "Check now" passes
+     * `force` and skips [isDue] entirely, so without this marker one person
+     * pressing that button forty times in an afternoon reads as ten more installs
+     * and the floor stops being a floor. Marked rather than suppressed: the
+     * request is a real check and belongs in the version histogram, it just has
+     * no place in the arithmetic.
+     */
+    fun censusAgent(version: String, firstEver: Boolean, forced: Boolean = false): String {
+        val name = version.trim().ifBlank { "unknown" }
+        val notes = buildList {
+            if (firstEver) add("new")
+            if (forced) add("tap")
+        }
+        val suffix = if (notes.isEmpty()) "" else notes.joinToString(prefix = "; ", separator = "; ")
+        return "Nightbell/$name (Android$suffix)"
     }
 
     /** Undoes [ignore], for the Settings card. A mis-tap has to be recoverable. */

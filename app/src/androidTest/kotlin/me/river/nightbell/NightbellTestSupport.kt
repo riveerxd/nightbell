@@ -39,7 +39,28 @@ object NightbellTestSupport {
                     // is missing, and on an emulator several always are, so every
                     // UI suite would otherwise be asserting against it instead of
                     // the app. `PagerSetupInstrumentedTest` opts back in.
-                    settings = settings.copy(hasSeenPagerSetup = true),
+                    settings = settings.copy(
+                        hasSeenPagerSetup = true,
+                        // Both update-source flags forced, so a test that pins a
+                        // source keeps it.
+                        //
+                        // Nightbell's init coroutine writes a source back, and it
+                        // is launched by the first `install` of the process, which
+                        // is the line above this block. On a freshly installed test
+                        // APK it reads persisted settings where both flags are
+                        // still false, so it decides a source and writes it, and
+                        // that write can land after this `replaceAll`. Setting the
+                        // flags here is half the fix and the other half is in
+                        // `Nightbell`, which now re-decides inside its own
+                        // transform: with both flags true, `sourceOnStartup`
+                        // returns the current source untouched and the pin
+                        // survives whichever order the two writes land in.
+                        //
+                        // Nothing here tests the guess. Every branch of it is
+                        // `AppUpdate.sourceOnStartup` and covered on the JVM.
+                        updateSourceChosen = true,
+                        updateSourceMigratedToSite = true,
+                    ),
                 ),
             )
         }

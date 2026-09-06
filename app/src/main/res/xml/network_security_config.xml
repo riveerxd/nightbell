@@ -68,6 +68,14 @@
     - api.github.com, for repository monitors and the version check. A fixed host
       this app chose rather than one the user typed, so it belongs here.
     - f-droid.org, for the version check when that is the chosen source.
+    - nightbell.app, for the release manifest, which is the default source for the
+      version check. It carries the address of the APK the in-app installer
+      downloads, so a CA sitting in front of it chooses what this app offers to
+      install. `UpdateInstaller.verify` is the backstop and refuses an archive
+      whose signing certificate does not match the installed copy, so the damage
+      is a suppressed update rather than a replaced app: whoever owns the manifest
+      can say "you are current" forever and hold a security fix back indefinitely.
+      Nailed here for the same reason api.github.com is.
 
   If a future release adds any other endpoint of its own, add it here the same way
   rather than letting it inherit the permissive base.
@@ -84,6 +92,7 @@
         <domain includeSubdomains="false">connectivitycheck.grapheneos.network</domain>
         <domain includeSubdomains="false">api.github.com</domain>
         <domain includeSubdomains="false">f-droid.org</domain>
+        <domain includeSubdomains="false">nightbell.app</domain>
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>

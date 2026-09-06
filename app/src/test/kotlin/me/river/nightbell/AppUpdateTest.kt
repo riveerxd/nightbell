@@ -235,18 +235,225 @@ class AppUpdateTest {
     }
 
     @Test
-    fun `a sideload watches github, because that is where a sideload came from`() {
-        assertEquals(UpdateSource.GITHUB, AppUpdate.sourceForInstaller(null))
-        assertEquals(UpdateSource.GITHUB, AppUpdate.sourceForInstaller(""))
-        assertEquals(UpdateSource.GITHUB, AppUpdate.sourceForInstaller("com.android.shell"))
-        assertEquals(UpdateSource.GITHUB, AppUpdate.sourceForInstaller("com.google.android.packageinstaller"))
+    fun `everything else watches the site the app is published from`() {
+        // Was GitHub until 3.10.0, on the reasoning that a sideload came from
+        // there. True and beside the point: the site serves the identical release
+        // and asking it tells one fewer stranger where the request came from.
+        assertEquals(UpdateSource.DIRECT, AppUpdate.sourceForInstaller(null))
+        assertEquals(UpdateSource.DIRECT, AppUpdate.sourceForInstaller(""))
+        assertEquals(UpdateSource.DIRECT, AppUpdate.sourceForInstaller("com.android.shell"))
+        assertEquals(UpdateSource.DIRECT, AppUpdate.sourceForInstaller("com.google.android.packageinstaller"))
     }
 
     @Test
     fun `the play store is not mistaken for f-droid`() {
-        // Nightbell is not on Play, so this can only be a repackage. Watching
-        // GitHub is the honest answer rather than guessing at a store listing.
-        assertEquals(UpdateSource.GITHUB, AppUpdate.sourceForInstaller("com.android.vending"))
+        // Nightbell is not on Play, so this can only be a repackage. Reading the
+        // site is the honest answer rather than guessing at a store listing.
+        assertEquals(UpdateSource.DIRECT, AppUpdate.sourceForInstaller("com.android.vending"))
+    }
+
+    // ---- the one-time move onto the app's own site ---------------------------
+
+    @Test
+    fun `an install nobody has configured takes the guess from its installer`() {
+        assertEquals(
+            UpdateSource.DIRECT,
+            AppUpdate.sourceOnStartup(UpdateSource.GITHUB, chosen = false, migrated = false, installerPackage = null),
+        )
+        assertEquals(
+            UpdateSource.FDROID,
+            AppUpdate.sourceOnStartup(
+                UpdateSource.GITHUB,
+                chosen = false,
+                migrated = false,
+                installerPackage = "org.fdroid.fdroid",
+            ),
+        )
+    }
+
+    @Test
+    fun `an existing install on github is moved to the site once`() {
+        // The whole reason updateSourceMigratedToSite exists. Without it every
+        // install that predates 3.10.0 would sit on GitHub forever, because
+        // updateSourceChosen was already true for all of them.
+        assertEquals(
+            UpdateSource.DIRECT,
+            AppUpdate.sourceOnStartup(
+                UpdateSource.GITHUB,
+                chosen = true,
+                migrated = false,
+                installerPackage = null,
+            ),
+        )
+    }
+
+    @Test
+    fun `an f-droid install is not moved, because the site is no more use to it`() {
+        assertEquals(
+            UpdateSource.FDROID,
+            AppUpdate.sourceOnStartup(
+                UpdateSource.FDROID,
+                chosen = true,
+                migrated = false,
+                installerPackage = "org.fdroid.fdroid",
+            ),
+        )
+    }
+
+    @Test
+    fun `once moved, a deliberate choice of github is left alone forever`() {
+        // The move happens once and never argues with the user afterwards. Anyone
+        // who reads the blurb and decides they would rather tell GitHub than tell
+        // the maintainer has made a real choice, and re-running the migration on
+        // the next launch would quietly overrule it every time.
+        assertEquals(
+            UpdateSource.GITHUB,
+            AppUpdate.sourceOnStartup(
+                UpdateSource.GITHUB,
+                chosen = true,
+                migrated = true,
+                installerPackage = null,
+            ),
+        )
+        assertEquals(
+            UpdateSource.FDROID,
+            AppUpdate.sourceOnStartup(
+                UpdateSource.FDROID,
+                chosen = true,
+                migrated = true,
+                installerPackage = null,
+            ),
+        )
+        assertEquals(
+            UpdateSource.DIRECT,
+            AppUpdate.sourceOnStartup(
+                UpdateSource.DIRECT,
+                chosen = true,
+                migrated = true,
+                installerPackage = "org.fdroid.fdroid",
+            ),
+        )
+    }
+
+    @Test
+    fun `a fresh f-droid install is never moved off f-droid by the migration`() {
+        // The two flags land together on a fresh install, so the guess is the
+        // last word. This is the ordering bug the combined function exists to
+        // make impossible: guess F-Droid, then immediately migrate it to the site
+        // because the migration ran second and only looked at the source.
+        val guessed = AppUpdate.sourceOnStartup(
+            UpdateSource.DIRECT,
+            chosen = false,
+            migrated = false,
+            installerPackage = "com.looker.droidify",
+        )
+        assertEquals(UpdateSource.FDROID, guessed)
+        assertEquals(
+            UpdateSource.FDROID,
+            AppUpdate.sourceOnStartup(guessed, chosen = true, migrated = true, installerPackage = null),
+        )
+    }
+
+    // ---- the census agent ----------------------------------------------------
+
+    @Test
+    fun `the first check ever appends new and no other check does`() {
+        assertEquals("Nightbell/3.9.0 (Android; new)", AppUpdate.censusAgent("3.9.0", firstEver = true))
+        assertEquals("Nightbell/3.9.0 (Android)", AppUpdate.censusAgent("3.9.0", firstEver = false))
+    }
+
+    @Test
+    fun `a check the user asked for says so, so it can be left out of the arithmetic`() {
+        // Active installs are read as scheduled checks over four, four being the
+        // most the six-hour interval allows in a day. "Check now" passes force and
+        // skips the interval, so without this marker one person pressing it forty
+        // times reads as ten more installs and the floor is not a floor.
+        assertEquals(
+            "Nightbell/3.9.0 (Android; tap)",
+            AppUpdate.censusAgent("3.9.0", firstEver = false, forced = true),
+        )
+        assertEquals(
+            "Nightbell/3.9.0 (Android; new; tap)",
+            AppUpdate.censusAgent("3.9.0", firstEver = true, forced = true),
+        )
+        // Order matters to nothing but the reader, and the reader is `census.sh`,
+        // which matches `; new` followed by either a semicolon or the paren for
+        // exactly this reason.
+        assertTrue(
+            AppUpdate.censusAgent("3.9.0", firstEver = true, forced = true).contains("; new;"),
+        )
+    }
+
+    @Test
+    fun `a scheduled check is still the default shape`() {
+        // The parameter is defaulted, so every existing caller keeps sending the
+        // unmarked agent and only the forced path opts in.
+        assertEquals(
+            AppUpdate.censusAgent("3.9.0", firstEver = false),
+            AppUpdate.censusAgent("3.9.0", firstEver = false, forced = false),
+        )
+    }
+
+    @Test
+    fun `the agent carries a version and nothing that could identify an install`() {
+        // Written as the property rather than as the string, because the string
+        // is already asserted above and the property is the thing that must not
+        // regress: the version is the only part that varies between two installs.
+        // Blank the version out of each and what is left has to be identical, so
+        // a future edit that adds a device model, a locale, a build fingerprint
+        // or an id fails here.
+        val one = AppUpdate.censusAgent("3.9.0", firstEver = true).replace("3.9.0", "")
+        val two = AppUpdate.censusAgent("41.2.7", firstEver = true).replace("41.2.7", "")
+        assertEquals(one, two)
+        // And two installs on the same version send byte-identical headers, so
+        // there is nothing in the request to tell them apart with at all.
+        assertEquals(
+            AppUpdate.censusAgent("3.9.0", firstEver = true),
+            AppUpdate.censusAgent("3.9.0", firstEver = true),
+        )
+    }
+
+    @Test
+    fun `a debug build reports its own suffix rather than hiding it`() {
+        // The suffix is real and the log is allowed to say so: a stream of
+        // -debug checks is the maintainer's emulator, and subtracting it from
+        // the count requires being able to see it.
+        assertEquals(
+            "Nightbell/3.9.0-debug (Android)",
+            AppUpdate.censusAgent("3.9.0-debug", firstEver = false),
+        )
+    }
+
+    @Test
+    fun `a blank version still produces a parseable agent`() {
+        // BuildConfig cannot be blank, but the injection point can be in a test
+        // or a future caller, and an agent of "Nightbell/ (Android)" would land
+        // in the version histogram as an empty column nobody could explain.
+        assertEquals("Nightbell/unknown (Android)", AppUpdate.censusAgent("", firstEver = false))
+        assertEquals("Nightbell/unknown (Android)", AppUpdate.censusAgent("   ", firstEver = false))
+    }
+
+    @Test
+    fun `being counted survives everything the user can answer about a version`() {
+        // censusSent is not part of the update conversation and must not be reset
+        // by any part of it. Ignoring a version, deferring one, or catching up
+        // are all answers about a release; whether this install has ever been
+        // seen is not, and clearing it would count one install twice.
+        val counted = UpdateState(censusSent = true, lastCheckedAt = 1_000L)
+        val release = AppUpdate.Release(
+            version = "3.9.0",
+            url = "https://nightbell.app/download",
+            source = UpdateSource.DIRECT,
+        )
+        assertTrue(AppUpdate.decide(release, "3.8.0", counted, 2_000L).state.censusSent)
+        // Caught up, which resets the deferrals. Not this.
+        assertTrue(AppUpdate.decide(release, "3.9.0", counted, 2_000L).state.censusSent)
+        // A failed check, which records only that the attempt happened.
+        assertTrue(AppUpdate.decide(null, "3.8.0", counted, 2_000L).state.censusSent)
+        assertTrue(AppUpdate.ignore(counted, "3.9.0").censusSent)
+        assertTrue(AppUpdate.remindLater(counted, 2_000L).censusSent)
+        assertTrue(AppUpdate.showNow(counted).censusSent)
+        assertTrue(AppUpdate.unignore(counted).censusSent)
     }
 
     @Test

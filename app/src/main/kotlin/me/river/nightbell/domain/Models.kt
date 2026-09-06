@@ -1394,7 +1394,7 @@ data class GlobalSettings(
      * app.
      */
     val updateChecksEnabled: Boolean = true,
-    val updateSource: UpdateSource = UpdateSource.GITHUB,
+    val updateSource: UpdateSource = UpdateSource.DIRECT,
 
     /**
      * Whether [updateSource] is the user's answer or still Nightbell's guess.
@@ -1410,6 +1410,23 @@ data class GlobalSettings(
      * their next visit to the switch settles it for good.
      */
     val updateSourceChosen: Boolean = false,
+
+    /**
+     * Whether the one-time move from GitHub's API onto the app's own site has run.
+     *
+     * Separate from [updateSourceChosen] because the two questions are different.
+     * That one asks whether anybody has touched the switch; this one asks whether
+     * an install predating [UpdateSource.DIRECT] has been moved onto it, and
+     * without it every existing install would sit on GitHub forever while only
+     * fresh ones read the site.
+     *
+     * The move is deliberately not "reset everyone to the default". Anyone on
+     * F-Droid stays on F-Droid, because for them GitHub's newest tag is a version
+     * their client cannot install and the site's is no better. Only GitHub moves,
+     * and it moves because the site serves the identical release while telling one
+     * fewer party where the request came from.
+     */
+    val updateSourceMigratedToSite: Boolean = false,
 
     // ---- Diagnostics ---------------------------------------------------------
     /**

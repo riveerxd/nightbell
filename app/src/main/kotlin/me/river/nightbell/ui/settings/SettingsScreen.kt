@@ -1300,7 +1300,9 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (ToastMessage) -> Unit) {
                             text = "Nightbell can look for a newer version of itself, notify you once " +
                                 "and show a notice on the dashboard until you dismiss it. Nothing is " +
                                 "fetched until you tap Install, and Android still asks before it " +
-                                "replaces the app.",
+                                "replaces the app. The check reads one small file from the source " +
+                                "below and says which version you are running. That is the whole of " +
+                                "it, and this switch stops it.",
                             style = MaterialTheme.typography.bodySmall,
                             color = NightbellColors.TextTertiary,
                         )
@@ -1333,8 +1335,19 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (ToastMessage) -> Unit) {
                                     selected = settings.updateSource,
                                     onSelect = { choice ->
                                         viewModel.update {
-                                            // Chosen, so the guess never runs again.
-                                            it.copy(updateSource = choice, updateSourceChosen = true)
+                                            // Chosen, so neither the guess nor the
+                                            // one-time move off GitHub runs again.
+                                            // Both flags, not just the first: with
+                                            // only `chosen` set, a deliberate pick
+                                            // of GitHub here would be migrated to
+                                            // the site on a later launch, which is
+                                            // the one thing the migration must
+                                            // never do.
+                                            it.copy(
+                                                updateSource = choice,
+                                                updateSourceChosen = true,
+                                                updateSourceMigratedToSite = true,
+                                            )
                                         }
                                     },
                                     label = { it.label },

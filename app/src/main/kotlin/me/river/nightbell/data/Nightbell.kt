@@ -85,7 +85,7 @@ object Nightbell {
          * apply to the next poll, not to the next launch.
          */
         val github = GitHubChecker(settingsFor = { store.snapshot.value.settings })
-        val updates = UpdateChecker()
+        val updates = UpdateChecker(installedVersion = { BuildConfig.VERSION_NAME })
 
         /**
          * Fetching and installing a release, on a tap and never otherwise.
@@ -191,11 +191,37 @@ object Nightbell {
             // here rather than at the first check means the Settings card is
             // already right the first time anyone opens it.
             appScope.launch {
-                if (!store.currentSnapshot().settings.updateSourceChosen) {
-                    val guess = AppUpdate.sourceForInstaller(installer.installerPackage())
-                    store.updateSettings {
-                        it.copy(updateSource = guess, updateSourceChosen = true)
-                    }
+                val settings = store.currentSnapshot().settings
+                if (settings.updateSourceChosen && settings.updateSourceMigratedToSite) {
+                    return@launch
+                }
+                // Reading the installer is a binder call, so it happens only on
+                // the launch that still needs it. Every branch of the decision
+                // itself is AppUpdate.sourceOnStartup and tested there.
+                val installerPackage = installer.installerPackage()
+                // Decided inside the transform, against the settings as they are
+                // when the write happens, not against the snapshot read above.
+                //
+                // There is a real gap between the two: a store read, then a binder
+                // round trip, then a write. Deciding before that window and
+                // writing `decided` afterwards discards anything that changed
+                // during it, which is a user tapping the source switch on a cold
+                // start, and in the test suite it is a `replaceAll` that pinned a
+                // source landing mid-window and being silently overruled. Both
+                // read as an inexplicable one-off. Re-deciding here closes it:
+                // once both flags are true, sourceOnStartup returns the current
+                // source untouched, so a value written in the gap survives.
+                store.updateSettings { current ->
+                    current.copy(
+                        updateSource = AppUpdate.sourceOnStartup(
+                            current = current.updateSource,
+                            chosen = current.updateSourceChosen,
+                            migrated = current.updateSourceMigratedToSite,
+                            installerPackage = installerPackage,
+                        ),
+                        updateSourceChosen = true,
+                        updateSourceMigratedToSite = true,
+                    )
                 }
             }
 

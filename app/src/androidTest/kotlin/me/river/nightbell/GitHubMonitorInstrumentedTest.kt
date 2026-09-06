@@ -91,7 +91,15 @@ class GitHubMonitorInstrumentedTest {
     @Before
     fun setUp() {
         notifications.cancelAll()
-        NightbellTestSupport.resetApp(GlobalSettings(motionIntensity = 0f))
+        // The update source is pinned to GitHub because this class's fake server
+        // impersonates GitHub's API and nothing else. The default moved to
+        // nightbell.app in 3.10.0, and without this pin `checkForAppUpdate` here
+        // reaches past the fake server to the real site: the update tests failed,
+        // and the three that assert nothing was posted would have started passing
+        // for the wrong reason, off a live 404, over the network, in a unit suite.
+        NightbellTestSupport.resetApp(
+            GlobalSettings(motionIntensity = 0f, updateSource = UpdateSource.GITHUB),
+        )
         server = TinyHttpServer { request -> respond(request) }
         engine = CheckEngine(
             store = graph.store,

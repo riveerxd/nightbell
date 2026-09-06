@@ -25,6 +25,7 @@ import me.river.nightbell.domain.MonitorRuntime
 import me.river.nightbell.domain.PauseState
 import me.river.nightbell.domain.NetworkBaseline
 import me.river.nightbell.domain.TlsTrust
+import me.river.nightbell.domain.UpdateSource
 import me.river.nightbell.domain.UrgentAlerts
 import me.river.nightbell.domain.runCatchingCancellable
 import me.river.nightbell.domain.Reachability
@@ -257,6 +258,9 @@ class CheckEngine(
      * serialised.
      */
     private val locks = ConcurrentHashMap<String, Mutex>()
+
+    /** Serialises [checkForAppUpdate]; see [checkForAppUpdateLocked] for why. */
+    private val updateLock = Mutex()
 
     /**
      * The checker's own health. See [CheckerHealth] — process-scoped on purpose,
@@ -1004,7 +1008,25 @@ class CheckEngine(
      *
      * @return whether a notification was posted.
      */
-    suspend fun checkForAppUpdate(force: Boolean = false): Boolean {
+    suspend fun checkForAppUpdate(force: Boolean = false): Boolean = updateLock.withLock {
+        checkForAppUpdateLocked(force)
+    }
+
+    /**
+     * Serialised, and the reason is the census rather than the notification.
+     *
+     * Three callers can arrive at once: the sweep in `MonitorWorkers`, the view
+     * model on init, and "Check now". On a fresh install `lastCheckedAt` is 0, so
+     * the first two both pass [AppUpdate.isDue] and can overlap. Both would read
+     * `censusSent = false` from their own snapshot, both would send `new`, and
+     * that install would be counted twice in a number documented as exact.
+     *
+     * A lock rather than writing the flag before the request, because the flag
+     * has to mean "a manifest actually came back": setting it optimistically
+     * would lose any install whose first few days are offline, which is the
+     * opposite and worse mistake.
+     */
+    private suspend fun checkForAppUpdateLocked(force: Boolean): Boolean {
         val checker = updates ?: return false
         if (!isOnline()) return false
         val snapshot = store.currentSnapshot()
@@ -1015,7 +1037,13 @@ class CheckEngine(
         if (!force && !AppUpdate.isDue(snapshot.update, nowMs())) return false
 
         val installed = installedVersion()
-        val release = runCatchingCancellable { checker.latest(settings.updateSource) }.getOrNull()
+        val release = runCatchingCancellable {
+            checker.latest(
+                settings.updateSource,
+                firstEver = !snapshot.update.censusSent,
+                forced = force,
+            )
+        }.getOrNull()
         val decision = AppUpdate.decide(release, installed, snapshot.update, nowMs())
         val speaking = decision.action == AppUpdate.Action.NOTIFY &&
             decision.release != null &&
@@ -1030,7 +1058,14 @@ class CheckEngine(
         } else {
             decision.state
         }
-        withContext(NonCancellable) { store.updateAppUpdate { state } }
+        // A manifest came back parsed, so the request reached the origin and was
+        // logged. Recorded whatever the decision was: whether a notification is
+        // warranted has nothing to do with whether this install has been seen
+        // once. Only the site is counted, so only the site sets it.
+        val counted = release != null && release.source == UpdateSource.DIRECT
+        withContext(NonCancellable) {
+            store.updateAppUpdate { if (counted) state.copy(censusSent = true) else state }
+        }
 
         if (!speaking) return false
         val notice = decision.release ?: return false

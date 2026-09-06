@@ -604,6 +604,49 @@ and offers **Check now**. When a newer version exists the app says so twice: a
 notification, once per version, and a modal banner on the dashboard that keeps
 saying it until the user answers.
 
+Three sources, at most one check every six hours:
+
+| Source | Reads | Default for |
+| --- | --- | --- |
+| **nightbell.app** | `nightbell.app/v1/release.json`, a static file naming the current release | Everything except an F-Droid install |
+| **GitHub** | `api.github.com`, the newest release on the repository | Nobody, and it stays selectable on purpose |
+| **F-Droid** | `f-droid.org/api/v1`, the newest build F-Droid has published | An install whose installer package was F-Droid, Droid-ify or Neo Store |
+
+The site is the default since 3.10.0, and an install that predated it is moved off
+GitHub once. An F-Droid install is never moved: F-Droid publishes on its own
+schedule, so the site's newest tag is as unreachable for them as GitHub's was.
+
+### The version check is counted
+
+The request to `nightbell.app` is the only one Nightbell makes that exists partly
+for the maintainer's benefit, so it is worth being exact about. It carries a
+`User-Agent` of `Nightbell/<version> (Android)`, plus `new` on an install's first
+ever successful check and `tap` when the user pressed Check now, so at most
+`Nightbell/<version> (Android; new; tap)`. Nothing else. The origin logs a
+timestamp, a status and that string, in `census.log`, and the log format holds no
+address and no hash of one. `website/scripts/validate.mjs` fails the site build if
+`$remote_addr` or an alias appears in it.
+
+That yields two numbers: an exact count of installs, from the word `new` said once
+per install per lifetime, and a floor on active installs, from scheduled requests
+per day over four. `tap` exists to keep the second one honest, since Check now
+passes `force` and skips the interval, so a tapped check is excluded from that
+division and counted only in the version histogram. Neither number can be traced
+to a device, because there is no per install identifier in the app to log. Retention curves are the thing this deliberately
+cannot produce, since linking two days of the same install is what an identifier
+is for.
+
+`censusSent` in `UpdateState` is the flag behind the word. It is set only when a
+manifest comes back parsed, so an install that is offline for its first three days
+is still counted as new on the fourth, and it survives everything the user can
+answer about a version. Clearing the app's data resets it, which counts a wipe and
+reinstall as two installs.
+
+The switch that stops the check stops the counting with it, and choosing GitHub
+moves the request to a third party who will not tell the maintainer anything. Both
+of those are the point rather than a loophole: a count nobody can decline is a
+different thing than a count.
+
 **The notification opens the app, not a browser**, whenever the release has an
 APK behind it. Both GitHub and F-Droid publish one, so the route turns on whether
 there is a file rather than on which source published it. The tap lands on the
@@ -958,5 +1001,7 @@ intact and the element monitor re-resolving through the new code path.
   dialog every interval was considered and refused.
 - **No custom sound-file picker.** Sound choice is silent / notification /
   alarm / ringtone; per-channel fine-tuning is handed off to system settings.
-- Local storage only, nothing leaves the device, and there is no sync or export
-  UI yet (the store is a single JSON document, so both are easy to add).
+- Local storage only, and the only things that leave the device are the checks
+  themselves, the connectivity probe and the six-hourly version check described
+  under "Being told about a new Nightbell". There is no sync UI yet (the store is
+  a single JSON document, so it is easy to add).

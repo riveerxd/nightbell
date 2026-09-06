@@ -558,6 +558,24 @@ android {
     testOptions {
         unitTests.isReturnDefaultValues = true
         unitTests.all { it.testLogging { events("passed", "failed", "skipped") } }
+        // Two JVM tests read a file Gradle has no other reason to associate with
+        // them, so it has to be told or the guard silently stops running in the
+        // one case it exists for.
+        //
+        // NetworkTrustTest reads res/xml/network_security_config.xml and
+        // UpdateCheckerTest reads the manifest the website generates. Neither is
+        // a test resource or a compiled source, so editing either one alone left
+        // testDebugUnitTest UP-TO-DATE: removing a pinned domain from the trust
+        // config and re-running the suite reported success without executing the
+        // test that checks it. Found by breaking the config on purpose and
+        // watching nothing happen.
+        unitTests.all { test ->
+            test.inputs.file("src/main/res/xml/network_security_config.xml")
+                .withPropertyName("networkSecurityConfig")
+            test.inputs.files(rootProject.file("website/public/v1/release.json"))
+                .withPropertyName("releaseManifest")
+                .optional()
+        }
     }
 
     lint {

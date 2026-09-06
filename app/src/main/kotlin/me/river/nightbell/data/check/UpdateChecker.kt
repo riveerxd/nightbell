@@ -19,11 +19,13 @@ import okhttp3.Request
 /**
  * Asks whether a newer Nightbell exists.
  *
- * Two sources, because there are two ways to have installed this app and they do
- * not move together. GitHub carries the APK the maintainer signs, available the
- * moment a tag goes out. F-Droid builds from source on its own schedule and is
- * usually a release or two behind, which for someone who installed from there is
- * not a lag but the truth: it is the newest version their client can hand them.
+ * Three sources, because there are three answers to "newest" and they do not move
+ * together. nightbell.app publishes a small file naming the current release and is
+ * the default. GitHub carries the same APK and answers from its own API, for
+ * anyone who would rather ask a stranger than ask the maintainer. F-Droid builds
+ * from source on its own schedule and is usually a release or two behind, which
+ * for someone who installed from there is not a lag but the truth: it is the
+ * newest version their client can hand them.
  *
  * Nothing here downloads anything: this reads two version strings and, when the
  * source publishes one, the address of the APK that carries them. Fetching that
@@ -33,6 +35,8 @@ class UpdateChecker(
     baseClient: OkHttpClient? = null,
     private val githubBase: String = GitHubChecker.API_BASE,
     private val fdroidBase: String = FDROID_BASE,
+    private val siteBase: String = AppUpdate.SITE_BASE,
+    private val installedVersion: () -> String = { "" },
 ) {
 
     private val client: OkHttpClient = (baseClient ?: OkHttpClient())
@@ -52,9 +56,21 @@ class UpdateChecker(
      * is a non-event, and the only correct response to one is to say nothing and
      * ask again in six hours.
      */
-    suspend fun latest(source: UpdateSource): AppUpdate.Release? = withContext(Dispatchers.IO) {
+    /**
+     * @param firstEver whether this install has never completed a check before.
+     *   Reaches the wire only on [UpdateSource.DIRECT], as one word in the
+     *   User-Agent, and only to the app's own host. See [AppUpdate.censusAgent].
+     * @param forced whether the user pressed "Check now". Same treatment, and it
+     *   is there so a tapped check can be left out of the cadence arithmetic.
+     */
+    suspend fun latest(
+        source: UpdateSource,
+        firstEver: Boolean = false,
+        forced: Boolean = false,
+    ): AppUpdate.Release? = withContext(Dispatchers.IO) {
         try {
             when (source) {
+                UpdateSource.DIRECT -> direct(firstEver, forced)
                 UpdateSource.GITHUB -> github()
                 UpdateSource.FDROID -> fdroid()
             }
@@ -64,6 +80,38 @@ class UpdateChecker(
             Diag.log(LogEvent.UPDATE_CHECK_FAILED, LogField.error("why", error))
             null
         }
+    }
+
+    /**
+     * The manifest on nightbell.app.
+     *
+     * Deliberately the dullest of the three: a static file with flat fields, no
+     * array to walk and no field that means something different depending on a
+     * sibling. It is generated from the same block the download button is
+     * generated from, by `website/scripts/gen-version-manifest.mjs`, so it cannot
+     * disagree with the site around it.
+     *
+     * A missing or unparseable manifest returns null and the caller says nothing,
+     * which is the same non-event as a rate-limited GitHub API. That matters more
+     * here than it looks: it means a website deploy that forgets this file costs
+     * update notices for a while and nothing else, rather than telling every
+     * install in the world that some wrong version is current.
+     */
+    private fun direct(firstEver: Boolean, forced: Boolean): AppUpdate.Release? {
+        val obj = fetchObject(
+            url = siteBase.trimEnd('/') + AppUpdate.MANIFEST_PATH,
+            github = false,
+            userAgent = AppUpdate.censusAgent(installedVersion(), firstEver, forced),
+        ) ?: return null
+        val version = obj.text("version")?.takeIf { it.isNotBlank() } ?: return null
+        return AppUpdate.Release(
+            version = version,
+            url = obj.text("url").orEmpty().ifBlank { AppUpdate.DOWNLOAD_URL },
+            source = UpdateSource.DIRECT,
+            notes = obj.text("notes").orEmpty(),
+            apkUrl = obj.text("apkUrl").orEmpty(),
+            apkSize = (obj["apkSize"] as? JsonPrimitive)?.content?.toLongOrNull() ?: 0L,
+        )
     }
 
     private fun github(): AppUpdate.Release? {
@@ -118,11 +166,15 @@ class UpdateChecker(
         )
     }
 
-    private fun fetchObject(url: String, github: Boolean): JsonObject? {
+    private fun fetchObject(
+        url: String,
+        github: Boolean,
+        userAgent: String = HttpChecker.USER_AGENT,
+    ): JsonObject? {
         val request = Request.Builder()
             .url(url)
             .get()
-            .header("User-Agent", HttpChecker.USER_AGENT)
+            .header("User-Agent", userAgent)
             .apply {
                 if (github) {
                     header("Accept", "application/vnd.github+json")
