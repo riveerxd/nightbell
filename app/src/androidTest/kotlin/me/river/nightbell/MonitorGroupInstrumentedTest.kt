@@ -137,7 +137,7 @@ class MonitorGroupInstrumentedTest {
                     monitors = monitors,
                     runtimes = runtimes,
                     groups = groups,
-                    settings = GlobalSettings(motionIntensity = motion, hasSeenPagerSetup = true),
+                    settings = GlobalSettings(motionIntensity = motion, hasSeenPagerSetup = true, pagerSetupSilenced = true),
                 ),
             )
         }

@@ -141,6 +141,33 @@ class BackupTest {
     }
 
     @Test
+    fun `the device-local settings do not travel in a backup`() {
+        // Both of these are answers about one phone. The diagnostic switch says
+        // whether this phone writes a file about itself; the pager silence says
+        // "stop asking me about grants I have made". Carried onto a new phone the
+        // second one is worse than useless: it silences a check about permissions
+        // that phone has never been asked for, which is the failure this whole
+        // change exists to remove, arriving by import instead.
+        val backup = NightbellBackup(
+            snapshot = NightbellSnapshot(
+                monitors = listOf(monitor("a")),
+                settings = GlobalSettings(
+                    diagnosticLogEnabled = true,
+                    pagerSetupSilenced = true,
+                    defaultIntervalMinutes = 7,
+                ),
+            ),
+        )
+
+        val imported = backup.toImportableSnapshot()
+
+        assertFalse(imported.settings.diagnosticLogEnabled)
+        assertFalse(imported.settings.pagerSetupSilenced)
+        // Everything that is about the fleet still travels.
+        assertEquals(7, imported.settings.defaultIntervalMinutes)
+    }
+
+    @Test
     fun `nothing is claimed about health until this install has checked`() {
         val backup = NightbellBackup(
             snapshot = NightbellSnapshot(

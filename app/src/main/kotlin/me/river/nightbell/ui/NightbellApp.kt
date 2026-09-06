@@ -20,6 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -28,6 +29,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.NavType
 import androidx.navigation.navArgument
 import me.river.nightbell.domain.AppUpdate
 import me.river.nightbell.data.Nightbell
@@ -47,22 +49,23 @@ import me.river.nightbell.ui.theme.rememberSystemAnimationsEnabled
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import me.river.nightbell.domain.PagerReadiness
+import me.river.nightbell.ui.permissions.PagerSetupMode
+import me.river.nightbell.ui.permissions.pagerReadiness
 import me.river.nightbell.ui.permissions.PagerSetupScreen
 
-/** One reading of what the platform currently allows. */
-private fun pagerReadinessNow(graph: Nightbell.Graph): PagerReadiness.State {
-    val settings = graph.store.snapshot.value.settings
-    return PagerReadiness.State(
-        notifications = graph.alerts.hasNotificationPermission(),
-        batteryExempt = graph.limits.isIgnoringBatteryOptimizations(),
-        fullScreen = graph.alerts.canUseFullScreenIntent(),
-        dndBypass = graph.alerts.urgentBypassesDnd(),
-        audible = graph.alarm.alarmStreamAudible(settings.urgentRespectsRingerMode),
-    )
-}
+
 
 object Routes {
-    const val PAGER_SETUP = "pager-setup"
+    /**
+     * The pager permission walkthrough.
+     *
+     * Carries how it was entered, because that decides how it is left: the
+     * launch gate replaces itself with the dashboard, while a visit from
+     * Settings has to go back to Settings. Query parameter rather than a path
+     * segment for the same reason [SETUP_NEW] uses one, so a saved back stack
+     * entry written by an earlier build still resolves.
+     */
+    const val PAGER_SETUP = "pager-setup?gate={gate}"
     const val DASHBOARD = "dashboard"
     const val SETTINGS = "settings"
     /**
@@ -75,6 +78,13 @@ object Routes {
     const val SETUP_NEW = "setup?template={template}"
     const val SETUP_EDIT = "setup/{monitorId}"
     const val DETAIL = "detail/{monitorId}"
+
+    /**
+     * Only ever called with false. The gate reaches the same destination as a
+     * start destination, which navigation resolves by pattern rather than by a
+     * filled route, so it takes the argument's default instead.
+     */
+    fun pagerSetup(gate: Boolean) = "pager-setup?gate=$gate"
 
     fun setupNew(templateId: String? = null) =
         if (templateId == null) "setup?template=" else "setup?template=$templateId"
@@ -130,18 +140,19 @@ fun NightbellApp(
     onUpdateShown: () -> Unit = {},
 ) {
     val graph = Nightbell.require()
+    val context = LocalContext.current
     val settings by graph.store.snapshot.collectAsStateWithLifecycle()
     val navController = rememberNavController()
     var toastMessage by remember { mutableStateOf<ToastMessage?>(null) }
 
-    // Decided once, from the first snapshot that has loaded: making this reactive
-    // would yank the user back to the gate the moment a grant was revoked, and
-    // re-deciding it after `hasSeenPagerSetup` flips would fight the navigation
-    // that flipped it.
+    // Decided once per launch, from the first snapshot that has loaded. Making it
+    // reactive would yank the user back to the gate the moment a grant was
+    // revoked, and re-deciding it after the screen writes its own flag would
+    // fight the navigation that flipped it.
     val startDestination = remember {
         val settings = graph.store.snapshot.value.settings
-        val state = pagerReadinessNow(graph)
-        if (PagerReadiness.shouldGate(state, dismissed = settings.hasSeenPagerSetup)) {
+        val state = pagerReadiness(context)
+        if (PagerReadiness.shouldGate(state, silenced = settings.pagerSetupSilenced)) {
             Routes.PAGER_SETUP
         } else {
             Routes.DASHBOARD
@@ -224,6 +235,12 @@ private fun NightbellNavHost(
     startDestination: String,
     onToast: (ToastMessage) -> Unit,
 ) {
+    // Deliberately owned by the host rather than by a destination. A write
+    // started inside `composable { }` runs on that entry's scope, and the
+    // navigation on the line below it pops the entry and cancels the scope. It
+    // survived on speed, which is not a property to rely on when the value being
+    // written is the one that stops a screen coming back.
+    val persistScope = rememberCoroutineScope()
     NavHost(
         navController = navController,
         startDestination = startDestination,
@@ -241,19 +258,43 @@ private fun NightbellNavHost(
             slideOutHorizontally(tween(280)) { it / 5 } + fadeOut(tween(200)) + scaleOut(tween(280), 0.96f)
         },
     ) {
-        composable(Routes.PAGER_SETUP) {
-            val scope = rememberCoroutineScope()
+        composable(
+            Routes.PAGER_SETUP,
+            arguments = listOf(
+                navArgument("gate") { type = NavType.BoolType; defaultValue = true },
+            ),
+        ) { entry ->
             val graph = Nightbell.require()
-            PagerSetupScreen(
-                onDone = {
-                    // Recorded before navigating, so a process death between the
-                    // two cannot make the gate reappear over and over.
-                    scope.launch {
-                        graph.store.updateSettings { it.copy(hasSeenPagerSetup = true) }
-                    }
+            val gate = entry.arguments?.getBoolean("gate") ?: true
+            // The gate has nothing behind it, so it replaces itself with the
+            // dashboard. A visit from Settings has Settings behind it.
+            val leave = {
+                if (gate) {
                     navController.navigate(Routes.DASHBOARD) {
                         popUpTo(Routes.PAGER_SETUP) { inclusive = true }
                     }
+                } else {
+                    navController.popBackStack()
+                }
+                Unit
+            }
+            PagerSetupScreen(
+                mode = if (gate) PagerSetupMode.GATE else PagerSetupMode.REVISIT,
+                onDone = {
+                    // Recorded before navigating, so a process death between the
+                    // two cannot make the screen ask for notifications twice.
+                    persistScope.launch {
+                        graph.store.updateSettings { it.copy(hasSeenPagerSetup = true) }
+                    }
+                    leave()
+                },
+                onSilence = {
+                    persistScope.launch {
+                        graph.store.updateSettings {
+                            it.copy(hasSeenPagerSetup = true, pagerSetupSilenced = true)
+                        }
+                    }
+                    leave()
                 },
             )
         }
@@ -315,6 +356,7 @@ private fun NightbellNavHost(
             SettingsScreen(
                 onBack = { navController.popBackStack() },
                 onToast = onToast,
+                onOpenPagerSetup = { navController.navigate(Routes.pagerSetup(gate = false)) },
             )
         }
     }

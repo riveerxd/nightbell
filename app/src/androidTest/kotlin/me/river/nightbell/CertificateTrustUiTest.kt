@@ -65,6 +65,7 @@ class CertificateTrustUiTest {
         motionIntensity = 0f,
         theme = ThemeChoice.DARK,
         hasSeenPagerSetup = true,
+        pagerSetupSilenced = true,
     )
 
     /** A monitor that is failing exactly the way issue #6 failed. */

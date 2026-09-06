@@ -72,7 +72,7 @@ class ImportProgressInstrumentedTest {
                     timeoutSeconds = SLOW_SECONDS,
                 )
             },
-            settings = GlobalSettings(motionIntensity = 0f, hasSeenPagerSetup = true),
+            settings = GlobalSettings(motionIntensity = 0f, hasSeenPagerSetup = true, pagerSetupSilenced = true),
         ),
         applicationId = "me.river.nightbell",
         versionName = "3.0.5",

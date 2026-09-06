@@ -120,6 +120,7 @@ class DiagnosticLogInstrumentedTest {
                     settings = GlobalSettings(
                         motionIntensity = 0f,
                         hasSeenPagerSetup = true,
+                        pagerSetupSilenced = true,
                         githubToken = token,
                         diagnosticLogEnabled = logging,
                     ),

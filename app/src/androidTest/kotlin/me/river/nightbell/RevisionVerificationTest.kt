@@ -138,6 +138,7 @@ class RevisionVerificationTest {
                     settings = GlobalSettings(
                         motionIntensity = 0f,
                         hasSeenPagerSetup = true,
+                        pagerSetupSilenced = true,
                         theme = theme,
                     ),
                 ),
@@ -542,7 +543,7 @@ class RevisionVerificationTest {
     fun aTemplateFillsInTheExpectationsItPromises() {
         runBlocking {
             Nightbell.install(NightbellTestSupport.appContext).store.replaceAll(
-                NightbellSnapshot(settings = GlobalSettings(motionIntensity = 0f, hasSeenPagerSetup = true)),
+                NightbellSnapshot(settings = GlobalSettings(motionIntensity = 0f, hasSeenPagerSetup = true, pagerSetupSilenced = true)),
             )
         }
         launch()

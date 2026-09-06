@@ -78,7 +78,7 @@ class SettingsTabsInstrumentedTest {
                         ),
                     ),
                     runtimes = mapOf("m1" to MonitorRuntime(health = Health.UP)),
-                    settings = GlobalSettings(motionIntensity = motion, hasSeenPagerSetup = true),
+                    settings = GlobalSettings(motionIntensity = motion, hasSeenPagerSetup = true, pagerSetupSilenced = true),
                 ),
             )
         }

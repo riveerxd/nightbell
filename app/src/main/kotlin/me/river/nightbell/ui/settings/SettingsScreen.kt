@@ -74,6 +74,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -86,6 +87,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.Lifecycle
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.river.nightbell.BuildConfig
@@ -141,10 +145,15 @@ import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import me.river.nightbell.ui.permissions.pagerReadiness
 import me.river.nightbell.ui.theme.NightbellRadii
 
 @Composable
-fun SettingsScreen(onBack: () -> Unit, onToast: (ToastMessage) -> Unit) {
+fun SettingsScreen(
+    onBack: () -> Unit,
+    onToast: (ToastMessage) -> Unit,
+    onOpenPagerSetup: () -> Unit = {},
+) {
     val viewModel = rememberSettingsViewModel()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val checkerHealth by viewModel.checkerHealth.collectAsStateWithLifecycle()
@@ -221,6 +230,23 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (ToastMessage) -> Unit) {
     val diagnosticBytes by viewModel.diagnosticBytes.collectAsStateWithLifecycle()
     var notificationsAllowed by remember {
         mutableStateOf(Nightbell.install(context).alerts.hasNotificationPermission())
+    }
+    // Re-read when this destination comes back to the front, which covers both a
+    // return from the Android settings page and a return from the permissions
+    // screen below. Inside a `composable { }` the lifecycle owner is the back
+    // stack entry, so a same-activity navigation resumes it just as a trip out
+    // to another app does.
+    var pagerReady by remember { mutableStateOf(pagerReadiness(context)) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                pagerReady = pagerReadiness(context)
+                notificationsAllowed = Nightbell.install(context).alerts.hasNotificationPermission()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     // Round trip to the system's speech settings, so returning from it re-asks
     // the engine what it can do. Without the callback the warning the user just
@@ -333,8 +359,76 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (ToastMessage) -> Unit) {
                 }
             }
 
+            item(key = "pager-permissions") {
+                StaggeredEntrance(index = 2, key = "pager-permissions", log = entrance) {
+                    // Amber, not rose: a missing grant degrades the page, it does
+                    // not mean anything is down. Rose is reserved for a monitor
+                    // that is actually failing, and notifications being off is
+                    // the one case here that earns it, because then nothing is
+                    // delivered at all.
+                    val tone = when {
+                        pagerReady.allGranted -> NightbellColors.Mint
+                        !pagerReady.canPageAtAll -> NightbellColors.Rose
+                        else -> NightbellColors.Amber
+                    }
+                    GlassCard(
+                        accent = if (pagerReady.allGranted) Color.Transparent else tone,
+                    ) {
+                        SectionHeader(
+                            "Alert permissions",
+                            icon = NightbellIcons.Bell,
+                            accent = tone,
+                        )
+                        Text(
+                            "${pagerReady.grantedCount} of ${pagerReady.total} ready",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = tone,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = if (pagerReady.allGranted) {
+                                "An urgent page can wake the screen, get through Do Not " +
+                                    "Disturb, and keep repeating until you answer it."
+                            } else {
+                                "Something an urgent page needs is switched off. Two of " +
+                                    "these live behind Android's own settings screens and " +
+                                    "no app can turn them on for you, so this walks you to " +
+                                    "each one."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NightbellColors.TextTertiary,
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        NightbellButton(
+                            text = "Open alert permissions",
+                            onClick = onOpenPagerSetup,
+                            tone = ButtonTone.Secondary,
+                            icon = NightbellIcons.Link,
+                            modifier = Modifier.fillMaxWidth().testTag("open-pager-setup"),
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        ToggleRow(
+                            title = "Check at launch",
+                            subtitle = if (settings.pagerSetupSilenced) {
+                                "Off. Nothing will tell you when one of these is switched off."
+                            } else {
+                                "Nightbell looks at these when it opens, and shows this " +
+                                    "screen when one is missing"
+                            },
+                            checked = !settings.pagerSetupSilenced,
+                            onCheckedChange = { value ->
+                                viewModel.update { it.copy(pagerSetupSilenced = !value) }
+                            },
+                            icon = NightbellIcons.Shield,
+                            accent = NightbellColors.Aqua,
+                            modifier = Modifier.testTag("pager-check-at-launch"),
+                        )
+                    }
+                }
+            }
+
             item(key = "defaults") {
-                StaggeredEntrance(index = 2, key = "defaults", log = entrance) {
+                StaggeredEntrance(index = 3, key = "defaults", log = entrance) {
                     GlassCard {
                         SectionHeader("Default alert policy", icon = NightbellIcons.Shield, accent = NightbellColors.Aqua)
                         Text(
@@ -358,7 +452,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (ToastMessage) -> Unit) {
             }
 
             item(key = "pause") {
-                StaggeredEntrance(index = 3, key = "pause", log = entrance) {
+                StaggeredEntrance(index = 4, key = "pause", log = entrance) {
                     GlassCard {
                         SectionHeader("Pause button", icon = NightbellIcons.Pause, accent = NightbellColors.Amber)
                         Text(
@@ -400,7 +494,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (ToastMessage) -> Unit) {
             }
 
             item(key = "certificates") {
-                StaggeredEntrance(index = 4, key = "certificates", log = entrance) {
+                StaggeredEntrance(index = 5, key = "certificates", log = entrance) {
                     GlassCard {
                         SectionHeader(
                             "TLS certificates",
@@ -461,7 +555,7 @@ fun SettingsScreen(onBack: () -> Unit, onToast: (ToastMessage) -> Unit) {
             }
 
             item(key = "speech") {
-                StaggeredEntrance(index = 5, key = "speech", log = entrance) {
+                StaggeredEntrance(index = 6, key = "speech", log = entrance) {
                     GlassCard {
                         // Sky, not rose. Rose is what this app calls DOWN, and it is
                         // spent on severity: the certificate card's "urgent below",

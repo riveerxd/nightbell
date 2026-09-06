@@ -207,11 +207,17 @@ fun NightbellBackup.toImportableSnapshot(): NightbellSnapshot {
     return NightbellSnapshot(
         monitors = monitors,
         runtimes = runtimes,
-        // The diagnostic switch is the one setting that does not travel. It
-        // governs whether this device writes a file about itself, so it is a
-        // decision about the device rather than about the fleet, and a backup
-        // carried onto a new phone should not start it writing one.
-        settings = snapshot.settings.copy(diagnosticLogEnabled = false),
+        // Two settings do not travel, and both for the same reason: they are
+        // decisions about this device rather than about the fleet. The
+        // diagnostic switch governs whether this phone writes a file about
+        // itself, and a backup carried onto a new one should not start it
+        // writing one. The pager-setup silence is an answer about the grants on
+        // the phone it was given on, and carrying it would silence a check on a
+        // phone that has made none of them.
+        settings = snapshot.settings.copy(
+            diagnosticLogEnabled = false,
+            pagerSetupSilenced = false,
+        ),
         // Grouping is part of how someone has arranged their monitors, so it
         // travels with them. Members that did not survive the filter above are
         // dropped by the store's own read migration, so nothing here has to

@@ -115,7 +115,11 @@ class MainActivity : ComponentActivity() {
             Manifest.permission.POST_NOTIFICATIONS,
         ) == android.content.pm.PackageManager.PERMISSION_GRANTED
         if (granted) return
-        val setupWillAsk = !Nightbell.install(this).store.snapshot.value.settings.hasSeenPagerSetup
+        // Reads the same flag the gate reads rather than "has it been seen".
+        // Notifications missing means the readiness state cannot be complete, so
+        // the gate is going to show unless it has been silenced, and it owns the
+        // ask when it does.
+        val setupWillAsk = !Nightbell.install(this).store.snapshot.value.settings.pagerSetupSilenced
         if (setupWillAsk) return
         notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
     }

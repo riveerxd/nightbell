@@ -101,6 +101,7 @@ class LiveCardInstrumentedTest {
             settings = GlobalSettings(
                 motionIntensity = 0f,
                 hasSeenPagerSetup = true,
+                pagerSetupSilenced = true,
                 strictForegroundMonitoring = strict,
             ),
         )

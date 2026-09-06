@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -51,6 +52,7 @@ import me.river.nightbell.domain.PagerReadiness
 import me.river.nightbell.domain.PagerReadiness.Requirement
 import me.river.nightbell.ui.components.ButtonTone
 import me.river.nightbell.ui.components.GlassCard
+import me.river.nightbell.ui.components.GlassIconButton
 import me.river.nightbell.ui.components.NightbellButton
 import me.river.nightbell.ui.icons.NightbellIcons
 import me.river.nightbell.ui.theme.NightbellColors
@@ -75,8 +77,26 @@ import me.river.nightbell.ui.theme.NightbellColors
 /** Stable handle for the "get me past this" button, whatever its label says. */
 const val TAG_DISMISS: String = "pager-setup-dismiss"
 
+/** The "stop showing me this" button, which exists only on the launch gate. */
+const val TAG_SILENCE: String = "pager-setup-silence"
+
+/**
+ * Where the screen was entered from, which decides how it is left.
+ *
+ * The gate stands in front of the dashboard and has nothing behind it, so it
+ * offers to stop appearing. Reached from Settings there is a screen behind it
+ * and the user came looking on purpose, so it offers a way back instead: an
+ * "are you sure you want this" button on a screen somebody navigated to is a
+ * question nobody asked.
+ */
+enum class PagerSetupMode { GATE, REVISIT }
+
 @Composable
-fun PagerSetupScreen(onDone: () -> Unit) {
+fun PagerSetupScreen(
+    mode: PagerSetupMode,
+    onDone: () -> Unit,
+    onSilence: () -> Unit = {},
+) {
     val context = LocalContext.current
     val graph = Nightbell.require()
     var state by remember { mutableStateOf(readState(context)) }
@@ -134,12 +154,31 @@ fun PagerSetupScreen(onDone: () -> Unit) {
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 22.dp, vertical = 24.dp),
     ) {
-        Text(
-            "Before we start",
-            style = MaterialTheme.typography.labelSmall,
-            color = NightbellColors.Rose,
-            letterSpacing = 2.4.sp,
-        )
+        if (mode == PagerSetupMode.REVISIT) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                GlassIconButton(
+                    icon = NightbellIcons.ArrowLeft,
+                    onClick = onDone,
+                    contentDescription = "Back",
+                    accent = NightbellColors.TextSecondary,
+                    size = 38.dp,
+                )
+                Spacer(Modifier.width(14.dp))
+                Text(
+                    "Alert permissions",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = NightbellColors.Aqua,
+                    letterSpacing = 2.4.sp,
+                )
+            }
+        } else {
+            Text(
+                "Before we start",
+                style = MaterialTheme.typography.labelSmall,
+                color = NightbellColors.Aqua,
+                letterSpacing = 2.4.sp,
+            )
+        }
         Spacer(Modifier.height(10.dp))
         Text(
             "Let Nightbell wake you when something breaks",
@@ -159,7 +198,11 @@ fun PagerSetupScreen(onDone: () -> Unit) {
         Text(
             "${state.grantedCount} of ${state.total} ready",
             style = MaterialTheme.typography.titleMedium,
-            color = if (state.allGranted) NightbellColors.Mint else NightbellColors.TextSecondary,
+            color = when {
+                state.allGranted -> NightbellColors.Mint
+                !state.canPageAtAll -> NightbellColors.Rose
+                else -> NightbellColors.Amber
+            },
         )
         Spacer(Modifier.height(12.dp))
 
@@ -208,12 +251,14 @@ fun PagerSetupScreen(onDone: () -> Unit) {
                 text = actionLabel(next),
                 onClick = { grant(next) },
                 modifier = Modifier.fillMaxWidth(),
-                accent = NightbellColors.Rose,
-                accentEnd = NightbellColors.Coral,
             )
             Spacer(Modifier.height(10.dp))
             NightbellButton(
-                text = if (state.canPageAtAll) "Continue anyway" else "Skip for now",
+                text = when {
+                    mode == PagerSetupMode.REVISIT -> "Done"
+                    state.canPageAtAll -> "Continue anyway"
+                    else -> "Skip for now"
+                },
                 onClick = onDone,
                 // Tagged because the label depends on what is already granted, so
                 // a test cannot address it by text.
@@ -222,7 +267,7 @@ fun PagerSetupScreen(onDone: () -> Unit) {
             )
         } else {
             NightbellButton(
-                text = "All set — open Nightbell",
+                text = if (mode == PagerSetupMode.REVISIT) "Done" else "All set, open Nightbell",
                 onClick = onDone,
                 modifier = Modifier.fillMaxWidth().testTag(TAG_DISMISS),
                 accent = NightbellColors.Mint,
@@ -230,9 +275,28 @@ fun PagerSetupScreen(onDone: () -> Unit) {
             )
         }
 
+        if (mode == PagerSetupMode.GATE) {
+            // Quieter than the two above it, and deliberately not a third
+            // NightbellButton: this is the one control here that gives something
+            // up, and it should not read as an equal third way out. It still
+            // takes a full row so the tap target clears 48dp.
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Don't ask again",
+                style = MaterialTheme.typography.bodyMedium,
+                color = NightbellColors.TextTertiary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(TAG_SILENCE)
+                    .clickable(onClick = onSilence)
+                    .padding(vertical = 14.dp),
+            )
+        }
+
         Spacer(Modifier.height(14.dp))
         Text(
-            "You can change any of this later in Settings.",
+            "Settings has all of this again, under Alerts.",
             style = MaterialTheme.typography.bodySmall,
             color = NightbellColors.TextTertiary,
             modifier = Modifier.fillMaxWidth(),
@@ -241,10 +305,26 @@ fun PagerSetupScreen(onDone: () -> Unit) {
     }
 }
 
+/**
+ * What a row's state costs, in the palette's own terms.
+ *
+ * Rose is down and amber is degraded everywhere else in this app, and
+ * [Requirement.essential] already draws exactly that line: without notifications
+ * nothing is delivered at all, and the other three each make the page worse in
+ * one specific, survivable way. This screen used to paint all four rose, which
+ * spent the colour that means "your service is down" on a Do Not Disturb toggle.
+ */
+@Composable
+private fun toneOf(requirement: Requirement, granted: Boolean): Color = when {
+    granted -> NightbellColors.Mint
+    requirement.essential -> NightbellColors.Rose
+    else -> NightbellColors.Amber
+}
+
 @Composable
 private fun RequirementRow(requirement: Requirement, granted: Boolean, onClick: () -> Unit) {
     GlassCard(
-        accent = if (granted) Color.Transparent else NightbellColors.Rose,
+        accent = if (granted) Color.Transparent else toneOf(requirement, granted),
         onClick = if (granted) null else onClick,
         // The tick and the trailing "Allow" both carry the state visually and
         // neither reaches TalkBack: the icon is decorative and the word only
@@ -264,7 +344,7 @@ private fun RequirementRow(requirement: Requirement, granted: Boolean, onClick: 
                 Icon(
                     if (granted) NightbellIcons.Check else NightbellIcons.Warning,
                     contentDescription = null,
-                    tint = if (granted) NightbellColors.Mint else NightbellColors.Rose,
+                    tint = toneOf(requirement, granted),
                     modifier = Modifier.size(22.dp),
                 )
             }
@@ -286,7 +366,7 @@ private fun RequirementRow(requirement: Requirement, granted: Boolean, onClick: 
                 Text(
                     if (requirement.leavesTheApp) "Settings" else "Allow",
                     style = MaterialTheme.typography.labelLarge,
-                    color = NightbellColors.Rose,
+                    color = toneOf(requirement, granted),
                 )
             }
         }
@@ -335,6 +415,20 @@ private fun grantedBlurb(requirement: Requirement): String = when (requirement) 
     Requirement.FULL_SCREEN -> "An urgent page can wake the screen."
     Requirement.DND_BYPASS -> "Urgent pages get through Do Not Disturb."
 }
+
+/**
+ * One live reading of the four grants, plus whether the phone can make a sound.
+ *
+ * Public because three screens need the same answer: this one, the launch gate's
+ * decision in `NightbellApp`, and the Alerts tab in Settings. It was written
+ * twice before that third caller existed, and two copies of a platform read is
+ * one copy too many for something that decides whether a page can wake anybody.
+ *
+ * Blocking, and called from composition on purpose: every one of these is a
+ * synchronous lookup against a system service, and the alternative is a screen
+ * that renders "0 of 4 ready" for a frame before correcting itself.
+ */
+fun pagerReadiness(context: Context): PagerReadiness.State = readState(context)
 
 private fun readState(context: Context): PagerReadiness.State {
     val graph = Nightbell.install(context)

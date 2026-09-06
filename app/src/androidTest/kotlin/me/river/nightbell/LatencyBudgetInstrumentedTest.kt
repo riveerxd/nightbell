@@ -115,6 +115,7 @@ class LatencyBudgetInstrumentedTest {
                         motionIntensity = 0f,
                         theme = ThemeChoice.DARK,
                         hasSeenPagerSetup = true,
+                        pagerSetupSilenced = true,
                         defaultLatencySloMs = defaultSloMs,
                     ),
                 ),

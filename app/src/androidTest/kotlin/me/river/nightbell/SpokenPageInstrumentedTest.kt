@@ -128,6 +128,7 @@ class SpokenPageInstrumentedTest {
             GlobalSettings(
                 motionIntensity = 0f,
                 hasSeenPagerSetup = true,
+                pagerSetupSilenced = true,
                 defaultAlert = AlertPolicy(speak = speak),
             ),
         )
@@ -557,6 +558,7 @@ class SpokenPageInstrumentedTest {
             GlobalSettings(
                 motionIntensity = 0f,
                 hasSeenPagerSetup = true,
+                pagerSetupSilenced = true,
                 defaultAlert = AlertPolicy(speak = true, failureThreshold = 1),
             ),
         )
@@ -603,6 +605,7 @@ class SpokenPageInstrumentedTest {
             GlobalSettings(
                 motionIntensity = 0f,
                 hasSeenPagerSetup = true,
+                pagerSetupSilenced = true,
                 defaultAlert = AlertPolicy(speak = false, failureThreshold = 1),
             ),
         )
@@ -650,6 +653,7 @@ class SpokenPageInstrumentedTest {
             GlobalSettings(
                 motionIntensity = 0f,
                 hasSeenPagerSetup = true,
+                pagerSetupSilenced = true,
                 strictForegroundMonitoring = true,
                 defaultAlert = AlertPolicy(speak = true, failureThreshold = 1),
             ),

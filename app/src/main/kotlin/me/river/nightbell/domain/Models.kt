@@ -1296,23 +1296,33 @@ data class GlobalSettings(
      */
     val speakVoice: String = "",
     /**
-     * The user has been through (or dismissed) the pager-setup screen.
+     * The pager-setup screen has owned a notification prompt at least once.
      *
-     * Gates that screen exactly once. It stays reachable from Settings
-     * afterwards — a monitoring app that will not show you your monitors until
-     * you have flipped four system toggles is worse than one with a degraded
-     * pager. See [me.river.nightbell.domain.PagerReadiness.shouldGate].
+     * Nothing is gated on this. It exists so `MainActivity` knows whether the
+     * setup screen is going to ask for notifications itself, and stays its hand
+     * if so. See [me.river.nightbell.MainActivity].
      */
     val hasSeenPagerSetup: Boolean = false,
 
     /**
-     * Watch TLS certificate expiry alongside the checks.
+     * The user asked not to be shown the pager-setup screen at launch.
      *
-     * On by default and cheap: the date comes back with a handshake the checker is
-     * already paying for, so the only cost is the notification, and the failure it
-     * catches is one nobody wants to meet at three in the morning. See
-     * [me.river.nightbell.domain.CertificateWatch].
+     * Set only by the "Don't ask again" button on that screen, and cleared again
+     * by the switch in Settings. Everything else about the screen is decided
+     * from the grants themselves, so a missing permission brings it back on the
+     * next launch.
+     *
+     * The distinction cost a real feature. Skipping the screen used to be
+     * permanent, and the only route to the full-screen permission ran through
+     * it, so one tap meant an urgent page could never wake a locked phone again
+     * and nothing anywhere would say why.
+     *
+     * Device-local, like [diagnosticLogEnabled]: it is a decision about the
+     * grants on this phone, so it does not travel in a backup. See
+     * [me.river.nightbell.data.transfer.toImportableSnapshot].
      */
+    val pagerSetupSilenced: Boolean = false,
+
     /** Dark, light, or whatever the system is doing. */
     val theme: ThemeChoice = ThemeChoice.SYSTEM,
 

@@ -104,6 +104,7 @@ class UpdateBannerInstrumentedTest {
                         motionIntensity = 0f,
                         theme = ThemeChoice.DARK,
                         hasSeenPagerSetup = true,
+                        pagerSetupSilenced = true,
                         updateChecksEnabled = checksEnabled,
                     ),
                     update = update,

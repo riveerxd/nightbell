@@ -207,6 +207,7 @@ class ScreenshotTest {
                         // Past the pager-setup gate, or every capture below is a
                         // photograph of the permissions screen.
                         hasSeenPagerSetup = true,
+                        pagerSetupSilenced = true,
                         defaultAlert = AlertPolicy(
                             sound = SoundChoice.ALARM,
                             vibrationStyle = VibrationStyle.HEARTBEAT,

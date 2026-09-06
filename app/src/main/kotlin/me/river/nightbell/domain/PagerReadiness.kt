@@ -105,10 +105,16 @@ object PagerReadiness {
     /**
      * Whether the setup screen should stand in front of the dashboard.
      *
-     * Shown while anything is missing and the user has not dismissed it. Once
-     * dismissed it never gates again — it stays reachable from Settings — because
-     * a monitoring app that will not let you see your monitors is worse than one
-     * with a degraded pager.
+     * Read at every launch, from the grants themselves. A missing grant brings
+     * the screen back, because the thing it is asking for is still missing and
+     * nothing else in the app can ask for it.
+     *
+     * This used to take "has the user seen it" instead, which made a single tap
+     * on the way past permanent. That cost the full-screen permission outright:
+     * it is granted from one Settings page, that page is reachable from this
+     * screen and nowhere else, and an install that skipped once could never get
+     * back. Only [GlobalSettings.pagerSetupSilenced] stops it now, it is set by
+     * a button that says so, and Settings can turn it off again.
      */
-    fun shouldGate(state: State, dismissed: Boolean): Boolean = !dismissed && !state.allGranted
+    fun shouldGate(state: State, silenced: Boolean): Boolean = !silenced && !state.allGranted
 }

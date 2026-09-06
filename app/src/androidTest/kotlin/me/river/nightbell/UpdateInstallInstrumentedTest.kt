@@ -157,6 +157,7 @@ class UpdateInstallInstrumentedTest {
                         motionIntensity = 0f,
                         theme = theme,
                         hasSeenPagerSetup = true,
+                        pagerSetupSilenced = true,
                         updateChecksEnabled = true,
                     ),
                     update = UpdateState(

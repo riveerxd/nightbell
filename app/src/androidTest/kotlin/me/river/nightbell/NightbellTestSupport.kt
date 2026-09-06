@@ -39,8 +39,14 @@ object NightbellTestSupport {
                     // is missing, and on an emulator several always are, so every
                     // UI suite would otherwise be asserting against it instead of
                     // the app. `PagerSetupInstrumentedTest` opts back in.
+                    //
+                    // `pagerSetupSilenced` is the one that does the work here.
+                    // `hasSeenPagerSetup` no longer gates anything; it is kept
+                    // set so `MainActivity` does not fire its own notification
+                    // prompt over whatever a test is looking at.
                     settings = settings.copy(
                         hasSeenPagerSetup = true,
+                        pagerSetupSilenced = true,
                         // Both update-source flags forced, so a test that pins a
                         // source keeps it.
                         //
@@ -71,9 +77,24 @@ object NightbellTestSupport {
         val graph = Nightbell.install(appContext)
         runBlocking {
             graph.store.replaceAll(
-                NightbellSnapshot(settings = settings.copy(hasSeenPagerSetup = false)),
+                NightbellSnapshot(
+                    settings = settings.copy(
+                        hasSeenPagerSetup = false,
+                        pagerSetupSilenced = false,
+                    ),
+                ),
             )
         }
+    }
+
+    /**
+     * Reads the flag the launch gate actually consults.
+     *
+     * Named rather than inlined because three tests assert on it and the field
+     * it used to be is still there, one line away, meaning nothing.
+     */
+    fun pagerSetupSilenced(): Boolean = runBlocking {
+        Nightbell.install(appContext).store.currentSnapshot().settings.pagerSetupSilenced
     }
 
     /**
