@@ -78,6 +78,30 @@ data class PageExpiry(
     }
 
     /**
+     * The one line that sits above the paragraph, in amber, and gets read first.
+     *
+     * `FailureKind.TIMEOUT` carries "Raise the timeout, or the service is
+     * genuinely slow." That is true of a slow server and false of every case
+     * this class exists to tell apart, and it was still the loudest thing on the
+     * screen after the paragraph below it had been fixed. A page that loaded
+     * fine and lost its element got it. So did the page in issue 8, sitting on
+     * requests that had already failed. Blank here means the generic line was
+     * right and should stand.
+     */
+    fun hint(): String = when {
+        !pageFinished && resourceErrors > 0 ->
+            "Something the page asked for never answered. A longer timeout will not fix that."
+
+        !pageFinished && readyState == "interactive" ->
+            "The page stalled waiting on something that never answered."
+
+        stage == LoadStage.POLLING || stage == LoadStage.GATE_PROBE ->
+            "The page loaded. It is the element that never appeared."
+
+        else -> ""
+    }
+
+    /**
      * The paragraph under the headline.
      *
      * Written for somebody who is going to paste it into an issue, so it says
@@ -85,6 +109,19 @@ data class PageExpiry(
      * "still waiting on subresources" case is the one that matters: it is the
      * shape of a page whose load event never fires because something it
      * requested never answered, and raising the timeout does not fix it.
+     *
+     * A failed request outranks both the ready state and the progress figure in
+     * that order, because progress on its own reads as movement. The reporter in
+     * issue 8 was told to try a longer timeout while sitting at 80% with four
+     * addresses that would not resolve, and he had already been to sixty seconds
+     * for nothing. Whatever the renderer claims, a load waiting on a request that
+     * failed is not going to arrive later.
+     *
+     * Both pieces of advice lead with the words that rule the timeout out. This
+     * paragraph is also the body of the alert that wakes somebody at night, and
+     * `AlertCenter` cuts that at 320 characters. Written the other way round,
+     * with the reasoning first and the verdict at the end, the sentence saying
+     * which knob not to turn was the part that fell off.
      */
     fun detail(): String = buildString {
         append("Stopped at ")
@@ -107,12 +144,19 @@ data class PageExpiry(
         if (requestsStarted > 0) append(" $requestsStarted requests were started.")
         if (resourceErrors > 0) append(" $resourceErrors of them failed.")
         if (consoleErrors > 0) append(" The page logged $consoleErrors errors.")
-        if (!pageFinished && readyState == "interactive") {
+        if (!pageFinished && resourceErrors > 0) {
             append(
-                " A document that reaches \"interactive\" and stops is usually waiting on " +
-                    "something it requested that never answered, so a longer timeout will " +
-                    "not help. Turn the diagnostic log on in Settings and check again to see " +
-                    "what failed.",
+                " A longer timeout will not help: a load that never completes while requests " +
+                    "are failing is waiting on one of them. A blocked host, a dead CDN or a " +
+                    "DNS rule on the network does this. Turn the diagnostic log on in " +
+                    "Settings and check again to see which addresses failed.",
+            )
+        } else if (!pageFinished && readyState == "interactive") {
+            append(
+                " A longer timeout will not help: a document that reaches \"interactive\" and " +
+                    "stops is usually waiting on something it requested that never answered. " +
+                    "Turn the diagnostic log on in Settings and check again to see what " +
+                    "failed.",
             )
         } else if (!pageFinished && progress in 0..99) {
             append(" Raising this monitor's timeout is worth trying first.")

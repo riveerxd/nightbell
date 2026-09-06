@@ -70,7 +70,7 @@ class AlertCenter(private val context: Context) {
         val body = result.message.ifBlank { result.failureKind.headline }
         val expanded = buildString {
             append(result.failureKind.headline)
-            if (result.failureKind.hint.isNotBlank()) append("\n").append(result.failureKind.hint)
+            if (result.advice.isNotBlank()) append("\n").append(result.advice)
             if (result.detail.isNotBlank()) append("\n\n").append(result.detail.take(320))
             append("\n\n").append(monitor.url)
         }
@@ -145,8 +145,8 @@ class AlertCenter(private val context: Context) {
                 NotificationCompat.BigTextStyle().bigText(
                     buildString {
                         append(result.failureKind.headline)
-                        if (result.failureKind.hint.isNotBlank()) {
-                            append("\n").append(result.failureKind.hint)
+                        if (result.advice.isNotBlank()) {
+                            append("\n").append(result.advice)
                         }
                         append("\n\nThis alert repeats every ")
                         append(monitor.urgentRepeatMinutes.coerceAtLeast(1))

@@ -189,6 +189,7 @@ class ElementChecker(
                     ?: "Page did not finish loading in ${timeout}s",
                 detail = stalled?.detail()
                     ?: "The embedded browser never reached a usable DOM.",
+                hint = stalled?.hint().orEmpty(),
                 at = nowMs(),
             )
         }

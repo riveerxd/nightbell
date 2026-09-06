@@ -1066,6 +1066,14 @@ data class CheckResult(
     val failureKind: FailureKind = FailureKind.NONE,
     val message: String = "",
     val detail: String = "",
+    /**
+     * Replaces [FailureKind.hint] when the check knows better than its category.
+     *
+     * A page monitor can tell a slow server from a page waiting on a request
+     * that already failed, and the two want opposite advice. The category
+     * cannot, so anything specific is set here and [advice] prefers it.
+     */
+    val hint: String = "",
     val bodyPreview: String = "",
     val elementText: String = "",
     /** One entry per watched element, in [Monitor.targets] order. */
@@ -1093,7 +1101,10 @@ data class CheckResult(
     /** See [RepoFacts]. Set by the GitHub checker, null everywhere else. */
     val repo: RepoFacts? = null,
     val at: Long = 0L,
-)
+) {
+    /** The next step to show, specific where the check had one. */
+    val advice: String get() = hint.ifBlank { failureKind.hint }
+}
 
 /**
  * How much a monitor's TLS certificate has to prove.

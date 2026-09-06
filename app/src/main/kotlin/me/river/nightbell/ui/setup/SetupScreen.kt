@@ -1854,10 +1854,10 @@ private fun TestResultCard(result: CheckResult, accent: Color) {
                 MicroTag("element text", color = NightbellColors.Violet, icon = NightbellIcons.Target)
             }
         }
-        if (!result.ok && result.failureKind.hint.isNotBlank()) {
+        if (!result.ok && result.advice.isNotBlank()) {
             Spacer(Modifier.height(11.dp))
             Text(
-                text = result.failureKind.hint,
+                text = result.advice,
                 style = MaterialTheme.typography.bodySmall,
                 color = NightbellColors.Amber,
             )
@@ -1868,7 +1868,10 @@ private fun TestResultCard(result: CheckResult, accent: Color) {
                 text = result.detail,
                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
                 color = NightbellColors.TextTertiary,
-                maxLines = 6,
+                // Eight, because a page verdict runs to six lines of facts
+                // before it reaches the sentence telling you to turn the
+                // diagnostic log on, and six lines cut that sentence in half.
+                maxLines = 8,
                 overflow = TextOverflow.Ellipsis,
             )
         }

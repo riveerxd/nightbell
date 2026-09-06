@@ -270,6 +270,10 @@ class LogSentinelTest {
             "CheckResult" to mapOf(
                 "message" to Rule.SAFE,
                 "detail" to Rule.NEVER,
+                // Chosen from a fixed set the app ships. Unlike detail it never
+                // quotes a number, an address or anything a server said, so it
+                // carries nothing about the monitor it came from.
+                "hint" to Rule.SAFE,
                 "bodyPreview" to Rule.NEVER,
                 "elementText" to Rule.NEVER,
                 // An issuer DN is presented by a server on the network and is
