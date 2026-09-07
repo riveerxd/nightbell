@@ -460,8 +460,34 @@ android {
         // version it announces can be installed by the thing announcing it. It
         // had been walking users out to a download page for several releases
         // while the app itself could fetch and hand over the APK.
-        versionCode = 38
-        versionName = "3.9.0"
+        // 3.10.0 asks this app's own site which version is current, at
+        // nightbell.app/v1/release.json, instead of asking api.github.com. The
+        // number of requests an install makes is unchanged and one stranger
+        // fewer is involved, and the origin's log is the first thing that can
+        // say how many installs there are: an install's first successful check
+        // says "new" once in its life and never again, so counting that word
+        // counts installs without an identifier existing. The log format
+        // carries a timestamp, a status and a user agent, and a build fails if
+        // an address field is ever added to it. GitHub stays selectable for
+        // anyone who would rather tell GitHub.
+        //
+        // The screen that asks for the alert permissions stops being a one way
+        // door. It set a flag saying it had been seen and then read that flag
+        // to decide whether to show, so a single tap on the way past was
+        // permanent, an urgent page could never wake a locked phone again, and
+        // nothing said why. It reads the grants now, so a missing one brings it
+        // back, and Settings, Alerts, Alert permissions reaches it on purpose.
+        // Reached that way it wears the Settings header and drops the first run
+        // copy, and its colour was corrected: rose is the notifications row
+        // alone, because that is the one whose absence delivers nothing.
+        //
+        // A page still waiting on a request that already failed stops being
+        // told to raise the timeout. A renderer stuck at 80 per cent reads as
+        // movement, so both the paragraph and the amber hint above it
+        // recommended the one knob that could not help, while the count of
+        // failed requests sat unused in the same object.
+        versionCode = 39
+        versionName = "3.10.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
