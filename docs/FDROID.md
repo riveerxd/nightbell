@@ -302,7 +302,21 @@ Order matters. Steps 2 and 3 are the ones that are easy to get backwards.
 1. **Set the JDK.** `sudo archlinux-java set java-21-openjdk`, confirm `21.0.12`.
 2. **Bump `versionCode` and `versionName`** in `app/build.gradle.kts`, write
    `fastlane/metadata/android/en-US/changelogs/<versionCode>.txt`, and **commit**.
-3. **Build.** `./gradlew clean :app:assembleRelease`
+3. **Build.** `./gradlew clean :app:assembleRelease --no-build-cache`
+
+   `--no-build-cache` is not optional and `clean` does not cover it. `clean`
+   empties `build/`, the build cache lives in `~/.gradle` and survives it, so
+   `minifyReleaseWithR8` can come back `FROM-CACHE` and the APK ships a dex that
+   this machine restored rather than produced. F-Droid runs R8 for real, gets a
+   different byte layout for the same program, and the reproducible build fails
+   on `classes.dex` and `baseline.prof` with every other file matching. That is
+   what happened to 3.9.0 and 3.10.0. Watch the task list: if the output says
+   `FROM-CACHE` next to R8, the APK is not publishable.
+
+   Build in a tree whose `.git` is a real directory. A `git worktree` is not,
+   and AGP writes `generate_error_reason: NO_VALID_GIT_FOUND` into
+   `META-INF/version-control-info.textproto` instead of the revision, which
+   fails the comparison on a different file for a different reason.
 4. **Preflight.** `docs/fdroid-preflight.sh` checks all three constraints.
 5. **Copy to `artifacts/`**, tag the *version bump* commit, push both.
 6. **Create the GitHub release** with the APK attached. The `Binaries` URL pattern
@@ -434,6 +448,8 @@ Kept as a lookup table, since the error strings are searchable.
 | `rewritemeta` diff moving `scandelete` below `gradle`, then `AllowedAPKSigningKeys` below `Builds` | Canonical field order | Paste what the diff prints |
 | `rewritemeta` diff of `-Binaries:` / `+Binaries: ` | Missing trailing space on a wrapped value | Commit via API with base64 |
 | `compared built binary to supplied reference binary but failed`, `classes.dex` and `baseline.prof` differ | JDK mismatch, 21.0.11 against their 21.0.12 | Match the JDK, re-release |
+| Same error, JDK already matching | R8 output restored `FROM-CACHE`, so the dex was never built by this run | Rebuild with `--no-build-cache` and replace the asset |
+| Same error, only `version-control-info.textproto` differs, saying `NO_VALID_GIT_FOUND` | Built inside a `git worktree`, whose `.git` is a file | Build in a real clone |
 | Same error, only `version-control-info.textproto` differs | APK built before the release commit existed | Rebuild at the tagged commit |
 | `found extra signing block 'Dependency metadata'` | AGP default for Play reporting | `dependenciesInfo { includeInApk = false }` |
 | Review comment: `Please don't use tag or branch in commit` | A tag in `commit`. Passes CI, fails review | Use the full 40 character hash |

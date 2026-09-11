@@ -98,7 +98,7 @@ export const RELEASE = {
   apkUrl:
     'https://github.com/riveerxd/nightbell/releases/download/v3.10.0/Nightbell-3.10.0-release.apk',
   apkBytes: 2469728,
-  apkSha256: '634792d27652be4dd0e7f9eb495cdf081d94b1f6b79818b6754df17f8c7f7a83',
+  apkSha256: 'd5368c5518bf9024e50b050a33ba036deac253eeb918dfb4007b2da1be7040c4',
   versionCode: 39,
   minSdk: 26,
   minAndroid: '8.0',
