@@ -12,7 +12,7 @@
   <img src="https://img.shields.io/badge/targetSdk-36-3a3f4b?style=flat-square" alt="targetSdk 36" />
   <a href="https://f-droid.org/en/packages/me.river.nightbell/"><img src="https://img.shields.io/f-droid/v/me.river.nightbell?style=flat-square&logo=fdroid&logoColor=white&color=1976D2&label=F-Droid" alt="Version on F-Droid" /></a>
   <a href="../../releases/latest"><img src="https://img.shields.io/github/v/release/riveerxd/nightbell?style=flat-square&color=2F6BFF&label=release" alt="Latest release" /></a>
-  <img src="https://img.shields.io/badge/tests-635%20JVM%20+%20353%20on--device-2FD98A?style=flat-square" alt="Tests" />
+  <img src="https://img.shields.io/badge/tests-823%20JVM%20+%20456%20on--device-2FD98A?style=flat-square" alt="Tests" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/licence-Apache%202.0-3a3f4b?style=flat-square" alt="Apache 2.0" /></a>
 </p>
 
@@ -280,8 +280,12 @@ versioned URL would rot. Every build is also in [Releases](../../releases/latest
 and in `artifacts/` in this repo:
 
 ```bash
-adb install -r artifacts/Nightbell-3.0.5-release.apk
+curl -fL -o nightbell.apk https://nightbell.app/download && adb install -r nightbell.apk
 ```
+
+That reads the redirect rather than naming a version, so it does not go stale.
+The version it resolved to is in the filename inside `artifacts/` if you want the
+file by name instead.
 
 Nightbell is not on IzzyOnDroid and not on Google Play. Play is not a "not yet":
 the foreground service declares `specialUse` rather than `dataSync`, because
