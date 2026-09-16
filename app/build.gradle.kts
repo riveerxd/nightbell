@@ -486,8 +486,26 @@ android {
         // movement, so both the paragraph and the amber hint above it
         // recommended the one knob that could not help, while the count of
         // failed requests sat unused in the same object.
-        versionCode = 39
-        versionName = "3.10.0"
+        //
+        // Prometheus arrives as one monitor kind with three sources: an
+        // exporter's own metrics endpoint read by name and label filter, a
+        // PromQL query against Prometheus, Mimir, Thanos or VictoriaMetrics
+        // treated as its own alert condition, and an Alertmanager listed worst
+        // first. Issues 12, 13 and 14, which were one ask from one person.
+        // Browsing an endpoint lists what it actually exposes, because the
+        // exact metric name is written down in exactly one place and that place
+        // is the thing being monitored.
+        //
+        // A dead network stops counting as an outage. The probe that confirms
+        // the network before paging only ever covered plain status monitors, so
+        // a page monitor and an https one could both page from a garage with no
+        // signal: one because a WebView error code was thrown away and every
+        // failure read as a broken page, the other because a socket dying
+        // inside a handshake was read as a certificate being refused. The
+        // urgent repeat also asked the wrong timestamp, one the drop path
+        // bumps for every check it discards.
+        versionCode = 40
+        versionName = "3.11.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
