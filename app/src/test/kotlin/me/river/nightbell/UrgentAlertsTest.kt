@@ -199,4 +199,41 @@ class UrgentAlertsTest {
         val acked = UrgentAlerts.acknowledge(started).state
         assertNull(UrgentAlerts.nextRepeatDelayMs(acked, now, 5))
     }
+
+    // ---- what a repeat is allowed to rest on --------------------------------
+
+    @Test
+    fun `evidence goes stale after one repeat gap`() {
+        assertFalse(UrgentAlerts.evidenceIsStale(now, now + 4 * minute, 5))
+        assertTrue(UrgentAlerts.evidenceIsStale(now, now + 5 * minute, 5))
+        assertTrue(UrgentAlerts.evidenceIsStale(now, now + 40 * minute, 5))
+    }
+
+    @Test
+    fun `a monitor that has never reached a verdict has nothing to page about`() {
+        assertTrue(UrgentAlerts.evidenceIsStale(0L, now, 5))
+    }
+
+    @Test
+    fun `a repeat gap under a minute is still a minute`() {
+        assertFalse(UrgentAlerts.evidenceIsStale(now, now + 30_000L, 0))
+        assertTrue(UrgentAlerts.evidenceIsStale(now, now + minute, 0))
+    }
+
+    @Test
+    fun `an attempt that reached no verdict does not refresh the evidence`() {
+        // The car park case. Checks kept being attempted every pass and every one
+        // of them was thrown away because the phone had no network, so the newest
+        // verdict stayed where it was and the siren stopped after one gap instead
+        // of running for the whole trip. Before this, the attempt timestamp was
+        // what got read, and it was refreshed by every dropped check.
+        val lastVerdict = now
+        val attemptsSince = listOf(now + minute, now + 2 * minute, now + 3 * minute)
+        attemptsSince.forEach { attemptAt ->
+            assertTrue(
+                "an attempt at $attemptAt must not vouch for a verdict from $lastVerdict",
+                UrgentAlerts.evidenceIsStale(lastVerdict, attemptAt + 5 * minute, 5),
+            )
+        }
+    }
 }

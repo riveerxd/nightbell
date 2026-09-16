@@ -13,11 +13,13 @@ import me.river.nightbell.domain.ProxyRoute
 import me.river.nightbell.domain.TlsFailure
 import me.river.nightbell.domain.Validation
 import java.io.ByteArrayOutputStream
+import java.io.EOFException
 import java.io.IOException
 import java.io.InterruptedIOException
 import java.net.ConnectException
 import java.net.InetSocketAddress
 import java.net.Proxy
+import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.security.cert.CertPathValidatorException
@@ -25,6 +27,7 @@ import java.security.cert.CertificateException
 import java.security.cert.X509Certificate
 import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLException
+import javax.net.ssl.SSLPeerUnverifiedException
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -390,14 +393,43 @@ class HttpChecker(
     private fun elapsedMs(startedNano: Long): Long =
         ((System.nanoTime() - startedNano) / 1_000_000L).coerceAtLeast(0L)
 
-    private fun classify(error: Throwable): FailureKind = when (error) {
+    internal fun classify(error: Throwable): FailureKind = when (error) {
         is UnknownHostException -> FailureKind.DNS
         is SocketTimeoutException, is InterruptedIOException -> FailureKind.TIMEOUT
-        is SSLException -> FailureKind.TLS
+        is SSLException -> if (droppedUnderTls(error)) FailureKind.CONNECT else FailureKind.TLS
         is ConnectException -> FailureKind.CONNECT
         is IllegalArgumentException -> FailureKind.BAD_CONFIG
         is IOException -> FailureKind.CONNECT
         else -> FailureKind.UNKNOWN
+    }
+
+    /**
+     * Whether an [SSLException] is really the socket dying rather than the
+     * certificate being refused.
+     *
+     * Conscrypt wraps a plain socket failure during the handshake in an
+     * SSLException: driving into an underground car park mid handshake gives
+     * "Read error: I/O error during system call, Connection reset by peer", and
+     * losing the radio between the ClientHello and the answer gives a timeout
+     * wearing the same coat. Both were classified TLS, which
+     * [me.river.nightbell.domain.Reachability] reads as proof the network
+     * works, so the reachability probe was never spent and every https monitor
+     * paged from a dead network.
+     *
+     * The cause chain decides it, never the message text: Conscrypt and the JVM
+     * word the identical condition differently, which is the mistake
+     * [me.river.nightbell.domain.TlsFailure] exists to avoid. A certificate
+     * exception anywhere in the chain means the handshake got far enough to
+     * judge a certificate, so it stays TLS whatever else is underneath.
+     */
+    private fun droppedUnderTls(error: Throwable): Boolean {
+        if (TlsTrustConfig.pinMismatch(error) != null) return false
+        val chain = generateSequence(error as Throwable?) {
+            if (it.cause === it) null else it.cause
+        }.toList()
+        if (chain.any { it is CertPathValidatorException || it is CertificateException }) return false
+        if (chain.any { it is SSLPeerUnverifiedException }) return false
+        return chain.any { it is SocketException || it is SocketTimeoutException || it is EOFException }
     }
 
     private fun describe(error: Throwable, kind: FailureKind, monitor: Monitor): String = when {

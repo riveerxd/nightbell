@@ -25,6 +25,7 @@ import me.river.nightbell.domain.BrowserState
 import me.river.nightbell.domain.CheckResult
 import me.river.nightbell.domain.ElementTarget
 import me.river.nightbell.domain.FailureKind
+import me.river.nightbell.domain.PageLoadFailure
 import me.river.nightbell.domain.GlobalSettings
 import me.river.nightbell.domain.LoadStage
 import me.river.nightbell.domain.LogEvent
@@ -85,6 +86,15 @@ class ElementChecker(
         val title: String = "",
         val nodeCount: Int = 0,
         val loadError: String = "",
+        /**
+         * The main frame's `WebViewClient.ERROR_*` code, or
+         * [PageLoadFailure.NONE] when the load did not fail that way.
+         *
+         * Kept because the description string alone cannot say whether the page
+         * broke or the phone did, and that difference decides whether the check
+         * is worth paging about. See [PageLoadFailure].
+         */
+        val loadErrorCode: Int = PageLoadFailure.NONE,
         /**
          * The words on the control that appears to be standing over the page,
          * when a lookup failed and one was found. See [PickerScripts.GATE_PROBE].
@@ -197,8 +207,12 @@ class ElementChecker(
             return CheckResult(
                 ok = false,
                 latencyMs = latency,
-                failureKind = FailureKind.RENDER,
-                message = "Page failed to load",
+                // Not RENDER for everything any more. A load that failed because
+                // nothing answered is a connection failure wearing a browser's
+                // clothes, and saying so is what lets the reachability probe
+                // stop it paging from a car park. See PageLoadFailure.
+                failureKind = PageLoadFailure.kindOf(page.loadErrorCode),
+                message = PageLoadFailure.headline(page.loadErrorCode),
                 detail = page.loadError,
                 at = nowMs(),
             )
@@ -356,6 +370,10 @@ class ElementChecker(
         try {
             val outcome = withTimeoutOrNull(timeoutSeconds * 1000L + SETTLE_BUDGET_MS) {
                 val errors = StringBuilder()
+                // The main frame's error code, kept alongside its description
+                // because only the code can say whether the page broke or the
+                // network did.
+                var mainFrameError = PageLoadFailure.NONE
                 val view = WebView(context).also { webView = it }
                 configure(view)
                 Diag.log(
@@ -556,6 +574,11 @@ class ElementChecker(
                         }
                         if (main) {
                             errors.append("main frame: $description")
+                            mainFrameError = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                error?.errorCode ?: PageLoadFailure.UNKNOWN
+                            } else {
+                                PageLoadFailure.UNKNOWN
+                            }
                             pageDone.complete()
                         }
                     }
@@ -637,6 +660,7 @@ class ElementChecker(
                             )
                             return@withTimeoutOrNull parsed.copy(
                                 loadError = errors.toString(),
+                                loadErrorCode = mainFrameError,
                                 certSpki = presentedPin,
                             )
                         }
@@ -658,7 +682,12 @@ class ElementChecker(
                     LogField.of("resource_errors", trace.resourceErrors),
                 )
                 (best ?: PageResult(results = List(targets.size) { Located(found = false) }))
-                    .copy(loadError = errors.toString(), certSpki = presentedPin, gateLabel = gate)
+                    .copy(
+                        loadError = errors.toString(),
+                        loadErrorCode = mainFrameError,
+                        certSpki = presentedPin,
+                        gateLabel = gate,
+                    )
             }
             if (outcome == null) {
                 // The one place the expiry is observable. Reading the document

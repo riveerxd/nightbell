@@ -1410,12 +1410,29 @@ class CheckEngine(
      * "Too old" is one repeat gap: if the monitor is being checked at least as
      * often as it is paged, the evidence behind every page is fresh by
      * construction and this never fires.
+     *
+     * Read off the newest sample rather than `lastCheckedAt`, because those two
+     * are not the same thing and reading the wrong one kept the siren running
+     * in an underground car park. `lastCheckedAt` records that an attempt
+     * happened, and [runLocked] deliberately bumps it for every check it throws
+     * away: a dead network, a checker that crashed, a rate-limited poll. So a
+     * phone with no signal refreshed the timestamp every pass while learning
+     * nothing, this read the refreshed timestamp as fresh evidence, and a
+     * monitor that had gone down before the signal did was re-paged every few
+     * minutes off a verdict nobody had confirmed since. A sample is only ever
+     * written when a check actually reached a verdict, which is the question
+     * being asked here.
+     *
+     * No samples at all means stale, which forces the re-check. If that
+     * re-check is itself dropped the caller pages about nothing, which is the
+     * direction to fail in.
      */
-    private fun staleEvidence(monitor: Monitor, runtime: MonitorRuntime, nowMs: Long): Boolean {
-        if (runtime.lastCheckedAt <= 0L) return true
-        val gap = monitor.urgentRepeatMinutes.coerceAtLeast(1) * 60_000L
-        return nowMs - runtime.lastCheckedAt >= gap
-    }
+    private fun staleEvidence(monitor: Monitor, runtime: MonitorRuntime, nowMs: Long): Boolean =
+        UrgentAlerts.evidenceIsStale(
+            newestVerdictAt = runtime.samples.lastOrNull()?.at ?: 0L,
+            nowMs = nowMs,
+            repeatMinutes = monitor.urgentRepeatMinutes,
+        )
 
     /** Re-hydrates enough of the last failure for the page to describe it. */
     fun pageEvidence(runtime: MonitorRuntime): CheckResult = lastResultFor(runtime)

@@ -121,6 +121,22 @@ object UrgentAlerts {
         return Outcome(Action.CLEAR, previous.copy(active = false, acknowledged = true))
     }
 
+    /**
+     * Whether the newest verdict is too old to justify another page.
+     *
+     * A repeat asserts that the outage is still happening, which is a much
+     * stronger claim than the standing notification, so it has to rest on
+     * something observed within one repeat gap. [newestVerdictAt] is the time of
+     * the last check that actually reached a verdict: not the time of the last
+     * attempt, which is a different number and a much more forgiving one.
+     *
+     * Zero means nothing has ever been observed, which is stale by definition.
+     */
+    fun evidenceIsStale(newestVerdictAt: Long, nowMs: Long, repeatMinutes: Int): Boolean {
+        if (newestVerdictAt <= 0L) return true
+        return nowMs - newestVerdictAt >= repeatMinutes.coerceAtLeast(1) * 60_000L
+    }
+
     /** Milliseconds until the next repeat is due, or null when nothing is pending. */
     fun nextRepeatDelayMs(state: State, nowMs: Long, repeatMinutes: Int): Long? {
         if (!state.nagging) return null

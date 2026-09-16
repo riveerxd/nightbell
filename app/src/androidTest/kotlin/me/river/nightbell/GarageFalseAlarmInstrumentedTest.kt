@@ -8,9 +8,11 @@ import java.net.ServerSocket
 import me.river.nightbell.NightbellTestSupport.awaitTrue
 import me.river.nightbell.data.Nightbell
 import me.river.nightbell.domain.AlertPolicy
+import me.river.nightbell.domain.ElementTarget
 import me.river.nightbell.domain.GlobalSettings
 import me.river.nightbell.domain.Health
 import me.river.nightbell.domain.Monitor
+import me.river.nightbell.domain.MonitorKind
 import me.river.nightbell.domain.ReferenceSample
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -335,6 +337,103 @@ class GarageFalseAlarmInstrumentedTest {
             assertEquals(Health.DOWN, runtime()?.health)
         } finally {
             probes.close()
+        }
+    }
+
+    /**
+     * The same car park, for a page monitor.
+     *
+     * This is the hole the first version of the feature left, and it was wide
+     * enough that somebody living in it kept being paged from a garage after the
+     * fix shipped. Every monitor in the tests above is an http one, so the whole
+     * suite agreed the feature worked while the browser checker reported
+     * `RENDER` for every way of failing to load, including "there is no
+     * network". RENDER means the page came back broken, which is a claim that
+     * the connection worked, so the probe was never spent and the page went out.
+     */
+    @Test
+    fun a_page_monitor_in_the_car_park_records_nothing_and_pages_nobody() {
+        NightbellTestSupport.resetApp(
+            GlobalSettings(
+                motionIntensity = 0f,
+                masterAlertsEnabled = true,
+                defaultAlert = AlertPolicy(),
+                confirmOutagesEnabled = true,
+                latencyReferenceUrl = deadUrl,
+            ),
+        )
+        runBlocking {
+            graph.store.updateReference { listOf(freshReading()) }
+            graph.store.upsert(
+                Monitor(
+                    id = "garage",
+                    name = "Checkout API",
+                    kind = MonitorKind.WEBSITE_ELEMENT,
+                    url = deadUrl,
+                    element = ElementTarget(elementId = "price"),
+                    timeoutSeconds = 15,
+                    useGlobalAlerts = true,
+                ),
+            )
+        }
+        runCheck()
+
+        assertEquals("no page should have gone out", false, paged())
+        val after = runtime()
+        assertEquals(
+            "a page the network could not carry must not become a verdict",
+            Health.UNKNOWN,
+            after?.health,
+        )
+        assertTrue("no sample should have been recorded", after?.samples.isNullOrEmpty())
+    }
+
+    /**
+     * The other half, and the one that keeps the fix honest.
+     *
+     * A page that loads and is missing its element is a real failure observed
+     * over a working connection, so it pages whatever the reference is doing.
+     * Without this, classifying load errors more generously could quietly turn
+     * into classifying everything as the network's fault.
+     */
+    @Test
+    fun a_page_that_loads_without_its_element_pages_even_off_network() {
+        val site = TinyHttpServer {
+            TinyHttpServer.Response(
+                body = "<!doctype html><html><body><p>nothing here</p></body></html>",
+                contentType = "text/html; charset=utf-8",
+            )
+        }
+        try {
+            NightbellTestSupport.resetApp(
+                GlobalSettings(
+                    motionIntensity = 0f,
+                    masterAlertsEnabled = true,
+                    defaultAlert = AlertPolicy(),
+                    confirmOutagesEnabled = true,
+                    latencyReferenceUrl = deadUrl,
+                ),
+            )
+            runBlocking {
+                graph.store.updateReference { listOf(freshReading()) }
+                graph.store.upsert(
+                    Monitor(
+                        id = "garage",
+                        name = "Checkout API",
+                        kind = MonitorKind.WEBSITE_ELEMENT,
+                        url = site.url("/shop"),
+                        element = ElementTarget(elementId = "price"),
+                        timeoutSeconds = 15,
+                        useGlobalAlerts = true,
+                    ),
+                )
+            }
+            runCheck()
+
+            awaitTrue(description = "a missing element pages whatever the reference says") { paged() }
+            assertEquals(Health.DOWN, runtime()?.health)
+        } finally {
+            site.close()
         }
     }
 
