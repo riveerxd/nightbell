@@ -69,6 +69,7 @@ object Reachability {
         FailureKind.BODY,
         FailureKind.ELEMENT,
         FailureKind.RENDER,
+        FailureKind.METRIC,
         FailureKind.BAD_CONFIG,
         FailureKind.UNKNOWN,
         -> false

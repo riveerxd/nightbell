@@ -231,6 +231,16 @@ object AlertDecider {
             lastLatencyMs = result.latencyMs,
             lastCode = result.statusCode,
             lastMessage = if (result.ok) "" else result.message,
+            // The mirror image, and cleared on a failure for the same reason
+            // lastMessage is cleared on a pass: a stale good reading sitting
+            // beside a live failure reads as the app contradicting itself.
+            lastReading = if (result.ok) result.message else "",
+            // Replaced, never merged, and cleared by a check that failed before
+            // it could read any: a list of what is firing is only true as of the
+            // moment it was read, and a check that never reached Alertmanager
+            // knows nothing rather than knowing the old answer. Every other kind
+            // reports none, so this is a no-op for them.
+            lastAlerts = result.alerts,
             lastDetail = result.detail,
             consecutiveFailures = failures,
             consecutiveSuccesses = successes,

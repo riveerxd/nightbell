@@ -21,11 +21,33 @@ object Assertions {
         val kind: FailureKind = FailureKind.NONE,
         val message: String = "",
         val detail: String = "",
+        /**
+         * Advice this assertion can give that its [FailureKind] cannot.
+         *
+         * Blank leaves [CheckResult.advice] on the category's own hint, which is
+         * every assertion here except the Prometheus ones: a 401 from a metrics
+         * endpoint and a NaN sample want different next steps, and "unexpected
+         * status" has nothing to say about either.
+         */
+        val hint: String = "",
+        /**
+         * What Alertmanager was holding, when that is what was being read.
+         *
+         * Structured rather than folded into [detail], because the screen that
+         * shows these lists them with a severity apiece and cannot get that back
+         * out of a paragraph. Empty for every other assertion here.
+         */
+        val alerts: List<FiringAlert> = emptyList(),
     ) {
         companion object {
             val Pass = Verdict(true)
-            fun fail(kind: FailureKind, message: String, detail: String = "") =
-                Verdict(false, kind, message, detail)
+            fun fail(
+                kind: FailureKind,
+                message: String,
+                detail: String = "",
+                hint: String = "",
+                alerts: List<FiringAlert> = emptyList(),
+            ) = Verdict(false, kind, message, detail, hint, alerts)
         }
     }
 
@@ -202,8 +224,19 @@ object Assertions {
         }
     }
 
-    /** Runs status then body assertions in order and returns the first failure. */
+    /**
+     * Runs status then body assertions in order and returns the first failure.
+     *
+     * A Prometheus monitor leaves through the top and judges its own status
+     * code. These APIs answer 2xx or they have failed, so there is no status
+     * expectation worth asking its owner for, and handling the code where the
+     * body is understood is what lets a 401 talk about credentials instead of
+     * about an unexpected number. See [PrometheusCheck.evaluate].
+     */
     fun evaluateHttp(monitor: Monitor, code: Int, body: String): Verdict {
+        if (monitor.kind == MonitorKind.PROMETHEUS) {
+            return PrometheusCheck.evaluate(monitor, code, body)
+        }
         val statusVerdict = checkStatus(monitor.status, code)
         if (!statusVerdict.passed) return statusVerdict
         return checkBody(monitor.assertion, body)

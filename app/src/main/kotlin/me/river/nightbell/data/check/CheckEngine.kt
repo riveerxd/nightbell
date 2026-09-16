@@ -20,6 +20,7 @@ import me.river.nightbell.domain.GitHubState
 import me.river.nightbell.domain.GlobalSettings
 import me.river.nightbell.domain.Health
 import me.river.nightbell.domain.Monitor
+import me.river.nightbell.domain.OpenMetrics
 import me.river.nightbell.domain.MonitorKind
 import me.river.nightbell.domain.MonitorRuntime
 import me.river.nightbell.domain.PauseState
@@ -136,6 +137,51 @@ class CheckEngine(
         // baseline or announce anything. Which is exactly what "Test now" means.
         MonitorKind.GITHUB_REPO -> githubDryRun(monitor)
         else -> http.check(monitor, certPin)
+    }
+
+    /**
+     * Everything a metrics endpoint is currently exposing, for the picker.
+     *
+     * The same request a check makes, with the status expectation relaxed to
+     * "any response" and the whole body kept. Relaxed because browsing is how
+     * somebody finds out what is there, and refusing to list it because the
+     * monitor is not configured yet would be refusing to help at exactly the
+     * moment help is the point.
+     */
+    suspend fun scrapeMetrics(monitor: Monitor): MetricScrape {
+        val probe = monitor.copy(
+            method = HttpMethod.GET,
+            status = StatusExpectation(mode = StatusMode.ANY),
+        )
+        val result = runCatchingCancellable {
+            http.check(probe, previewChars = SCRAPE_CHARS)
+        }.getOrElse {
+            return MetricScrape.Failed(it.message ?: "The endpoint could not be read")
+        }
+        if (result.statusCode !in 200..299) {
+            return MetricScrape.Failed(
+                if (result.statusCode > 0) {
+                    "The endpoint answered ${result.statusCode}"
+                } else {
+                    result.message.ifBlank { "The endpoint could not be reached" }
+                },
+            )
+        }
+        val samples = OpenMetrics.parse(result.bodyPreview)
+        if (samples.isEmpty()) {
+            return MetricScrape.Failed(
+                "Nothing at that URL looks like OpenMetrics. Check it is the exporter's " +
+                    "/metrics path.",
+            )
+        }
+        return MetricScrape.Read(samples)
+    }
+
+    /** What [scrapeMetrics] found, or why it found nothing. */
+    sealed interface MetricScrape {
+        data class Read(val samples: List<OpenMetrics.Sample>) : MetricScrape
+
+        data class Failed(val message: String) : MetricScrape
     }
 
     /**
@@ -1654,6 +1700,15 @@ class CheckEngine(
 
         /** A certificate's expiry does not move between two checks. Once a day is enough. */
         private const val CERT_PROBE_INTERVAL_MS = 24L * 60 * 60 * 1000
+
+        /**
+         * How much of a scrape the picker keeps.
+         *
+         * A busy node_exporter with the default collectors runs to a few hundred
+         * kilobytes, and the reader that fills this is already bounded below it,
+         * so this is the smaller of the two limits and the one worth stating.
+         */
+        private const val SCRAPE_CHARS = 512 * 1024
         private const val DUE_SLACK_MS = DueCheck.SLACK_MS
 
         /** Never wake more often than this, however tight the configured cadence. */

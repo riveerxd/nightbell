@@ -158,6 +158,7 @@ fun kindIcon(kind: MonitorKind) = when (kind) {
     MonitorKind.ADVANCED_REQUEST -> NightbellIcons.Braces
     MonitorKind.WEBSITE_ELEMENT -> NightbellIcons.Pointer
     MonitorKind.GITHUB_REPO -> NightbellIcons.Repo
+    MonitorKind.PROMETHEUS -> NightbellIcons.Gauge
 }
 
 @Composable
@@ -1630,12 +1631,27 @@ private fun MonitorRowCard(
             )
         }
 
+        // A reading rather than a failure: a healthy Prometheus monitor whose
+        // message is the value it just read. "node_load1 = 0.29" at a glance is
+        // most of why somebody sets one of these up, and opening the monitor to
+        // find it would be hiding the answer behind a tap. Every other kind's
+        // passing message is "HTTP 200 in 41ms", which is why this is not general.
+        val reading = monitor.kind == MonitorKind.PROMETHEUS &&
+            runtime.ok(monitor.enabled) &&
+            runtime.lastReading.isNotBlank()
         AnimatedVisibility(
-            visible = !runtime.ok(monitor.enabled) && runtime.lastMessage.isNotBlank(),
+            visible = reading || (!runtime.ok(monitor.enabled) && runtime.lastMessage.isNotBlank()),
             enter = fadeIn(),
             exit = fadeOut(),
         ) {
-            val tone = if (muted) NightbellColors.Amber else NightbellColors.Rose
+            // Accent, which is chrome, because this strip is reporting a number
+            // and not passing judgement on it. The status pill above already
+            // carries the health, in the colour that means health.
+            val tone = when {
+                reading -> accent
+                muted -> NightbellColors.Amber
+                else -> NightbellColors.Rose
+            }
             Column {
                 Spacer(Modifier.height(11.dp))
                 Row(
@@ -1647,19 +1663,29 @@ private fun MonitorRowCard(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
-                        if (muted) NightbellIcons.BellOff else NightbellIcons.Warning,
+                        when {
+                            reading -> NightbellIcons.Gauge
+                            muted -> NightbellIcons.BellOff
+                            else -> NightbellIcons.Warning
+                        },
                         contentDescription = null,
                         tint = tone,
                         modifier = Modifier.size(14.dp),
                     )
                     Spacer(Modifier.width(9.dp))
                     Text(
-                        text = if (muted) {
-                            "${runtime.lastMessage} · muted, no alerts"
-                        } else {
-                            runtime.lastMessage
+                        text = when {
+                            reading -> runtime.lastReading
+                            muted -> "${runtime.lastMessage} · muted, no alerts"
+                            else -> runtime.lastMessage
                         },
-                        style = MaterialTheme.typography.bodySmall,
+                        // A reading is re-rendered on every check and its digits
+                        // change, so proportional figures make the line twitch
+                        // while somebody is watching it. Same treatment the
+                        // countdown and the latency figures already get.
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontFeatureSettings = "tnum",
+                        ),
                         color = NightbellColors.TextSecondary,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
@@ -1709,7 +1735,16 @@ private fun MonitorRowCard(
                         icon = NightbellIcons.Target,
                     )
                 }
-                if (monitor.kind != MonitorKind.WEBSITE_ELEMENT &&
+                if (monitor.kind == MonitorKind.PROMETHEUS) {
+                    // The method is always GET here, so the chip that carries it
+                    // everywhere else would be a word that never changes. Which
+                    // of the three endpoints this monitor reads is the fact worth
+                    // the same space.
+                    MicroTag(
+                        text = monitor.prometheus.source.label,
+                        color = NightbellColors.TextTertiary,
+                    )
+                } else if (monitor.kind != MonitorKind.WEBSITE_ELEMENT &&
                     monitor.kind != MonitorKind.GITHUB_REPO
                 ) {
                     MicroTag(text = monitor.method.name, color = NightbellColors.TextTertiary)

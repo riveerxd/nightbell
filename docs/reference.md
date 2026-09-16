@@ -13,6 +13,74 @@ watch it, chart it, and shout when it breaks.
 | **Status check** | Ping a URL, assert on the status code (exact / any 2xx / range / any). |
 | **Request & response** | Full control: GET·POST·PUT·PATCH·DELETE·HEAD, custom headers, request body and content type, plus a response-body assertion. |
 | **Page element** | Loads the real page in an embedded browser and watches **any number** of DOM nodes you picked by tapping them, all resolved against one page load. |
+| **Prometheus** | Reads a metrics endpoint, a PromQL query or an Alertmanager. Three sources, one kind. See below. |
+
+### Prometheus, PromQL and Alertmanager
+
+One kind with three sources, because the three differ only in which URL is
+fetched and how the body is read. The sign-in, the cadence, the TLS trust and
+the alert policy are the monitor that already existed.
+
+| Source | Asks for | Healthy when |
+| --- | --- | --- |
+| **Metrics** | The exporter's own URL, exactly as entered | Every series matching the name and label filter satisfies the comparison |
+| **PromQL** | The server's base URL, plus `/api/v1/query` which Nightbell appends | The query returns nothing · returns something · or every value it returns passes the comparison |
+| **Alertmanager** | The base URL, plus `/api/v2/alerts` which Nightbell appends | No alert past the severity and label filters is firing |
+
+**Comparisons:** above · at least · below · at most · equals · not equal.
+Written as what healthy looks like, the way an expected status code is the one
+you want back, so a page fires when the value leaves the range.
+
+**Label filters** use PromQL's own syntax and all four of its operators:
+`mode="idle"`, `cpu!="0"`, `device=~"sd.*"`, `fstype!~"tmpfs|overlay"`. Regexes
+are anchored, as Prometheus anchors them. The field also takes pasted braces,
+unquoted values and a trailing comma, because it is a text field a person types
+into.
+
+Two failures are worth calling out because they are the ones that would
+otherwise be silent. A metrics filter that matches **nothing** fails the check,
+since a metric that has stopped being exported is not good news. And a sample of
+`NaN` never counts as healthy, whichever comparison is set, because `NaN` means
+the exporter had no reading rather than a reading of zero.
+
+A default PromQL monitor is healthy while its query matches no series, which is
+how a Prometheus alerting rule is written: the expression *is* the alert
+condition, and anything it returns is the page. Prometheus answers a query it
+refuses with HTTP 200 and `status: "error"`, so that case is reported as a
+configuration problem naming what the server said, rather than as an outage.
+
+Alertmanager is asked for active alerts only, both through the request's query
+parameters and again on the way in, because some versions and some gateways in
+front of them ignore the parameters. Silenced and inhibited alerts stay out by
+default: somebody has already said they know. An alert carrying a severity
+Nightbell does not rank, or none at all, passes every severity floor, since
+hiding what cannot be ranked would hide outages to keep a filter tidy.
+
+**Finding the metric:** "Browse this endpoint" reads the URL and lists what is
+actually exposed, with a filter box over it. A name with one series shows its
+current value; a name with several shows the count and the labels that separate
+them. Picking one fills the metric field, and fills the label filter too when
+there is exactly one series, because then its labels are not a choice. This is
+the same problem the element picker solves and the same answer: the exact string
+is written down in one place, which is the thing being monitored.
+
+**Seeing the alerts:** an Alertmanager monitor's detail screen lists what is
+firing, worst first and oldest first inside a severity, each with its severity,
+its summary annotation and how long it has been going. Critical is rose, warning
+is amber, and a severity Nightbell does not rank is neutral rather than guessed
+at. The list is replaced on every check and cleared by a check that could not
+reach Alertmanager, because a list of what is firing is only true as of the
+moment it was read.
+
+**Signing in:** a username and password for HTTP basic auth, which is what
+Grafana Cloud, Mimir and a reverse proxy in front of Prometheus take. Anything
+else goes in the monitor's headers: a bearer token, a Mimir `X-Scope-OrgID`, an
+API gateway's own key. The password is never shown after it is typed, never
+logged, and is stripped from an export unless secrets were explicitly included.
+
+A healthy Prometheus monitor shows what it last read on its dashboard card,
+because the number is the thing it exists to watch. Every other kind's passing
+message is the round trip, which is not worth a line.
 
 **Response-body assertions:** contains · does not contain · exactly equals ·
 matches regex · JSON field equals · JSON field exists. JSON paths support

@@ -165,7 +165,16 @@ object BackupCodec {
 fun NightbellSnapshot.withoutSecrets(): NightbellSnapshot =
     copy(
         settings = settings.copy(githubToken = ""),
-        monitors = monitors.map { it.copy(browserState = BrowserState()) },
+        monitors = monitors.map {
+            it.copy(
+                browserState = BrowserState(),
+                // The password only. The username is not a credential on its own
+                // and keeping it means the export still says which account this
+                // monitor signs in as, so restoring it is one field to retype
+                // rather than a puzzle about who it was.
+                prometheus = it.prometheus.copy(password = ""),
+            )
+        },
     )
 
 /**
@@ -232,6 +241,8 @@ private fun MonitorRuntime.forFreshInstall(paused: Boolean): MonitorRuntime = co
     lastLatencyMs = 0L,
     lastCode = 0,
     lastMessage = "",
+    lastReading = "",
+    lastAlerts = emptyList(),
     lastDetail = "",
     consecutiveFailures = 0,
     consecutiveSuccesses = 0,

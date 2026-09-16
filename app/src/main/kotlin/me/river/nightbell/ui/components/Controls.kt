@@ -69,6 +69,8 @@ import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
@@ -105,6 +107,25 @@ fun GlassField(
     imeAction: ImeAction = ImeAction.Next,
     enabled: Boolean = true,
     /**
+     * Render the value as dots.
+     *
+     * Separate from [keyboardType], which only asks the IME not to learn the
+     * word: a password field that sets the keyboard type and nothing else still
+     * prints the password on screen, which is the half of it that matters in a
+     * room with other people in it.
+     */
+    masked: Boolean = false,
+    /**
+     * Hold the error back until the field is left.
+     *
+     * For a field whose correct values pass through invalid prefixes. A label
+     * filter is wrong for the first four keystrokes of `mode="idle"`, so flagging
+     * it live means the red note is there for most of the typing and gone by the
+     * time it mattered. Reward early, punish late: it still blocks the save, it
+     * just stops shouting mid-word.
+     */
+    holdErrorUntilBlur: Boolean = false,
+    /**
      * Defaults to the standalone field radius, which is what most of Setup uses:
      * those fields sit on the page itself with nothing around them, so there is
      * no outer curve for them to answer to.
@@ -116,7 +137,12 @@ fun GlassField(
     corner: Dp = NightbellRadii.field,
 ) {
     var focused by remember { mutableStateOf(false) }
-    val isError = note?.severity == Validation.Severity.ERROR
+    val shown = if (holdErrorUntilBlur && focused && note?.severity == Validation.Severity.ERROR) {
+        null
+    } else {
+        note
+    }
+    val isError = shown?.severity == Validation.Severity.ERROR
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
 
@@ -168,6 +194,11 @@ fun GlassField(
                         fontWeight = FontWeight.Medium,
                     ),
                     cursorBrush = SolidColor(accent),
+                    visualTransformation = if (masked) {
+                        PasswordVisualTransformation()
+                    } else {
+                        VisualTransformation.None
+                    },
                     keyboardOptions = KeyboardOptions(
                         keyboardType = keyboardType,
                         imeAction = imeAction,
@@ -195,7 +226,7 @@ fun GlassField(
                 trailing()
             }
         }
-        FieldNote(note = note, helper = helper)
+        FieldNote(note = shown, helper = helper)
     }
 }
 
@@ -667,7 +698,11 @@ fun <T> ChipSelector(
                     .padding(horizontal = 16.dp)
                     .semantics { stateDescription = if (isSelected) "Selected" else "Not selected" },
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                // Centred, not merely spaced. `spacedBy` alone packs from the
+                // start, so every label shorter than CHIP_MIN_WIDTH sat left of
+                // centre with all the slack on its right: "Above" and "Equals"
+                // looked misaligned next to "Not equal", which fills its chip.
+                horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
             ) {
                 icon?.invoke(option)?.let {
                     Icon(

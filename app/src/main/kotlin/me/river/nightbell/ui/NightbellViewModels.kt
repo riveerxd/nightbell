@@ -28,7 +28,12 @@ import me.river.nightbell.domain.ElementTarget
 import me.river.nightbell.data.alerts.PageSpeaker
 import me.river.nightbell.domain.GlobalSettings
 import me.river.nightbell.domain.SpokenPage
+import me.river.nightbell.domain.OpenMetrics
+import me.river.nightbell.data.check.CheckEngine
 import me.river.nightbell.domain.Monitor
+import me.river.nightbell.domain.PrometheusWatch
+import me.river.nightbell.domain.PrometheusSource
+import me.river.nightbell.domain.BodyAssertion
 import me.river.nightbell.domain.GroupRollup
 import me.river.nightbell.domain.MonitorCard
 import me.river.nightbell.domain.MonitorGroup
@@ -933,6 +938,24 @@ class SetupViewModel(
     /** Always the list, never the legacy single field. */
     val elements: List<ElementTarget> get() = draft.targets
 
+    /**
+     * The threshold exactly as it is being typed.
+     *
+     * Held apart from the draft for the same reason [repoInput] is. Parsing on
+     * every keystroke and writing the parse back would delete the decimal point
+     * on the keystroke that produced it, so "0.5" cannot be typed at all: "0."
+     * parses to 0.0 and renders as "0".
+     *
+     * Declared above [init] rather than beside the rest of the Prometheus
+     * helpers, and that is load bearing. `viewModelScope.launch` runs its body
+     * eagerly until the first real suspension, and `currentSnapshot()` does not
+     * suspend when the store already has one, so the whole block below runs
+     * inside the constructor. A property declared after it is still null at that
+     * point and reading it throws.
+     */
+    var thresholdInput by mutableStateOf("")
+        private set
+
     init {
         viewModelScope.launch {
             val snapshot = graph.store.currentSnapshot()
@@ -957,6 +980,11 @@ class SetupViewModel(
                     step = 1
                 }
             }
+            // After both branches, so an edited monitor, a template and a blank
+            // draft all get the field seeded from whatever the draft ended up
+            // holding. Unseeded it reads as empty and saves the default over a
+            // threshold somebody had already chosen.
+            thresholdInput = PrometheusWatch.formatValue(draft.prometheus.threshold)
             baseline = draft
             loading = false
         }
@@ -992,8 +1020,145 @@ class SetupViewModel(
                 // of an hour runs the device out of budget before the hour is up.
                 intervalMinutes = maxOf(draft.intervalMinutes, MIN_GITHUB_INTERVAL),
             ).withTargets(emptyList())
+
+            MonitorKind.PROMETHEUS -> draft.copy(
+                kind = kind,
+                method = me.river.nightbell.domain.HttpMethod.GET,
+                // PrometheusCheck judges the status code itself, in terms of what
+                // was being asked for. These two are cleared rather than left
+                // standing because neither has a field on the Prometheus screen:
+                // a body assertion carried over from a request draft would fail
+                // the monitor on something its owner cannot see to fix.
+                status = StatusExpectation(mode = StatusMode.ANY_SUCCESS),
+                assertion = BodyAssertion(),
+                body = "",
+            ).withTargets(emptyList())
         }
+        thresholdInput = PrometheusWatch.formatValue(draft.prometheus.threshold)
         testResult = null
+    }
+
+    // ---- prometheus --------------------------------------------------------
+
+    fun setThreshold(text: String) {
+        thresholdInput = text
+        val parsed = text.trim().toDoubleOrNull()
+        if (parsed != null) updateWatch { it.copy(threshold = parsed) }
+        // A field mid-edit is not an error. Validation reads the draft, which
+        // still holds the last number that parsed, and the moment the user types
+        // something that parses again this catches up. Blanking the draft here
+        // would flash a validation error under a field somebody is still using.
+        testResult = null
+    }
+
+    fun updateWatch(transform: (PrometheusWatch) -> PrometheusWatch) {
+        update { it.copy(prometheus = transform(it.prometheus)) }
+    }
+
+    fun setSource(source: PrometheusSource) {
+        updateWatch { it.copy(source = source) }
+    }
+
+    // ---- the metric browser ------------------------------------------------
+
+    /**
+     * One metric name as the picker lists it.
+     *
+     * The label sets come along because they are what tells two series of the
+     * same name apart, and picking `node_cpu_seconds_total` without seeing that
+     * it has eight of them is picking blind.
+     */
+    data class BrowsedMetric(
+        val name: String,
+        val series: List<OpenMetrics.Sample>,
+    ) {
+        val count: Int get() = series.size
+
+        /** The distinct label keys across this metric's series, for the subtitle. */
+        val labelKeys: List<String>
+            get() = series.flatMap { it.labels.keys }.distinct().sorted()
+    }
+
+    var browsing by mutableStateOf(false)
+        private set
+
+    var browseLoading by mutableStateOf(false)
+        private set
+
+    var browseError by mutableStateOf<String?>(null)
+        private set
+
+    var browseQuery by mutableStateOf("")
+
+    private var browsed by mutableStateOf<List<BrowsedMetric>>(emptyList())
+
+    /** What the list shows: everything, narrowed by whatever has been typed. */
+    val browseResults: List<BrowsedMetric>
+        get() {
+            val needle = browseQuery.trim()
+            if (needle.isEmpty()) return browsed
+            return browsed.filter { it.name.contains(needle, ignoreCase = true) }
+        }
+
+    /**
+     * Fetches the endpoint and lists what it exposes.
+     *
+     * The same problem the element picker solves, in the same shape: nobody
+     * knows the exact string, and the only place it is written down is the thing
+     * being monitored. Typing `node_load1` from memory and getting "nothing
+     * matched" is a worse first run than the app simply showing the list.
+     */
+    fun browseMetrics() {
+        if (browseLoading) return
+        browsing = true
+        browseError = null
+        browseLoading = true
+        viewModelScope.launch {
+            try {
+                when (val scrape = graph.engine.scrapeMetrics(draft)) {
+                    is CheckEngine.MetricScrape.Read -> {
+                        browsed = scrape.samples
+                            .groupBy { it.name }
+                            .map { (name, series) -> BrowsedMetric(name, series) }
+                            .sortedBy { it.name }
+                        browseError = null
+                    }
+
+                    is CheckEngine.MetricScrape.Failed -> {
+                        browsed = emptyList()
+                        browseError = scrape.message
+                    }
+                }
+            } finally {
+                browseLoading = false
+            }
+        }
+    }
+
+    fun closeBrowser() {
+        browsing = false
+        browseQuery = ""
+    }
+
+    /** Takes the name, and the labels too when there is exactly one series. */
+    fun pickMetric(metric: BrowsedMetric) {
+        updateWatch { watch ->
+            val single = metric.series.singleOrNull()
+            watch.copy(
+                metricName = metric.name,
+                // One series means its labels are not a choice, so filling them
+                // in costs the user nothing and saves them typing. More than one
+                // and the filter is a decision this cannot make for them, so it
+                // is left exactly as they had it.
+                labelFilter = if (single != null && single.labels.isNotEmpty()) {
+                    single.labels.entries.sortedBy { it.key }
+                        .joinToString(", ") { (k, v) -> "$k=\"$v\"" }
+                } else {
+                    watch.labelFilter
+                },
+            )
+        }
+        closeBrowser()
     }
 
     // ---- github ------------------------------------------------------------

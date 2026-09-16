@@ -29,6 +29,18 @@ enum class MonitorKind {
      */
     @SerialName("github_repo")
     GITHUB_REPO,
+
+    /**
+     * Reads a Prometheus-shaped endpoint: an exporter's own metrics, a PromQL
+     * query, or what Alertmanager is firing about.
+     *
+     * One kind with three sources rather than three kinds, because the three
+     * differ only in which URL is fetched and how the body is read. Everything
+     * else about them, the sign-in, the cadence, the TLS trust, the alert
+     * policy, is the monitor that already existed. See [PrometheusSource].
+     */
+    @SerialName("prometheus")
+    PROMETHEUS,
     ;
 
     val label: String
@@ -37,6 +49,7 @@ enum class MonitorKind {
             ADVANCED_REQUEST -> "Request & response"
             WEBSITE_ELEMENT -> "Page element"
             GITHUB_REPO -> "GitHub repo"
+            PROMETHEUS -> "Prometheus"
         }
 
     val blurb: String
@@ -45,6 +58,7 @@ enum class MonitorKind {
             ADVANCED_REQUEST -> "Send a crafted request, assert on what comes back."
             WEBSITE_ELEMENT -> "Watch one element on a real rendered page."
             GITHUB_REPO -> "Stars, issues, comments and releases on one repository."
+            PROMETHEUS -> "Scrape metrics, run PromQL, or watch Alertmanager."
         }
 }
 
@@ -548,6 +562,11 @@ data class Monitor(
      * kind, and defaulted so a store written before this existed still decodes.
      */
     val github: GitHubWatch = GitHubWatch(),
+    /**
+     * What a [MonitorKind.PROMETHEUS] monitor reads. Ignored by every other
+     * kind, and defaulted so a store written before this existed still decodes.
+     */
+    val prometheus: PrometheusWatch = PrometheusWatch(),
     val timeoutSeconds: Int = 15,
     val intervalMinutes: Int = 15,
     /**
@@ -646,6 +665,14 @@ data class Monitor(
             // isn't.
             if (kind == MonitorKind.GITHUB_REPO && github.repository.isSet) {
                 github.slug
+            } else if (kind == MonitorKind.PROMETHEUS &&
+                prometheus.source == PrometheusSource.METRICS &&
+                prometheus.metricName.isNotBlank()
+            ) {
+                // Several exporters on one host is the normal shape of this, and
+                // the host is the part they share. The metric is the part that
+                // tells two of them apart on the dashboard.
+                prometheus.metricName.trim()
             } else {
                 prettyHost
             }
@@ -786,6 +813,31 @@ data class MonitorRuntime(
     val lastLatencyMs: Long = 0L,
     val lastCode: Int = 0,
     val lastMessage: String = "",
+    /**
+     * What the last passing check reported, for a monitor whose answer is a
+     * value rather than a yes.
+     *
+     * Separate from [lastMessage] rather than folded into it, because that field
+     * means "why is this not OK": it is cleared on every success on purpose, and
+     * the urgent page, the summary and the detail header all read it that way.
+     * Widening it to sometimes hold good news would have changed what three
+     * other call sites are asking.
+     *
+     * Only read for [MonitorKind.PROMETHEUS], where the message is the number the
+     * monitor exists to watch. Every other kind's passing message is "HTTP 200 in
+     * 41ms", which is not worth a line on a card.
+     */
+    val lastReading: String = "",
+    /**
+     * The alerts the newest check saw, worst first.
+     *
+     * Kept so the detail screen can list them rather than re-read the sentence
+     * in [lastMessage]. Replaced wholesale on every check that reached
+     * Alertmanager, because a list of what is firing is only ever true as of
+     * one moment: carrying a resolved alert forward would be showing an outage
+     * that has ended.
+     */
+    val lastAlerts: List<FiringAlert> = emptyList(),
     val lastDetail: String = "",
     val consecutiveFailures: Int = 0,
     val consecutiveSuccesses: Int = 0,
@@ -1022,6 +1074,12 @@ enum class FailureKind {
     BODY,
     ELEMENT,
     RENDER,
+    /**
+     * The endpoint answered, was read, and said something outside the range the
+     * monitor was given. Separate from [BODY] because it is not a mismatch in a
+     * payload: the server is healthy and is reporting that something else is not.
+     */
+    METRIC,
     BAD_CONFIG,
     UNKNOWN,
     ;
@@ -1037,6 +1095,7 @@ enum class FailureKind {
             BODY -> "Response body mismatch"
             ELEMENT -> "Element check failed"
             RENDER -> "Page did not render"
+            METRIC -> "Reported a problem"
             BAD_CONFIG -> "Monitor misconfigured"
             UNKNOWN -> "Check failed"
         }
@@ -1053,6 +1112,7 @@ enum class FailureKind {
             BODY -> "Compare the assertion with the response preview below."
             ELEMENT -> "The page rendered but the element or its text didn't match."
             RENDER -> "The page failed to load in the embedded browser."
+            METRIC -> "The endpoint answered. What it reported is the problem."
             BAD_CONFIG -> "Fix the monitor's URL or assertion and try again."
             UNKNOWN -> "See the technical detail below."
         }
@@ -1100,6 +1160,12 @@ data class CheckResult(
     val certSpki: String = "",
     /** See [RepoFacts]. Set by the GitHub checker, null everywhere else. */
     val repo: RepoFacts? = null,
+    /**
+     * What Alertmanager was holding, for a [MonitorKind.PROMETHEUS] monitor on
+     * that source. Empty for every other kind and for a check that never got an
+     * answer. Sorted worst first.
+     */
+    val alerts: List<FiringAlert> = emptyList(),
     val at: Long = 0L,
 ) {
     /** The next step to show, specific where the check had one. */

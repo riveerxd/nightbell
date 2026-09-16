@@ -26,7 +26,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -73,6 +81,12 @@ import me.river.nightbell.domain.ElementMode
 import me.river.nightbell.domain.HeaderPair
 import me.river.nightbell.domain.HttpMethod
 import me.river.nightbell.domain.Monitor
+import me.river.nightbell.domain.PrometheusWatch
+import me.river.nightbell.domain.PrometheusSource
+import me.river.nightbell.domain.PrometheusCheck
+import me.river.nightbell.domain.PromQueryRule
+import me.river.nightbell.domain.MetricComparison
+import me.river.nightbell.domain.AlertSeverity
 import me.river.nightbell.domain.MonitorKind
 import me.river.nightbell.domain.ProxyRoute
 import me.river.nightbell.domain.StatusMode
@@ -92,6 +106,7 @@ import me.river.nightbell.ui.components.MicroTag
 import me.river.nightbell.ui.components.ProgressPips
 import me.river.nightbell.ui.components.NightbellButton
 import me.river.nightbell.ui.components.SectionHeader
+import me.river.nightbell.ui.components.SpinnerDot
 import me.river.nightbell.ui.components.SegmentedSelector
 import me.river.nightbell.ui.components.StepperRow
 import me.river.nightbell.ui.components.ToggleRow
@@ -231,7 +246,17 @@ fun SetupScreen(
                                     onTest = viewModel::runTest,
                                 )
                             }
-                            Spacer(Modifier.height(footerHeight + 8.dp))
+                            // Tagged so a test can scroll the form the whole way
+                            // down. This spacer is exactly the footer's height,
+                            // so once it is on screen every control above it is
+                            // clear of the footer that floats over the form, and
+                            // "Test now" can be tapped where a thumb would tap it
+                            // rather than through the footer sitting on top.
+                            Spacer(
+                                Modifier
+                                    .height(footerHeight + 8.dp)
+                                    .testTag("setup-bottom"),
+                            )
                         }
                     }
                 }
@@ -279,6 +304,8 @@ fun SetupScreen(
                 )
             },
         )
+
+        MetricBrowserSheet(viewModel = viewModel, accent = accent)
 
         DiscardDraftPrompt(
             visible = confirmDiscard,
@@ -370,10 +397,15 @@ private fun canLeaveStep(step: Int, draft: Monitor, report: Validation.Report): 
     1 -> report.of(Validation.Field.URL)?.severity != Validation.Severity.ERROR &&
         report.of(Validation.Field.HEADERS)?.severity != Validation.Severity.ERROR &&
         report.of(Validation.Field.REPO)?.severity != Validation.Severity.ERROR &&
+        report.of(Validation.Field.TOKEN)?.severity != Validation.Severity.ERROR &&
         (draft.kind != MonitorKind.WEBSITE_ELEMENT || draft.element?.isCaptured == true)
     2 -> report.of(Validation.Field.ASSERTION)?.severity != Validation.Severity.ERROR &&
         report.of(Validation.Field.JSON_PATH)?.severity != Validation.Severity.ERROR &&
         report.of(Validation.Field.STATUS)?.severity != Validation.Severity.ERROR &&
+        report.of(Validation.Field.METRIC)?.severity != Validation.Severity.ERROR &&
+        report.of(Validation.Field.LABELS)?.severity != Validation.Severity.ERROR &&
+        report.of(Validation.Field.PROMQL)?.severity != Validation.Severity.ERROR &&
+        report.of(Validation.Field.ALERTS)?.severity != Validation.Severity.ERROR &&
         report.of(Validation.Field.ELEMENT_TEXT)?.severity != Validation.Severity.ERROR
     else -> report.isValid
 }
@@ -664,6 +696,8 @@ private fun StepTarget(
     )
     if (draft.kind == MonitorKind.GITHUB_REPO) {
         GitHubTargetCard(viewModel, draft, report, accent)
+    } else if (draft.kind == MonitorKind.PROMETHEUS) {
+        PrometheusTargetCard(viewModel, draft, report, accent)
     } else {
         GlassField(
             value = draft.url,
@@ -1057,6 +1091,11 @@ private fun StepExpectations(
 ) {
     if (draft.kind == MonitorKind.GITHUB_REPO) {
         GitHubWatchCard(viewModel, draft, report, accent)
+        return
+    }
+
+    if (draft.kind == MonitorKind.PROMETHEUS) {
+        PrometheusExpectationCard(viewModel, draft, report, accent)
         return
     }
 
@@ -2345,4 +2384,541 @@ private fun GitHubWatchCard(
     }
 
     FieldNote(report.of(Validation.Field.GITHUB))
+}
+
+// ---------------------------------------------------------------- prometheus
+
+/**
+ * Where a Prometheus monitor points, on step one.
+ *
+ * The source picker comes before the URL rather than after it because it changes
+ * what the URL means. Asking for an address and then asking what kind of address
+ * it was is the order that makes somebody retype it.
+ */
+@Composable
+private fun PrometheusTargetCard(
+    viewModel: SetupViewModel,
+    draft: Monitor,
+    report: Validation.Report,
+    accent: Color,
+) {
+    val watch = draft.prometheus
+
+    SectionHeader("Source", icon = NightbellIcons.Gauge, accent = accent)
+    SegmentedSelector(
+        options = PrometheusSource.entries.toList(),
+        selected = watch.source,
+        onSelect = viewModel::setSource,
+        label = { it.label },
+        accent = accent,
+        modifier = Modifier.testTag("prom-source"),
+    )
+    Text(
+        text = watch.source.title,
+        style = MaterialTheme.typography.titleSmall,
+        color = NightbellColors.TextPrimary,
+    )
+    Text(
+        text = watch.source.blurb,
+        style = MaterialTheme.typography.bodySmall,
+        color = NightbellColors.TextTertiary,
+    )
+
+    GlassField(
+        value = draft.url,
+        onValueChange = { value -> viewModel.update { it.copy(url = value.trim()) } },
+        label = watch.source.urlLabel,
+        placeholder = watch.source.urlPlaceholder,
+        note = report.of(Validation.Field.URL),
+        leadingIcon = NightbellIcons.Link,
+        accent = accent,
+        keyboardType = KeyboardType.Uri,
+        modifier = Modifier.testTag("prom-url"),
+    )
+
+    // Only where this app adds a path the user did not type. For a metrics
+    // endpoint the URL is fetched exactly as entered, and a line restating it
+    // would be noise rather than reassurance.
+    if (watch.source != PrometheusSource.METRICS && draft.url.isNotBlank()) {
+        RequestPreview(
+            url = PrometheusCheck.requestUrl(draft).substringBefore('?'),
+            accent = accent,
+        )
+    }
+
+    SectionHeader("Sign in", icon = NightbellIcons.Shield, accent = accent)
+    Text(
+        text = "Optional. Basic auth covers Grafana Cloud, Mimir and a Prometheus behind a " +
+            "reverse proxy. A bearer token or a tenant header goes below instead.",
+        style = MaterialTheme.typography.bodySmall,
+        color = NightbellColors.TextTertiary,
+    )
+    GlassField(
+        value = watch.username,
+        onValueChange = { value -> viewModel.updateWatch { it.copy(username = value) } },
+        label = "Username",
+        placeholder = "Leave blank if the endpoint is open",
+        leadingIcon = NightbellIcons.Eye,
+        accent = accent,
+        modifier = Modifier.testTag("prom-username"),
+    )
+    GlassField(
+        value = watch.password,
+        onValueChange = { value -> viewModel.updateWatch { it.copy(password = value) } },
+        label = "Password",
+        note = report.of(Validation.Field.TOKEN),
+        leadingIcon = NightbellIcons.Shield,
+        accent = accent,
+        masked = true,
+        keyboardType = KeyboardType.Password,
+        modifier = Modifier.testTag("prom-password"),
+    )
+
+    HeadersEditor(
+        headers = draft.headers,
+        onChange = { value -> viewModel.update { it.copy(headers = value) } },
+        note = report.of(Validation.Field.HEADERS),
+        accent = accent,
+    )
+}
+
+/**
+ * The URL a check will actually request.
+ *
+ * Here because two of the three sources take a server address and build the path
+ * themselves, and a field that quietly rewrites what was typed into it is the
+ * kind of control rule six calls a bug. Showing the result means somebody who
+ * pasted the full API path can see it was understood rather than doubled.
+ */
+@Composable
+private fun RequestPreview(url: String, accent: Color) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(NightbellRadii.field))
+            .background(NightbellColors.sheen(0.05f))
+            .padding(horizontal = 14.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Text(
+            text = "GET",
+            style = MaterialTheme.typography.labelSmall,
+            color = accent,
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            text = url,
+            style = MaterialTheme.typography.bodySmall,
+            color = NightbellColors.TextSecondary,
+            modifier = Modifier.weight(1f).testTag("prom-request-preview"),
+        )
+    }
+}
+
+/** What a Prometheus monitor counts as healthy, on step two. */
+@Composable
+private fun PrometheusExpectationCard(
+    viewModel: SetupViewModel,
+    draft: Monitor,
+    report: Validation.Report,
+    accent: Color,
+) {
+    val watch = draft.prometheus
+    when (watch.source) {
+        PrometheusSource.METRICS -> {
+            SectionHeader("The series to read", icon = NightbellIcons.Gauge, accent = accent)
+            GlassField(
+                value = watch.metricName,
+                onValueChange = { value -> viewModel.updateWatch { it.copy(metricName = value.trim()) } },
+                label = "Metric",
+                placeholder = "node_load1",
+                note = report.of(Validation.Field.METRIC),
+                leadingIcon = NightbellIcons.Target,
+                accent = accent,
+                modifier = Modifier.testTag("prom-metric"),
+            )
+            // Offered only once there is somewhere to look. Without a usable URL
+            // this would be a button whose only possible outcome is an error
+            // about a field on the previous step.
+            if (Validation.urlNote(draft.url)?.severity != Validation.Severity.ERROR) {
+                NightbellButton(
+                    text = "Browse this endpoint",
+                    onClick = viewModel::browseMetrics,
+                    icon = NightbellIcons.Search,
+                    tone = ButtonTone.Secondary,
+                    modifier = Modifier.fillMaxWidth().testTag("prom-browse"),
+                )
+            }
+            GlassField(
+                value = watch.labelFilter,
+                onValueChange = { value -> viewModel.updateWatch { it.copy(labelFilter = value) } },
+                label = "Label filter",
+                placeholder = "mode=\"idle\", cpu!=\"0\"",
+                helper = "Optional. Same syntax as PromQL, including =~ for a regex.",
+                note = report.of(Validation.Field.LABELS),
+                holdErrorUntilBlur = true,
+                leadingIcon = NightbellIcons.Filter,
+                accent = accent,
+                modifier = Modifier.testTag("prom-labels"),
+            )
+            ComparisonEditor(viewModel, draft, report, accent)
+            Text(
+                text = "Every series that matches has to pass. A filter that matches nothing " +
+                    "fails the check, because a metric that has stopped being exported is not " +
+                    "good news.",
+                style = MaterialTheme.typography.bodySmall,
+                color = NightbellColors.TextTertiary,
+            )
+        }
+
+        PrometheusSource.QUERY -> {
+            SectionHeader("The query", icon = NightbellIcons.Braces, accent = accent)
+            GlassField(
+                value = watch.query,
+                onValueChange = { value -> viewModel.updateWatch { it.copy(query = value) } },
+                label = "PromQL",
+                placeholder = "up{job=\"api\"} == 0",
+                note = report.of(Validation.Field.PROMQL),
+                accent = accent,
+                singleLine = false,
+                minLines = 3,
+                imeAction = ImeAction.Default,
+                modifier = Modifier.testTag("prom-query"),
+            )
+            Spacer(Modifier.height(6.dp))
+            SectionHeader("Healthy while it", icon = NightbellIcons.Target, accent = accent)
+            SegmentedSelector(
+                options = PromQueryRule.entries.toList(),
+                selected = watch.queryRule,
+                onSelect = { rule -> viewModel.updateWatch { it.copy(queryRule = rule) } },
+                label = { it.label },
+                accent = accent,
+                modifier = Modifier.testTag("prom-rule"),
+            )
+            Text(
+                text = watch.queryRule.blurb,
+                style = MaterialTheme.typography.bodySmall,
+                color = NightbellColors.TextTertiary,
+            )
+            AnimatedVisibility(
+                visible = watch.queryRule == PromQueryRule.VALUE_PASSES,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically(),
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Spacer(Modifier.height(4.dp))
+                    ComparisonEditor(viewModel, draft, report, accent)
+                }
+            }
+        }
+
+        PrometheusSource.ALERTMANAGER -> {
+            SectionHeader("What counts as a page", icon = NightbellIcons.Bell, accent = accent)
+            Text(
+                text = "The lowest severity worth waking you. Anything at or above it fails " +
+                    "this monitor.",
+                style = MaterialTheme.typography.bodySmall,
+                color = NightbellColors.TextTertiary,
+            )
+            ChipSelector(
+                options = AlertSeverity.entries.toList(),
+                selected = watch.minimumSeverity,
+                onSelect = { value -> viewModel.updateWatch { it.copy(minimumSeverity = value) } },
+                label = { it.label },
+                accent = accent,
+                modifier = Modifier.testTag("prom-severity"),
+            )
+            FieldNote(note = report.of(Validation.Field.ALERTS))
+            GlassField(
+                value = watch.alertLabelFilter,
+                onValueChange = { value -> viewModel.updateWatch { it.copy(alertLabelFilter = value) } },
+                label = "Label filter",
+                placeholder = "team=\"platform\"",
+                helper = "Optional. Matches the alert's own labels.",
+                note = report.of(Validation.Field.LABELS),
+                holdErrorUntilBlur = true,
+                leadingIcon = NightbellIcons.Filter,
+                accent = accent,
+                modifier = Modifier.testTag("prom-alert-labels"),
+            )
+            Spacer(Modifier.height(6.dp))
+            ToggleRow(
+                title = "Count silenced alerts",
+                subtitle = if (watch.includeSilenced) {
+                    "Silencing in Alertmanager no longer quietens this monitor"
+                } else {
+                    "An alert silenced in Alertmanager stays quiet here too"
+                },
+                checked = watch.includeSilenced,
+                onCheckedChange = { value -> viewModel.updateWatch { it.copy(includeSilenced = value) } },
+                icon = NightbellIcons.BellOff,
+                accent = accent,
+            )
+            ToggleRow(
+                title = "Count inhibited alerts",
+                subtitle = if (watch.includeInhibited) {
+                    "Alerts suppressed by a bigger one still page"
+                } else {
+                    "An alert another one already covers stays quiet"
+                },
+                checked = watch.includeInhibited,
+                onCheckedChange = { value -> viewModel.updateWatch { it.copy(includeInhibited = value) } },
+                icon = NightbellIcons.Layers,
+                accent = accent,
+            )
+        }
+    }
+}
+
+/**
+ * The comparison and the number it compares against.
+ *
+ * Shared by the metrics source and by a PromQL query set to judge its own
+ * values, because in both cases the question is the same one and a second
+ * control that asked it differently would be two vocabularies for one idea.
+ */
+@Composable
+private fun ComparisonEditor(
+    viewModel: SetupViewModel,
+    draft: Monitor,
+    report: Validation.Report,
+    accent: Color,
+) {
+    val watch = draft.prometheus
+    SectionHeader("Healthy while the value is", icon = NightbellIcons.Chart, accent = accent)
+    ChipSelector(
+        options = MetricComparison.entries.toList(),
+        selected = watch.comparison,
+        onSelect = { value -> viewModel.updateWatch { it.copy(comparison = value) } },
+        label = { it.label },
+        accent = accent,
+        modifier = Modifier.testTag("prom-comparison"),
+    )
+    GlassField(
+        value = viewModel.thresholdInput,
+        onValueChange = viewModel::setThreshold,
+        label = "Threshold",
+        placeholder = "2",
+        note = report.of(Validation.Field.METRIC)
+            ?.takeIf { it.message.contains("threshold", ignoreCase = true) },
+        leadingIcon = NightbellIcons.Sliders,
+        accent = accent,
+        keyboardType = KeyboardType.Decimal,
+        modifier = Modifier.testTag("prom-threshold"),
+    )
+    val subject = when {
+        watch.source == PrometheusSource.QUERY -> "every series the query returns"
+        watch.selectorText.isNotBlank() -> watch.selectorText
+        else -> "the value"
+    }
+    SummaryLine(
+        label = "Healthy while",
+        value = "$subject ${watch.comparison.symbol} ${PrometheusWatch.formatValue(watch.threshold)}",
+    )
+}
+
+/**
+ * The list of what an endpoint is actually exposing.
+ *
+ * The same problem the element picker solves and the same answer: the exact
+ * string is written down in exactly one place, which is the thing being
+ * monitored, so the app goes and reads it rather than asking somebody to
+ * remember it. Typing a name from memory and getting "nothing matched" back is
+ * the worst possible first run of this feature.
+ */
+@Composable
+private fun MetricBrowserSheet(viewModel: SetupViewModel, accent: Color) {
+    // Back closes the list rather than walking the wizard backwards underneath it.
+    BackHandler(enabled = viewModel.browsing, onBack = viewModel::closeBrowser)
+
+    // Faded in and out, like the discard prompt. An overlay that appears between
+    // two frames reads as the screen having been replaced rather than as
+    // something opening on top of it.
+    AnimatedVisibility(
+        visible = viewModel.browsing,
+        enter = fadeIn(tween(220)),
+        exit = fadeOut(tween(160)),
+    ) {
+        // An in-screen scrim rather than a Dialog, which is what the discard prompt
+        // and the element picker already do. A Dialog is its own window: the card is
+        // translucent, so with nothing but the platform scrim behind it the form
+        // underneath read straight through the list, and a second window also means
+        // a screenshot has two roots and cannot say which one it wants.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(NightbellColors.Void.copy(alpha = 0.82f))
+                // Also `pointerInput` and not `clickable`, for the same reason as
+                // the card: a clickable parent merges its whole subtree into one
+                // semantics node, and this one is the parent of everything here.
+                // Tap-outside stays a convenience either way; the close button and
+                // the back gesture are what a screen reader and a keyboard use.
+                .pointerInput(Unit) { detectTapGestures { viewModel.closeBrowser() } },
+            contentAlignment = Alignment.Center,
+        ) {
+            GlassCard(
+                modifier = Modifier
+                    .fillMaxWidth(0.94f)
+                    .fillMaxHeight(0.82f)
+                    // Swallows taps so one aimed at a metric cannot fall through to
+                    // the scrim and close the thing it was aimed at.
+                    //
+                    // `pointerInput` rather than `clickable`, which would make the
+                    // card one merged semantics node and fold every row, tag and
+                    // label inside it into itself. The list stayed on screen and
+                    // became unaddressable, which is a UI that is also invisible to
+                    // a screen reader.
+                    .pointerInput(Unit) { detectTapGestures { } }
+                    .testTag("metric-browser"),
+                contentPadding = 18.dp,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    SectionHeader(
+                        title = "What this endpoint exposes",
+                        icon = NightbellIcons.Gauge,
+                        accent = accent,
+                        modifier = Modifier.weight(1f),
+                    )
+                    GlassIconButton(
+                        icon = NightbellIcons.Close,
+                        onClick = viewModel::closeBrowser,
+                        contentDescription = "Close the metric list",
+                        size = 34.dp,
+                        accent = NightbellColors.TextSecondary,
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+
+                when {
+                    viewModel.browseLoading -> {
+                        Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                // The app's own spinner, not Material's. Material's
+                                // runs an animation that never ends, which keeps the
+                                // Compose frame clock busy forever: nothing on a test
+                                // device ever reaches idle again and every assertion
+                                // after it times out. `SpinnerDot` goes through
+                                // `rememberLoopingFloat`, which collapses to a
+                                // constant under reduced motion, which is the whole
+                                // reason this app is drivable by a test at all.
+                                SpinnerDot(color = accent, size = 22.dp)
+                                Spacer(Modifier.height(12.dp))
+                                Text(
+                                    text = "Reading the endpoint…",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = NightbellColors.TextTertiary,
+                                )
+                            }
+                        }
+                    }
+
+                    viewModel.browseError != null -> {
+                        Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                IconBadge(
+                                    icon = NightbellIcons.Warning,
+                                    accent = NightbellColors.Amber,
+                                    size = 42.dp,
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                Text(
+                                    text = viewModel.browseError.orEmpty(),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = NightbellColors.TextSecondary,
+                                    textAlign = TextAlign.Center,
+                                )
+                                Spacer(Modifier.height(14.dp))
+                                NightbellButton(
+                                    text = "Try again",
+                                    onClick = viewModel::browseMetrics,
+                                    icon = NightbellIcons.Refresh,
+                                    tone = ButtonTone.Secondary,
+                                )
+                            }
+                        }
+                    }
+
+                    else -> {
+                        GlassField(
+                            value = viewModel.browseQuery,
+                            onValueChange = { viewModel.browseQuery = it },
+                            label = "Filter",
+                            placeholder = "load, cpu, memory…",
+                            leadingIcon = NightbellIcons.Search,
+                            accent = accent,
+                            corner = NightbellRadii.inCard,
+                            modifier = Modifier.testTag("metric-browser-filter"),
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        val results = viewModel.browseResults
+                        if (results.isEmpty()) {
+                            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = "No metric here matches \"${viewModel.browseQuery.trim()}\".",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = NightbellColors.TextTertiary,
+                                    textAlign = TextAlign.Center,
+                                )
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.weight(1f).testTag("metric-browser-list"),
+                                verticalArrangement = Arrangement.spacedBy(2.dp),
+                            ) {
+                                items(results, key = { it.name }) { metric ->
+                                    MetricRow(metric = metric, accent = accent) {
+                                        viewModel.pickMetric(metric)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** One metric name, with enough beside it to tell two of them apart. */
+@Composable
+private fun MetricRow(
+    metric: SetupViewModel.BrowsedMetric,
+    accent: Color,
+    onPick: () -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(NightbellRadii.inCard))
+            .clickable(onClick = onPick)
+            .padding(horizontal = 10.dp, vertical = 9.dp),
+    ) {
+        Text(
+            text = metric.name,
+            style = MaterialTheme.typography.bodyMedium,
+            color = NightbellColors.TextPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            // A single series shows its value, because that is the whole answer.
+            // Several show the count and the labels that separate them, because
+            // the value of one of eight says nothing about which one is wanted.
+            text = if (metric.count == 1) {
+                PrometheusWatch.formatValue(metric.series.first().value)
+            } else {
+                buildString {
+                    append("${metric.count} series")
+                    if (metric.labelKeys.isNotEmpty()) {
+                        append(" · ").append(metric.labelKeys.joinToString(", "))
+                    }
+                }
+            },
+            style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"),
+            color = if (metric.count == 1) accent else NightbellColors.TextTertiary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
 }

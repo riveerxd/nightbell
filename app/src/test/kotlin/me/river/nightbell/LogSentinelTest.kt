@@ -13,6 +13,8 @@ import me.river.nightbell.domain.LogField
 import me.river.nightbell.domain.LogFormat
 import me.river.nightbell.domain.LogRedactor
 import me.river.nightbell.domain.Monitor
+import me.river.nightbell.domain.FiringAlert
+import me.river.nightbell.domain.PrometheusWatch
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -44,6 +46,8 @@ class LogSentinelTest {
         "SENTINEL_TOKEN_g7",
         "SENTINEL_SELECTOR_h8",
         "SENTINEL_PROXYHOST_i9",
+        "SENTINEL_PROMPASS_j0",
+        "SENTINEL_PROMQL_k1",
     )
 
     private val monitor = Monitor(
@@ -58,6 +62,10 @@ class LogSentinelTest {
             localStorage = "{\"jwt\":\"SENTINEL_STORAGE_f6\"}",
         ),
         proxyHost = "SENTINEL_PROXYHOST_i9",
+        prometheus = PrometheusWatch(
+            password = "SENTINEL_PROMPASS_j0",
+            query = "up{job=\"SENTINEL_PROMQL_k1\"}",
+        ),
     )
 
     private val settings = GlobalSettings(
@@ -72,6 +80,7 @@ class LogSentinelTest {
         add(monitor.browserState.cookies)
         add(monitor.browserState.localStorage)
         monitor.headers.forEach { add(it.value) }
+        add(monitor.prometheus.password)
     }.filter { it.isNotBlank() }
 
     @Test
@@ -92,6 +101,13 @@ class LogSentinelTest {
             LogField.count("body_bytes", monitor.body.length),
             LogField.secret("header", monitor.headers.first().value),
             LogField.count("selectors", 1),
+            // A basic-auth password is a credential and goes out the same way the
+            // GitHub token does. The query beside it is the user's description of
+            // their own estate and no factory carries it at all, so the only thing
+            // a call site may say about it is that there is one.
+            LogField.secret("basic_auth", monitor.prometheus.password),
+            LogField.present("basic_auth", monitor.prometheus.password),
+            LogField.count("query_chars", monitor.prometheus.query.length),
             LogField.error("error", IllegalStateException(monitor.url), known),
         ).joinToString(" ") { it.render() }
 
@@ -178,6 +194,16 @@ class LogSentinelTest {
     @Test
     fun `every string on RepoFacts is classified`() {
         assertClassified(RepoFacts::class.java, "RepoFacts")
+    }
+
+    @Test
+    fun `every string on PrometheusWatch is classified`() {
+        assertClassified(PrometheusWatch::class.java, "PrometheusWatch")
+    }
+
+    @Test
+    fun `every string on FiringAlert is classified`() {
+        assertClassified(FiringAlert::class.java, "FiringAlert")
     }
 
     /**
@@ -285,10 +311,36 @@ class LogSentinelTest {
             ),
             "MonitorRuntime" to mapOf(
                 "lastMessage" to Rule.SAFE,
+                // A metric value and the labels that identify it: the user's
+                // hosts, devices and job names, read off their own server.
+                "lastReading" to Rule.NEVER,
                 "lastDetail" to Rule.NEVER,
                 "lastElementText" to Rule.NEVER,
                 "certIssuer" to Rule.HOST,
                 "certPin" to Rule.SAFE,
+            ),
+            // A password is a credential and leaves on the same terms as the
+            // GitHub token. Everything else here is the user's own description
+            // of their own systems: a PromQL expression names their jobs and
+            // instances, a label filter names their hosts and devices, and an
+            // internal metric name describes what their service measures. None
+            // of it is this app's to publish, so none of it has a factory.
+            "PrometheusWatch" to mapOf(
+                "metricName" to Rule.NEVER,
+                "labelFilter" to Rule.NEVER,
+                "query" to Rule.NEVER,
+                "alertLabelFilter" to Rule.NEVER,
+                "username" to Rule.FINGERPRINT,
+                "password" to Rule.FINGERPRINT,
+            ),
+            // An alert somebody else's Prometheus raised about somebody else's
+            // estate. The name is a rule name, the summary is prose written by
+            // whoever wrote the rule, and the severity is a label value they
+            // chose. None of it is this app's to publish.
+            "FiringAlert" to mapOf(
+                "name" to Rule.NEVER,
+                "severity" to Rule.NEVER,
+                "summary" to Rule.NEVER,
             ),
             // A repository's releases, issue titles and the handles of people
             // who commented on them. None of it is this app's to publish.

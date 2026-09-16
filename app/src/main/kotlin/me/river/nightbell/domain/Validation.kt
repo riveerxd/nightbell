@@ -11,11 +11,17 @@ object Validation {
     enum class Field {
         NAME, URL, METHOD, HEADERS, BODY, STATUS, ASSERTION, JSON_PATH,
         INTERVAL, TIMEOUT, ELEMENT, ELEMENT_TEXT, LATENCY_SLO, URGENT, PROXY,
-        REPO, GITHUB, TOKEN, TLS,
+        REPO, GITHUB, TOKEN, TLS, METRIC, LABELS, PROMQL, ALERTS,
     }
 
     /** Past this many watched elements the settle loop is worth warning about. */
     private const val MANY_ELEMENTS = 8
+
+    /** The exposition format's own metric-name rule. */
+    private val METRIC_NAME = Regex("^[a-zA-Z_:][a-zA-Z0-9_:]*$")
+
+    /** Past this the query stops reliably fitting in a URL. See reportPrometheus. */
+    private const val MAX_QUERY_LENGTH = 1800
 
     data class Note(val field: Field, val severity: Severity, val message: String)
 
@@ -121,38 +127,15 @@ object Validation {
         // API answers 200 or it does not, and what the check is *for* is the
         // difference between two answers rather than any one of them.
         if (monitor.kind == MonitorKind.GITHUB_REPO) return Report(notes + cadenceNotes(monitor))
-        when (monitor.status.mode) {
-            StatusMode.EXACT -> if (monitor.status.code !in 100..599) {
-                notes += Note(Field.STATUS, Severity.ERROR, "Status codes run from 100 to 599")
-            }
-            StatusMode.RANGE -> {
-                if (monitor.status.rangeStart !in 100..599 || monitor.status.rangeEnd !in 100..599) {
-                    notes += Note(Field.STATUS, Severity.ERROR, "Range must stay within 100–599")
-                } else if (monitor.status.rangeStart > monitor.status.rangeEnd) {
-                    notes += Note(Field.STATUS, Severity.WARNING, "Range is reversed — we'll swap it")
-                }
-            }
-            StatusMode.ANY -> notes += Note(
-                Field.STATUS, Severity.HINT, "Only connectivity is checked — any code passes",
-            )
-            StatusMode.ANY_SUCCESS -> Unit
-        }
-
-        // Body assertion
-        val assertion = monitor.assertion
-        if (assertion.mode.needsValue && assertion.value.isBlank()) {
-            notes += Note(Field.ASSERTION, Severity.ERROR, "${assertion.mode.label} needs a value")
-        }
-        if (assertion.mode == AssertionMode.REGEX && assertion.value.isNotBlank()) {
-            val bad = runCatching { Regex(assertion.value) }.isFailure
-            if (bad) notes += Note(Field.ASSERTION, Severity.ERROR, "That regular expression doesn't compile")
-        }
-        if (assertion.mode.needsPath) {
-            if (assertion.jsonPath.isBlank()) {
-                notes += Note(Field.JSON_PATH, Severity.ERROR, "Add a JSON path like data.status")
-            } else if (!Regex("^[A-Za-z0-9_$\\[\\]. -]+$").matches(assertion.jsonPath)) {
-                notes += Note(Field.JSON_PATH, Severity.WARNING, "Unusual characters in the path")
-            }
+        // Status codes and body assertions belong to the kinds whose setup
+        // screen offers them. A Prometheus monitor's expectations are its own,
+        // and judging it against a body assertion left behind by a draft that
+        // used to be a request kind would block saving on a field that is not
+        // on screen to fix.
+        if (monitor.kind == MonitorKind.PROMETHEUS) {
+            reportPrometheus(monitor, notes)
+        } else {
+            reportHttpExpectations(monitor, notes)
         }
 
         // Reaching a hidden service at all.
@@ -271,6 +254,130 @@ object Validation {
         }
 
         return Report(notes)
+    }
+
+    /** Status expectation and body assertion, for the kinds that have them. */
+    private fun reportHttpExpectations(monitor: Monitor, notes: MutableList<Note>) {
+        when (monitor.status.mode) {
+            StatusMode.EXACT -> if (monitor.status.code !in 100..599) {
+                notes += Note(Field.STATUS, Severity.ERROR, "Status codes run from 100 to 599")
+            }
+            StatusMode.RANGE -> {
+                if (monitor.status.rangeStart !in 100..599 || monitor.status.rangeEnd !in 100..599) {
+                    notes += Note(Field.STATUS, Severity.ERROR, "Range must stay within 100 to 599")
+                } else if (monitor.status.rangeStart > monitor.status.rangeEnd) {
+                    notes += Note(Field.STATUS, Severity.WARNING, "Range is reversed, we'll swap it")
+                }
+            }
+            StatusMode.ANY -> notes += Note(
+                Field.STATUS, Severity.HINT, "Only connectivity is checked, any code passes",
+            )
+            StatusMode.ANY_SUCCESS -> Unit
+        }
+
+        // Body assertion
+        val assertion = monitor.assertion
+        if (assertion.mode.needsValue && assertion.value.isBlank()) {
+            notes += Note(Field.ASSERTION, Severity.ERROR, "${assertion.mode.label} needs a value")
+        }
+        if (assertion.mode == AssertionMode.REGEX && assertion.value.isNotBlank()) {
+            val bad = runCatching { Regex(assertion.value) }.isFailure
+            if (bad) notes += Note(Field.ASSERTION, Severity.ERROR, "That regular expression doesn't compile")
+        }
+        if (assertion.mode.needsPath) {
+            if (assertion.jsonPath.isBlank()) {
+                notes += Note(Field.JSON_PATH, Severity.ERROR, "Add a JSON path like data.status")
+            } else if (!Regex("^[A-Za-z0-9_$\\[\\]. -]+$").matches(assertion.jsonPath)) {
+                notes += Note(Field.JSON_PATH, Severity.WARNING, "Unusual characters in the path")
+            }
+        }
+    }
+
+    /**
+     * Everything a Prometheus monitor can get wrong before a request is sent.
+     *
+     * Only the fields the chosen source actually shows are judged. Switching
+     * source keeps the other source's fields, deliberately, so somebody who
+     * tries Alertmanager and comes back finds their metric name still typed.
+     * Validating all three at once would turn that convenience into a form that
+     * cannot be saved until every unused field is cleared.
+     */
+    private fun reportPrometheus(monitor: Monitor, notes: MutableList<Note>) {
+        val watch = monitor.prometheus
+        when (watch.source) {
+            PrometheusSource.METRICS -> {
+                if (watch.metricName.isBlank()) {
+                    notes += Note(Field.METRIC, Severity.ERROR, "Name the metric to read, like node_load1")
+                } else if (!METRIC_NAME.matches(watch.metricName.trim())) {
+                    notes += Note(
+                        Field.METRIC, Severity.ERROR,
+                        "\"${watch.metricName.trim()}\" isn't a metric name. Put labels in the filter below.",
+                    )
+                }
+                selectorNote(Field.LABELS, watch.labelFilter)?.let { notes += it }
+                thresholdNote(watch)?.let { notes += it }
+            }
+
+            PrometheusSource.QUERY -> {
+                if (watch.query.isBlank()) {
+                    notes += Note(Field.PROMQL, Severity.ERROR, "Add a PromQL expression")
+                } else if (watch.query.trim().length > MAX_QUERY_LENGTH) {
+                    // Not a Prometheus limit. It is the point past which the
+                    // query no longer fits in a GET at every proxy in the way,
+                    // and the failure that produces is a 414 from something that
+                    // is not Prometheus.
+                    notes += Note(
+                        Field.PROMQL, Severity.WARNING,
+                        "Very long queries are sent in the URL and some proxies refuse them",
+                    )
+                }
+                if (watch.queryRule == PromQueryRule.VALUE_PASSES) {
+                    thresholdNote(watch)?.let { notes += it }
+                }
+            }
+
+            PrometheusSource.ALERTMANAGER -> {
+                selectorNote(Field.LABELS, watch.alertLabelFilter)?.let { notes += it }
+                if (watch.minimumSeverity != AlertSeverity.ANY) {
+                    notes += Note(
+                        Field.ALERTS, Severity.HINT,
+                        "An alert with no severity label, or one Nightbell doesn't rank, still " +
+                            "comes through. Hiding those would be hiding outages.",
+                    )
+                }
+                if (watch.includeSilenced) {
+                    notes += Note(
+                        Field.ALERTS, Severity.WARNING,
+                        "Silencing an alert in Alertmanager will no longer quieten this monitor",
+                    )
+                }
+            }
+        }
+
+        if (watch.password.isNotBlank() && watch.username.isBlank()) {
+            notes += Note(Field.TOKEN, Severity.ERROR, "Basic auth needs a username as well")
+        }
+        if (watch.hasBasicAuth && monitor.url.trim().startsWith("http://", ignoreCase = true) &&
+            !ProxyRoute.isHiddenService(monitor.url)
+        ) {
+            notes += Note(
+                Field.TOKEN, Severity.WARNING,
+                "Basic auth over plain http sends the password in clear text on every check",
+            )
+        }
+    }
+
+    private fun selectorNote(field: Field, raw: String): Note? {
+        if (raw.isBlank()) return null
+        val selector = OpenMetrics.parseSelector(raw)
+        return selector.error?.let { Note(field, Severity.ERROR, it) }
+    }
+
+    private fun thresholdNote(watch: PrometheusWatch): Note? = when {
+        watch.threshold.isNaN() -> Note(
+            Field.METRIC, Severity.ERROR, "The threshold has to be a number",
+        )
+        else -> null
     }
 
     /**

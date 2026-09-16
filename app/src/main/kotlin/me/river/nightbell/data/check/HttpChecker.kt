@@ -9,6 +9,8 @@ import me.river.nightbell.domain.FailureKind
 import me.river.nightbell.domain.GlobalSettings
 import me.river.nightbell.domain.HttpMethod
 import me.river.nightbell.domain.Monitor
+import me.river.nightbell.domain.MonitorKind
+import me.river.nightbell.domain.PrometheusCheck
 import me.river.nightbell.domain.ProxyRoute
 import me.river.nightbell.domain.TlsFailure
 import me.river.nightbell.domain.Validation
@@ -67,7 +69,20 @@ class HttpChecker(
      *   `MonitorRuntime.certPin`. Empty arms the pin instead of enforcing it, and
      *   is ignored entirely unless the monitor asked for [TlsTrust.PINNED].
      */
-    suspend fun check(monitor: Monitor, certPin: String = ""): CheckResult = withContext(Dispatchers.IO) {
+    suspend fun check(
+        monitor: Monitor,
+        certPin: String = "",
+        /**
+         * How much of the body to keep on the result.
+         *
+         * The default is the preview a failure quotes back. The metric browser
+         * asks for the whole scrape, because picking a metric off a list means
+         * having the list, and a node_exporter response is far past 4 kB. Raised
+         * here rather than by a second fetch path, so browsing goes through the
+         * same proxy, the same trust mode and the same retry as a real check.
+         */
+        previewChars: Int = MAX_PREVIEW,
+    ): CheckResult = withContext(Dispatchers.IO) {
         val urlNote = Validation.urlNote(monitor.url)
         if (urlNote?.severity == Validation.Severity.ERROR) {
             return@withContext CheckResult(
@@ -147,7 +162,10 @@ class HttpChecker(
                 LogField.of("port", endpoint.port),
             )
         }
-        attempt(client, request, monitor, timeout, tlsSession, retriesLeft = 1, pinnedTo = certPin)
+        attempt(
+            client, request, monitor, timeout, tlsSession,
+            retriesLeft = 1, pinnedTo = certPin, previewChars = previewChars,
+        )
     }
 
     /**
@@ -196,6 +214,7 @@ class HttpChecker(
         retriesLeft: Int,
         /** Only ever asked whether it is set, for the certificate trace. */
         pinnedTo: String = "",
+        previewChars: Int = MAX_PREVIEW,
     ): CheckResult {
         val watcher = ConnectionWatcher()
         val call = client.newBuilder()
@@ -232,17 +251,26 @@ class HttpChecker(
                     latencyMs = latency,
                     statusCode = response.code,
                     failureKind = verdict.kind,
+                    // A passing verdict usually has nothing to add and the round
+                    // trip is the interesting fact. A Prometheus one is the
+                    // exception and the whole point of it: "node_load1 = 0.29" is
+                    // what somebody opened the monitor to find out, and "HTTP 200
+                    // in 41ms" answers a question nobody asked.
                     message = if (verdict.passed) {
-                        "HTTP ${response.code} in ${latency}ms"
+                        verdict.message.ifBlank { "HTTP ${response.code} in ${latency}ms" }
                     } else {
                         verdict.message
                     },
                     detail = if (verdict.passed) {
-                        "${response.protocol.name} · ${response.code} ${response.message}"
+                        verdict.detail.ifBlank {
+                            "${response.protocol.name} · ${response.code} ${response.message}"
+                        }
                     } else {
                         verdict.detail
                     },
-                    bodyPreview = body.take(MAX_PREVIEW),
+                    hint = verdict.hint,
+                    alerts = verdict.alerts,
+                    bodyPreview = body.take(previewChars),
                     certExpiresAt = leaf?.notAfter?.time ?: 0L,
                     certIssuer = issuerOf(leaf),
                     certSpki = TlsTrustConfig.pinOf(leaf),
@@ -273,7 +301,10 @@ class HttpChecker(
                     LogField.ms("failed_at", latency),
                     LogField.of("upgraded", !watcher.schemeUpgradedTo.isNullOrBlank()),
                 )
-                return attempt(client, request, monitor, timeoutSeconds, tlsSession, retriesLeft - 1, pinnedTo)
+                return attempt(
+                    client, request, monitor, timeoutSeconds, tlsSession,
+                    retriesLeft - 1, pinnedTo, previewChars,
+                )
             }
             val kind = classify(error)
             if (kind == FailureKind.TLS) {
@@ -320,7 +351,12 @@ class HttpChecker(
         Proxy(Proxy.Type.SOCKS, InetSocketAddress(route.host, route.port))
 
     private fun buildRequest(monitor: Monitor): Request {
-        val builder = Request.Builder().url(monitor.url.trim())
+        val prometheus = monitor.kind == MonitorKind.PROMETHEUS
+        // The URL a Prometheus monitor fetches is not the URL its owner typed:
+        // the query and the API path are assembled from the watch. See
+        // PrometheusCheck.requestUrl for why the path is this app's business.
+        val url = if (prometheus) PrometheusCheck.requestUrl(monitor) else monitor.url.trim()
+        val builder = Request.Builder().url(url)
         monitor.headers.filterNot { it.isBlank }.forEach { header ->
             builder.header(header.name.trim(), header.value.trim())
         }
@@ -328,6 +364,20 @@ class HttpChecker(
             builder.header("User-Agent", USER_AGENT)
         }
         builder.header("Cache-Control", "no-cache")
+        if (prometheus) {
+            // Second, so a header the user typed themselves wins. Somebody who
+            // has pasted an Authorization header has said what they want more
+            // specifically than the two convenience fields can.
+            PrometheusCheck.basicAuthHeader(monitor.prometheus)?.let { value ->
+                if (monitor.headers.none { it.name.equals("Authorization", true) }) {
+                    builder.header("Authorization", value)
+                }
+            }
+            // Always a GET with no body, whatever the draft is carrying. Both
+            // query APIs take one, and a monitor converted from a request kind
+            // would otherwise still be posting the old body at them.
+            return builder.get().build()
+        }
 
         val method = monitor.method.name
         if (monitor.method.allowsBody) {

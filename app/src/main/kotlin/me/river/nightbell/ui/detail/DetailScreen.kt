@@ -57,7 +57,13 @@ import me.river.nightbell.domain.GitHubState
 import me.river.nightbell.domain.githubInstantMs
 import me.river.nightbell.domain.Health
 import me.river.nightbell.domain.Monitor
+import me.river.nightbell.domain.FiringAlert
 import me.river.nightbell.domain.MonitorKind
+import me.river.nightbell.domain.PrometheusWatch
+import me.river.nightbell.domain.PrometheusSource
+import me.river.nightbell.domain.PrometheusCheck
+import me.river.nightbell.domain.PromQueryRule
+import me.river.nightbell.domain.AlertSeverity
 import me.river.nightbell.domain.MonitorRuntime
 import me.river.nightbell.domain.TlsTrust
 import me.river.nightbell.domain.Sample
@@ -266,6 +272,18 @@ fun DetailScreen(
                         },
                         onMute = { viewModel.mute(24) },
                     )
+                }
+            }
+        }
+
+        // What Alertmanager is holding, as a list rather than as the sentence in
+        // the verdict. Issue 14 asked for a view of the alerts and named two
+        // alert viewers, and "2 firing: DiskFillingUp (critical)" answers
+        // "should I get up" without answering "what is going on".
+        if (runtime.lastAlerts.isNotEmpty()) {
+            item(key = "alerts") {
+                StaggeredEntrance(index = 2, key = "alerts-${monitor.id}", log = entrance) {
+                    FiringAlertsCard(alerts = runtime.lastAlerts, nowMs = now, accent = accent)
                 }
             }
         }
@@ -551,7 +569,12 @@ private fun HeroCard(
                 )
             }
         }
-        if (runtime.lastDetail.isNotBlank() && health == Health.DOWN) {
+        // Not when the alerts card is about to say the same thing better. The
+        // detail line for an Alertmanager check is those alerts flattened into a
+        // paragraph, which exists for the notification and the log, and printing
+        // it here as well means reading the same four lines twice on one screen.
+        val alertsListedBelow = runtime.lastAlerts.isNotEmpty()
+        if (runtime.lastDetail.isNotBlank() && health == Health.DOWN && !alertsListedBelow) {
             Spacer(Modifier.height(14.dp))
             Box(
                 Modifier
@@ -846,6 +869,112 @@ private fun CertificateCard(
     }
 }
 
+/**
+ * Every alert this monitor is currently paging about, worst first.
+ *
+ * Severity carries the colour and nothing else does: rose for critical, amber
+ * for warning, chrome for info and for a word nobody ranks. That is the app's
+ * own palette rule applied to somebody else's vocabulary, which is why an
+ * unrecognised severity gets the neutral one rather than a guess.
+ */
+@Composable
+private fun FiringAlertsCard(alerts: List<FiringAlert>, nowMs: Long, accent: Color) {
+    GlassCard {
+        SectionHeader(
+            title = if (alerts.size == 1) "1 alert firing" else "${alerts.size} alerts firing",
+            icon = NightbellIcons.Bell,
+            accent = accent,
+        )
+        alerts.forEachIndexed { index, alert ->
+            if (index > 0) {
+                Spacer(Modifier.height(10.dp))
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(NightbellColors.sheen(0.07f)),
+                )
+                Spacer(Modifier.height(10.dp))
+            }
+            val tone = when (alert.rank) {
+                AlertSeverity.CRITICAL -> NightbellColors.Rose
+                AlertSeverity.WARNING -> NightbellColors.Amber
+                else -> NightbellColors.TextTertiary
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .size(8.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(tone),
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    text = alert.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = NightbellColors.TextPrimary,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (alert.severity.isNotBlank()) {
+                    Text(
+                        text = alert.severity,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = tone,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(NightbellRadii.chip))
+                            .background(tone.copy(alpha = 0.12f))
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                    )
+                }
+            }
+            if (alert.summary.isNotBlank()) {
+                Spacer(Modifier.height(5.dp))
+                Text(
+                    text = alert.summary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = NightbellColors.TextSecondary,
+                    modifier = Modifier.padding(start = 18.dp),
+                )
+            }
+            val since = firingSince(alert, nowMs)
+            if (since.isNotBlank() || alert.silenced || alert.inhibited) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = buildList {
+                        if (since.isNotBlank()) add(since)
+                        if (alert.silenced) add("silenced")
+                        if (alert.inhibited) add("inhibited")
+                    }.joinToString(" · "),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = NightbellColors.TextTertiary,
+                    modifier = Modifier.padding(start = 18.dp),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * How long this has been firing, in the coarsest unit that is still true.
+ *
+ * Blank when Alertmanager gave no start time or gave one in the future, because
+ * "firing for -3m" is worse than saying nothing.
+ */
+private fun firingSince(alert: FiringAlert, nowMs: Long): String {
+    if (alert.startedAt <= 0L) return ""
+    val elapsed = nowMs - alert.startedAt
+    if (elapsed < 0L) return ""
+    val minutes = elapsed / 60_000L
+    return when {
+        minutes < 1 -> "firing for under a minute"
+        minutes < 60 -> "firing for ${minutes}m"
+        minutes < 60 * 48 -> "firing for ${minutes / 60}h"
+        else -> "firing for ${minutes / (60 * 24)}d"
+    }
+}
+
 @Composable
 private fun ConfigCard(monitor: Monitor, accent: Color) {
     GlassCard {
@@ -865,6 +994,56 @@ private fun ConfigCard(monitor: Monitor, accent: Color) {
             }
             if (monitor.github.watchReleases && monitor.github.includePrereleases) {
                 ConfigRow("Prereleases", "included")
+            }
+        } else if (monitor.kind == MonitorKind.PROMETHEUS) {
+            val watch = monitor.prometheus
+            ConfigRow("Source", watch.source.title)
+            // The URL this monitor fetches, not the one its owner typed. Two of
+            // the three sources build a path, and the detail screen is where
+            // somebody goes to find out what is actually being requested.
+            ConfigRow("Requests", PrometheusCheck.requestUrl(monitor).substringBefore('?'))
+            when (watch.source) {
+                PrometheusSource.METRICS -> {
+                    ConfigRow("Series", watch.selectorText)
+                    ConfigRow(
+                        "Healthy while",
+                        "${watch.comparison.symbol} ${PrometheusWatch.formatValue(watch.threshold)}",
+                    )
+                }
+
+                PrometheusSource.QUERY -> {
+                    ConfigRow("Query", watch.query)
+                    ConfigRow("Healthy while it", watch.queryRule.label.lowercase())
+                    if (watch.queryRule == PromQueryRule.VALUE_PASSES) {
+                        ConfigRow(
+                            "Value",
+                            "${watch.comparison.symbol} ${PrometheusWatch.formatValue(watch.threshold)}",
+                        )
+                    }
+                }
+
+                PrometheusSource.ALERTMANAGER -> {
+                    ConfigRow(
+                        "Severity",
+                        if (watch.minimumSeverity == AlertSeverity.ANY) {
+                            "any"
+                        } else {
+                            "${watch.minimumSeverity.label} and above"
+                        },
+                    )
+                    if (watch.alertLabelFilter.isNotBlank()) {
+                        ConfigRow("Label filter", watch.alertLabelFilter.trim())
+                    }
+                    if (watch.includeSilenced) ConfigRow("Silenced", "counted")
+                    if (watch.includeInhibited) ConfigRow("Inhibited", "counted")
+                }
+            }
+            // Named, never shown. The password is the one thing on this screen
+            // that must not be readable over somebody's shoulder, and "set" is
+            // the whole of what the user came here to confirm.
+            if (watch.hasBasicAuth) ConfigRow("Sign in", "basic auth as ${watch.username}")
+            if (monitor.headers.isNotEmpty()) {
+                ConfigRow("Headers", monitor.headers.joinToString(", ") { it.name })
             }
         } else if (monitor.kind != MonitorKind.WEBSITE_ELEMENT) {
             ConfigRow("Method", monitor.method.name)
