@@ -1,0 +1,7 @@
+Every number in Nightbell can now be typed. Tap the interval, the timeout, the failure count or any other number sitting between a minus and a plus, and it turns into a field with a keypad: a 45 minute cadence or a 90 second timeout is one entry rather than thirty taps.
+
+An open field says the range it takes, and says so in amber when what you have typed is outside it: "Highest is 1440m", naming the end it will land on rather than quietly rewriting your number after you have left. Clearing the field is not a request for zero, so it leaves the value where it was. The minus and plus still work, including out of a field you are part way through typing into.
+
+This is every stepper in the app rather than the two the report named: the certificate warning thresholds, the default interval and timeout under Settings, how much history is kept, the latency budget, the escalation count and its cooldowns, the repeat interval, and the widget's monitor count, which now says that zero means auto instead of leaving you to type it and find out.
+
+Reported as issue 15.

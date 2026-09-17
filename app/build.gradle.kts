@@ -504,8 +504,20 @@ android {
         // inside a handshake was read as a certificate being refused. The
         // urgent repeat also asked the wrong timestamp, one the drop path
         // bumps for every check it discards.
-        versionCode = 40
-        versionName = "3.11.0"
+        //
+        // Every number between a minus and a plus is a field. Issue 15 asked
+        // for the two on the cadence step and the fix went into the control, so
+        // all twenty one of them take a typed value: the readout wears the
+        // buttons' own surface to say it can be tapped, an open one names the
+        // range and the end an out of range number will land on, and an empty
+        // one is not a request for zero. The commit is per keystroke rather
+        // than on Done, because nothing takes focus off a field when a button
+        // is tapped and a deferred commit meant typing 45 and tapping Create
+        // saved 15. The readout also stopped being 74dp flat and now measures
+        // the longest string its own range can produce, which is what "60000ms"
+        // on the latency row needs.
+        versionCode = 41
+        versionName = "3.12.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
