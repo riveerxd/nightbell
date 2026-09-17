@@ -14,6 +14,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performTextReplacement
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -116,5 +117,28 @@ class WidgetConfigUiTest {
         composeRule.onNodeWithContentDescription("Decrease Monitors").performClick()
         composeRule.waitForIdle()
         stepperReads("Auto")
+    }
+
+    /**
+     * The count can be typed, and the open field says what its bottom position
+     * means.
+     *
+     * "Auto" is a word where every other stepper has a number, so a field that
+     * opens on 0 needs to say that 0 is the word. Otherwise the only way to find
+     * out is to type it and look at what happens to the widget.
+     */
+    @Test
+    fun theCountCanBeTypedAndSaysWhatZeroMeans() {
+        open()
+        scrollToMonitors()
+        composeRule.onNodeWithContentDescription("Set Monitors").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("0 is auto, and the most is 10").assertIsDisplayed()
+        composeRule.captureScreenshot("widget-config-typing")
+
+        composeRule.onNodeWithContentDescription("Monitors value").performTextReplacement("7")
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("At most 7", substring = true).assertIsDisplayed()
+        composeRule.captureScreenshot("widget-config-typed")
     }
 }

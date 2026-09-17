@@ -48,6 +48,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,6 +57,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -69,6 +72,9 @@ import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.ImeAction
@@ -244,14 +250,22 @@ private fun dismissKeyboard(
 }
 
 @Composable
-fun FieldNote(note: Validation.Note?, helper: String = "") {
+fun FieldNote(
+    note: Validation.Note?,
+    helper: String = "",
+    /**
+     * The colour of a [helper] that is not a validation note. Defaults to the
+     * tertiary grey every other helper line uses.
+     */
+    helperTone: Validation.Severity? = null,
+) {
     val message = note?.message ?: helper.ifBlank { null }
     AnimatedVisibility(
         visible = message != null,
         enter = fadeIn() + expandVertically(),
         exit = fadeOut() + shrinkVertically(),
     ) {
-        val severity = note?.severity
+        val severity = note?.severity ?: helperTone
         val color = when (severity) {
             Validation.Severity.ERROR -> NightbellColors.Rose
             Validation.Severity.WARNING -> NightbellColors.Amber
@@ -790,6 +804,20 @@ fun ToggleRow(
     }
 }
 
+/**
+ * A number between a minus and a plus, where the number is also the field.
+ *
+ * The two buttons were the only way in until issue #15, which is fine for a
+ * nudge and useless for a value somebody already knows: nobody sets a 45 minute
+ * interval one tap at a time. The readout now wears the same surface as the
+ * buttons beside it, which is what says it can be tapped, and a tap turns it
+ * into a number field in place.
+ *
+ * Every keystroke inside [range] is the value. Outside it, and while the field
+ * is empty, the row says what will happen and waits: leaving the field then
+ * pulls the number back to the end it passed, and an empty field leaves the
+ * value where it was.
+ */
 @Composable
 fun StepperRow(
     title: String,
@@ -809,6 +837,45 @@ fun StepperRow(
      */
     zeroLabel: String? = null,
 ) {
+    var typed by remember { mutableStateOf<TextFieldValue?>(null) }
+    // Whether the field has held focus yet. onFocusChanged fires once with
+    // false as the field enters composition, and committing on that would close
+    // the editor in the same frame the tap opened it.
+    var held by remember { mutableStateOf(false) }
+    val editing = typed != null
+    val entered = typed?.text?.toIntOrNull()
+    val focusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val digits = range.last.toString().length
+
+    // Clearing the draft before the callback, not after: dropping the field
+    // takes focus with it, and a commit that has not cleared yet would run a
+    // second time on the way out.
+    fun commit() {
+        val number = typed?.text?.toIntOrNull()
+        typed = null
+        held = false
+        if (number != null) onValueChange(number.coerceIn(range.first, range.last))
+    }
+
+    fun nudge(delta: Int) {
+        val base = entered ?: value
+        if (editing) {
+            typed = null
+            held = false
+            dismissKeyboard(focusManager, keyboard)
+        }
+        onValueChange((base + delta).coerceIn(range.first, range.last))
+    }
+
+    LaunchedEffect(editing) {
+        if (editing) {
+            focusRequester.requestFocus()
+            keyboard?.show()
+        }
+    }
+
     Column(modifier.fillMaxWidth().padding(vertical = RowGutter)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             if (icon != null) {
@@ -821,38 +888,170 @@ fun StepperRow(
                 color = NightbellColors.TextPrimary,
                 modifier = Modifier.weight(1f),
             )
-            StepperButton("−", "Decrease $title") {
-                onValueChange((value - step).coerceIn(range.first, range.last))
-            }
-            // Scaled with the type. 74dp holds "999 min" at the default size and
-            // clips it to "999 m" at 150 per cent, which is a readout that lies
-            // about the value the two buttons beside it are changing.
-            Box(
-                modifier = Modifier
-                    .width(74.dp * LocalDensity.current.fontScale)
-                    .padding(horizontal = 4.dp),
-                contentAlignment = Alignment.Center,
+            StepperButton("−", "Decrease $title") { nudge(-step) }
+            // Wide enough for the longest thing this particular stepper can ever
+            // show, with 74dp as the floor so a row of them lines up. It used to
+            // be 74dp flat, which fitted "999 min" and clipped it at 150 per
+            // cent, and the latency row reaches "60000ms" on top of that. A
+            // readout that loses a digit lies about the value the two buttons
+            // beside it are changing.
+            val readoutStyle = MaterialTheme.typography.titleMedium
+            val measurer = rememberTextMeasurer()
+            val density = LocalDensity.current
+            val widest = remember(
+                range.last, suffix, zeroLabel, readoutStyle, density,
+                LocalFontFamilyResolver.current,
             ) {
-                if (value == 0 && zeroLabel != null) {
-                    Text(
-                        text = zeroLabel,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = NightbellColors.TextPrimary,
-                    )
-                } else {
-                    AnimatedCounter(
-                        value = value,
-                        suffix = suffix,
-                        color = NightbellColors.TextPrimary,
-                        style = MaterialTheme.typography.titleMedium,
-                    )
+                val longest = listOf("${range.last}$suffix", zeroLabel.orEmpty())
+                    .maxBy { it.length }
+                with(density) {
+                    measurer.measure(AnnotatedString(longest), readoutStyle, softWrap = false)
+                        .size.width.toDp()
                 }
             }
-            StepperButton("+", "Increase $title") {
-                onValueChange((value + step).coerceIn(range.first, range.last))
+            val shape = RoundedCornerShape(12.dp)
+            Box(
+                modifier = Modifier
+                    // The measurement already carries the font scale, because sp
+                    // is what it measured. Only the floor has to be scaled.
+                    .width(maxOf(74.dp * density.fontScale, widest + 16.dp))
+                    .heightIn(min = MinTouchTarget)
+                    .then(
+                        if (editing) {
+                            Modifier
+                        } else {
+                            Modifier
+                                .clickable(
+                                    indication = ripple(bounded = false, color = accent),
+                                    interactionSource = null,
+                                ) {
+                                    val text = value.toString()
+                                    typed = TextFieldValue(text, TextRange(0, text.length))
+                                }
+                                .semantics {
+                                    contentDescription = "Set $title"
+                                    stateDescription = if (value == 0 && zeroLabel != null) {
+                                        zeroLabel
+                                    } else {
+                                        "$value$suffix"
+                                    }
+                                }
+                        },
+                    )
+                    .padding(horizontal = 2.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 34.dp)
+                        .clip(shape)
+                        .background(NightbellColors.sheen(if (editing) 0.10f else 0.05f))
+                        .border(
+                            BorderStroke(
+                                if (editing) 1.5.dp else 1.dp,
+                                if (editing) {
+                                    accent.copy(alpha = 0.85f)
+                                } else {
+                                    NightbellColors.sheen(0.10f)
+                                },
+                            ),
+                            shape,
+                        )
+                        // No horizontal padding: the widest thing this has to
+                        // hold is "60000ms" on the latency row, and the border
+                        // already costs it a dp on each side.
+                        .padding(vertical = 5.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    when {
+                        editing -> BasicTextField(
+                            value = typed ?: TextFieldValue(),
+                            onValueChange = { next ->
+                                val kept = next.text.filter { it.isDigit() }.take(digits)
+                                typed = if (kept == next.text) {
+                                    next
+                                } else {
+                                    TextFieldValue(kept, TextRange(kept.length))
+                                }
+                                // Every keystroke that lands inside the range is
+                                // the new value, rather than a draft waiting for
+                                // Done. Nothing takes focus off a field when a
+                                // button is tapped, so a deferred commit meant
+                                // typing 45 and tapping Create saved 15: the
+                                // number was on screen, agreed with, and thrown
+                                // away. Out of range and empty still wait,
+                                // because those are not values yet.
+                                val number = kept.toIntOrNull()
+                                if (number != null && number in range) onValueChange(number)
+                            },
+                            singleLine = true,
+                            textStyle = MaterialTheme.typography.titleMedium.copy(
+                                color = NightbellColors.TextPrimary,
+                                textAlign = TextAlign.Center,
+                            ),
+                            cursorBrush = SolidColor(accent),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Number,
+                                imeAction = ImeAction.Done,
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onDone = {
+                                    commit()
+                                    dismissKeyboard(focusManager, keyboard)
+                                },
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(focusRequester)
+                                .onFocusChanged { state ->
+                                    if (state.isFocused) {
+                                        held = true
+                                    } else if (held) {
+                                        commit()
+                                    }
+                                }
+                                .semantics { contentDescription = "$title value" },
+                        )
+
+                        value == 0 && zeroLabel != null -> Text(
+                            text = zeroLabel,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = NightbellColors.TextPrimary,
+                        )
+
+                        else -> AnimatedCounter(
+                            value = value,
+                            suffix = suffix,
+                            color = NightbellColors.TextPrimary,
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                    }
+                }
             }
+            StepperButton("+", "Increase $title") { nudge(step) }
         }
-        FieldNote(note = note)
+        // The range is only worth saying while somebody is typing into it. Out
+        // of range is amber rather than rose because nothing is broken: the
+        // value is about to be pulled to the end it passed, and the line says
+        // which end and where it lands.
+        val outside = entered != null && entered !in range
+        FieldNote(
+            note = note,
+            helper = when {
+                !editing -> ""
+                entered != null && entered < range.first -> "Lowest is ${range.first}$suffix"
+                entered != null && entered > range.last -> "Highest is ${range.last}$suffix"
+                // A stepper whose bottom is a word rather than a number has to
+                // say so here, or the only way to find out what 0 does is to
+                // type it and look.
+                zeroLabel != null && range.first == 0 ->
+                    "0 is ${zeroLabel.lowercase()}, and the most is ${range.last}$suffix"
+
+                else -> "Anything from ${range.first} to ${range.last}$suffix"
+            },
+            helperTone = if (outside) Validation.Severity.WARNING else null,
+        )
     }
 }
 
