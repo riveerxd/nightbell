@@ -49,10 +49,12 @@ object MonitorQuery {
          * always kept a list, and every existing install already has a meaningful
          * order in it (the order things were created).
          *
-         * It has to be its own mode rather than a gesture available under any sort.
-         * Dragging a card while the list is ranked worst-first would arrange
-         * something that the next completed check immediately re-sorts, so the work
-         * would visibly undo itself seconds later.
+         * Nothing puts the dashboard in this sort except rearranging it. Dragging a
+         * card under any other sort would arrange something the next completed
+         * check immediately re-sorts, so the work would visibly undo itself
+         * seconds later; the answer is not to refuse the drag but to keep what the
+         * drag produced, which is what this sort is. `commitReorder` sets it on
+         * every drop that actually moved something.
          */
         @kotlinx.serialization.SerialName("manual")
         MANUAL,
@@ -203,13 +205,18 @@ object MonitorQuery {
     /**
      * Whether cards may be dragged right now.
      *
-     * Only in [Sort.MANUAL], and only with nothing filtered out. Dragging within a
-     * subset is ambiguous in a way that has no good answer — dropping card 2 above
-     * card 5 of a filtered view says nothing about where either belongs among the
-     * monitors you cannot see — so the handle is simply absent instead of guessing.
+     * Only with nothing filtered out. Dragging within a subset is ambiguous in a
+     * way that has no good answer: dropping card 2 above card 5 of a filtered view
+     * says nothing about where either belongs among the monitors you cannot see,
+     * so a hold on a narrowed list starts a selection instead of guessing.
+     *
+     * The sort is deliberately not part of this any more. It used to require
+     * [Sort.MANUAL], which meant the user had to find and choose a sort before the
+     * gesture existed at all. Dropping a card now *sets* [Sort.MANUAL], which is
+     * the same fact stated in the order a person arrives at it: they rearrange
+     * something, and the arrangement is what the dashboard then shows.
      */
-    fun canReorder(spec: Spec): Boolean =
-        spec.sort == Sort.MANUAL && spec.filter == Filter.ALL && spec.query.isBlank()
+    fun canReorder(spec: Spec): Boolean = spec.hidesNothing
 
     /**
      * Move one id within an order.

@@ -248,7 +248,6 @@ class MonitorQueryTest {
         // Dropping card 2 above card 5 of a filtered view says nothing about where
         // either belongs among the monitors you cannot see.
         assertTrue(MonitorQuery.canReorder(MonitorQuery.Spec(sort = Sort.MANUAL)))
-        assertFalse(MonitorQuery.canReorder(MonitorQuery.Spec(sort = Sort.WORST_FIRST)))
         assertFalse(
             MonitorQuery.canReorder(MonitorQuery.Spec(sort = Sort.MANUAL, query = "api")),
         )
@@ -257,6 +256,25 @@ class MonitorQueryTest {
                 MonitorQuery.Spec(sort = Sort.MANUAL, filter = Filter.PROBLEMS),
             ),
         )
+    }
+
+    /**
+     * The sort stopped being part of this, and that is the third fix in issue #16
+     * rather than a loosened rule.
+     *
+     * Dragging used to require [Sort.MANUAL], so the gesture did not exist until
+     * the user had found a panel and picked a sort out of it, and once picked it
+     * never went away. A drop now *sets* the sort, so the gesture is available
+     * under every one of them and the arrangement is what survives.
+     */
+    @Test
+    fun `dragging does not wait for a sort to be chosen`() {
+        Sort.entries.forEach { sort ->
+            assertTrue(
+                "$sort should allow dragging on an un-narrowed list",
+                MonitorQuery.canReorder(MonitorQuery.Spec(sort = sort)),
+            )
+        }
     }
 
     @Test

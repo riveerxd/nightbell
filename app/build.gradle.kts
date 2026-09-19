@@ -516,8 +516,28 @@ android {
         // saved 15. The readout also stopped being 74dp flat and now measures
         // the longest string its own range can produce, which is what "60000ms"
         // on the latency row needs.
-        versionCode = 41
-        versionName = "3.12.0"
+        // Issue 16 was three reports off one monitor setup, and the third one
+        // took three attempts. The URL field completes its own scheme on blur,
+        // so typing a host is enough and nothing goes red while it is being
+        // typed. The SOCKS5 switch and the certificate selector were on all
+        // three wizard steps past the kind picker, because they have to be
+        // visible wherever Test is; they are on Target now and the later steps
+        // carry a readout that walks back to them.
+        //
+        // The reorder grips are gone entirely. A mode with a bar and a button
+        // was built first and was still ceremony in front of a gesture every
+        // phone teaches, so a hold on the card picks it up and dropping it
+        // somewhere new is what sets the manual sort. The hold has to be the
+        // clickable's own, because a detector layered outside it loses the
+        // release and a held card opened instead of selecting.
+        //
+        // Three things found by driving it: a dropped card landed twice because
+        // the preview was released before the write, deleting from a monitor's
+        // own screen flashed "Monitor not found" on the way out, and an imported
+        // backup arrived in the right order and was instantly re-ranked because
+        // the dashboard read the sort once at construction.
+        versionCode = 42
+        versionName = "3.13.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -534,11 +554,34 @@ android {
         }
     }
 
+    // Read once, here, because it is consulted while the debug build type is
+    // being configured below.
+    val minifyDebug = providers.gradleProperty("minifyDebug").isPresent
+
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
-            isMinifyEnabled = false
+            // Off by default, and on with -PminifyDebug.
+            //
+            // For handing a build over on a metered link: R8 takes the APK from
+            // about 16MB to about 2.5MB, all of it dex, and costs roughly half a
+            // minute. Everything else about the build is untouched, which is the
+            // point. Same applicationId, same yellow mark, same "Nightbell debug"
+            // on the launcher, so it replaces the install already on the phone
+            // instead of sitting next to it.
+            //
+            // Not for a test run. The instrumentation APK is built against the
+            // app's real class names and R8 renames them, so a device suite needs
+            // this off.
+            isMinifyEnabled = minifyDebug
+            isShrinkResources = minifyDebug
+            if (minifyDebug) {
+                proguardFiles(
+                    getDefaultProguardFile("proguard-android-optimize.txt"),
+                    "proguard-rules.pro",
+                )
+            }
         }
         release {
             isMinifyEnabled = true
@@ -595,6 +638,13 @@ android {
 
     sourceSets {
         getByName("main") { java.srcDirs("src/main/kotlin") }
+        // The yellow mark belongs to both builds that are not a release, so it
+        // lives in a directory neither of them owns. releaseTest inherits its
+        // build type from release via initWith, and resources do not travel that
+        // way: the first minified APK handed over carried the release blue bell
+        // and the release name, which on a launcher is the release app.
+        getByName("debug") { res.srcDirs("src/debug/res", "src/devMark/res") }
+        getByName("releaseTest") { res.srcDirs("src/releaseTest/res", "src/devMark/res") }
         // testShared holds helpers (e.g. TinyHttpServer) used by both the JVM
         // unit tests and the on-device instrumentation tests.
         getByName("test") { java.srcDirs("src/test/kotlin", "src/testShared/kotlin") }

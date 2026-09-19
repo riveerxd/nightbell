@@ -33,6 +33,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,6 +59,7 @@ import me.river.nightbell.domain.githubInstantMs
 import me.river.nightbell.domain.Health
 import me.river.nightbell.domain.Monitor
 import me.river.nightbell.domain.FiringAlert
+import me.river.nightbell.domain.MonitorCard
 import me.river.nightbell.domain.MonitorKind
 import me.river.nightbell.domain.PrometheusWatch
 import me.river.nightbell.domain.PrometheusSource
@@ -136,7 +138,18 @@ fun DetailScreen(
     val topInset = WindowInsets.systemBars.asPaddingValues().calculateTopPadding()
     val bottomInset = WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
 
-    val current = card
+    // The last card this screen had, kept for the gap between deleting a monitor
+    // and the back stack popping.
+    //
+    // `delete` writes to the store first and pops afterwards, so the flow hands
+    // back null for the frames in between and this screen drew "Monitor not
+    // found" at full size on its way out: an amber warning, in the middle of the
+    // screen, every single time a delete worked. Holding the last card renders
+    // the screen the user was already looking at until it slides away.
+    var lastCard by remember { mutableStateOf<MonitorCard?>(null) }
+    LaunchedEffect(card) { if (card != null) lastCard = card }
+
+    val current = card ?: lastCard?.takeIf { viewModel.deleting }
     if (current == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             EmptyState(

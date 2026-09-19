@@ -41,6 +41,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -66,6 +67,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
@@ -117,6 +119,7 @@ import me.river.nightbell.ui.icons.NightbellIcons
 import me.river.nightbell.ui.rememberSetupViewModel
 import me.river.nightbell.ui.theme.BackdropHost
 import me.river.nightbell.ui.theme.BackdropScope
+import me.river.nightbell.ui.theme.LocalNightbellMotion
 import me.river.nightbell.ui.theme.NightbellColors
 import me.river.nightbell.ui.theme.NightbellRadii
 import me.river.nightbell.ui.theme.accentFor
@@ -160,6 +163,27 @@ fun SetupScreen(
     // area's bottom padding, so nothing ever hides behind it.
     var footerHeight by remember { mutableStateOf(0.dp) }
     var confirmDiscard by remember { mutableStateOf(false) }
+
+    // One scroll position per step, held outside the AnimatedContent below.
+    //
+    // Inside it, every step change built a fresh state, so walking Back landed at
+    // the top of a form the user had scrolled halfway down and had to find their
+    // place in again. The route summary made that impossible to ignore: it sends
+    // the user two steps back to a control that sits at the bottom of Target, and
+    // arriving at the top of the page is not arriving at the control.
+    val stepScroll = remember { List(stepTitles.size) { ScrollState(0) } }
+    val motion = LocalNightbellMotion.current
+
+    // Arriving at Target because the summary was tapped. The routing and
+    // certificate sections are the last things on that step, so the bottom of the
+    // scroll is exactly where they are, and no measuring is needed to find them.
+    LaunchedEffect(viewModel.revealRouting, viewModel.step, stepScroll[1].maxValue) {
+        val target = stepScroll[1]
+        if (viewModel.revealRouting && viewModel.step == 1 && target.maxValue > 0) {
+            if (motion.enabled) target.animateScrollTo(target.maxValue) else target.scrollTo(target.maxValue)
+            viewModel.revealedRouting()
+        }
+    }
 
     /**
      * Leaving the wizard, from whichever direction the request arrived.
@@ -216,7 +240,7 @@ fun SetupScreen(
                             Modifier
                                 .fillMaxSize()
                                 .testTag("setup-scroll")
-                                .verticalScroll(rememberScrollState())
+                                .verticalScroll(stepScroll[step.coerceIn(stepScroll.indices)])
                                 // Clamped and centred on a tablet: a form field a
                                 // thousand pixels wide is harder to read, not easier.
                                 .padding(readableContentPadding()),
@@ -229,14 +253,35 @@ fun SetupScreen(
                                 else -> StepSchedule(viewModel, draft, report, accent)
                             }
 
-                            if (viewModel.step > 0) {
-                                // Above the Test panel, on every step that offers
-                                // Test, which is the whole point of it living here.
-                                // It used to sit two steps further on under Cadence,
-                                // so the first test anyone ran on a routed monitor
-                                // failed with nothing on screen to explain why.
-                                ProxyRoutingSection(viewModel, draft, report, accent)
-                                CertificateTrustSection(viewModel, draft, report, accent)
+                            // Routing and certificate trust belong to Target, and
+                            // to Target only.
+                            //
+                            // They used to be rendered on every step past the kind
+                            // picker, because they have to be visible wherever Test
+                            // is and Test is offered from step 1 onwards. The cost
+                            // was three live copies of the same switch, which is
+                            // what issue #16 reported: setting up one monitor, the
+                            // SOCKS5 toggle appears three times and nothing says
+                            // whether those are the same setting.
+                            //
+                            // They are one setting now, on the step that owns the
+                            // question of how this app reaches the target, and the
+                            // later steps carry a readout of the answer so that a
+                            // test run from them is still never run blind.
+                            if (step == 1) {
+                                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                    ProxyRoutingSection(viewModel, draft, report, accent)
+                                    CertificateTrustSection(viewModel, draft, report, accent)
+                                }
+                            } else if (step > 1) {
+                                RouteSummaryRow(
+                                    draft = draft,
+                                    shared = viewModel.proxy,
+                                    accent = accent,
+                                    onEdit = viewModel::editRouting,
+                                )
+                            }
+                            if (step > 0) {
                                 TestPanel(
                                     testing = viewModel.testing,
                                     result = viewModel.testResult,
@@ -701,13 +746,18 @@ private fun StepTarget(
     } else {
         GlassField(
             value = draft.url,
-            onValueChange = { value -> viewModel.update { it.copy(url = value.trim()) } },
+            onValueChange = viewModel::setUrl,
+            // Completed when the field is left, never while it is being typed in.
+            // See UrlInput for why that is the only moment this is allowed to
+            // happen, and Validation.report for why nothing goes red in the
+            // meantime.
+            onBlur = { viewModel.completeUrlScheme() },
             label = "URL",
             // With a port, deliberately. Without one it read as "ports are not a
             // thing here", and the first report against the routing feature was a
             // Monero RPC on 18089 that returned nothing until the port was added.
             placeholder = "https://example.com:8443/health",
-            note = report.of(Validation.Field.URL),
+            note = viewModel.urlNote,
             leadingIcon = NightbellIcons.Link,
             accent = accent,
             keyboardType = KeyboardType.Uri,
@@ -1401,6 +1451,21 @@ private fun SummaryLine(label: String, value: String) {
  * on, because that is the case where an http monitor can still end up making a
  * TLS request, which is how issue #6 happened.
  */
+/**
+ * Whether [CertificateTrustSection] has an opinion to offer about this draft.
+ *
+ * Pulled out of the section itself so [RouteSummaryRow] can answer the same
+ * question the same way. The two are on different steps and a summary that names
+ * a trust mode for a monitor that never makes a TLS request would be reporting a
+ * setting the user was never shown.
+ */
+private fun showsCertificate(draft: Monitor): Boolean {
+    if (draft.kind == MonitorKind.GITHUB_REPO) return false
+    val url = draft.url.trim()
+    return url.startsWith("https://", ignoreCase = true) ||
+        (url.startsWith("http://", ignoreCase = true) && draft.followRedirects)
+}
+
 @Composable
 private fun CertificateTrustSection(
     viewModel: SetupViewModel,
@@ -1408,11 +1473,9 @@ private fun CertificateTrustSection(
     report: Validation.Report,
     accent: Color,
 ) {
-    if (draft.kind == MonitorKind.GITHUB_REPO) return
+    if (!showsCertificate(draft)) return
     val url = draft.url.trim()
-    val https = url.startsWith("https://", ignoreCase = true)
     val couldBecomeHttps = url.startsWith("http://", ignoreCase = true) && draft.followRedirects
-    if (!https && !couldBecomeHttps) return
 
     // A `SectionHeader` and a `SegmentedSelector`, which is what every other
     // section of this wizard and the update-source control in Settings both use.
@@ -1595,6 +1658,110 @@ private fun ProxyRoutingSection(
         }
     }
     FieldNote(report.of(Validation.Field.PROXY))
+}
+
+/**
+ * What the route and the certificate rule currently are, on the steps that do not
+ * own them.
+ *
+ * A readout, not a control, and that distinction is the fix for issue #16. The
+ * switches themselves were rendered on all three steps because Test is offered on
+ * all three and nobody should run a routed check without being able to see that
+ * it is routed. Repeating the switch answered that by making the user wonder
+ * which of the three copies they were touching. A sentence saying what the route
+ * is answers it without asking anything of them, and the one action it carries
+ * goes back to the single place the setting lives.
+ */
+@Composable
+private fun RouteSummaryRow(
+    draft: Monitor,
+    shared: ProxyRoute.Endpoint?,
+    accent: Color,
+    onEdit: () -> Unit,
+) {
+    // Same resolution order ProxyRoutingSection uses: the monitor's own address
+    // wins, the shared one from Settings is the fallback, and a monitor routed
+    // with neither has nowhere to go.
+    val own = draft.proxyHost.trim()
+    val endpoint = when {
+        own.isNotBlank() -> {
+            val port = if (draft.proxyPort in ProxyRoute.PORTS) draft.proxyPort else shared?.port
+            port?.let { "$own:$it" }
+        }
+        shared != null -> "${shared.host}:${shared.port}"
+        else -> null
+    }
+    val unconfigured = draft.useProxy && endpoint == null
+    val trust = if (showsCertificate(draft)) draft.tlsTrust else null
+
+    val route = when {
+        !draft.useProxy -> "Direct"
+        endpoint != null -> "Via $endpoint"
+        else -> "Routed, no address yet"
+    }
+    val value = listOfNotNull(route, trust?.label).joinToString("  ·  ")
+    val label = if (trust != null) "Route and certificate" else "Route"
+    // Amber is degraded and rose is down, and both of these are real: a routed
+    // monitor with no address cannot run at all, and "Any certificate" means
+    // anything on the path can rewrite the answer this app is trusting.
+    val tone = when {
+        unconfigured -> NightbellColors.Amber
+        trust == TlsTrust.ANY -> NightbellColors.Rose
+        else -> NightbellColors.TextPrimary
+    }
+
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(NightbellRadii.field))
+            .clickable(onClick = onEdit)
+            .background(NightbellColors.sheen(0.05f))
+            .padding(horizontal = 14.dp, vertical = 12.dp)
+            .testTag("route-summary")
+            .semantics {
+                role = Role.Button
+                contentDescription = "$label: $value. Change on the Target step."
+            },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = NightbellIcons.Shield,
+            contentDescription = null,
+            tint = if (tone == NightbellColors.TextPrimary) accent else tone,
+            modifier = Modifier.size(17.dp),
+        )
+        Spacer(Modifier.width(11.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = label.uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                color = NightbellColors.TextTertiary,
+            )
+            Spacer(Modifier.height(3.dp))
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleSmall,
+                color = tone,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        // The word, not a bare chevron. "Change" says what the tap does and a
+        // chevron on its own says only that something is over there.
+        Text(
+            text = "Change",
+            style = MaterialTheme.typography.labelMedium,
+            color = accent,
+        )
+        Spacer(Modifier.width(4.dp))
+        Icon(
+            imageVector = NightbellIcons.ChevronRight,
+            contentDescription = null,
+            tint = accent,
+            modifier = Modifier.size(14.dp),
+        )
+    }
 }
 
 // --------------------------------------------------------------------- step 3
@@ -2426,10 +2593,11 @@ private fun PrometheusTargetCard(
 
     GlassField(
         value = draft.url,
-        onValueChange = { value -> viewModel.update { it.copy(url = value.trim()) } },
+        onValueChange = viewModel::setUrl,
+        onBlur = { viewModel.completeUrlScheme() },
         label = watch.source.urlLabel,
         placeholder = watch.source.urlPlaceholder,
-        note = report.of(Validation.Field.URL),
+        note = viewModel.urlNote,
         leadingIcon = NightbellIcons.Link,
         accent = accent,
         keyboardType = KeyboardType.Uri,

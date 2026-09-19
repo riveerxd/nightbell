@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Every build that is not a release paints the mark yellow.
+
+        Shared by the debug and releaseTest source sets rather than living in
+        either of them. A minified build handed over for testing is exactly as
+        much "not the real app" as a debug one, and the first one that went out
+        was indistinguishable from the release install on the launcher.
+
+        Every place the bell appears follows from this one value: the launcher
+        icon, the system splash, the widget header, and NightbellMark in the app
+        itself, which reads the same resource. Deliberately not Amber #FFB020,
+        which is the degraded status colour: a mark in the same shade as a
+        warning would read as one.
+    -->
+    <color name="brand_mark">#FFFFD400</color>
+</resources>

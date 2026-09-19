@@ -16,6 +16,8 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -54,6 +56,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -200,8 +206,21 @@ fun DashboardScreen(
 
     val visible = viewModel.visible
     val selecting = viewModel.selecting
-    // Dragging and bulk selection are mutually exclusive modes; the handle is hidden
-    // while selecting so the two can never be in play at once.
+
+    /**
+     * Rearranging has no mode and no handle. Hold a card and it comes up.
+     *
+     * Issue #16 arrived as "the reorder icons never go away", and the first fix
+     * was a mode with an explicit way in and out. That was still one screen of
+     * ceremony in front of a gesture every phone already teaches: hold the thing,
+     * move the thing. What is left is the gesture, and dropping a card somewhere
+     * new is what puts the dashboard in `Sort.MANUAL` rather than something the
+     * user has to arrange beforehand.
+     *
+     * Not while a selection is running, because then a hold already means
+     * something, and not while a filter or a search is narrowing the list, for
+     * the reason `MonitorQuery.canReorder` gives.
+     */
     val canReorder = MonitorQuery.canReorder(viewModel.spec) && !selecting
     val reorder = rememberGridReorderState(gridState, scope)
     val reorderableKeys = remember(visible) { visible.map { it.monitor.id }.toSet() }
@@ -314,38 +333,40 @@ fun DashboardScreen(
                 offline = offline,
                 dragging = reorder.draggingKey == card.monitor.id,
                 dragDelta = reorder.delta,
-                reorderHandle = if (canReorder) {
-                    {
-                        ReorderHandle(
-                            monitorName = card.monitor.displayName,
-                            onDragStart = {
-                                viewModel.beginReorder()
-                                reorder.start(card.monitor.id)
-                            },
-                            onDrag = { amount ->
-                                reorder.drag(
-                                    amount,
-                                    reorderableKeys = reorderableKeys,
-                                ) { fromId, toId ->
-                                    viewModel.moveInReorder(fromId, toId)
-                                }
-                            },
-                            onDragEnd = {
-                                reorder.end()
-                                viewModel.commitReorder()
-                            },
-                            onMoveUp = if (rank > 0) {
-                                { viewModel.nudge(card.monitor.id, -1) }
-                            } else {
-                                null
-                            },
-                            onMoveDown = if (rank < visible.lastIndex) {
-                                { viewModel.nudge(card.monitor.id, 1) }
-                            } else {
-                                null
-                            },
-                        )
-                    }
+                reorder = if (canReorder) {
+                    CardReorder(
+                        onPickUp = {
+                            viewModel.beginReorder()
+                            reorder.start(card.monitor.id)
+                        },
+                        isHeld = { reorder.draggingKey == card.monitor.id },
+                        onDrag = { amount ->
+                            reorder.drag(amount, reorderableKeys = reorderableKeys) { fromId, toId ->
+                                viewModel.moveInReorder(fromId, toId)
+                            }
+                        },
+                        // One gesture, and the distance decides what it meant. A
+                        // hold that travelled is a rearrangement; a hold that did
+                        // not is the long press that has always started a bulk
+                        // selection, and taking that away to make room for
+                        // dragging would be trading one feature for another.
+                        onDrop = {
+                            reorder.end(animate = motion.enabled)
+                            if (!viewModel.commitReorder()) {
+                                viewModel.toggleSelected(card.monitor.id)
+                            }
+                        },
+                        onMoveUp = if (rank > 0) {
+                            { viewModel.nudge(card.monitor.id, -1) }
+                        } else {
+                            null
+                        },
+                        onMoveDown = if (rank < visible.lastIndex) {
+                            { viewModel.nudge(card.monitor.id, 1) }
+                        } else {
+                            null
+                        },
+                    )
                 } else {
                     null
                 },
@@ -1075,7 +1096,9 @@ private fun TunePanel(
             icon = { sort ->
                 when (sort) {
                     MonitorQuery.Sort.WORST_FIRST -> NightbellIcons.Warning
-                    // The grip, literally: this is the mode where the grips appear.
+                    // The grip, which is now the only one left in the app: the
+                    // cards lost theirs, and this chip is what that gesture
+                    // produces.
                     MonitorQuery.Sort.MANUAL -> NightbellIcons.Grip
                     MonitorQuery.Sort.NAME -> NightbellIcons.SortLines
                     MonitorQuery.Sort.SLOWEST -> NightbellIcons.Gauge
@@ -1085,30 +1108,36 @@ private fun TunePanel(
                 }
             },
         )
-        AnimatedVisibility(visible = spec.sort == MonitorQuery.Sort.MANUAL) {
+        // Under every sort, not only under "My order".
+        //
+        // This is the one place in the app that says the drag gesture exists, and
+        // for a while it was inside the manual-sort branch, which put it behind
+        // the very thing it tells you how to reach: you would only be told how to
+        // rearrange the list after you had already rearranged it. Dragging works
+        // under all seven sorts now, so the sentence lives with all seven too.
+        val draggable = MonitorQuery.canReorder(spec)
+        Spacer(Modifier.height(10.dp))
+        Text(
+            text = if (draggable) {
+                "Hold any card on the dashboard and drag it to put the monitors in " +
+                    "your own order."
+            } else {
+                "Dragging is off while a filter or a search is narrowing the " +
+                    "list, because a card's place in a filtered view says " +
+                    "nothing about where it belongs. Show all to rearrange."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = if (draggable) NightbellColors.TextTertiary else NightbellColors.Amber,
+        )
+        // The reassurance only makes sense once there is an order to keep.
+        AnimatedVisibility(visible = draggable && spec.sort == MonitorQuery.Sort.MANUAL) {
             Column {
-                Spacer(Modifier.height(10.dp))
-                // Manual sort does not by itself put grips on the cards:
-                // `MonitorQuery.canReorder` also needs the list un-narrowed, for
-                // the reason its own doc gives. Saying "drag the grip" while a
-                // filter is on sends the user hunting for a control the code has
-                // deliberately withheld.
-                val draggable = MonitorQuery.canReorder(spec)
+                Spacer(Modifier.height(6.dp))
                 Text(
-                    text = if (draggable) {
-                        "Drag the grip on any card to arrange them. Nothing re-sorts " +
-                            "them behind your back while this is on."
-                    } else {
-                        "The grips stay hidden while a filter or a search is narrowing " +
-                            "the list, because a card's place in a filtered view says " +
-                            "nothing about where it belongs. Show all to start dragging."
-                    },
+                    text = "Monitors stay where you put them. Nothing re-sorts them " +
+                        "behind your back while this is on.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (draggable) {
-                        NightbellColors.TextTertiary
-                    } else {
-                        NightbellColors.Amber
-                    },
+                    color = NightbellColors.TextTertiary,
                 )
             }
         }
@@ -1372,7 +1401,8 @@ private fun MonitorRowCard(
     offline: Boolean,
     dragging: Boolean,
     dragDelta: Offset,
-    reorderHandle: (@Composable () -> Unit)?,
+    /** Non-null when a hold on this card should pick it up rather than select it. */
+    reorder: CardReorder?,
     onOpen: () -> Unit,
     onLongPress: () -> Unit,
     onCheck: () -> Unit,
@@ -1381,6 +1411,17 @@ private fun MonitorRowCard(
 ) {
     val monitor = card.monitor
     val runtime = card.runtime
+    val haptics = LocalHapticFeedback.current
+    val motion = LocalNightbellMotion.current
+    val lift by animateDpAsState(
+        targetValue = if (dragging) 26.dp else 12.dp,
+        animationSpec = if (motion.enabled) {
+            spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMedium)
+        } else {
+            snap()
+        },
+        label = "cardLift",
+    )
     val (accent, accentEnd) = accentFor(monitor.accent)
     val health = if (!monitor.enabled) Health.PAUSED else runtime.health
     val now = LocalNowMs.current
@@ -1402,11 +1443,38 @@ private fun MonitorRowCard(
             else -> healthRim(health)
         },
         // Elevation and shadow both grow while held, so the card reads as picked up
-        // off the surface rather than merely sliding along it.
-        elevation = if (dragging) 26.dp else 12.dp,
+        // off the surface rather than merely sliding along it, and they come back
+        // down on their own clock rather than with the last frame of the drop.
+        // `dragging` stays true for the length of the settle, so this is the card
+        // being set down after it has arrived.
+        elevation = lift,
         onClick = onOpen,
-        onLongClick = onLongPress,
+        // The hold, and it is the clickable's rather than a detector of our own,
+        // because the clickable is the inner node and always wins the release.
+        // See `dragWhileHeld`. When the card can be dragged this picks it up and
+        // the release decides what the gesture meant; otherwise it is the bulk
+        // selection it has always been.
+        onLongClick = if (reorder != null) {
+            {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                reorder.onPickUp()
+            }
+        } else {
+            onLongPress
+        },
         modifier = Modifier
+            .then(
+                if (reorder != null) {
+                    Modifier.dragWhileHeld(
+                        key = monitor.id,
+                        isHeld = reorder.isHeld,
+                        onDrag = reorder.onDrag,
+                        onDrop = reorder.onDrop,
+                    )
+                } else {
+                    Modifier
+                },
+            )
             .then(
                 if (dragging) {
                     Modifier
@@ -1443,7 +1511,28 @@ private fun MonitorRowCard(
                                 "${CertificateWatch.daysLeft(runtime.certExpiresAt, now)} days",
                         )
                     }
-                    append(if (selecting) ", tap to select" else ", open details")
+                    append(
+                        when {
+                            selecting -> ", tap to select"
+                            reorder != null -> ", open details, or hold to move or select"
+                            else -> ", open details"
+                        },
+                    )
+                }
+                // The accessible half of the drag. A drag is unusable with a
+                // screen reader, and reordering is exactly the kind of feature
+                // that ships sighted-only unless the same capability exists as an
+                // action. Invoking one also sets the sort, by the same path a
+                // dropped card takes.
+                if (reorder != null) {
+                    customActions = buildList {
+                        reorder.onMoveUp?.let {
+                            add(CustomAccessibilityAction("Move up") { it(); true })
+                        }
+                        reorder.onMoveDown?.let {
+                            add(CustomAccessibilityAction("Move down") { it(); true })
+                        }
+                    }
                 }
             },
     ) {
@@ -1456,18 +1545,6 @@ private fun MonitorRowCard(
                 pageUrl = monitor.url,
                 enabled = monitor.kind == MonitorKind.WEBSITE_ELEMENT,
             )
-            // The grip lives in the title row, not down with the actions.
-            //
-            // The action row is already full — kind, method, interval, pause,
-            // re-check — and adding 48 dp of handle to it pushed the re-check button
-            // clean off the card. The title row has slack by construction: the
-            // name/host column is weighted and simply gives some up. Leading also
-            // keeps it away from the bottom-right corner, where the floating add
-            // button is drawn over whichever card happens to be at the fold.
-            reorderHandle?.let {
-                it()
-                Spacer(Modifier.width(6.dp))
-            }
             IconBadge(
                 icon = kindIcon(monitor.kind),
                 accent = accent,

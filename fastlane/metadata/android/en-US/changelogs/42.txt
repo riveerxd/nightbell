@@ -1,0 +1,9 @@
+Monitors are rearranged by holding a card and dragging it. No handle to find and no mode to turn on first: hold, move, let go, and the dashboard keeps that order from then on instead of re-ranking it by severity on the next check. A hold you release without moving still starts a selection, exactly as before.
+
+Adding a monitor no longer asks for a scheme. Type status.example.com and the URL field finishes it as https when you leave the field, saying that it did; type http:// yourself and it is left alone. Nothing turns red while you are still typing the host.
+
+The SOCKS5 switch and the certificate rule now appear once, on the Target step, rather than on every screen of the wizard. The later steps show what the route and the trust setting are, and tap through to change them.
+
+Also fixed: a dragged card that appeared to swap twice before settling, the "Monitor not found" warning that flashed when you deleted a monitor from its own screen, and an imported backup whose monitor order was restored and then immediately sorted away.
+
+Reported as issue 16.

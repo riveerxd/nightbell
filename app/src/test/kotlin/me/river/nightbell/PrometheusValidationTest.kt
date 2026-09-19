@@ -166,10 +166,22 @@ class PrometheusValidationTest {
         assertFalse(report.isValid)
     }
 
+    /**
+     * Rewritten for issue #16, and the change is deliberate rather than a
+     * concession. `prom.example.com` used to be an error here, because a
+     * Prometheus server address is a URL and a URL had to carry its own scheme.
+     * The field completes it on blur now, and `Validation.report` judges the
+     * completed value, so the only honest assertion left is that the things
+     * completion cannot save are still refused.
+     */
     @Test
     fun `an unusable URL is still an unusable URL`() {
         val watch = PrometheusWatch(source = PrometheusSource.QUERY, query = "up")
-        assertNotNull(errorOn(monitor(watch, url = "prom.example.com"), Validation.Field.URL))
+        assertNotNull(errorOn(monitor(watch, url = ""), Validation.Field.URL))
+        assertNotNull(errorOn(monitor(watch, url = "prom example com"), Validation.Field.URL))
+        assertNotNull(errorOn(monitor(watch, url = "gopher://prom.example.com"), Validation.Field.URL))
+        // And the one that used to be here now passes, which is the point.
+        assertNull(errorOn(monitor(watch, url = "prom.example.com"), Validation.Field.URL))
     }
 
     @Test

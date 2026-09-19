@@ -132,6 +132,15 @@ fun GlassField(
      */
     holdErrorUntilBlur: Boolean = false,
     /**
+     * Called once, with the current value, when focus leaves the field.
+     *
+     * For the work that has to happen after the user has finished typing and not
+     * on every keystroke: completing a URL's scheme is the case it was added for.
+     * Doing that in [onValueChange] would rewrite the field mid-word, and doing it
+     * at save would change the value at a moment nobody is looking at the field.
+     */
+    onBlur: ((String) -> Unit)? = null,
+    /**
      * Defaults to the standalone field radius, which is what most of Setup uses:
      * those fields sit on the page itself with nothing around them, so there is
      * no outer curve for them to answer to.
@@ -223,7 +232,11 @@ fun GlassField(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = if (singleLine) 20.dp else (minLines * 21).dp)
-                        .onFocusChanged { focused = it.isFocused }
+                        .onFocusChanged { state ->
+                            val leaving = focused && !state.isFocused
+                            focused = state.isFocused
+                            if (leaving) onBlur?.invoke(value)
+                        }
                         .semantics { contentDescription = label },
                 )
             }

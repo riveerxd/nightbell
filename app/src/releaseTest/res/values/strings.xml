@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Its own label rather than the debug one, because both can be installed at
+        the same time: the applicationId suffixes are .debug and .minified, so two
+        yellow bells sit on the launcher and the name is the only thing that says
+        which is which. Worth telling apart, because this is the build R8 has been
+        through and the debug one is not.
+    -->
+    <string name="app_name">Nightbell minified</string>
+</resources>

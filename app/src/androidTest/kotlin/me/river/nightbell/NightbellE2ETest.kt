@@ -7,6 +7,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performScrollToNode
 import androidx.test.espresso.Espresso
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
@@ -17,6 +18,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
@@ -348,14 +350,17 @@ class NightbellE2ETest {
         composeRule.onNodeWithText("Continue").performClick()
         composeRule.waitForIdle()
 
-        // A bare host: valid characters, but no scheme.
-        composeRule.onNodeWithContentDescription("URL").performTextInput("example.com")
+        // A scheme this app does not speak. Rewritten for issue #16: this used to
+        // be a bare host, and a bare host is no longer an error, because the field
+        // completes it. What is left is the input nothing can complete into
+        // something usable, and it has to say so exactly as loudly as before.
+        composeRule.onNodeWithContentDescription("URL").performTextInput("ftp://example.com")
         composeRule.waitForIdle()
         Espresso.closeSoftKeyboard()
         composeRule.waitForIdle()
         // The message shows twice by design: inline under the field, and again in
         // the test panel explaining why "Test now" is unavailable.
-        val schemeError = composeRule.onAllNodes(hasText("Start with http:// or https://"))
+        val schemeError = composeRule.onAllNodes(hasText("Only http and https are supported"))
         assertEquals(2, schemeError.fetchSemanticsNodes().size)
         schemeError.onFirst().performScrollTo().assertIsDisplayed()
         composeRule.captureScreenshot("07-setup-validation")
@@ -366,6 +371,17 @@ class NightbellE2ETest {
         composeRule.waitForIdle()
         composeRule.onNodeWithContentDescription("URL").assertIsDisplayed()
         assertEquals(storedBefore, runBlocking { Nightbell.require().store.currentSnapshot().monitors.size })
+
+        // And the other half of the same change, on the same screen: the input
+        // that used to be refused here now walks straight through.
+        composeRule.onNodeWithContentDescription("URL").performTextReplacement("example.com")
+        composeRule.waitForIdle()
+        Espresso.closeSoftKeyboard()
+        composeRule.waitForIdle()
+        composeRule.onAllNodes(hasText("Start with http:// or https://")).assertCountEquals(0)
+        composeRule.onNodeWithText("Continue").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("Expectations").assertIsDisplayed()
     }
 
     // ---- helpers -------------------------------------------------------------

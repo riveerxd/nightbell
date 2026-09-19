@@ -229,17 +229,53 @@ fun GlassDivider(modifier: Modifier = Modifier, alpha: Float = 0.10f) {
 }
 
 /**
- * Remembers which entrance animations have already run on a screen.
+ * The opening moment of a screen, and which items have used it.
  *
- * A `LazyColumn` throws an item's composition away the moment it scrolls out of
- * view, so state held with `remember` *inside* the item resets and its entrance
- * replays every time it scrolls back. This log lives above the list — the
- * nearest scope that outlives recycling — so an item animates the first time it
- * is seen and stays put on every pass after that.
+ * Two jobs, and the second one arrived later. A `LazyColumn` throws an item's
+ * composition away the moment it scrolls out of view, so state held with
+ * `remember` *inside* the item resets and its entrance replays every time it
+ * scrolls back. This log lives above the list, the nearest scope that outlives
+ * recycling, so an item animates once and stays put on every pass after that.
+ *
+ * The second job is [opening]. Playing an entrance the first time each item is
+ * composed sounds like the same thing as playing it when the screen appears, and
+ * in a lazy list it is not: an item twelve rows down is not composed until it is
+ * scrolled to, so it drifted in under the user's thumb halfway through a scroll.
+ * Every screenful after the first arrived animating, which reads as the list
+ * still loading long after it has loaded.
+ *
+ * So the entrance belongs to the screen rather than to the item. The window opens
+ * when the first item asks for it, which is when the data arrived rather than
+ * when the screen was composed, and it shuts shortly after. Items that appear
+ * inside it drift in together, staggered by their position; anything composed
+ * afterwards is simply there.
  */
 @Stable
 class EntranceLog {
     private val played = mutableSetOf<Any>()
+
+    /** True until the screen's opening moment has passed. See [rememberEntranceLog]. */
+    var opening by mutableStateOf(true)
+        private set
+
+    /**
+     * Set by the first item to reach [StaggeredEntrance].
+     *
+     * The window is timed from here rather than from the screen appearing,
+     * because a dashboard spends its first moments with nothing in it: the store
+     * read has not landed, so there are no cards to animate and a window timed
+     * from composition could be shut before the first one arrives.
+     */
+    var started by mutableStateOf(false)
+        private set
+
+    fun start() {
+        started = true
+    }
+
+    fun closeOpening() {
+        opening = false
+    }
 
     fun hasPlayed(key: Any): Boolean = key in played
 
@@ -248,8 +284,26 @@ class EntranceLog {
     }
 }
 
+/**
+ * How long a screen keeps drifting new items in after the first one shows up.
+ *
+ * Only has to outlast the composition of one screenful, which is a frame or two,
+ * so this is slack rather than duration. It is deliberately shorter than it takes
+ * to read the screen and decide to scroll.
+ */
+private const val ENTRANCE_WINDOW_MS = 600L
+
 @Composable
-fun rememberEntranceLog(): EntranceLog = remember { EntranceLog() }
+fun rememberEntranceLog(): EntranceLog {
+    val log = remember { EntranceLog() }
+    LaunchedEffect(log.started) {
+        if (log.started) {
+            delay(ENTRANCE_WINDOW_MS)
+            log.closeOpening()
+        }
+    }
+    return log
+}
 
 /**
  * Staggered entrance: each item drifts up, scales in and fades on a short delay
@@ -276,11 +330,19 @@ fun StaggeredEntrance(
     val motion = LocalNightbellMotion.current
     // Read while composing, before the effect below records it: the first pass
     // animates, every later one, including after recycling, does not.
-    val animate = remember(key) { enabled && motion.enabled && !log.hasPlayed(key) }
+    // Read while composing, before the effect below records it: the first pass
+    // animates, every later one, including after recycling, does not. `opening`
+    // is what keeps this to the screen's arrival rather than to each item's, so
+    // scrolling reveals rows that are already there instead of rows that drift
+    // in as they are uncovered.
+    val animate = remember(key) {
+        enabled && motion.enabled && log.opening && !log.hasPlayed(key)
+    }
     var shown by remember(key) { mutableStateOf(!animate) }
     LaunchedEffect(key) {
         // Recorded up front, not after the delay, so scrolling away mid-flight
         // doesn't leave the item eligible to animate again.
+        log.start()
         log.markPlayed(key)
         if (animate) delay(index.coerceAtMost(9) * 55L)
         shown = true

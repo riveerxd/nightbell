@@ -51,6 +51,7 @@ import me.river.nightbell.domain.ProxyRoute
 import me.river.nightbell.domain.StatusExpectation
 import me.river.nightbell.domain.StatusMode
 import me.river.nightbell.domain.Validation
+import me.river.nightbell.domain.UrlInput
 import me.river.nightbell.domain.isCancellation
 import me.river.nightbell.domain.runCatchingCancellable
 import me.river.nightbell.ui.components.ToastMessage
@@ -63,10 +64,13 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Shown when a human asks for a check with no connectivity. Worth saying out
@@ -154,14 +158,27 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
         private set
 
     init {
-        // Restores only the sort. Search text and filters start clear on purpose: a
-        // dashboard that opens with monitors hidden reads as a dashboard that has
-        // lost them.
+        // Follows the stored sort for as long as this screen lives, rather than
+        // reading it once at construction.
+        //
+        // Once was a bug with a long fuse. This view model outlives a trip into
+        // Settings, so importing a backup there replaced the store underneath a
+        // dashboard that had already decided it was showing worst-first. The
+        // monitors arrived in exactly the order they were exported in and were
+        // then re-ranked by severity on screen, so a fleet somebody had spent
+        // real effort arranging came back looking like it had not been carried
+        // over at all. It survived a restart, which is what made it look like the
+        // backup format was dropping the order.
+        //
+        // `setSort` writes the same value it sets, so this collector echoes it
+        // back and the guard makes that a no-op. Search text and filters are
+        // deliberately not restored: a dashboard that opens with monitors hidden
+        // reads as a dashboard that has lost them.
         viewModelScope.launch {
-            val stored = graph.store.currentSnapshot().settings.dashboardSort
-            if (spec.sort == MonitorQuery.Sort.WORST_FIRST) {
-                spec = spec.copy(sort = stored)
-            }
+            graph.store.settings
+                .map { it.dashboardSort }
+                .distinctUntilChanged()
+                .collect { stored -> if (stored != spec.sort) spec = spec.copy(sort = stored) }
         }
 
         // Ask about a new version when the app is opened, not only when the sweep
@@ -242,8 +259,20 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
             return if (ordered.size == base.size) ordered else base
         }
 
+    /**
+     * The order as it stood when the finger went down.
+     *
+     * Kept so a drop can answer one question: did anything actually move. A hold
+     * that never travelled is not a rearrangement, and treating it as one would
+     * switch the dashboard's sort every time somebody long pressed a card to
+     * select it.
+     */
+    private var reorderOrigin: List<String>? = null
+
     fun beginReorder() {
-        reorderPreview = visible.map { it.monitor.id }
+        val ids = visible.map { it.monitor.id }
+        reorderOrigin = ids
+        reorderPreview = ids
     }
 
     fun moveInReorder(fromId: String, toId: String) {
@@ -263,17 +292,74 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
         if (from == to) return
         val next = MonitorQuery.reordered(ids, from, to)
         reorderPreview = null
-        viewModelScope.launch { graph.store.reorder(next) }
+        reorderOrigin = null
+        writeOrder(next)
     }
 
-    fun commitReorder() {
-        val order = reorderPreview ?: return
-        reorderPreview = null
-        viewModelScope.launch { graph.store.reorder(order) }
+    /**
+     * End a drag, and say whether it was one.
+     *
+     * Returns false when the finger was held and lifted without travelling, which
+     * the dashboard reads as "select this card" instead. That is the whole reason
+     * this returns anything: one gesture, and the distance decides which of the
+     * two things it meant.
+     */
+    fun commitReorder(): Boolean {
+        val order = reorderPreview
+        val origin = reorderOrigin
+        reorderOrigin = null
+        if (order == null || order == origin) {
+            reorderPreview = null
+            return false
+        }
+        writeOrder(order)
+        return true
+    }
+
+    /**
+     * Write an order, and make the dashboard show it.
+     *
+     * The sort switch is not a side effect, it is the point. Rearranging under
+     * worst-first and leaving the sort alone would write an order the next
+     * completed check immediately re-ranks away, so the user would watch their
+     * work undo itself. Said out loud with a toast, because it changes what the
+     * dashboard does on every check from now on: it stops floating the broken
+     * ones to the top, and nobody should have to deduce that from a list.
+     */
+    private fun writeOrder(order: List<String>) {
+        val wasSorted = spec.sort != MonitorQuery.Sort.MANUAL
+        // The sort switches now, not after the write, and the preview is held
+        // until the store has caught up. Both halves are about the same thing:
+        // the card must land once.
+        //
+        // Dropping the preview at the end of the drag hands `visible` straight
+        // back to `MonitorQuery.apply`, which is still ranking by severity and
+        // still reading the pre-drag store, so every card animated back to where
+        // it started. The write landed a frame or two later and they all animated
+        // to the dragged order a second time. The card was seen to move, snap
+        // back, and move again.
+        if (wasSorted) spec = spec.copy(sort = MonitorQuery.Sort.MANUAL)
+        viewModelScope.launch {
+            graph.store.reorder(order)
+            // The preview and the store now agree, so handing over between them is
+            // invisible. Bounded, because a preview that outlived its write would
+            // freeze the list against every later change.
+            withTimeoutOrNull(2_000) {
+                cards.first { list ->
+                    MonitorQuery.apply(list, spec).map { it.monitor.id } == order
+                }
+            }
+            reorderPreview = null
+            if (wasSorted) {
+                graph.store.updateSettings { it.copy(dashboardSort = MonitorQuery.Sort.MANUAL) }
+                toast = ToastMessage.success("Keeping your order. Worst first is off.")
+            }
+        }
     }
 
     fun cancelReorder() {
         reorderPreview = null
+        reorderOrigin = null
     }
 
     fun setQuery(value: String) {
@@ -995,6 +1081,46 @@ class SetupViewModel(
         testResult = null
     }
 
+    /**
+     * True from the moment [completeUrlScheme] changed the field until the next
+     * keystroke in it.
+     *
+     * The app just edited something the user typed. Saying so is what separates
+     * that from the field quietly disagreeing with them, and it has to stop being
+     * said the moment they take the field back.
+     */
+    var urlSchemeAdded by mutableStateOf(false)
+        private set
+
+    /** Every edit of the URL field, from either of the two screens that has one. */
+    fun setUrl(value: String) {
+        urlSchemeAdded = false
+        update { it.copy(url = value.trim()) }
+    }
+
+    /**
+     * Put a scheme on the URL if it needs one.
+     *
+     * Called when the field is left, and again from the three places that consume
+     * the URL without waiting for that: the element picker, Test and Save. A user
+     * who types a host and taps "Capture element" straight after never blurs the
+     * field, and before this they got a refusal about a URL that looked fine.
+     */
+    fun completeUrlScheme() {
+        val completed = UrlInput.completed(draft.url)
+        if (completed == draft.url) return
+        update { it.copy(url = completed) }
+        urlSchemeAdded = true
+    }
+
+    /**
+     * What goes under the URL field: the validator's verdict, or the note saying
+     * a scheme was added when the validator has nothing to complain about.
+     */
+    val urlNote: Validation.Note?
+        get() = report.of(Validation.Field.URL)
+            ?: if (urlSchemeAdded) UrlInput.completionNote(draft.url) else null
+
     fun setKind(kind: MonitorKind) {
         draft = when (kind) {
             MonitorKind.HTTP_STATUS -> draft.copy(
@@ -1268,12 +1394,31 @@ class SetupViewModel(
         step = target.coerceIn(0, LAST_STEP)
     }
 
+    /**
+     * Set while the wizard is walking back to Target because the user asked to
+     * change the route, so the step can arrive at the routing controls rather than
+     * at the top of a form they are at the bottom of.
+     */
+    var revealRouting by mutableStateOf(false)
+        private set
+
+    /** The route summary's one action: go where the switches actually live. */
+    fun editRouting() {
+        revealRouting = true
+        goTo(1)
+    }
+
+    fun revealedRouting() {
+        revealRouting = false
+    }
+
     fun next() = goTo(step + 1)
 
     fun back() = goTo(step - 1)
 
     /** @param index element slot to overwrite, or -1 to append a new one. */
     fun openPicker(index: Int = -1) {
+        completeUrlScheme()
         if (Validation.urlNote(draft.url)?.severity == Validation.Severity.ERROR) return
         pickingIndex = index
         pickerOpen = true
@@ -1348,6 +1493,7 @@ class SetupViewModel(
 
     fun runTest() {
         if (testing) return
+        completeUrlScheme()
         val validation = report
         if (!validation.isValid) return
         testing = true
@@ -1373,6 +1519,7 @@ class SetupViewModel(
 
     fun save() {
         if (saving) return
+        completeUrlScheme()
         val validation = report
         if (!validation.isValid) return
         saving = true
@@ -1529,7 +1676,8 @@ class DetailViewModel(
      * A second tap on a button that is still working is the normal human response
      * to a screen that has not changed yet.
      */
-    private var deleting = false
+    var deleting by mutableStateOf(false)
+        private set
 
     fun delete(onDone: (ToastMessage) -> Unit) {
         if (deleting) return

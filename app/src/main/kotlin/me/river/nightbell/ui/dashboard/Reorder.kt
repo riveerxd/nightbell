@@ -1,38 +1,30 @@
 package me.river.nightbell.ui.dashboard
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.scrollBy
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.LazyGridItemInfo
 import androidx.compose.foundation.lazy.grid.LazyGridState
-import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.positionChange
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.semantics.CustomAccessibilityAction
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.customActions
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.input.pointer.positionChangeIgnoreConsumed
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import me.river.nightbell.ui.components.MinTouchTarget
-import me.river.nightbell.ui.icons.NightbellIcons
-import me.river.nightbell.ui.theme.NightbellColors
 
 /**
  * Drag-to-reorder for the dashboard grid.
@@ -87,11 +79,19 @@ class GridReorderState(
      */
     private var currentIndex = -1
 
+    /** The drop animation, held so a new pickup can take the state back. */
+    private var settle: Job? = null
+
     private fun info(key: Any): LazyGridItemInfo? =
         gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == key }
 
     fun start(key: Any) {
         val item = info(key) ?: return
+        // A pickup during another card's settle wins outright. Leaving that
+        // animation running would keep writing to `delta`, which now belongs to
+        // this card.
+        settle?.cancel()
+        settle = null
         draggingKey = key
         slotOffset = item.offset
         slotSize = item.size
@@ -159,11 +159,56 @@ class GridReorderState(
         }
     }
 
-    fun end() {
-        draggingKey = null
-        delta = Offset.Zero
+    /**
+     * Put the card down where it landed, rather than teleporting it there.
+     *
+     * The first version of this zeroed [delta] on release, which meant the card
+     * jumped from under the finger to its slot in a single frame: it was reported
+     * as snapping into place too instantly, and it is the one moment in the
+     * gesture with nothing to explain the movement. Everything else about a drag
+     * is already animated, so the drop was the only cut.
+     *
+     * [draggingKey] is held for the length of the settle, which is what keeps the
+     * card lifted and on top while it travels the last few pixels. It sets down
+     * afterwards, in that order, because a card that flattens first and then
+     * slides is a card sliding along the surface rather than being placed on it.
+     *
+     * Not animated when the user has turned motion off, and not animated when
+     * there is nothing to travel: an accessibility nudge moves nothing on screen
+     * and would otherwise pay for an animation of zero pixels.
+     */
+    fun end(animate: Boolean = true) {
         autoScroll = 0
         currentIndex = -1
+        val key = draggingKey
+        val from = delta
+        settle?.cancel()
+        settle = null
+        if (key == null || !animate || from == Offset.Zero) {
+            draggingKey = null
+            delta = Offset.Zero
+            return
+        }
+        settle = scope.launch {
+            try {
+                Animatable(from, Offset.VectorConverter).animateTo(
+                    targetValue = Offset.Zero,
+                    // Just short of critically damped: it arrives without a
+                    // bounce, because a monitor card springing about is decoration
+                    // and this movement is only here to be followable.
+                    animationSpec = spring(
+                        dampingRatio = 0.9f,
+                        stiffness = Spring.StiffnessMedium,
+                        visibilityThreshold = Offset.VisibilityThreshold,
+                    ),
+                ) { delta = value }
+            } finally {
+                // Also on cancellation, so a second pickup mid-settle does not
+                // leave the previous card displaced forever.
+                delta = Offset.Zero
+                if (draggingKey == key) draggingKey = null
+            }
+        }
     }
 
     /** One step of edge scrolling. Called from a loop while [autoScroll] is non-zero. */
@@ -187,77 +232,66 @@ fun rememberGridReorderState(
 ): GridReorderState = remember(gridState, scope) { GridReorderState(gridState, scope) }
 
 /**
- * The grip.
+ * Everything a card needs to be picked up and moved, or null when it cannot be.
  *
- * Carries "move up" and "move down" as accessibility actions as well as accepting a
- * drag, because a drag gesture is unusable with a screen reader and reordering is
- * exactly the kind of feature that gets shipped mouse-only. TalkBack users get the
- * same capability through the actions menu.
+ * Passed down instead of a handle composable. There used to be a grip drawn in
+ * every card's title row, and it was a lot of chrome for a mode that already
+ * announces itself in a bar at the bottom of the screen: the whole card is the
+ * target now, and holding it is the gesture.
+ *
+ * [onMoveUp] and [onMoveDown] are not optional extras. A drag is unusable with a
+ * screen reader, and reordering is exactly the kind of feature that ships
+ * mouse-only unless the same capability exists as an action. They were attached
+ * to the grip; with the grip gone they belong on the card.
  */
-@Composable
-fun ReorderHandle(
-    monitorName: String,
-    onDragStart: () -> Unit,
+data class CardReorder(
+    /** Run from the card's own `onLongClick`. See [dragWhileHeld]. */
+    val onPickUp: () -> Unit,
+    /** Whether this card is the one currently off the surface. */
+    val isHeld: () -> Boolean,
+    val onDrag: (Offset) -> Unit,
+    val onDrop: () -> Unit,
+    /** Null at the top of the list, where there is nowhere up to go. */
+    val onMoveUp: (() -> Unit)?,
+    /** Null at the bottom, likewise. */
+    val onMoveDown: (() -> Unit)?,
+)
+
+/**
+ * The drag half of a hold, for a card whose hold is already handled elsewhere.
+ *
+ * This does not detect the long press. The card is a `combinedClickable` and its
+ * own `onLongClick` is what picks the monitor up, for a reason that cost a suite
+ * to find: a detector layered outside the clickable cannot win. The clickable is
+ * the inner node, so it sees the finger lift first, and with no long-click handler
+ * of its own it reported that lift as an ordinary tap. Holding a card opened it,
+ * and consuming the event afterwards was already too late. With `onLongClick` set,
+ * Compose's tap detector fires the long press itself and then swallows everything
+ * up to the release, which is exactly the behaviour wanted.
+ *
+ * What is left for this to do is read the movement after the pickup and say when
+ * the finger came off. [isHeld] is how it knows a pickup happened at all, and the
+ * changes it reads are already consumed by the clickable, hence the
+ * ignore-consumed variants throughout.
+ *
+ * [onDrop] fires on release whenever the card was held, travelled or not. Which of
+ * the two things the gesture meant is the caller's to decide, because "it moved"
+ * has to mean the order changed rather than the finger wobbled.
+ */
+fun Modifier.dragWhileHeld(
+    key: Any,
+    isHeld: () -> Boolean,
     onDrag: (Offset) -> Unit,
-    onDragEnd: () -> Unit,
-    onMoveUp: (() -> Unit)?,
-    onMoveDown: (() -> Unit)?,
-    modifier: Modifier = Modifier,
-) {
-    val haptics = LocalHapticFeedback.current
-    Box(
-        modifier
-            .size(MinTouchTarget)
-            // Not detectDragGestures.
-            //
-            // The handle lives inside a LazyVerticalGrid, and a scrollable ancestor
-            // claims a vertical drag the moment it crosses touch slop.
-            // detectDragGestures does not consume anything while it waits for slop,
-            // so the grid won every gesture and onDragStart never fired at all — the
-            // card simply scrolled instead of lifting.
-            //
-            // Consuming the down denies the grid the gesture up front, which is
-            // exactly right for a dedicated grip: nobody wants to scroll the list by
-            // starting on the reorder handle. The drag is then driven by hand so the
-            // start can be deferred to the first real movement — otherwise a plain
-            // tap on the grip would visibly pick the card up and put it back.
-            .pointerInput(monitorName) {
-                awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false)
-                    down.consume()
-                    var started = false
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                        if (change.changedToUpIgnoreConsumed()) break
-                        val amount = change.positionChange()
-                        if (amount != Offset.Zero) {
-                            if (!started) {
-                                started = true
-                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onDragStart()
-                            }
-                            change.consume()
-                            onDrag(amount)
-                        }
-                    }
-                    if (started) onDragEnd()
-                }
-            }
-            .semantics {
-                contentDescription = "Reorder $monitorName"
-                customActions = buildList {
-                    onMoveUp?.let { add(CustomAccessibilityAction("Move up") { it(); true }) }
-                    onMoveDown?.let { add(CustomAccessibilityAction("Move down") { it(); true }) }
-                }
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = NightbellIcons.Grip,
-            contentDescription = null,
-            tint = NightbellColors.TextTertiary,
-            modifier = Modifier.size(18.dp),
-        )
+    onDrop: () -> Unit,
+): Modifier = pointerInput(key) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        while (true) {
+            val event = awaitPointerEvent()
+            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+            if (change.changedToUpIgnoreConsumed()) break
+            if (isHeld()) onDrag(change.positionChangeIgnoreConsumed())
+        }
+        if (isHeld()) onDrop()
     }
 }

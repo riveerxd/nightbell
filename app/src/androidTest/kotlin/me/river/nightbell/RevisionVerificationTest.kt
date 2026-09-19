@@ -22,6 +22,7 @@ import androidx.compose.ui.test.down
 import androidx.compose.ui.test.moveBy
 import androidx.compose.ui.test.up
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.test.core.app.ActivityScenario
@@ -621,7 +622,15 @@ class RevisionVerificationTest {
      */
     private val firstCardIndex = 2
 
-    private fun handleFor(name: String, scrollToIndex: Int? = null): SemanticsNodeInteraction {
+    /**
+     * A card that can be picked up, which is every card on an un-narrowed
+     * dashboard now that there is neither a grip nor a mode.
+     */
+    private fun draggable(name: String) =
+        hasContentDescription(name, substring = true) and
+            hasContentDescription("hold to move or select", substring = true)
+
+    private fun cardFor(name: String, scrollToIndex: Int? = null): SemanticsNodeInteraction {
         if (scrollToIndex != null) {
             // Pin the card to the top of the viewport so the card *below* it is
             // composed too. A lazy grid only lays out what is visible, and
@@ -633,40 +642,50 @@ class RevisionVerificationTest {
             composeRule.onNodeWithTag("dashboard-list").performScrollToIndex(scrollToIndex)
             composeRule.waitForIdle()
         }
-        composeRule.onNodeWithTag("dashboard-list")
-            .performScrollToNode(hasContentDescription("Reorder $name"))
+        composeRule.onNodeWithTag("dashboard-list").performScrollToNode(draggable(name))
         composeRule.waitForIdle()
-        // Unmerged, and this matters more than it looks.
-        //
-        // The card's combinedClickable sets mergeDescendants, so in the merged tree
-        // the grip's own contentDescription is folded into the card's node. Selecting
-        // it merged therefore returns the *card*, and injecting a touch at that node's
-        // centre lands in the middle of the card — nowhere near the handle, where it
-        // is swallowed by the card's click and the grid's scroll. The gesture looks
-        // broken when only the selector is.
-        return composeRule.onNode(hasContentDescription("Reorder $name"), useUnmergedTree = true)
-            .also { it.assertIsDisplayed() }
+        return composeRule.onNode(draggable(name)).also { it.assertIsDisplayed() }
     }
 
     /**
-     * Drag a grip far enough to matter.
+     * Hold a card, then drag it far enough to matter.
      *
-     * A generous fixed distance in small steps, rather than one card height: the drop
-     * target is recomputed per movement exactly as it is for a real finger, and a
-     * distance measured off the wrong node is how the first version of this test
-     * passed a 23 dp "card height" and moved nothing.
+     * The hold is the half that has to be right. `detectDragGesturesAfterLongPress`
+     * only claims the pointer once the press has outlasted the long-press timeout,
+     * and any movement before that cancels it and scrolls the list instead, which
+     * is exactly the behaviour that keeps the grid usable while arranging. So the
+     * time has to be advanced with the finger still.
+     *
+     * The touch lands near the top of the card rather than at its centre. The
+     * middle of a card is its latency chart on a seeded monitor, and on a taller
+     * one it can be the pause and re-check buttons; the title row is the part of
+     * the card that is always just the card.
+     *
+     * A generous fixed distance in small steps, rather than one card height: the
+     * drop target is recomputed per movement exactly as it is for a real finger,
+     * and a distance measured off the wrong node is how the first version of this
+     * test passed a 23 dp "card height" and moved nothing.
      */
     private fun SemanticsNodeInteraction.dragDown(pixels: Float) {
         performTouchInput {
-            down(center)
+            down(Offset(centerX, top + (height * 0.12f)))
+            advanceEventTime(viewConfiguration.longPressTimeoutMillis + 120)
             val step = pixels / 20f
-            repeat(20) { moveBy(Offset(0f, step)) }
+            repeat(20) {
+                advanceEventTime(16)
+                moveBy(Offset(0f, step))
+            }
             up()
         }
         composeRule.waitForIdle()
     }
 
     private fun openTunePanel() {
+        // Back to the top first. The controls live in the header, which is item 0
+        // of the grid, so a test that has scrolled to a card several rows down has
+        // scrolled them out of composition entirely and the tap finds nothing.
+        composeRule.onNodeWithTag("dashboard-list").performScrollToIndex(0)
+        composeRule.waitForIdle()
         composeRule.onNodeWithContentDescription("Filter and sort").performClick()
         composeRule.waitForIdle()
     }
@@ -676,33 +695,25 @@ class RevisionVerificationTest {
         composeRule.waitForIdle()
     }
 
-    private fun switchToMyOrder() {
-        openTunePanel()
-        composeRule.onNodeWithText("My order").performClick()
-        composeRule.waitForIdle()
-        composeRule.onNodeWithContentDescription("Close panel").performClick()
-        composeRule.waitForIdle()
-    }
-
+    /**
+     * Draggable straight off a cold start, under the default sort, with nothing
+     * chosen first. That is the whole of the third fix: there is no mode and no
+     * handle, so the only question left is whether the list is narrowed.
+     */
     @Test
-    fun theDragHandleOnlyExistsInMyOrderWithNothingHidden() {
+    fun everyCardIsDraggableUntilSomethingIsHidden() {
         seed()
         launch()
-        // Worst-first: no handles at all, because the next check would re-sort.
+        // Worst-first, freshly launched, nobody has opened the tune panel.
         assertEquals(
-            0,
-            composeRule.onAllNodes(
-                hasContentDescription("Reorder Checkout API"),
-                useUnmergedTree = true,
-            ).fetchSemanticsNodes().size,
+            me.river.nightbell.domain.MonitorQuery.Sort.WORST_FIRST,
+            runBlocking { Nightbell.require().store.currentSnapshot().settings.dashboardSort },
         )
-
-        switchToMyOrder()
-        handleFor("Checkout API")
-        composeRule.captureScreenshot("reorder-01-handles-visible")
+        cardFor("Checkout API")
+        composeRule.captureScreenshot("reorder-01-draggable-by-default")
 
         // Filtering hides monitors, so dropping between two visible ones would be
-        // ambiguous — the handles go away rather than guessing.
+        // ambiguous: a hold goes back to meaning "select" rather than guessing.
         openTunePanel()
         composeRule.onNodeWithText("Problems").performClick()
         composeRule.waitForIdle()
@@ -711,28 +722,33 @@ class RevisionVerificationTest {
         assertEquals(
             0,
             composeRule.onAllNodes(
-                hasContentDescription("Reorder Marketing site"),
-                useUnmergedTree = true,
+                draggable("Marketing site"),
             ).fetchSemanticsNodes().size,
         )
-        composeRule.captureScreenshot("reorder-02-hidden-while-filtered")
+        composeRule.captureScreenshot("reorder-02-off-while-filtered")
     }
 
     @Test
-    fun theHandleDoesNotCostTheCardItsActions() {
-        // Regression guard. The grip first went into the action row, whose 48 dp of
-        // extra width silently pushed the re-check button past the card's edge — the
-        // per-card actions were simply gone in the one mode that shows the handle.
+    fun draggingDoesNotCostTheCardItsActions() {
+        // Regression guard, twice over. The grip first went into the action row,
+        // whose 48 dp of extra width silently pushed the re-check button past the
+        // card's edge, so the per-card actions were simply gone whenever the
+        // handle showed. The grip is gone now and the whole card is the drag
+        // target instead, which puts a long-press detector over the top of those
+        // same buttons: they have to still be there and still be tappable.
         seed()
         launch()
-        switchToMyOrder()
-        handleFor("Checkout API", scrollToIndex = firstCardIndex)
+        cardFor("Checkout API", scrollToIndex = firstCardIndex)
         // Every visible card has its own pair, so scope to the top one — the only
         // card guaranteed to be fully on screen after scrolling to it. A button
         // pushed off the card's edge fails assertIsDisplayed even though its node
         // still exists, which is exactly the failure being guarded against.
-        composeRule.onAllNodesWithContentDescription("Check now")[0].assertIsDisplayed()
-        composeRule.onAllNodesWithContentDescription("Pause monitor")[0].assertIsDisplayed()
+        composeRule.onAllNodesWithContentDescription("Check now")[0]
+            .assertIsDisplayed()
+            .assertHasClickAction()
+        composeRule.onAllNodesWithContentDescription("Pause monitor")[0]
+            .assertIsDisplayed()
+            .assertHasClickAction()
         // And it must sit inside the screen, not merely exist somewhere to the right.
         val screenWidth = NightbellTestSupport.appContext.resources.displayMetrics.widthPixels /
             NightbellTestSupport.appContext.resources.displayMetrics.density
@@ -749,12 +765,11 @@ class RevisionVerificationTest {
         val before = storedOrder()
         assertEquals(listOf("m0", "m1", "m2", "m3", "m4", "m5"), before)
 
-        switchToMyOrder()
-        val handle = handleFor("Checkout API", scrollToIndex = firstCardIndex)
+        val card = cardFor("Checkout API", scrollToIndex = firstCardIndex)
         composeRule.captureScreenshot("reorder-03-before-drag")
 
-        // Drag the first card's grip past its neighbour.
-        handle.dragDown(700f)
+        // Hold the first card and drag it past its neighbour.
+        card.dragDown(700f)
 
         NightbellTestSupport.awaitTrue(description = "store order changed") {
             storedOrder() != before
@@ -774,8 +789,7 @@ class RevisionVerificationTest {
     fun aDraggedOrderSurvivesARestart() {
         seed()
         launch()
-        switchToMyOrder()
-        handleFor("Checkout API", scrollToIndex = firstCardIndex).dragDown(700f)
+        cardFor("Checkout API", scrollToIndex = firstCardIndex).dragDown(700f)
         NightbellTestSupport.awaitTrue(description = "order committed") {
             storedOrder() != listOf("m0", "m1", "m2", "m3", "m4", "m5")
         }
@@ -785,7 +799,11 @@ class RevisionVerificationTest {
         scenario?.close()
         launch()
         assertEquals(committed, storedOrder())
-        // And the sort choice persisted with it, so the arrangement is still shown.
+        // The sort switched to manual on the drop and persisted with the order, so
+        // the arrangement is what the next launch shows. Without that half, the
+        // first completed check would re-rank the list and the drag would have
+        // undone itself, which is why dragging under a computed sort used to be
+        // refused outright.
         assertEquals(
             me.river.nightbell.domain.MonitorQuery.Sort.MANUAL,
             runBlocking { Nightbell.require().store.currentSnapshot().settings.dashboardSort },
@@ -794,14 +812,19 @@ class RevisionVerificationTest {
     }
 
     @Test
-    fun theHandleOffersMoveUpAndDownForScreenReaders() {
+    fun theCardOffersMoveUpAndDownForScreenReaders() {
         // A drag gesture is unusable with TalkBack, so the same capability has to
         // exist as a custom action. This asserts the actions are actually attached
-        // and that invoking one really moves the monitor.
+        // and that invoking one really moves the monitor. They hung off the grip
+        // until the grip was removed; losing them with it would have quietly made
+        // reordering sighted-only.
         seed()
         launch()
-        switchToMyOrder()
-        val node = handleFor("Marketing site").fetchSemanticsNode()
+        // Asset CDN, not the first card. The list is still ranked worst first at
+        // this point, so "Marketing site" is at the top and would honestly offer
+        // only "Move down": a card with nowhere up to go does not get the action,
+        // which is the behaviour, not a bug to assert around.
+        val node = cardFor("Asset CDN").fetchSemanticsNode()
         val actions = node.config.getOrNull(SemanticsActions.CustomActions).orEmpty()
         val labels = actions.map { it.label }
         assertTrue("expected move actions, got $labels", labels.contains("Move up"))
@@ -812,7 +835,17 @@ class RevisionVerificationTest {
         NightbellTestSupport.awaitTrue(description = "moved up") { storedOrder() != before }
         val after = storedOrder()
         assertEquals(before.sorted(), after.sorted())
-        assertEquals("m1", after.first())
+        // m2 is Asset CDN and m1 is Marketing site, the card it was sitting under.
+        assertTrue("Asset CDN should be above Marketing site, order is $after",
+            after.indexOf("m2") < after.indexOf("m1"))
+        // Same path a dropped card takes, sort switch included. A screen reader
+        // user who moved a monitor and then watched the next check put it back
+        // would have the accessible route to a feature that does not work.
+        NightbellTestSupport.awaitTrue(description = "sort switched to manual") {
+            runBlocking {
+                Nightbell.require().store.currentSnapshot().settings.dashboardSort
+            } == me.river.nightbell.domain.MonitorQuery.Sort.MANUAL
+        }
     }
 
     // ---- touch targets -----------------------------------------------------

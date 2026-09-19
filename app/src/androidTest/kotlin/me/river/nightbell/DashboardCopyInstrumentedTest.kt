@@ -1,5 +1,6 @@
 package me.river.nightbell
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -69,12 +70,15 @@ class DashboardCopyInstrumentedTest {
     )
 
     /**
-     * Manual sort alone does not put grips on the cards: `MonitorQuery.canReorder`
-     * also wants the list un-narrowed. The panel used to promise the grip anyway,
-     * which sent the user hunting a control the code had deliberately withheld.
+     * The one place in the app that says the drag gesture exists.
+     *
+     * There is no grip and no mode any more, so nothing on the dashboard itself
+     * announces that a card can be held and moved. This sentence is it, and it
+     * has to tell the truth in both directions: the gesture while the whole list
+     * is showing, and why it is unavailable once a filter is on.
      */
     @Test
-    fun theManualSortHintSaysWhyTheGripsAreMissing() {
+    fun theManualSortHintNamesTheGestureAndWhenItIsUnavailable() {
         seed(monitor("a", "Alpha"), monitor("b", "Bravo"))
         openDashboard()
         composeRule.waitUntil(10_000) {
@@ -86,13 +90,15 @@ class DashboardCopyInstrumentedTest {
         composeRule.onNodeWithText("My order").performClick()
         composeRule.waitForIdle()
 
-        // Nothing is narrowing yet, so the grips are real and the hint says so.
-        composeRule.onNodeWithText("Drag the grip", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Hold any card", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Monitors stay where you put them", substring = true)
+            .assertIsDisplayed()
 
         composeRule.onNodeWithText("Problems").performClick()
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithText("The grips stay hidden", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Dragging is off", substring = true).assertIsDisplayed()
+        composeRule.onAllNodesWithText("Hold any card", substring = true).assertCountEquals(0)
     }
 
     /**

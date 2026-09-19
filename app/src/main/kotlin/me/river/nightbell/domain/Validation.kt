@@ -84,13 +84,29 @@ object Validation {
         )
     }
 
+    /**
+     * The form's verdict on a draft.
+     *
+     * Judged against the URL the draft will *have*, not the characters currently
+     * in the field. [UrlInput] puts a scheme on when the field is left, so
+     * flagging the absence of one while somebody is still typing the host is the
+     * validation anxiety this app had for its whole life: red under the field from
+     * the first keystroke, and Continue greyed out on a URL that was about to be
+     * fine. Reward early, punish late. What gets saved is completed too, in
+     * `SetupViewModel.save`, so the two never disagree.
+     *
+     * [urlNote] itself is deliberately left strict, because `HttpChecker` uses it
+     * as the last gate before a real request and a stored monitor has no field to
+     * be left.
+     */
     fun report(monitor: Monitor): Report {
         val notes = mutableListOf<Note>()
+        val url = UrlInput.completed(monitor.url)
 
         if (monitor.kind == MonitorKind.GITHUB_REPO) {
             reportGitHub(monitor, notes)
         } else {
-            urlNote(monitor.url)?.let { notes += it }
+            urlNote(url)?.let { notes += it }
         }
 
         if (monitor.name.isBlank()) {
@@ -144,7 +160,7 @@ object Validation {
         // check cannot get past the lookup: it reports "can't resolve", which is
         // true and completely unhelpful. Worth saying at setup time rather than
         // letting the first check say it badly.
-        if (ProxyRoute.isHiddenService(monitor.url) && !monitor.useProxy) {
+        if (ProxyRoute.isHiddenService(url) && !monitor.useProxy) {
             notes += Note(
                 Field.URL, Severity.WARNING,
                 "Only reachable through a SOCKS5 proxy. Set one up in Settings, then route this monitor through it.",
@@ -157,8 +173,8 @@ object Validation {
         // it produces reads like a broken service rather than an impossible
         // request. Said at setup time instead of once per interval afterwards.
         if (monitor.tlsTrust == TlsTrust.SYSTEM &&
-            ProxyRoute.isHiddenService(monitor.url) &&
-            !monitor.url.trim().startsWith("http://", ignoreCase = true)
+            ProxyRoute.isHiddenService(url) &&
+            !url.startsWith("http://", ignoreCase = true)
         ) {
             notes += Note(
                 Field.TLS, Severity.WARNING,
