@@ -79,7 +79,7 @@ class AlertCenter(private val context: Context) {
             .setSmallIcon(R.drawable.ic_stat_alert)
             .setContentTitle(title)
             .setContentText(body)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(expanded))
+            .setStyle(alertList(result) ?: NotificationCompat.BigTextStyle().bigText(expanded))
             .setColor(DOWN_COLOR)
             .setColorized(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -98,6 +98,31 @@ class AlertCenter(private val context: Context) {
             .build()
 
         post(monitor.id.notificationId(), notification)
+    }
+
+    /**
+     * The alerts themselves, one to a row, when the check carried any.
+     *
+     * Issue 14's follow-up: what shipped put "5 firing: A, B, C" in one small
+     * line with the rest behind an ellipsis, and the question was whether the
+     * alerts could be shown singly. `InboxStyle` is Android's own answer to
+     * exactly that, and it costs nothing that `BigTextStyle` was giving: the
+     * flattened paragraph it replaces was the same alerts with their line breaks
+     * taken out. Null for every check that read something other than an
+     * Alertmanager, which keeps the paragraph everywhere it is still the right
+     * shape.
+     *
+     * Seven rows because that is what the platform's own template draws, so an
+     * eighth would be added and silently not shown. The summary says how many
+     * are behind it rather than leaving a count nobody can reach.
+     */
+    private fun alertList(result: CheckResult): NotificationCompat.InboxStyle? {
+        if (result.alerts.isEmpty()) return null
+        val style = NotificationCompat.InboxStyle()
+        result.alerts.take(ALERT_LINES).forEach { style.addLine(it.line) }
+        val hidden = result.alerts.size - ALERT_LINES
+        if (hidden > 0) style.setSummaryText("and $hidden more")
+        return style
     }
 
     fun notifyRecovery(monitor: Monitor, result: CheckResult, policy: AlertPolicy, silent: Boolean) {
@@ -147,6 +172,18 @@ class AlertCenter(private val context: Context) {
                         append(result.failureKind.headline)
                         if (result.advice.isNotBlank()) {
                             append("\n").append(result.advice)
+                        }
+                        // One alert to a line here as well. This page keeps the
+                        // big-text template rather than the inbox one because it
+                        // has the repeat sentence to carry too, and the inbox
+                        // template has nowhere to put a paragraph.
+                        if (result.alerts.isNotEmpty()) {
+                            append("\n")
+                            result.alerts.take(ALERT_LINES).forEach {
+                                append("\n").append(it.line)
+                            }
+                            val hidden = result.alerts.size - ALERT_LINES
+                            if (hidden > 0) append("\nand $hidden more")
                         }
                         append("\n\nThis alert repeats every ")
                         append(monitor.urgentRepeatMinutes.coerceAtLeast(1))
@@ -1398,6 +1435,9 @@ class AlertCenter(private val context: Context) {
         /** The three alert id spaces below, taken together. */
         private const val ALERT_ID_MIN = 100_000
         private const val ALERT_ID_MAX = 399_999
+
+        /** What the platform's inbox template draws before it stops. */
+        private const val ALERT_LINES = 7
 
         private const val DOWN_COLOR = 0xFFFF5A7A.toInt()
         private const val DEGRADED_COLOR = 0xFFFFB020.toInt()

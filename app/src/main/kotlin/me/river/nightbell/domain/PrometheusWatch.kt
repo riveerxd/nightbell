@@ -264,15 +264,114 @@ data class FiringAlert(
     /** Exactly as Alertmanager labelled it, including a word nobody ranks. */
     val severity: String = "",
     val summary: String = "",
+    /**
+     * The `description` annotation, kept beside [summary] rather than behind it.
+     *
+     * It used to be read only when `summary` was missing, which threw away the
+     * longer of the two on every alert that carries both. Convention in the
+     * rules people actually write is that `summary` is the headline and
+     * `description` is the sentence with the numbers in it, so the row shows the
+     * first and the opened row shows the second.
+     */
+    val description: String = "",
     /** `startsAt` as epoch millis, or 0 when it could not be read. */
     val startedAt: Long = 0L,
     val silenced: Boolean = false,
     val inhibited: Boolean = false,
+    /** Alertmanager's own id, stable for as long as the alert keeps firing. */
+    val fingerprint: String = "",
+    /**
+     * Every other label, which is the half that says which one this is.
+     *
+     * `alertname` and `severity` are not in here: they have fields of their own
+     * and repeating them in the label list would be the same word twice on one
+     * row. Without the rest, five pods failing the same rule are five rows
+     * reading `KubePodCrashLooping` and nothing else, which is the shape issue
+     * 14's follow-up reported.
+     */
+    val labels: Map<String, String> = emptyMap(),
 ) {
     val rank: AlertSeverity? get() = AlertSeverity.parse(severity)
 
     /** Where this sorts, with anything unranked below everything ranked. */
     val sortKey: Int get() = rank?.rank ?: 0
+
+    /**
+     * Which of these this is, in at most two labels: `db01`, `checkout-7f9c ·
+     * payments`.
+     *
+     * One label for the thing and one for where it lives, rather than the first
+     * two that happen to be present. A pod carries `pod` and `container` and
+     * they are usually the same word twice, so the second slot comes from a
+     * different question: the namespace, cluster or job around it. Anything
+     * labelled with none of them falls back to its first label, because some
+     * label is better than a row that looks exactly like the one above it.
+     */
+    val identity: String
+        get() {
+            val thing = WHICH_LABELS.firstNotNullOfOrNull { labels[it]?.trim()?.ifBlank { null } }
+            val place = WHERE_LABELS.firstNotNullOfOrNull { labels[it]?.trim()?.ifBlank { null } }
+            val picked = listOfNotNull(thing, place).distinct()
+            if (picked.isNotEmpty()) return picked.joinToString(" · ")
+            return labels.entries.sortedBy { it.key }
+                .firstOrNull { it.value.isNotBlank() }
+                ?.let { "${it.key}=${it.value}" }
+                .orEmpty()
+        }
+
+    /** One alert on one line, for a notification that lists them. */
+    val line: String
+        get() = buildString {
+            append(name)
+            if (severity.isNotBlank()) append(" (").append(severity).append(")")
+            val who = identity
+            if (who.isNotBlank()) append(" · ").append(who)
+        }
+
+    /**
+     * The same line for a screen that already draws the severity as a colour.
+     *
+     * The word is only in [line] because a notification has no colour to say it
+     * with, and repeating it beside a rose row would spend the width that the
+     * label separating two identical alerts needs.
+     */
+    val label: String
+        get() = if (identity.isBlank()) name else "$name · $identity"
+
+    companion object {
+        private val WHICH_LABELS = listOf(
+            "instance", "pod", "node", "container", "device", "mountpoint",
+            "target", "service",
+        )
+        private val WHERE_LABELS = listOf("namespace", "cluster", "job")
+        private val IDENTITY_LABELS = WHICH_LABELS + WHERE_LABELS
+
+        /**
+         * What is worth persisting off an alert's label set.
+         *
+         * Capped because this is written back into the store on every check of
+         * every Alertmanager monitor, and a label set is whatever somebody's
+         * relabelling rules left behind: a Kubernetes alert routinely carries
+         * thirty, half of them internal ids nobody reads. The identity labels
+         * are kept first so the cap never falls on the one that says which pod.
+         */
+        fun tidyLabels(raw: Map<String, String>): Map<String, String> {
+            val kept = raw.filterKeys { it != "alertname" && it != "severity" }
+                .filterValues { it.isNotBlank() }
+            val ordered = kept.entries.sortedWith(
+                compareBy<Map.Entry<String, String>> {
+                    val at = IDENTITY_LABELS.indexOf(it.key)
+                    if (at < 0) IDENTITY_LABELS.size else at
+                }.thenBy { it.key },
+            )
+            return ordered.take(LABELS_KEPT).associate { (key, value) ->
+                key to value.take(LABEL_LENGTH)
+            }
+        }
+
+        private const val LABELS_KEPT = 12
+        private const val LABEL_LENGTH = 120
+    }
 }
 
 /**
@@ -391,3 +490,18 @@ data class PrometheusWatch(
         }
     }
 }
+
+/**
+ * How many alerts are firing, which is not always how many were kept.
+ *
+ * [MonitorRuntime.lastAlerts] holds the worst fifty and
+ * [MonitorRuntime.lastAlertsTotal] counts what was firing when they were read,
+ * so anything that prints a number reads this rather than the list's size.
+ */
+val MonitorRuntime.alertsFiring: Int
+    get() = maxOf(lastAlertsTotal, lastAlerts.size)
+
+/** The same number as a sentence, for a header or a card. */
+val MonitorRuntime.alertsFiringLine: String
+    get() = if (alertsFiring == 1) "1 alert firing" else "$alertsFiring alerts firing"
+

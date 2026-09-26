@@ -838,6 +838,15 @@ data class MonitorRuntime(
      * that has ended.
      */
     val lastAlerts: List<FiringAlert> = emptyList(),
+    /**
+     * How many were firing when [lastAlerts] was taken.
+     *
+     * The same number most of the time, and larger when the list hit
+     * [AlertDecider.ALERTS_KEPT]. Kept so a capped list can say which of the two
+     * it is: "50 alerts firing" under a header that has quietly dropped a
+     * hundred and fifty would be the app lying about the size of the outage.
+     */
+    val lastAlertsTotal: Int = 0,
     val lastDetail: String = "",
     val consecutiveFailures: Int = 0,
     val consecutiveSuccesses: Int = 0,

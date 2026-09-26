@@ -341,6 +341,12 @@ class LogSentinelTest {
                 "name" to Rule.NEVER,
                 "severity" to Rule.NEVER,
                 "summary" to Rule.NEVER,
+                "description" to Rule.NEVER,
+                // Alertmanager's hash of the alert's label set. It reveals
+                // nothing on its own and everything it is derived from is
+                // NEVER, so it goes the same way rather than being argued
+                // about at the next outage.
+                "fingerprint" to Rule.NEVER,
             ),
             // A repository's releases, issue titles and the handles of people
             // who commented on them. None of it is this app's to publish.

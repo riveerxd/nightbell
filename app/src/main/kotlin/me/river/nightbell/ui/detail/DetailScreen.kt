@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -35,8 +36,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,6 +63,8 @@ import me.river.nightbell.domain.githubInstantMs
 import me.river.nightbell.domain.Health
 import me.river.nightbell.domain.Monitor
 import me.river.nightbell.domain.FiringAlert
+import me.river.nightbell.domain.alertsFiring
+import me.river.nightbell.domain.alertsFiringLine
 import me.river.nightbell.domain.MonitorCard
 import me.river.nightbell.domain.MonitorKind
 import me.river.nightbell.domain.PrometheusWatch
@@ -296,7 +302,12 @@ fun DetailScreen(
         if (runtime.lastAlerts.isNotEmpty()) {
             item(key = "alerts") {
                 StaggeredEntrance(index = 2, key = "alerts-${monitor.id}", log = entrance) {
-                    FiringAlertsCard(alerts = runtime.lastAlerts, nowMs = now, accent = accent)
+                    FiringAlertsCard(
+                        alerts = runtime.lastAlerts,
+                        total = runtime.alertsFiring,
+                        nowMs = now,
+                        accent = accent,
+                    )
                 }
             }
         }
@@ -544,8 +555,14 @@ private fun HeroCard(
                 if (repoFacts) {
                     RepoHeroFacts(monitor, runtime)
                 } else {
-                    Text(
-                        text = runtime.lastMessage.ifBlank {
+                    // The count, not the names, when the card below lists them.
+                    // The verdict sentence names the first three and ellipsises
+                    // the rest, which directly above a list of all of them is
+                    // the same information twice, and the worse of the two.
+                    val headline = if (runtime.lastAlerts.isNotEmpty()) {
+                        runtime.alertsFiringLine
+                    } else {
+                        runtime.lastMessage.ifBlank {
                             when {
                                 runtime.lastCheckedAt <= 0 -> "Not checked yet"
                                 // DEGRADED is a pass, so lastMessage is empty — spell
@@ -555,7 +572,10 @@ private fun HeroCard(
                                         "over its latency budget"
                                 else -> "Last response ${formatLatency(runtime.lastLatencyMs)}"
                             }
-                        },
+                        }
+                    }
+                    Text(
+                        text = headline,
                         style = MaterialTheme.typography.bodySmall,
                         color = NightbellColors.TextSecondary,
                         maxLines = 3,
@@ -889,15 +909,44 @@ private fun CertificateCard(
  * for warning, chrome for info and for a word nobody ranks. That is the app's
  * own palette rule applied to somebody else's vocabulary, which is why an
  * unrecognised severity gets the neutral one rather than a guess.
+ *
+ * A row opens. Collapsed it answers which alert this is: the rule's name, the
+ * label that separates it from the four others firing on the same rule, its
+ * summary and its age. Opened it answers what the alert says: the description
+ * annotation and every label Alertmanager sent, which is the part that used to
+ * exist only in the browser somebody was trying not to open.
  */
 @Composable
-private fun FiringAlertsCard(alerts: List<FiringAlert>, nowMs: Long, accent: Color) {
+private fun FiringAlertsCard(
+    alerts: List<FiringAlert>,
+    total: Int,
+    nowMs: Long,
+    accent: Color,
+) {
+    // Keyed by fingerprint rather than by position, so an alert that resolves
+    // while this is open does not hand its open state to the row that moves up
+    // into its place. Alertmanager sends one; the fallback is for a gateway in
+    // front of it that strips the field.
+    val opened = rememberSaveable(saver = openAlertsSaver) { mutableStateOf(emptySet<String>()) }
     GlassCard {
         SectionHeader(
-            title = if (alerts.size == 1) "1 alert firing" else "${alerts.size} alerts firing",
+            // The number firing, not the number drawn. The line under it is
+            // where a capped list says which of the two this is.
+            title = if (total == 1) "1 alert firing" else "$total alerts firing",
             icon = NightbellIcons.Bell,
             accent = accent,
         )
+        // Only when the two disagree, which is a list that hit the cap. Printing
+        // "50 of 50" on every other outage would be noise around a number that
+        // is already on the row above.
+        if (total > alerts.size) {
+            Text(
+                text = "Showing the worst ${alerts.size} of $total.",
+                style = MaterialTheme.typography.labelSmall,
+                color = NightbellColors.TextTertiary,
+            )
+            Spacer(Modifier.height(8.dp))
+        }
         alerts.forEachIndexed { index, alert ->
             if (index > 0) {
                 Spacer(Modifier.height(10.dp))
@@ -909,61 +958,174 @@ private fun FiringAlertsCard(alerts: List<FiringAlert>, nowMs: Long, accent: Col
                 )
                 Spacer(Modifier.height(10.dp))
             }
-            val tone = when (alert.rank) {
-                AlertSeverity.CRITICAL -> NightbellColors.Rose
-                AlertSeverity.WARNING -> NightbellColors.Amber
-                else -> NightbellColors.TextTertiary
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier
-                        .size(8.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(tone),
-                )
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    text = alert.name,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = NightbellColors.TextPrimary,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (alert.severity.isNotBlank()) {
-                    Text(
-                        text = alert.severity,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = tone,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(NightbellRadii.chip))
-                            .background(tone.copy(alpha = 0.12f))
-                            .padding(horizontal = 8.dp, vertical = 3.dp),
+            FiringAlertRow(
+                alert = alert,
+                nowMs = nowMs,
+                open = alertKey(alert, index) in opened.value,
+                onToggle = {
+                    val key = alertKey(alert, index)
+                    opened.value = if (key in opened.value) opened.value - key else opened.value + key
+                },
+            )
+        }
+    }
+}
+
+private fun alertKey(alert: FiringAlert, index: Int): String =
+    alert.fingerprint.ifBlank { "$index/${alert.name}/${alert.identity}/${alert.startedAt}" }
+
+/** Which rows are open survives a rotation only if something writes it down. */
+private val openAlertsSaver = Saver<MutableState<Set<String>>, List<String>>(
+    save = { it.value.toList() },
+    restore = { mutableStateOf(it.toSet()) },
+)
+
+@Composable
+private fun FiringAlertRow(
+    alert: FiringAlert,
+    nowMs: Long,
+    open: Boolean,
+    onToggle: () -> Unit,
+) {
+    val tone = when (alert.rank) {
+        AlertSeverity.CRITICAL -> NightbellColors.Rose
+        AlertSeverity.WARNING -> NightbellColors.Amber
+        else -> NightbellColors.TextTertiary
+    }
+    // Nothing to open is nothing to tap. A row that expands into an empty space
+    // is a control you have to try in order to learn it does nothing.
+    val expandable = alert.description.isNotBlank() || alert.labels.isNotEmpty() || alert.startedAt > 0L
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .then(
+                if (expandable) {
+                    Modifier.clickable(
+                        onClickLabel = if (open) "Hide the alert's labels" else "Show the alert's labels",
+                        onClick = onToggle,
                     )
-                }
-            }
-            if (alert.summary.isNotBlank()) {
-                Spacer(Modifier.height(5.dp))
+                } else {
+                    Modifier
+                },
+            ),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier
+                    .size(8.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(tone),
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                text = alert.name,
+                style = MaterialTheme.typography.titleSmall,
+                color = NightbellColors.TextPrimary,
+                modifier = Modifier.weight(1f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (alert.severity.isNotBlank()) {
                 Text(
-                    text = alert.summary,
+                    text = alert.severity,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = tone,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(NightbellRadii.chip))
+                        .background(tone.copy(alpha = 0.12f))
+                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                )
+            }
+            if (expandable) {
+                Spacer(Modifier.width(6.dp))
+                Icon(
+                    imageVector = if (open) NightbellIcons.ChevronUp else NightbellIcons.ChevronDown,
+                    contentDescription = null,
+                    tint = NightbellColors.TextTertiary,
+                    modifier = Modifier.size(15.dp),
+                )
+            }
+        }
+        // The label that says which of them this is, directly under the name it
+        // qualifies. Without it, five pods failing one rule are five rows of the
+        // same word, which is what issue 14's follow-up reported.
+        if (alert.identity.isNotBlank()) {
+            Spacer(Modifier.height(3.dp))
+            Text(
+                text = alert.identity,
+                style = MaterialTheme.typography.labelSmall,
+                color = NightbellColors.TextSecondary,
+                modifier = Modifier.padding(start = 18.dp),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (alert.summary.isNotBlank()) {
+            Spacer(Modifier.height(5.dp))
+            Text(
+                text = alert.summary,
+                style = MaterialTheme.typography.bodySmall,
+                color = NightbellColors.TextSecondary,
+                modifier = Modifier.padding(start = 18.dp),
+                // Closed, a summary is an identifying line and a rule that writes
+                // a paragraph into it must not push the next alert off the screen.
+                // Open, it is the thing being read.
+                maxLines = if (open) Int.MAX_VALUE else 3,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        val since = firingSince(alert, nowMs)
+        if (since.isNotBlank() || alert.silenced || alert.inhibited) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = buildList {
+                    if (since.isNotBlank()) add(since)
+                    if (alert.silenced) add("silenced")
+                    if (alert.inhibited) add("inhibited")
+                }.joinToString(" · "),
+                style = MaterialTheme.typography.labelSmall,
+                color = NightbellColors.TextTertiary,
+                modifier = Modifier.padding(start = 18.dp),
+            )
+        }
+        if (open) {
+            if (alert.description.isNotBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = alert.description,
                     style = MaterialTheme.typography.bodySmall,
                     color = NightbellColors.TextSecondary,
                     modifier = Modifier.padding(start = 18.dp),
                 )
             }
-            val since = firingSince(alert, nowMs)
-            if (since.isNotBlank() || alert.silenced || alert.inhibited) {
-                Spacer(Modifier.height(4.dp))
+            if (alert.startedAt > 0L) {
+                Spacer(Modifier.height(8.dp))
                 Text(
-                    text = buildList {
-                        if (since.isNotBlank()) add(since)
-                        if (alert.silenced) add("silenced")
-                        if (alert.inhibited) add("inhibited")
-                    }.joinToString(" · "),
+                    text = "Started ${alertStartFormat.format(Date(alert.startedAt))}",
                     style = MaterialTheme.typography.labelSmall,
                     color = NightbellColors.TextTertiary,
                     modifier = Modifier.padding(start = 18.dp),
                 )
+            }
+            alert.labels.forEach { (key, value) ->
+                Spacer(Modifier.height(6.dp))
+                Row(Modifier.fillMaxWidth().padding(start = 18.dp)) {
+                    Text(
+                        text = key,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = NightbellColors.TextTertiary,
+                        modifier = Modifier.width(96.dp),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = value,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = NightbellColors.TextSecondary,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
         }
     }
@@ -1147,6 +1309,7 @@ private fun ConfigRow(label: String, value: String) {
 private val certDateFormat = SimpleDateFormat("d MMM yyyy", Locale.getDefault())
 private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 private val dateFormat = SimpleDateFormat("d MMM", Locale.getDefault())
+private val alertStartFormat = SimpleDateFormat("d MMM HH:mm", Locale.getDefault())
 
 @Composable
 private fun EventRow(sample: Sample) {

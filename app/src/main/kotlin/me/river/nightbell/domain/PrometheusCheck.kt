@@ -483,8 +483,19 @@ object PrometheusCheck {
             )
         }
 
+        // Two pods failing one rule are two alerts with one name, and a headline
+        // reading "KubePodCrashLooping, KubePodCrashLooping" is a sentence that
+        // looks like a bug. Only then is the label that separates them worth the
+        // width it costs here.
+        val ambiguous = firing.groupingBy { it.name }.eachCount().filterValues { it > 1 }.keys
         val headline = firing.take(NAMES_IN_MESSAGE).joinToString(", ") { alert ->
-            if (alert.severity.isBlank()) alert.name else "${alert.name} (${alert.severity})"
+            buildString {
+                append(alert.name)
+                if (alert.severity.isNotBlank()) append(" (").append(alert.severity).append(")")
+                if (alert.name in ambiguous && alert.identity.isNotBlank()) {
+                    append(" ").append(alert.identity)
+                }
+            }
         }
         return Assertions.Verdict.fail(
             FailureKind.METRIC,
@@ -493,8 +504,7 @@ object PrometheusCheck {
             // log. The screen uses `alerts` below and renders a list instead.
             firing.take(SERIES_IN_DETAIL).joinToString("\n") { alert ->
                 buildString {
-                    append(alert.name)
-                    if (alert.severity.isNotBlank()) append(" · ").append(alert.severity)
+                    append(alert.line)
                     if (alert.summary.isNotBlank()) append("\n").append(alert.summary)
                 }
             } + if (firing.size > SERIES_IN_DETAIL) "\n… and ${firing.size - SERIES_IN_DETAIL} more" else "",
@@ -511,15 +521,22 @@ object PrometheusCheck {
             ?: emptyMap()
         val status = obj["status"] as? JsonObject
         val annotations = obj["annotations"] as? JsonObject
+        val summary = annotations?.text("summary").orEmpty().trim()
+        val description = annotations?.text("description").orEmpty().trim()
         return Held(
             alert = FiringAlert(
                 name = labels["alertname"].orEmpty().ifBlank { "unnamed alert" },
                 severity = labels["severity"].orEmpty(),
-                summary = annotations?.text("summary")
-                    ?: annotations?.text("description").orEmpty(),
+                summary = summary.ifBlank { description },
+                // Blank when it is already standing in as the summary, so an
+                // alert with a description and no summary does not print the
+                // same paragraph twice.
+                description = if (summary.isBlank()) "" else description,
                 startedAt = parseTimestamp(obj.text("startsAt")),
                 silenced = (status?.get("silencedBy") as? JsonArray).orEmpty().isNotEmpty(),
                 inhibited = (status?.get("inhibitedBy") as? JsonArray).orEmpty().isNotEmpty(),
+                fingerprint = obj.text("fingerprint").orEmpty(),
+                labels = FiringAlert.tidyLabels(labels),
             ),
             labels = labels,
             state = status?.text("state").orEmpty(),

@@ -64,11 +64,20 @@ there is exactly one series, because then its labels are not a choice. This is
 the same problem the element picker solves and the same answer: the exact string
 is written down in one place, which is the thing being monitored.
 
-**Seeing the alerts:** an Alertmanager monitor's detail screen lists what is
-firing, worst first and oldest first inside a severity, each with its severity,
+**Seeing the alerts:** what is firing is shown one alert to a row on every
+surface that has room for it. The page in the shade draws a row per alert, the
+dashboard card names the first three and counts the rest, and the detail screen
+lists them all: worst first and oldest first inside a severity, each with its
+severity, the label that separates it from the others firing on the same rule,
 its summary annotation and how long it has been going. Critical is rose, warning
 is amber, and a severity Nightbell does not rank is neutral rather than guessed
-at. The list is replaced on every check and cleared by a check that could not
+at.
+
+Tap a row on the detail screen and it opens on the `description` annotation, the
+time it started and every label Alertmanager sent with it, which is what tells
+two alerts on one rule apart. Fifty rows are kept per monitor and the header
+says so when there were more, since the list is written back to storage on every
+check. The list is replaced on every check and cleared by a check that could not
 reach Alertmanager, because a list of what is firing is only true as of the
 moment it was read.
 
@@ -359,7 +368,7 @@ configuration was unreachable.
 ### Columns
 
 A widget's height is whatever the user dragged it to. Flatten one and the old
-single-column layout stopped drawing monitors past the fold — they were still in
+single-column layout stopped drawing monitors past the fold: they were still in
 the list, still counted in "+3 more", and invisible. A short widget has spare
 *width*, so monitors spill sideways into a second or third column instead.
 
@@ -423,7 +432,7 @@ point the widget is text on your wallpaper and nothing else.
 
 The surface is a tintable `ImageView` behind the content, not a background
 drawable on it, because `RemoteViews` cannot recolour a `View` background on
-API 26–30. `setColorFilter` plus `setImageAlpha` give an arbitrary colour at an
+API 26 to 30. `setColorFilter` plus `setImageAlpha` give an arbitrary colour at an
 arbitrary opacity while keeping the rounded corners a flat `setBackgroundColor`
 would throw away. The hairline edge is its own layer and fades out with the
 surface, so a fully transparent widget has no ring floating around it.
@@ -435,8 +444,8 @@ colour to something readable *unless* you have already chosen one yourself.
 
 ## The live strict-monitoring card
 
-On Android 16 the strict-monitoring notice draws its own history. `ProgressStyle` —
-the template rideshare and delivery apps use — gives a horizontal line of coloured
+On Android 16 the strict-monitoring notice draws its own history. `ProgressStyle` (the
+template rideshare and delivery apps use) gives a horizontal line of coloured
 segments with milestone points and a tracker riding along it, and it is the only
 template the platform will promote to a status-bar chip and expand on the lock
 screen. `LiveTimeline` turns the check history into that shape; `LiveCard` hands it
@@ -446,13 +455,13 @@ Reading the line:
 
 | What you see | What it is |
 | --- | --- |
-| Green / red stretch | a **band** — one run of an outcome, as wide as it actually lasted |
-| Taller red block | a **marker** — where an outage *began* |
+| Green / red stretch | a **band**, one run of an outcome, as wide as it actually lasted |
+| Taller red block | a **marker**, where an outage *began* |
 | Grey tail past the dot | the wait until the next check |
 
 The marker is not redundant with the band it sits on. The shortest possible outage
 is one bucket, a couple of per cent of the width, which on screen reads as a
-rendering artefact — the block is what makes a single failed check findable, and the
+rendering artefact: the block is what makes a single failed check findable, and the
 band is what makes a long one measurable.
 
 ### Three things it used to get wrong
@@ -463,17 +472,17 @@ All three were reported from a device and none was visible from reading the code
 oldest retained sample of any age and was then clamped to 24 hours, so one straggler
 older than a day stretched the line to a full day and was immediately skipped for
 falling before the window start. Every bucket between the left edge and the first
-drawable check stayed unknown, and carrying forward cannot rescue them — it
+drawable check stayed unknown, and carrying forward cannot rescue them: it
 propagates left to right and there is no earlier bucket to inherit from. Half a bar
 of grey under a label claiming a day of history. Samples older than the ceiling are
 now dropped *before* the span is measured, so the label describes the line drawn.
 
 **Compression invented outages.** Capping the band count used to absorb the shortest
-non-outage band into a neighbour — and the neighbours of an up-band are outages by
+non-outage band into a neighbour, and the neighbours of an up-band are outages by
 construction, since same-tone runs are already fused, so the absorbed uptime could
 only ever be handed to an outage, and the adjacency pass then merged the two red runs
 into one. Measured on a monitor that alternated pass/fail every half hour for a day:
-24 buckets genuinely failed, the line drew 40, and the longest drawn run was 33 — a
+24 buckets genuinely failed, the line drew 40, and the longest drawn run was 33, a
 claimed sixteen and a half hours of continuous downtime that never happened. The old
 guarantee that outages are never merged *away* was true and beside the point.
 Compression now reports each group's real composition, so the drawn red total matches
@@ -481,28 +490,28 @@ the real one exactly, at the cost of approximating order within a group.
 
 **A live outage could be painted over.** Carry-forward ran on the fleet-merged tone,
 so a monitor checking every five minutes filled every bucket after an hourly
-monitor's failure with green — the line drew green to the right edge under a red
+monitor's failure with green: the line drew green to the right edge under a red
 tracker and a "1 DOWN" chip. Each monitor now carries its own last verdict before the
 fleet merge.
 
 ### The countdown on the line
 
 The tail's width says *how much* of the wait is left; the label at the end of the line
-says how much in words — "15m", "4m", "now". Both come from the same `nextCheckInMs`,
+says how much in words: "15m", "4m", "now". Both come from the same `nextCheckInMs`,
 so they cannot disagree.
 
 `ProgressStyle` carries no text: segments and points take a colour and nothing else. It
 does take an icon at each end, and an icon is a bitmap, so the label is drawn into one.
 Three things about that slot were learned the hard way, on a device:
 
-- **It centre-crops to a square.** A bitmap sized to its text is trimmed from both ends —
+- **It centre-crops to a square.** A bitmap sized to its text is trimmed from both ends,
   "1h20m" rendered as "h20", "now" as "how". The canvas is square and the text is fitted
   into it, so a short label renders larger than a long one.
 - **It renders full colour**, not the alpha mask a status-bar small icon gets. Proven by
   posting red/green/blue stripes into it and getting three stripes back.
 - **Glyphs must be filled, not knocked out.** The first version punched the text out of a
-  pill, which put the card behind it — a colour this code neither chooses nor can
-  measure — on one side of the contrast ratio. It measured 2.5:1 and was reported from a
+  pill, which put the card behind it (a colour this code neither chooses nor can
+  measure) on one side of the contrast ratio. It measured 2.5:1 and was reported from a
   device, accurately, as unreadable.
 
 There is no container behind the label now, so the ink follows `uiMode` exactly as the
@@ -520,7 +529,7 @@ a bucket is nearly nineteen minutes and a fifteen-minute countdown floors to the
 value full and empty alike. It spends a fixed sixth of the bar and empties across it
 instead.
 
-It is also paced by **one** monitor — the fastest, ties broken by id — rather than by
+It is also paced by **one** monitor (the fastest, ties broken by id) rather than by
 whichever is due soonest. "Soonest across the fleet" is the literal next check and is
 useless as a gauge: eight monitors on a fifteen-minute interval are staggered, so one
 is always nearly due, the value sits near its floor and resets every couple of
@@ -596,7 +605,7 @@ background transparent, the obvious move is an `<adaptive-icon>` whose
 `AdaptiveIconDrawable.draw()` fills its layer bitmap with `Color.BLACK` before it
 composites the background and foreground, because the format assumes the
 background is opaque. So the black is not a launcher bug and not a stale icon
-cache — it reproduces in Settings' app-info screen, and survives clearing the
+cache: it reproduces in Settings' app-info screen, and survives clearing the
 launcher's data.
 
 What Android actually guarantees is that an app icon gets a *filled shape*:
@@ -610,14 +619,14 @@ There is no transparent app icon on Android. Legacy is nonetheless the closer of
 the two: it is genuinely transparent wherever a launcher does not apply its
 legacy wrapping, and where one does the result is a clean light plate rather than
 a black one. The cost is themed ("monochrome") icons, which only the adaptive
-format carries — `ic_launcher_foreground` and `ic_launcher_monochrome` are kept,
+format carries: `ic_launcher_foreground` and `ic_launcher_monochrome` are kept,
 unused, for whenever a plate is wanted back.
 
 `LauncherIconInstrumentedTest` pins the things that are actually in the app's
 control: that the manifest does not point at an adaptive icon, and that the
 drawable it does point at has transparent corners, draws its trace in the brand
 blue, and no longer paints the ring across the top. All of it was invisible to
-review — a dark icon on a dark background looks the same either way.
+review: a dark icon on a dark background looks the same either way.
 
 ### One geometry, five copies
 
@@ -633,8 +642,8 @@ changing any geometry:
 python3 docs/brand/android_assets.py
 ```
 
-As of 2.4.3 each copy is the single trace path — the ring direction 30 drew around
-it is gone — fitted to its canvas and vertically centred. The generator computes
+As of 2.4.3 each copy is the single trace path (the ring direction 30 drew around
+it is gone) fitted to its canvas and vertically centred. The generator computes
 that fit from the trace's own bounding box, so `size` still means the drawn mark's
 extent and the copies cannot drift apart.
 

@@ -78,4 +78,31 @@ object PrometheusPayloads {
            "startsAt":"2026-09-14T10:00:00.000Z","fingerprint":"e5f6"}
         ]
     """
+
+    /**
+     * One rule firing on three pods, which is the case a name alone cannot
+     * describe: three rows reading `KubePodCrashLooping` and nothing else.
+     * Carries a description beside the summary and a label set wide enough to
+     * need ordering.
+     */
+    const val ALERTS_ONE_RULE = """
+        [
+          {"labels":{"alertname":"KubePodCrashLooping","severity":"critical",
+            "namespace":"payments","pod":"checkout-7f9c","container":"checkout",
+            "cluster":"eu-west-1","job":"kube-state-metrics","team":"platform"},
+           "annotations":{"summary":"Pod is restarting","description":"checkout-7f9c has restarted 14 times in the last hour"},
+           "status":{"state":"active","silencedBy":[],"inhibitedBy":[]},
+           "startsAt":"2026-09-14T18:00:00.000Z","fingerprint":"aaa1"},
+          {"labels":{"alertname":"KubePodCrashLooping","severity":"critical",
+            "namespace":"payments","pod":"ledger-2b41","container":"ledger",
+            "cluster":"eu-west-1","job":"kube-state-metrics","team":"platform"},
+           "annotations":{"summary":"Pod is restarting","description":"ledger-2b41 has restarted 6 times in the last hour"},
+           "status":{"state":"active","silencedBy":[],"inhibitedBy":[]},
+           "startsAt":"2026-09-14T18:20:00.000Z","fingerprint":"bbb2"},
+          {"labels":{"alertname":"CertificateExpiringSoon","severity":"ticket","instance":"gw-01"},
+           "annotations":{"description":"The gateway certificate expires in 9 days"},
+           "status":{"state":"active","silencedBy":[],"inhibitedBy":[]},
+           "startsAt":"2026-09-13T09:00:00.000Z","fingerprint":"ccc3"}
+        ]
+    """
 }

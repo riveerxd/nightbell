@@ -274,6 +274,17 @@ class NightbellE2ETest {
             composeRule.onAllNodesWithText("Persistent one").fetchSemanticsNodes().isNotEmpty()
         }
         composeRule.onNodeWithText("Persistent one").assertIsDisplayed()
+        // Waited for rather than read straight off, because the first check of a
+        // new monitor runs on its own and the only thing the step above proves
+        // is that the monitor was stored. Reading it immediately passed on an
+        // idle machine and failed once in a full-suite run, which is a race in
+        // the test and not a sample that went missing.
+        awaitTrue(description = "the first check to record a sample") {
+            runBlocking {
+                Nightbell.require().store.currentSnapshot()
+                    .runtimes.values.firstOrNull()?.samples?.isNotEmpty() == true
+            }
+        }
         val stored = runBlocking { Nightbell.require().store.currentSnapshot() }
         assertEquals(1, stored.monitors.size)
         assertEquals("Persistent one", stored.monitors.first().name)

@@ -240,7 +240,8 @@ object AlertDecider {
             // moment it was read, and a check that never reached Alertmanager
             // knows nothing rather than knowing the old answer. Every other kind
             // reports none, so this is a no-op for them.
-            lastAlerts = result.alerts,
+            lastAlerts = result.alerts.take(ALERTS_KEPT),
+            lastAlertsTotal = result.alerts.size,
             lastDetail = result.detail,
             consecutiveFailures = failures,
             consecutiveSuccesses = successes,
@@ -260,4 +261,17 @@ object AlertDecider {
             samples = history,
         )
     }
+
+    /**
+     * How many firing alerts get written back to the store.
+     *
+     * The whole runtime is one document rewritten on every check of every
+     * monitor, and a label set is whatever somebody's relabelling rules left
+     * behind, so an Alertmanager holding two hundred alerts past the filter
+     * would put a hundred kilobytes through that write every minute. Fifty is
+     * far past where a list stops being read and starts being scrolled, and
+     * [MonitorRuntime.lastAlertsTotal] keeps the true number so the screen says
+     * it is showing fifty of two hundred rather than claiming there are fifty.
+     */
+    const val ALERTS_KEPT = 50
 }

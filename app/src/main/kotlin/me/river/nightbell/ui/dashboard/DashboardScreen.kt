@@ -88,6 +88,9 @@ import androidx.compose.ui.unit.sp
 import android.content.Intent
 import android.net.Uri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.river.nightbell.domain.AlertSeverity
+import me.river.nightbell.domain.alertsFiring
+import me.river.nightbell.domain.alertsFiringLine
 import me.river.nightbell.domain.CertificateWatch
 import me.river.nightbell.domain.groupedCount
 import me.river.nightbell.domain.groupsHolding
@@ -1729,6 +1732,11 @@ private fun MonitorRowCard(
                 muted -> NightbellColors.Amber
                 else -> NightbellColors.Rose
             }
+            // Muted lists them too. The strip's job there is to say that the
+            // monitor is down and nobody is being woken about it, and a muted
+            // outage is exactly when somebody reads the card instead of the
+            // page they did not get.
+            val listsAlerts = !reading && runtime.lastAlerts.isNotEmpty()
             Column {
                 Spacer(Modifier.height(11.dp))
                 Row(
@@ -1737,7 +1745,11 @@ private fun MonitorRowCard(
                         .clip(RoundedCornerShape(NightbellRadii.inCard))
                         .background(tone.copy(alpha = 0.10f))
                         .padding(horizontal = 11.dp, vertical = 9.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                    // Centred against one line, and against the first line when
+                    // the strip lists alerts: a warning glyph floating level with
+                    // the second of four rows reads as though it belongs to that
+                    // row rather than to the block.
+                    verticalAlignment = if (listsAlerts) Alignment.Top else Alignment.CenterVertically,
                 ) {
                     Icon(
                         when {
@@ -1747,26 +1759,72 @@ private fun MonitorRowCard(
                         },
                         contentDescription = null,
                         tint = tone,
-                        modifier = Modifier.size(14.dp),
+                        modifier = Modifier
+                            .then(if (listsAlerts) Modifier.padding(top = 2.dp) else Modifier)
+                            .size(14.dp),
                     )
                     Spacer(Modifier.width(9.dp))
-                    Text(
-                        text = when {
-                            reading -> runtime.lastReading
-                            muted -> "${runtime.lastMessage} · muted, no alerts"
-                            else -> runtime.lastMessage
-                        },
-                        // A reading is re-rendered on every check and its digits
-                        // change, so proportional figures make the line twitch
-                        // while somebody is watching it. Same treatment the
-                        // countdown and the latency figures already get.
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontFeatureSettings = "tnum",
-                        ),
-                        color = NightbellColors.TextSecondary,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    // What is firing, one to a line, when that is what took the
+                    // monitor down. The sentence this replaces named three of
+                    // them and ellipsised the rest, which is the form issue 14's
+                    // follow-up called too small to read: a card is not a detail
+                    // screen, but three rows and an honest count is a different
+                    // thing from one clipped line.
+                    val listed = if (listsAlerts) runtime.lastAlerts else emptyList()
+                    if (listed.isNotEmpty()) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = if (muted) {
+                                    "${runtime.alertsFiringLine} · muted, no alerts"
+                                } else {
+                                    runtime.alertsFiringLine
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = NightbellColors.TextSecondary,
+                            )
+                            listed.take(ALERTS_ON_CARD).forEach { alert ->
+                                Spacer(Modifier.height(3.dp))
+                                Text(
+                                    text = alert.label,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = when (alert.rank) {
+                                        AlertSeverity.CRITICAL -> NightbellColors.Rose
+                                        AlertSeverity.WARNING -> NightbellColors.Amber
+                                        else -> NightbellColors.TextTertiary
+                                    },
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            val hidden = runtime.alertsFiring - minOf(listed.size, ALERTS_ON_CARD)
+                            if (hidden > 0) {
+                                Spacer(Modifier.height(3.dp))
+                                Text(
+                                    text = "and $hidden more",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = NightbellColors.TextTertiary,
+                                )
+                            }
+                        }
+                    } else {
+                        Text(
+                            text = when {
+                                reading -> runtime.lastReading
+                                muted -> "${runtime.lastMessage} · muted, no alerts"
+                                else -> runtime.lastMessage
+                            },
+                            // A reading is re-rendered on every check and its digits
+                            // change, so proportional figures make the line twitch
+                            // while somebody is watching it. Same treatment the
+                            // countdown and the latency figures already get.
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontFeatureSettings = "tnum",
+                            ),
+                            color = NightbellColors.TextSecondary,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
             }
         }
@@ -2085,3 +2143,13 @@ fun DashboardCountBadge(count: Int, accent: Color = NightbellColors.Aqua) {
         )
     }
 }
+
+/**
+ * Rows a dashboard card gives the list before it starts counting instead.
+ *
+ * Three, because a card has the whole fleet under it and the screen is a list of
+ * monitors rather than a list of alerts. The detail screen is where all of them
+ * are, and a card that grew with the outage would push the next monitor off the
+ * screen exactly when somebody needs to see whether it is up.
+ */
+private const val ALERTS_ON_CARD = 3
