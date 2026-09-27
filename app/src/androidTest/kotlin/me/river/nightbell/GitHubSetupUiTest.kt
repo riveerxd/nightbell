@@ -302,12 +302,13 @@ class GitHubSetupUiTest {
         composeRule.onAllNodesWithContentDescription("stars", useUnmergedTree = true)
             .onFirst()
             .assertIsDisplayed()
-        // Substring, because the label is singular at a count of one, and "first"
-        // because the hero line says the same thing further up the screen.
-        composeRule.onAllNodesWithText("open issue", substring = true, useUnmergedTree = true)
+        // Open issues and forks wear GitHub's own marks now, so like the star
+        // above they carry their name as a content description rather than as
+        // text. Substring, because both labels are singular at a count of one.
+        composeRule.onAllNodesWithContentDescription("open issue", substring = true, useUnmergedTree = true)
             .onFirst()
             .assertIsDisplayed()
-        composeRule.onAllNodesWithText("fork", substring = true, useUnmergedTree = true)
+        composeRule.onAllNodesWithContentDescription("fork", substring = true, useUnmergedTree = true)
             .onFirst()
             .assertIsDisplayed()
         composeRule.captureScreenshot("gh-06-detail")

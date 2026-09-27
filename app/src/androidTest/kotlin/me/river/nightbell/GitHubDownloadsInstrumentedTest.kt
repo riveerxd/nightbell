@@ -5,10 +5,14 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
@@ -112,6 +116,7 @@ class GitHubDownloadsInstrumentedTest {
             "x-ratelimit-reset" to "1787776320",
         )
         val path = request.path.substringBefore('?')
+        val query = request.path.substringAfter('?', "")
         if (!path.endsWith("/releases")) {
             return TinyHttpServer.Response(
                 body = """
@@ -128,7 +133,16 @@ class GitHubDownloadsInstrumentedTest {
                 extraHeaders = headers,
             )
         }
-        val body = releases.get().joinToString(",", "[", "]") { it.json() }
+        // Page one carries the releases and the rest are empty, the way a real
+        // list behaves. Serving the same rows for every page made a three page
+        // walk count the same two releases three times, which is a fake that
+        // agrees with itself and with nothing else.
+        val page = PAGE_PARAM.find(query)?.groupValues?.get(1)?.toIntOrNull() ?: 1
+        val body = if (page <= 1) {
+            releases.get().joinToString(",", "[", "]") { it.json() }
+        } else {
+            "[]"
+        }
         val host = request.headers["host"] ?: "127.0.0.1"
         val link = if (hasNextPage.get()) {
             mapOf(
@@ -147,7 +161,7 @@ class GitHubDownloadsInstrumentedTest {
 
     private fun FakeRelease.json(): String = """
         {
-          "id": ${tag.hashCode()},
+          "id": ${kotlin.math.abs(tag.hashCode())},
           "tag_name": "$tag",
           "name": "Nightbell $tag",
           "prerelease": false,
@@ -196,9 +210,19 @@ class GitHubDownloadsInstrumentedTest {
             composeRule.onAllNodesWithText("Nightbell repo").fetchSemanticsNodes().isNotEmpty()
         }
         composeRule.onAllNodesWithText("Nightbell repo").onFirst().performClick()
-        awaitTrue(description = "the repository card") {
-            composeRule.onAllNodesWithText("Repository").fetchSemanticsNodes().isNotEmpty()
+        awaitTrue(description = "the detail screen") {
+            composeRule.onAllNodesWithTag("detail-list").fetchSemanticsNodes().isNotEmpty()
         }
+        // The detail screen is a lazy list. The repository card is below the
+        // fold and is not composed until something scrolls to it, so waiting
+        // for its text to appear waits for a node that never arrives. Every
+        // assertion below scrolls the list to its target first.
+        scrollTo(hasTestTag("github-metrics"))
+    }
+
+    /** Brings a node into composition, which inside a lazy list it may not be. */
+    private fun scrollTo(matcher: SemanticsMatcher) {
+        composeRule.onNodeWithTag("detail-list").performScrollToNode(matcher)
     }
 
     // ---- the engine ----------------------------------------------------------
@@ -249,7 +273,8 @@ class GitHubDownloadsInstrumentedTest {
         seed()
         check()
         openDetail()
-        composeRule.onNodeWithTag("github-download-metrics").performScrollTo().assertIsDisplayed()
+        scrollTo(hasTestTag("github-download-metrics"))
+        composeRule.onNodeWithTag("github-download-metrics").assertIsDisplayed()
         composeRule.onNodeWithText("423").assertIsDisplayed()
         composeRule.onNodeWithText("297").assertIsDisplayed()
         // The captions say which slice each number counted. The first cut read
@@ -267,7 +292,8 @@ class GitHubDownloadsInstrumentedTest {
         // No check has run, so there are no tiles and no number anywhere: a zero
         // here would be a claim about the repository rather than about what the
         // app knows.
-        composeRule.onNodeWithText("Not read yet").performScrollTo().assertIsDisplayed()
+        scrollTo(hasText("Not read yet"))
+        composeRule.onNodeWithText("Not read yet").assertIsDisplayed()
         assertFalse(state().downloadsSeeded)
         composeRule.captureScreenshot("downloads-02-not-read-yet")
     }
@@ -285,9 +311,8 @@ class GitHubDownloadsInstrumentedTest {
         )
         check()
         openDetail()
-        composeRule.onNodeWithText("No release file matches that")
-            .performScrollTo()
-            .assertIsDisplayed()
+        scrollTo(hasText("No release file matches that"))
+        composeRule.onNodeWithText("No release file matches that").assertIsDisplayed()
         composeRule.captureScreenshot("downloads-03-filter-matches-nothing")
     }
 
@@ -300,9 +325,8 @@ class GitHubDownloadsInstrumentedTest {
         check()
         assertFalse(state().totalComplete)
         openDetail()
-        composeRule.onAllNodesWithText("423+", substring = true).onFirst()
-            .performScrollTo()
-            .assertIsDisplayed()
+        scrollTo(hasText("423+", substring = true))
+        composeRule.onAllNodesWithText("423+", substring = true).onFirst().assertIsDisplayed()
         composeRule.captureScreenshot("downloads-04-floor")
     }
 
@@ -333,13 +357,15 @@ class GitHubDownloadsInstrumentedTest {
         openDetail()
         // The history row, which is what the count moving looks like after the
         // notification has gone.
-        composeRule.onAllNodesWithText("7 downloads", substring = true).onFirst()
-            .performScrollTo()
-            .assertIsDisplayed()
+        scrollTo(hasText("7 downloads", substring = true))
+        composeRule.onAllNodesWithText("7 downloads", substring = true).onFirst().assertIsDisplayed()
         composeRule.captureScreenshot("downloads-05-delta-row")
     }
 
     private companion object {
         const val MONITOR_ID = "gh-downloads"
+
+        /** Anchored, because "per_page=100" contains "page=". */
+        val PAGE_PARAM = Regex("""(?:^|&)page=(\d+)""")
     }
 }
