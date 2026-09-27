@@ -1,0 +1,9 @@
+A repository monitor can now count how many times the release files have been downloaded, both on the newest release and as a running total across every release. It costs no extra request: the numbers live inside the release list the monitor was already reading. Turn it on under Downloads when you add or edit a GitHub repository.
+
+Which files count is up to you. A project that publishes an APK beside a signature and a checksum can count the APKs alone, and because the filename carries the version, every release of the same file adds up under one line rather than thirty separate ones. When a repository only ships one kind of file the app says so instead of offering a filter that cannot change the answer.
+
+You can be told when the count moves, either on any increase or only at round numbers, or held back to one line an hour or a day. Nothing about a download wakes the phone.
+
+What the number is, stated plainly on the card: GitHub counts requests for the file rather than people, so mirrors, build servers and crawlers are in it, and it is not updated the moment somebody downloads. Past three hundred releases the total is shown as a floor with the number of releases it covers rather than quietly undercounting.
+
+Requested as issue 18.

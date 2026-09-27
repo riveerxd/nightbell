@@ -536,8 +536,27 @@ android {
         // own screen flashed "Monitor not found" on the way out, and an imported
         // backup arrived in the right order and was instantly re-ranked because
         // the dashboard read the sort once at construction.
-        versionCode = 42
-        versionName = "3.13.0"
+        //
+        // 3.14.0 counts what the release files of a watched repository have been
+        // downloaded, on the newest release and across every release, and lets
+        // the user say which files count. The numbers were already inside the
+        // release list the monitor reads, so a repository whose releases fit one
+        // page pays no extra request for any of it; it pays about a quarter of a
+        // megabyte instead of five kilobytes, which is what the refresh setting
+        // is for.
+        //
+        // The filename carries the version, so the breakdown groups by the name
+        // with its digits replaced and every release of one file adds up on one
+        // line. The filter only appears when there is more than one kind of file
+        // to choose between, because a repository shipping one APK a release
+        // counts the same total whichever way that chip is set.
+        //
+        // A release wore the arrow that means a file lands on this device, which
+        // is the mark the download count needed, so releases take a tag now. An
+        // open issue wore the warning triangle, which claims a fault where there
+        // is none.
+        versionCode = 43
+        versionName = "3.14.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
