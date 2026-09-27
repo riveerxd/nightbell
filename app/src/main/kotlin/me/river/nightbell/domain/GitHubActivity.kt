@@ -64,6 +64,18 @@ object GitHubActivity {
 
     data class Release(val tag: String, override val at: Long) : Row
 
+    /**
+     * The release files were downloaded [delta] more times.
+     *
+     * Only emitted when both readings are real and both were taken against a
+     * complete walk. A floor compared with a total produces a difference that
+     * says where the page walk stopped rather than anything about the
+     * repository, and a row claiming it would be inventing history.
+     */
+    data class Downloads(val from: Int, val to: Int, override val at: Long) : Row {
+        val delta: Int get() = to - from
+    }
+
     data class Forks(val from: Int, val to: Int, override val at: Long) : Row
 
     /** `pushed_at` moved: someone pushed to the repository. */
@@ -163,6 +175,14 @@ object GitHubActivity {
             }
             if (facts.stars != before.stars) {
                 changes += Stars(before.stars, facts.stars, sample.at)
+            }
+            // Guarded on both readings being real, the way the comment id is,
+            // so the first poll after the track is switched on does not post a
+            // row about downloads that accumulated over years.
+            val downloadsBefore = before.downloadsReading
+            val downloadsNow = facts.downloadsReading
+            if (downloadsBefore >= 0 && downloadsNow > downloadsBefore) {
+                changes += Downloads(downloadsBefore, downloadsNow, sample.at)
             }
             if (facts.forks != before.forks) {
                 changes += Forks(before.forks, facts.forks, sample.at)

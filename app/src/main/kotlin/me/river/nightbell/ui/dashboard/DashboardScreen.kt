@@ -1996,14 +1996,36 @@ private fun GitHubFactsRow(
                         } else {
                             NightbellColors.TextTertiary
                         },
-                        icon = NightbellIcons.Warning,
+                        icon = NightbellIcons.IssueOpen,
                     )
                 }
                 if (watch.watchReleases && state.lastReleaseTag.isNotBlank()) {
                     MicroTag(
                         text = state.lastReleaseTag,
                         color = NightbellColors.Mint,
-                        icon = NightbellIcons.Import,
+                        icon = NightbellIcons.Tag,
+                    )
+                }
+                if (watch.trackDownloads && state.downloadsSeeded) {
+                    val counted = if (watch.downloadsAcrossAllReleases) {
+                        state.totalDownloads
+                    } else {
+                        state.latestDownloads
+                    }
+                    MicroTag(
+                        // Secondary rather than mint or gold. Mint means up,
+                        // gold is already the star count, and this is neither a
+                        // health reading nor the repository's headline number.
+                        text = buildString {
+                            append(counted.coerceAtLeast(0))
+                            if (watch.downloadsAcrossAllReleases && !state.totalComplete) {
+                                append('+')
+                            }
+                        },
+                        color = NightbellColors.TextSecondary,
+                        icon = NightbellIcons.Download,
+                        iconDescription = "downloads",
+                        iconAtEnd = true,
                     )
                 }
             }

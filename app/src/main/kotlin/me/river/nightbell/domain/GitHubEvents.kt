@@ -143,6 +143,63 @@ sealed interface GitHubEvent {
         override val key: String get() = "comment-issue-$issueNumber"
     }
 
+    /**
+     * The download count moved.
+     *
+     * The body is a delta sentence and never "somebody downloaded your APK",
+     * because the app cannot see a download. It sees a counter that moved by N
+     * since the last poll, and GitHub's counter includes mirrors, continuous
+     * integration and crawlers that fetch a whole release. Seven of these is
+     * seven requests, not seven people, and the wording has to survive somebody
+     * reading it at face value.
+     */
+    data class Downloads(val from: Int, val to: Int, val repoUrl: String) : GitHubEvent {
+        val delta: Int get() = to - from
+
+        override fun title(slug: String): String =
+            if (delta == 1) "New download on $slug" else "New downloads on $slug"
+
+        override val body: String
+            get() = "$from to $to downloads (+$delta since the last check)"
+
+        override val url: String get() = repoUrl
+
+        /** One replacing row, as stars are. A second notice adds no fact. */
+        override val key: String get() = "downloads"
+    }
+
+    data class DownloadMilestone(
+        val milestone: Int,
+        val downloads: Int,
+        val repoUrl: String,
+    ) : GitHubEvent {
+        override fun title(slug: String): String = "$slug passed $milestone downloads"
+
+        override val body: String get() = "$downloads downloads now"
+
+        override val url: String get() = repoUrl
+
+        override val key: String get() = "download-milestone-$milestone"
+    }
+
+    data class DownloadDigest(
+        val from: Int,
+        val to: Int,
+        val spanMs: Long,
+        val repoUrl: String,
+    ) : GitHubEvent {
+        val delta: Int get() = to - from
+
+        override fun title(slug: String): String = "+$delta downloads on $slug"
+
+        override val body: String
+            get() = "$from to $to downloads over the last ${spanLabel(spanMs)}"
+
+        override val url: String get() = repoUrl
+
+        override val key: String get() = "downloads"
+    }
+
     data class NewRelease(val release: GitHubRelease) : GitHubEvent {
         override fun title(slug: String): String = "New release on $slug"
 
@@ -445,6 +502,111 @@ object GitHubEvents {
                         lastReleaseUrl = release.url,
                     )
                 }
+            }
+        }
+
+        // Recorded outside the download block, so a monitor that only watches
+        // releases still learns what files the repository ships and the setup
+        // screen can offer them the first time somebody opens it.
+        if (snapshot.assetTypes.isNotEmpty()) {
+            state = state.copy(knownAssetTypes = snapshot.assetTypes)
+        }
+
+        // ---- release downloads -----------------------------------------------
+        //
+        // The same four rules the star track runs on, because this is the same
+        // shape of fact: a counter that only means anything when it goes up.
+        //
+        // Which number is being watched is the user's choice, and it changes
+        // what a fall means. On the cumulative total a fall means a release was
+        // deleted. On the latest release it happens every time a new release
+        // lands, because the count starts again from nothing. Neither is growth
+        // and neither is news, which is why the rule is the star rule and not
+        // an absolute difference.
+        val reading = snapshot.downloads
+        if (reading != null) {
+            val seedingDownloads = !previous.downloadsSeeded
+            val fromDownloads = if (watch.downloadsAcrossAllReleases) {
+                previous.totalDownloads
+            } else {
+                previous.latestDownloads
+            }
+            val toDownloads = if (watch.downloadsAcrossAllReleases) {
+                reading.total
+            } else {
+                reading.latest
+            }
+
+            state = state.copy(
+                downloadsSeeded = true,
+                latestDownloads = reading.latest,
+                totalDownloads = reading.total,
+                totalCoversReleases = reading.releases,
+                totalComplete = reading.complete,
+                downloadsByFile = reading.byFile,
+                downloadsReadAt = nowMs,
+                downloadsFailures = 0,
+                // The cadence gate, written as the moment the next wide call is
+                // allowed. `OFF` means every check and has a zero window, so
+                // this lands in the past and the next poll counts again.
+                downloadsRetryAt = nowMs + watch.downloadsRefresh.windowMs,
+            )
+
+            // A reading taken against a truncated walk cannot be compared with
+            // one taken against a complete list. The difference between a floor
+            // and a total is an artefact of where the walk stopped, not a fact
+            // about the repository, and announcing it would be inventing news.
+            val comparable = reading.complete &&
+                (previous.totalComplete || !watch.downloadsAcrossAllReleases)
+            val grewDownloads = !seedingDownloads &&
+                comparable &&
+                fromDownloads >= 0 &&
+                toDownloads > fromDownloads
+
+            if (grewDownloads && watch.notifyOnDownloads) {
+                val milestone = watch.downloadMilestones
+                    .filter { it in (fromDownloads + 1)..toDownloads }
+                    .maxOrNull()
+                when {
+                    // A milestone supersedes the plain notice rather than
+                    // joining it, exactly as it does for stars: both are about
+                    // the same downloads and two buzzes for one event is the
+                    // noise the milestone mode exists to reduce.
+                    watch.notifyOnDownloadMilestones && milestone != null ->
+                        events += GitHubEvent.DownloadMilestone(milestone, toDownloads, repo.url)
+
+                    watch.downloadDigest.isOn -> Unit // folded into the window below
+
+                    watch.notifyOnEveryDownload ->
+                        events += GitHubEvent.Downloads(fromDownloads, toDownloads, repo.url)
+                }
+            }
+
+            if (watch.notifyOnDownloads && watch.downloadDigest.isOn) {
+                if (grewDownloads && state.digestDownloadsFrom < 0) {
+                    state = state.copy(
+                        digestDownloadsFrom = fromDownloads,
+                        digestDownloadsSince = nowMs,
+                    )
+                }
+                val opened = state.digestDownloadsSince
+                if (state.digestDownloadsFrom >= 0 && opened > 0L &&
+                    nowMs - opened >= watch.downloadDigest.windowMs
+                ) {
+                    if (toDownloads > state.digestDownloadsFrom) {
+                        events += GitHubEvent.DownloadDigest(
+                            state.digestDownloadsFrom,
+                            toDownloads,
+                            nowMs - opened,
+                            repo.url,
+                        )
+                    }
+                    state = state.copy(digestDownloadsFrom = -1, digestDownloadsSince = 0L)
+                }
+            } else if (state.digestDownloadsFrom >= 0) {
+                // Switched off with a window open. Drop it rather than holding a
+                // summary nobody will ever be sent.
+                state = state.copy(digestDownloadsFrom = -1, digestDownloadsSince = 0L)
             }
         }
 

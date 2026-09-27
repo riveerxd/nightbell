@@ -59,7 +59,7 @@
         android:id="@+id/row_value_icon"
         android:layout_width="10dp"
         android:layout_height="10dp"
-        android:layout_marginStart="3dp"
+        android:layout_marginStart="2dp"
         android:src="@drawable/widget_star"
         android:visibility="gone"
         android:contentDescription="@null" />

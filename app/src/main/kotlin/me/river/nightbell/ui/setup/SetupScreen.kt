@@ -77,7 +77,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.river.nightbell.domain.AssertionMode
 import me.river.nightbell.domain.DigestMode
+import me.river.nightbell.domain.GitHubDownloads
 import me.river.nightbell.domain.GitHubWatch
+import me.river.nightbell.domain.toggleDownloadFilter
 import me.river.nightbell.domain.CheckResult
 import me.river.nightbell.domain.ElementMode
 import me.river.nightbell.domain.HeaderPair
@@ -2385,7 +2387,7 @@ private fun GitHubWatchCard(
     }
 
     Spacer(Modifier.height(14.dp))
-    SectionHeader("Issues", icon = NightbellIcons.Warning, accent = accent)
+    SectionHeader("Issues", icon = NightbellIcons.IssueOpen, accent = accent)
     ToggleRow(
         title = "New issues",
         subtitle = if (watch.notifyOnIssues) {
@@ -2395,7 +2397,7 @@ private fun GitHubWatchCard(
         },
         checked = watch.notifyOnIssues,
         onCheckedChange = { v -> viewModel.updateGitHub { it.copy(notifyOnIssues = v) } },
-        icon = NightbellIcons.Warning,
+        icon = NightbellIcons.IssueOpen,
         accent = accent,
         modifier = Modifier.testTag("github-watch-issues"),
     )
@@ -2519,13 +2521,13 @@ private fun GitHubWatchCard(
     }
 
     Spacer(Modifier.height(14.dp))
-    SectionHeader("Releases", icon = NightbellIcons.Import, accent = NightbellColors.Mint)
+    SectionHeader("Releases", icon = NightbellIcons.Tag, accent = NightbellColors.Mint)
     ToggleRow(
         title = "New releases",
         subtitle = if (watch.watchReleases) "Announced once, with the tag" else "Releases are ignored",
         checked = watch.watchReleases,
         onCheckedChange = { v -> viewModel.updateGitHub { it.copy(watchReleases = v) } },
-        icon = NightbellIcons.Import,
+        icon = NightbellIcons.Tag,
         accent = NightbellColors.Mint,
         modifier = Modifier.testTag("github-watch-releases"),
     )
@@ -2550,7 +2552,289 @@ private fun GitHubWatchCard(
         }
     }
 
+    GitHubDownloadsCard(viewModel, watch)
+
     FieldNote(report.of(Validation.Field.GITHUB))
+}
+
+/**
+ * How many times the release files have been fetched.
+ *
+ * Its own card rather than more rows under Releases, because it asks a
+ * different question. Releases is "tell me when a new one lands", and this is
+ * "count what the old ones are still doing", which is why the two can be
+ * switched on separately even though one request answers both.
+ *
+ * Everything here is off by default. The counts live only in the full release
+ * list, so the call widens from about five kilobytes to a couple of hundred,
+ * and that is a cost the user should choose rather than inherit from an update.
+ */
+@Composable
+private fun GitHubDownloadsCard(viewModel: SetupViewModel, watch: GitHubWatch) {
+    // The app's own blue, not mint and not gold. Mint means a service is up,
+    // gold is already the star count, and a download total is neither a health
+    // reading nor this repository's headline number.
+    val downloadAccent = NightbellColors.Aqua
+    Spacer(Modifier.height(14.dp))
+    SectionHeader("Downloads", icon = NightbellIcons.Download, accent = downloadAccent)
+    ToggleRow(
+        title = "Count downloads",
+        subtitle = if (watch.trackDownloads) {
+            "Reads the whole release list, about a quarter of a megabyte a check"
+        } else {
+            "Release files are not counted"
+        },
+        checked = watch.trackDownloads,
+        onCheckedChange = { v ->
+            viewModel.updateGitHub { it.copy(trackDownloads = v) }
+            // Ask the repository what it ships the moment counting is switched
+            // on, so the chips are there on the first visit. Waiting for a save
+            // and a second edit is a round trip nobody makes.
+            if (v) viewModel.loadAssetTypes()
+        },
+        icon = NightbellIcons.Download,
+        accent = downloadAccent,
+        modifier = Modifier.testTag("github-track-downloads"),
+    )
+    AnimatedVisibility(
+        visible = watch.trackDownloads,
+        enter = fadeIn() + expandVertically(),
+        exit = fadeOut() + shrinkVertically(),
+    ) {
+        Column {
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = "WHAT TO COUNT",
+                style = MaterialTheme.typography.labelSmall,
+                color = NightbellColors.TextTertiary,
+            )
+            Spacer(Modifier.height(6.dp))
+            // A selector rather than a toggle, and worded exactly as the two
+            // tiles on the detail card are. "Every release" as a switch title
+            // read as "tell me about every release", which is the question the
+            // Releases section above already asks.
+            SegmentedSelector(
+                options = listOf(false, true),
+                selected = watch.downloadsAcrossAllReleases,
+                onSelect = { all ->
+                    viewModel.updateGitHub { it.copy(downloadsAcrossAllReleases = all) }
+                },
+                label = { all -> if (all) "All releases" else "This release" },
+                accent = downloadAccent,
+                modifier = Modifier.testTag("github-downloads-scope"),
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = if (watch.downloadsAcrossAllReleases) {
+                    "One running total across every release the repository has."
+                } else {
+                    "Only the newest release, which starts again near zero each time one lands."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = NightbellColors.TextTertiary,
+            )
+
+            Spacer(Modifier.height(10.dp))
+            if (viewModel.loadingAssetTypes && viewModel.knownAssetTypes.isEmpty()) {
+                Text(
+                    text = "Reading what this repository ships...",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = NightbellColors.TextTertiary,
+                )
+                Spacer(Modifier.height(10.dp))
+            }
+
+            // The rule lives in GitHubDownloads.filterControls, where it is
+            // tested. A control whose two positions cannot be told apart is
+            // worse than no control: it invites somebody to tap it, look for
+            // the difference, and find none.
+            val controls = GitHubDownloads.filterControls(
+                knownTypes = viewModel.knownAssetTypes,
+                filterText = watch.downloadFilterText,
+                loading = viewModel.loadingAssetTypes,
+            )
+
+            controls.onlyType?.let { only ->
+                Text(
+                    text = "Every release here ships one kind of file, $only, " +
+                        "so there is nothing to narrow.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = NightbellColors.TextTertiary,
+                    modifier = Modifier.testTag("github-single-file-type"),
+                )
+            }
+
+            if (controls.chips) {
+                Text(
+                    text = "FILES THIS REPOSITORY SHIPS",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = NightbellColors.TextTertiary,
+                )
+                Spacer(Modifier.height(6.dp))
+                // Independent of one another rather than one of a set, so the
+                // chips carry their own test. Tapping one writes the same text
+                // a person would have typed into the field below it, which is
+                // what keeps the two halves one control.
+                ChipSelector(
+                    options = viewModel.knownAssetTypes,
+                    selected = "",
+                    isSelected = { type ->
+                        watch.downloadFilters.any { it.equals(type, true) }
+                    },
+                    onSelect = { type ->
+                        viewModel.updateGitHub { it.toggleDownloadFilter(type) }
+                    },
+                    label = { it },
+                    accent = downloadAccent,
+                    modifier = Modifier.testTag("github-download-types"),
+                )
+                Spacer(Modifier.height(10.dp))
+            }
+
+            if (controls.field) {
+                GlassField(
+                    value = watch.downloadFilterText,
+                    onValueChange = { v ->
+                        viewModel.updateGitHub { it.copy(downloadFilterText = v) }
+                    },
+                    label = "Only these files (optional)",
+                    placeholder = ".apk, *.aab",
+                    helper = "Comma separated. A bare extension like .apk counts every file " +
+                        "that ends in it, whatever the version in the name. Empty counts " +
+                        "every file.",
+                    leadingIcon = NightbellIcons.Filter,
+                    accent = downloadAccent,
+                    modifier = Modifier.testTag("github-download-filter"),
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
+            Text(
+                // Names the verb, because there is a second picker below with
+                // three options and two of the same words on it. That one
+                // decides how often you are *told*; this one decides how often
+                // the list is *read*, and a user should not have to try them to
+                // find out which is which.
+                text = "HOW OFTEN TO COUNT",
+                style = MaterialTheme.typography.labelSmall,
+                color = NightbellColors.TextTertiary,
+            )
+            Spacer(Modifier.height(6.dp))
+            SegmentedSelector(
+                options = DigestMode.entries.toList(),
+                selected = watch.downloadsRefresh,
+                onSelect = { mode -> viewModel.updateGitHub { it.copy(downloadsRefresh = mode) } },
+                // Deliberately not DigestMode.label, which the digest below
+                // uses. Sharing the words is what made the two pickers look
+                // like the same setting twice.
+                label = { mode ->
+                    when (mode) {
+                        DigestMode.OFF -> "Every check"
+                        DigestMode.HOURLY -> "Once an hour"
+                        DigestMode.DAILY -> "Once a day"
+                    }
+                },
+                accent = downloadAccent,
+                modifier = Modifier.testTag("github-downloads-refresh"),
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = when (watch.downloadsRefresh) {
+                    DigestMode.OFF -> "Counted on every check. It costs no extra request: it is " +
+                        "the call the release watcher already makes, asked for in full."
+                    DigestMode.HOURLY -> "Counted once an hour, and the rest of the checks use " +
+                        "the smaller call."
+                    DigestMode.DAILY -> "Counted once a day, and the rest of the checks use the " +
+                        "smaller call."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = NightbellColors.TextTertiary,
+            )
+
+            Spacer(Modifier.height(14.dp))
+            ToggleRow(
+                title = "Tell me when it moves",
+                subtitle = if (watch.notifyOnDownloads) {
+                    "A notice when the count has gone up"
+                } else {
+                    "Counted quietly, shown on the card"
+                },
+                checked = watch.notifyOnDownloads,
+                onCheckedChange = { v ->
+                    viewModel.updateGitHub { it.copy(notifyOnDownloads = v) }
+                },
+                icon = NightbellIcons.Bell,
+                accent = downloadAccent,
+                modifier = Modifier.testTag("github-notify-downloads"),
+            )
+            AnimatedVisibility(
+                visible = watch.notifyOnDownloads,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically(),
+            ) {
+                Column {
+                    ToggleRow(
+                        title = "Any increase",
+                        // What the app can actually see, said plainly. It reads
+                        // a counter, so it knows the count moved by seven and
+                        // never that seven people arrived.
+                        subtitle = if (watch.notifyOnEveryDownload) {
+                            "One notice a check saying how much it moved, which on a busy " +
+                                "repository is most checks"
+                        } else {
+                            "Only the milestones below"
+                        },
+                        checked = watch.notifyOnEveryDownload,
+                        onCheckedChange = { v ->
+                            viewModel.updateGitHub { it.copy(notifyOnEveryDownload = v) }
+                        },
+                        icon = NightbellIcons.Bell,
+                        accent = downloadAccent,
+                        modifier = Modifier.testTag("github-every-download"),
+                    )
+                    ToggleRow(
+                        title = "Round numbers",
+                        subtitle = if (watch.notifyOnDownloadMilestones) {
+                            "100, 250, 500, 1k and up"
+                        } else {
+                            "Milestones are ignored"
+                        },
+                        checked = watch.notifyOnDownloadMilestones,
+                        onCheckedChange = { v ->
+                            viewModel.updateGitHub { it.copy(notifyOnDownloadMilestones = v) }
+                        },
+                        icon = NightbellIcons.Target,
+                        accent = downloadAccent,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "GitHub counts requests for the file rather than people. Mirrors, " +
+                            "build servers and crawlers are in the number, and it is not " +
+                            "updated the moment somebody downloads.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = NightbellColors.TextTertiary,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = "OR HOLD THEM AND SEND ONE LINE",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = NightbellColors.TextTertiary,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    SegmentedSelector(
+                        options = DigestMode.entries.toList(),
+                        selected = watch.downloadDigest,
+                        onSelect = { mode ->
+                            viewModel.updateGitHub { it.copy(downloadDigest = mode) }
+                        },
+                        label = { it.label },
+                        accent = NightbellColors.Amber,
+                        modifier = Modifier.testTag("github-download-digest"),
+                    )
+                }
+            }
+        }
+    }
 }
 
 // ---------------------------------------------------------------- prometheus

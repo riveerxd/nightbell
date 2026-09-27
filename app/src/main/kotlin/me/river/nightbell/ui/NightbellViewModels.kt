@@ -43,6 +43,7 @@ import me.river.nightbell.domain.PauseScope
 import me.river.nightbell.domain.PauseState
 import me.river.nightbell.domain.AppUpdate
 import me.river.nightbell.domain.GitHubRepo
+import me.river.nightbell.domain.GitHubState
 import me.river.nightbell.domain.GitHubWatch
 import me.river.nightbell.domain.MonitorKind
 import me.river.nightbell.domain.Secrets
@@ -1042,6 +1043,59 @@ class SetupViewModel(
     var thresholdInput by mutableStateOf("")
         private set
 
+    /**
+     * Release file types the last poll of this repository actually saw.
+     *
+     * Read from the runtime rather than guessed, so the chips offer what the
+     * repository ships instead of a list of extensions somebody thought an
+     * Android project might publish. Empty on a monitor that has never polled,
+     * which is why the filter field stands on its own and the chips are an
+     * accelerator rather than the only way in.
+     */
+    var knownAssetTypes by mutableStateOf<List<String>>(emptyList())
+        private set
+
+    /** A live look at the repository is in flight, for the chips. */
+    var loadingAssetTypes by mutableStateOf(false)
+        private set
+
+    /**
+     * Ask GitHub what files this repository ships.
+     *
+     * Called when counting is switched on, because a monitor being created has
+     * never polled anything and one that only watched releases may predate the
+     * feature. Without it the chips appeared only after a save and a second
+     * visit to this screen, which is a round trip nobody makes.
+     *
+     * One poll, and it is allowed to come back with nothing: the filter field
+     * underneath works perfectly well typed by hand, so a repository that is
+     * unreachable, private or rate limited costs the user a convenience rather
+     * than the feature.
+     */
+    fun loadAssetTypes() {
+        if (loadingAssetTypes) return
+        if (!draft.github.repository.isSet) return
+        loadingAssetTypes = true
+        viewModelScope.launch {
+            val probe = draft.copy(
+                github = draft.github.copy(
+                    // Only the release list is wanted. The other three tracks
+                    // would spend requests on answers nothing here reads.
+                    watchReleases = true,
+                    notifyOnIssues = false,
+                    watchPullRequests = false,
+                    notifyOnComments = false,
+                    trackDownloads = false,
+                ),
+            )
+            val types = runCatching {
+                graph.github.poll(probe, GitHubState(), force = true).snapshot?.assetTypes
+            }.getOrNull().orEmpty()
+            if (types.isNotEmpty()) knownAssetTypes = types
+            loadingAssetTypes = false
+        }
+    }
+
     init {
         viewModelScope.launch {
             val snapshot = graph.store.currentSnapshot()
@@ -1050,6 +1104,11 @@ class SetupViewModel(
             if (editingId != null) {
                 snapshot.monitors.firstOrNull { it.id == editingId }?.let { draft = it.migrated }
                 if (draft.github.repository.isSet) repoInput = draft.github.slug
+                knownAssetTypes = snapshot.runtimes[editingId]?.github?.knownAssetTypes.orEmpty()
+                // Already counting but never polled for it, which is every
+                // monitor that had the track switched on before this screen
+                // could learn the file types.
+                if (draft.github.trackDownloads && knownAssetTypes.isEmpty()) loadAssetTypes()
             } else {
                 draft = draft.copy(
                     intervalMinutes = snapshot.settings.defaultIntervalMinutes,

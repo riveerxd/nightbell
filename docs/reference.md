@@ -14,6 +14,62 @@ watch it, chart it, and shout when it breaks.
 | **Request & response** | Full control: GET·POST·PUT·PATCH·DELETE·HEAD, custom headers, request body and content type, plus a response-body assertion. |
 | **Page element** | Loads the real page in an embedded browser and watches **any number** of DOM nodes you picked by tapping them, all resolved against one page load. |
 | **Prometheus** | Reads a metrics endpoint, a PromQL query or an Alertmanager. Three sources, one kind. See below. |
+| **GitHub repository** | Watches a repository over the public API: stars, issues, pull requests, comments, releases and how often the release files are downloaded. See below. |
+
+### A GitHub repository
+
+The one kind that is not an uptime check. Nothing here can fail in the way a
+service fails, so a repository monitor never pages anyone and never counts as an
+outage: being refused by GitHub is recorded and shown, because it means Nightbell
+learned nothing, but it is not a claim about the repository.
+
+Five tracks, each switched on separately, all answered by at most four requests
+per check:
+
+| Track | What arrives |
+| --- | --- |
+| Stars | Every increase, or only round numbers, or one summary an hour or a day. A count that falls is never reported as growth. |
+| Issues and pull requests | New ones, optionally filtered to a keyword or an author. Pull requests are a separate switch, because the issues endpoint returns both and letting them through is the commonest way a repository monitor cries wolf. |
+| Comments | Replies on any thread, closed ones included. Off by default: it is a fourth endpoint and the loudest of the five. |
+| Releases | A new release, once, with its tag. Prereleases are a separate switch. |
+| Downloads | How many times the release files have been fetched. |
+
+The first check of each track writes down where the repository stands and says
+nothing, so you are told about what happens next rather than about everything
+that already happened. Each track records its own first sighting, so switching
+one on later does not announce a backlog.
+
+**Rate limits.** GitHub allows 60 requests an hour per address without a token
+and 5,000 with one, which is why the template's interval is 15 minutes and why
+every request carries an `If-None-Match`. A token goes in Settings.
+
+#### Counting downloads
+
+GitHub publishes a download count per release file. Nightbell can total the
+newest release, or every release the repository has, and can narrow both to the
+files you care about: a project shipping an APK beside a signature and a checksum
+can count the APKs alone.
+
+Files are matched by extension or by a wildcard, comma separated, and an empty
+filter counts everything. Because the filename carries the version and therefore
+changes every release, the per file breakdown groups by the name with its digits
+replaced: `Nightbell-3.13.0-release.apk` and every other release of the same file
+add up under `nightbell-*-release.apk`.
+
+It adds no request on a repository whose releases fit one page. The counts live
+inside the release payload, so the call is the one the release watcher was making
+anyway, asked for in full. That does make it a bigger response, roughly a quarter
+of a megabyte against five kilobytes, which is what the refresh setting is for:
+every check by default, or hourly or daily on a metered connection.
+
+Past 300 releases the walk stops and the total is shown as a floor, with the
+number of releases it covers, rather than quietly undercounting. Drafts never
+count, because nobody but the maintainer can reach them.
+
+**What the number is.** GitHub counts requests for the file, not people. Mirrors,
+build servers and crawlers that fetch a whole release are all in it, and the
+counter is not updated the moment somebody downloads. Nightbell reports the
+movement it sees between two checks and never claims a person did anything.
 
 ### Prometheus, PromQL and Alertmanager
 

@@ -2,7 +2,12 @@ package me.river.nightbell.data.check
 
 import me.river.nightbell.domain.CheckResult
 import me.river.nightbell.domain.FailureKind
+import me.river.nightbell.domain.GitHubAsset
 import me.river.nightbell.domain.GitHubComment
+import me.river.nightbell.domain.DownloadReading
+import me.river.nightbell.domain.GitHubDownloads
+import me.river.nightbell.domain.GitHubWatch
+import me.river.nightbell.domain.FileDownloads
 import me.river.nightbell.domain.GitHubEtags
 import me.river.nightbell.domain.GitHubItem
 import me.river.nightbell.domain.GitHubRate
@@ -216,37 +221,75 @@ class GitHubChecker(
                 }
             }
 
-            // ---- releases -----------------------------------------------------
+            // ---- releases and their downloads ---------------------------------
+            //
+            // One request serves both tracks, and that is the whole reason the
+            // download counts cost nothing on an ordinary repository. The counts
+            // live inside the release payload, so asking for the list at a larger
+            // page size is the same call the release watcher was making anyway.
+            //
+            // The budget floor and the refresh gate below decide whether the wide
+            // form is affordable this time; when it is not, the narrow form still
+            // answers the release watcher and the counts keep their last reading.
             var release: GitHubRelease? = null
             var releaseChanged = false
             var releasesEtag = previous.releasesEtag
-            if (watch.watchReleases) {
-                // `releases/latest` skips drafts and prereleases outright, which is
-                // the right answer nearly always and the wrong one for somebody
-                // watching a beta channel. That case lists instead.
-                val url = if (watch.includePrereleases) {
-                    "$apiBase/repos/${repo.owner}/${repo.name}/releases?per_page=$RELEASES_PER_PAGE"
-                } else {
-                    "$apiBase/repos/${repo.owner}/${repo.name}/releases/latest"
+            var downloads: DownloadReading? = null
+            var assetTypes = emptyList<String>()
+            val downloadsDue = watch.trackDownloads &&
+                (force || nowMs() >= previous.downloadsRetryAt) &&
+                (rate.remaining < 0 || rate.remaining >= DOWNLOADS_BUDGET_FLOOR)
+            if (watch.watchReleases || downloadsDue) {
+                // Three shapes, in order of what they cost. `releases/latest`
+                // skips drafts and prereleases outright, which is the right
+                // answer nearly always and the wrong one for somebody watching a
+                // beta channel or counting files across every tag.
+                val base = "$apiBase/repos/${repo.owner}/${repo.name}/releases"
+                val url = when {
+                    downloadsDue -> "$base?per_page=$DOWNLOADS_PER_PAGE"
+                    watch.includePrereleases -> "$base?per_page=$RELEASES_PER_PAGE"
+                    else -> "$base/latest"
                 }
                 val answer = call(client, url, previous.releasesEtag, token)
                 answer.rate?.let { rate = it }
                 when (answer) {
                     is Answer.Limited -> return@withContext limited(previous, answer, rate)
                     is Answer.Ok -> {
-                        release = if (watch.includePrereleases) {
-                            parseReleases(answer.array).firstOrNull { !it.draft }
+                        val listed = if (url.endsWith("/latest")) {
+                            listOfNotNull(answer.body?.let(::parseRelease))
                         } else {
-                            answer.body?.let(::parseRelease)
+                            parseReleases(answer.array)
                         }
+                        release = listed.firstOrNull { !it.draft }
+                        // Learned whether or not anybody is counting, because
+                        // the payload carries them either way and the setup
+                        // screen needs them before counting is switched on.
+                        assetTypes = GitHubDownloads.extensionsIn(listed)
                         releaseChanged = true
                         releasesEtag = answer.etag.ifBlank { previous.releasesEtag }
+                        if (downloadsDue) {
+                            val walked = walkDownloads(
+                                client = client,
+                                token = token,
+                                watch = watch,
+                                firstPage = listed,
+                                nextPage = answer.nextPage,
+                                rateIn = rate,
+                            )
+                            downloads = walked.reading
+                            rate = walked.rate
+                        }
                     }
                     is Answer.NotModified -> releasesEtag = answer.etag.ifBlank { previous.releasesEtag }
                     is Answer.Failed ->
                         // 404 here is "no releases yet", which is a fact about the
-                        // repository rather than a failure to read it.
-                        if (answer.code == 404) releaseChanged = true
+                        // repository rather than a failure to read it. It is also
+                        // a real download reading: a repository with no releases
+                        // has no downloads, and zero is the honest answer.
+                        if (answer.code == 404) {
+                            releaseChanged = true
+                            if (downloadsDue) downloads = DownloadReading.EMPTY
+                        }
                 }
             }
 
@@ -325,6 +368,8 @@ class GitHubChecker(
                 issuesChanged = issuesChanged,
                 release = release,
                 releaseChanged = releaseChanged,
+                downloads = downloads,
+                assetTypes = assetTypes,
                 comments = comments,
                 commentsChanged = commentsChanged,
                 commentsAnswered = commentsAnswered,
@@ -373,6 +418,13 @@ class GitHubChecker(
                     ?: maxOf(previous.lastIssueCommentId, previous.lastPullCommentId),
                 commentIssue = newestComment?.issueNumber ?: 0,
                 commentAuthor = newestComment?.author.orEmpty(),
+                // Carried forward on a poll that did not ask, exactly as the
+                // comment id above is, so the history cannot read as the
+                // repository losing its downloads and regaining them on the
+                // next wide call.
+                latestDownloads = downloads?.latest ?: previous.latestDownloads,
+                totalDownloads = downloads?.total ?: previous.totalDownloads,
+                downloadsComplete = downloads?.complete ?: previous.totalComplete,
             )
 
             Outcome(
@@ -430,6 +482,8 @@ class GitHubChecker(
             val array: JsonArray?,
             override val etag: String,
             override val rate: GitHubRate?,
+            /** `rel="next"` out of the Link header, or blank when this is the last page. */
+            val nextPage: String = "",
         ) : Answer
 
         data class NotModified(override val etag: String, override val rate: GitHubRate?) : Answer
@@ -551,7 +605,26 @@ class GitHubChecker(
             array = element as? JsonArray,
             etag = etag,
             rate = rate,
+            nextPage = nextPageOf(response.header("Link")),
         )
+    }
+
+    /**
+     * The `rel="next"` URL out of a Link header, or blank.
+     *
+     * Parsed rather than constructed, because the page after this one is
+     * GitHub's opinion and not arithmetic on a page number: it carries the
+     * cursor and the page size already agreed, and rebuilding it by hand is how
+     * a walk silently re-reads page one forever.
+     */
+    private fun nextPageOf(link: String?): String {
+        if (link.isNullOrBlank()) return ""
+        return link.split(',')
+            .firstOrNull { it.contains("rel=\"next\"") }
+            ?.substringAfter('<', "")
+            ?.substringBefore('>', "")
+            ?.trim()
+            .orEmpty()
     }
 
     private fun messageFor(code: Int): String = when (code) {
@@ -658,6 +731,68 @@ class GitHubChecker(
             .split('/')
             .let { it.size > 2 && it[2] == "pull" }
 
+    /** A [DownloadReading] and the budget left after taking it. */
+    private data class Walked(val reading: DownloadReading, val rate: GitHubRate)
+
+    /**
+     * Sums the release files, following Link headers under a cap.
+     *
+     * The comment track's rule, one request and deliberately never a second,
+     * cannot apply here: page two of a release list holds real downloads, and
+     * dropping it produces a number that is wrong rather than partial. So the
+     * walk continues, and what stops it is recorded instead of hidden.
+     *
+     * It stops for three reasons, and all three mean the same thing to the
+     * caller. The cap is reached, GitHub stops offering a next page, or the
+     * budget falls to the floor, which is the one that protects the other
+     * monitors: a five hundred release repository must not be able to spend an
+     * unauthenticated device's whole hour on its own back catalogue.
+     */
+    private suspend fun walkDownloads(
+        client: OkHttpClient,
+        token: String,
+        watch: GitHubWatch,
+        firstPage: List<GitHubRelease>,
+        nextPage: String,
+        rateIn: GitHubRate,
+    ): Walked {
+        val filters = watch.downloadFilters
+        val gathered = firstPage.toMutableList()
+        var rate = rateIn
+        var next = nextPage
+        var pages = 1
+        var complete = next.isBlank()
+
+        while (watch.downloadsAcrossAllReleases && next.isNotBlank()) {
+            if (pages >= DOWNLOADS_PAGE_CAP) break
+            if (rate.remaining in 0 until DOWNLOADS_BUDGET_FLOOR) break
+            // No ETag on the tail pages. One is held for this endpoint and it
+            // belongs to page one; sending it against page two would compare a
+            // validator to a body it was never computed from, and a 304 there
+            // would silently drop a page of releases from the total.
+            val answer = call(client, next, "", token)
+            answer.rate?.let { rate = it }
+            if (answer !is Answer.Ok) break
+            gathered += parseReleases(answer.array)
+            next = answer.nextPage
+            pages++
+            complete = next.isBlank()
+        }
+
+        val counted = if (watch.downloadsAcrossAllReleases) gathered else gathered.take(1)
+        val newest = gathered.firstOrNull { !it.draft }
+        val reading = DownloadReading(
+            latest = newest?.let { GitHubDownloads.sum(it.assets, filters) } ?: 0,
+            total = GitHubDownloads.total(counted, filters),
+            releases = counted.count { !it.draft },
+            // A latest-only reading is always complete: it covers exactly the
+            // one release it claims to, whatever the rest of the list does.
+            complete = if (watch.downloadsAcrossAllReleases) complete else true,
+            byFile = GitHubDownloads.group(counted, filters),
+        )
+        return Walked(reading, rate)
+    }
+
     private fun parseReleases(array: JsonArray?): List<GitHubRelease> {
         if (array == null) return emptyList()
         return array.mapNotNull { (it as? JsonObject)?.let(::parseRelease) }
@@ -673,7 +808,26 @@ class GitHubChecker(
             prerelease = obj.bool("prerelease") ?: false,
             draft = obj.bool("draft") ?: false,
             publishedAt = obj.string("published_at").orEmpty(),
+            assets = parseAssets(obj["assets"] as? JsonArray),
         )
+    }
+
+    /**
+     * The files on one release.
+     *
+     * An asset with no name is dropped rather than counted under a blank one:
+     * every reader downstream groups by name, and a nameless row would collect
+     * every malformed asset in the repository into one meaningless total. A
+     * missing `download_count` reads as zero, which is what an asset nobody has
+     * fetched reports anyway.
+     */
+    private fun parseAssets(array: JsonArray?): List<GitHubAsset> {
+        if (array == null) return emptyList()
+        return array.mapNotNull { element ->
+            val obj = element as? JsonObject ?: return@mapNotNull null
+            val name = obj.string("name")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            GitHubAsset(name = name, downloads = obj.int("download_count") ?: 0)
+        }
     }
 
     companion object {
@@ -688,6 +842,33 @@ class GitHubChecker(
          */
         const val ITEMS_PER_PAGE = 20
         const val RELEASES_PER_PAGE = 10
+
+        /**
+         * Releases per page when the download counts are being read.
+         *
+         * GitHub's maximum, and the reason is arithmetic rather than greed: the
+         * counts only exist in the release payload, so a smaller page means a
+         * second request to reach releases the first one left out. This
+         * repository's 38 tags fit in one call at this size.
+         */
+        const val DOWNLOADS_PER_PAGE = 100
+
+        /**
+         * Pages the download walk will follow before it stops and says so.
+         *
+         * Three hundred releases, which covers all but a handful of projects.
+         * Past it the total is reported as a floor rather than quietly short.
+         */
+        const val DOWNLOADS_PAGE_CAP = 3
+
+        /**
+         * Requests that must remain before the download call is considered.
+         *
+         * The same guard [COMMENTS_BUDGET_FLOOR] applies to the comment track,
+         * for the same reason: a wide call on a device near its hourly ceiling
+         * must not take another monitor's repository call down with it.
+         */
+        const val DOWNLOADS_BUDGET_FLOOR = 3
 
         /**
          * Comments per poll, and the reason it is the maximum GitHub allows.

@@ -106,6 +106,64 @@ data class GitHubWatch(
      * on the keystroke that produced it and the second login cannot be typed.
      */
     val commentMutedText: String = "",
+
+    // ---- release downloads --------------------------------------------------
+
+    /**
+     * Count what the release files have been downloaded.
+     *
+     * Off by default, and that is load bearing rather than taste, for the same
+     * reason written against [notifyOnComments]: a watch stored by an older
+     * build takes the default when the update lands. Defaulting to true would
+     * widen the releases call from five kilobytes to about two hundred and
+     * forty for every repository monitor already on a phone, because the counts
+     * exist only in the full release list.
+     *
+     * It adds no request on a repository whose releases fit one page. The call
+     * it makes is the one the release watcher was making anyway, asked at a
+     * larger page size.
+     */
+    val trackDownloads: Boolean = false,
+
+    /**
+     * Sum every release rather than only the newest.
+     *
+     * On by default once [trackDownloads] is on, because it is what the feature
+     * was asked for and it costs nothing extra: the same response already
+     * carries every release on the page.
+     */
+    val downloadsAcrossAllReleases: Boolean = true,
+
+    /**
+     * How often the count is refreshed.
+     *
+     * [DigestMode.OFF] means every check here, which is the default and the
+     * right answer: the call replaces the release watcher's own call rather
+     * than joining it. The slower positions exist for somebody on a data cap
+     * who would rather not spend a quarter of a megabyte every quarter hour.
+     */
+    val downloadsRefresh: DigestMode = DigestMode.OFF,
+
+    /**
+     * Which files count, exactly as the user typed it.
+     *
+     * Raw text, which inverts the arrangement [issueKeywords] uses, for the
+     * reason [commentMutedText] already gives: re-parsing on every keystroke
+     * erases the comma that separates two entries on the keystroke that
+     * produced it, and the second entry cannot be typed.
+     *
+     * Empty means every file. See [GitHubDownloads.matches].
+     */
+    val downloadFilterText: String = "",
+
+    /** The master switch for telling anybody about a download. */
+    val notifyOnDownloads: Boolean = false,
+
+    /** Any increase at all, however small. */
+    val notifyOnEveryDownload: Boolean = true,
+    val notifyOnDownloadMilestones: Boolean = true,
+    val downloadMilestones: List<Int> = DEFAULT_DOWNLOAD_MILESTONES,
+    val downloadDigest: DigestMode = DigestMode.OFF,
 ) {
     val repository: GitHubRepo get() = GitHubRepo(owner, repo)
 
@@ -118,6 +176,9 @@ data class GitHubWatch(
 
     /** Parsed on read, so the stored string stays whatever was typed. */
     val commentMutedAuthors: List<String> get() = splitTerms(commentMutedText)
+
+    /** Parsed on read, for the same reason. Empty means every file counts. */
+    val downloadFilters: List<String> get() = splitTerms(downloadFilterText)
 
     fun withKeywordsText(raw: String): GitHubWatch = copy(issueKeywords = splitTerms(raw))
 
@@ -179,6 +240,11 @@ data class GitHubWatch(
             if (watchPullRequests) add("pull requests")
             if (notifyOnComments) add("comments")
             if (watchReleases) add("releases")
+            // Just the word. This list is separated by dots and every other
+            // term in it is one or two words, so "downloads, all releases"
+            // smuggled a comma into a comma-free line to say something the
+            // card already states under "Counted over".
+            if (trackDownloads) add("downloads")
         }.joinToString(" · ").ifBlank { "Nothing selected" }
 
     companion object {
@@ -198,6 +264,20 @@ data class GitHubWatch(
          */
         val DEFAULT_MILESTONES: List<Int> =
             listOf(10, 25, 50, 100, 250, 500, 1_000, 2_500, 5_000, 10_000, 25_000, 50_000)
+
+        /**
+         * The same idea for downloads, starting an order of magnitude higher.
+         *
+         * A download is not a star: one release of this app took 295 in the
+         * time it took to gain a handful of stars. Reusing [DEFAULT_MILESTONES]
+         * would have fired six times in the first week and then said nothing
+         * for a year, which is the opposite of what a milestone is for.
+         */
+        val DEFAULT_DOWNLOAD_MILESTONES: List<Int> =
+            listOf(
+                100, 250, 500, 1_000, 2_500, 5_000, 10_000, 25_000,
+                50_000, 100_000, 250_000, 500_000, 1_000_000,
+            )
 
         private fun splitTerms(raw: String): List<String> = raw
             .split(',', '\n')
@@ -272,6 +352,51 @@ data class GitHubState(
     val lastReleaseTag: String = "",
     val lastReleaseName: String = "",
     val lastReleaseUrl: String = "",
+
+    // ---- release downloads --------------------------------------------------
+    /**
+     * The download track's own first sighting, for the reason each of the other
+     * tracks carries one: a monitor created with downloads off never asks for
+     * the wide endpoint, so the day the user switches it on is the day this
+     * track sees its first response. A watermark of zero on that day would
+     * announce the repository's entire download history as news.
+     */
+    val downloadsSeeded: Boolean = false,
+
+    /**
+     * What the newest release and every release have accumulated, over the
+     * files the filter lets through.
+     *
+     * `-1` until read, never `0`, for the reason [RepoFacts] gives: a
+     * repository whose files have genuinely never been fetched is a real answer
+     * and must not be indistinguishable from one nothing has looked at.
+     */
+    val latestDownloads: Int = -1,
+    val totalDownloads: Int = -1,
+
+    /**
+     * What [totalDownloads] actually covers.
+     *
+     * [totalComplete] is false when the page walk hit its cap or a rate limit
+     * stopped it part way. The number is then a floor rather than a total, and
+     * the card has to say so: a total that silently undercounts is the app
+     * lying about a number.
+     */
+    val totalCoversReleases: Int = 0,
+    val totalComplete: Boolean = false,
+
+    val downloadsByFile: List<FileDownloads> = emptyList(),
+    /** Distinct extensions seen, so the setup screen can offer them as chips. */
+    val knownAssetTypes: List<String> = emptyList(),
+
+    val downloadsReadAt: Long = 0L,
+    /** The refresh cadence gate, and the back-off after a refusal. */
+    val downloadsRetryAt: Long = 0L,
+    val downloadsFailures: Int = 0,
+
+    /** Star-style digest window, anchored on a persisted count. */
+    val digestDownloadsFrom: Int = -1,
+    val digestDownloadsSince: Long = 0L,
 
     // ---- conditional GETs ---------------------------------------------------
     // One per endpoint. An authenticated 304 costs nothing against the primary
@@ -399,6 +524,15 @@ data class GitHubRelease(
     val prerelease: Boolean = false,
     val draft: Boolean = false,
     val publishedAt: String = "",
+    /**
+     * The files attached to it, empty unless the poll asked for the list.
+     *
+     * Defaulted so every existing construction site keeps compiling, and empty
+     * rather than null because "this release has no files" and "this poll did
+     * not ask" are the same thing to every reader here: both sum to zero and
+     * neither is a claim.
+     */
+    val assets: List<GitHubAsset> = emptyList(),
 ) {
     /** What the notification calls it: the release name, or the tag. */
     val displayName: String get() = name.ifBlank { tag }
@@ -430,6 +564,21 @@ data class GitHubSnapshot(
     val issuesChanged: Boolean = false,
     val release: GitHubRelease? = null,
     val releaseChanged: Boolean = false,
+    /**
+     * What the release files have accumulated, or null when this poll did not
+     * ask. Null and zero are different answers and the decider reads them so.
+     */
+    val downloads: DownloadReading? = null,
+    /**
+     * File types seen on whatever releases this poll read.
+     *
+     * Separate from [downloads] on purpose. Every release payload carries its
+     * assets, including the single-release one a monitor that only watches
+     * releases already fetches, so the setup screen can offer real chips before
+     * anybody has ever switched counting on. Tying this to the download reading
+     * meant the chips appeared only after a save and a second visit.
+     */
+    val assetTypes: List<String> = emptyList(),
     val comments: List<GitHubComment> = emptyList(),
     /** A 200 arrived and [comments] is what it said. */
     val commentsChanged: Boolean = false,
@@ -453,3 +602,20 @@ data class GitHubEtags(
     val releases: String = "",
     val comments: String = "",
 )
+
+/**
+ * Add or remove one term from the download filter, keeping the user's text.
+ *
+ * Rewrites the raw string rather than the parsed list, because that string is
+ * what the field shows: a chip that edited a list and left the text behind
+ * would make the two controls disagree about the same setting.
+ */
+fun GitHubWatch.toggleDownloadFilter(term: String): GitHubWatch {
+    val current = downloadFilters
+    val next = if (current.any { it.equals(term, ignoreCase = true) }) {
+        current.filterNot { it.equals(term, ignoreCase = true) }
+    } else {
+        current + term
+    }
+    return copy(downloadFilterText = next.joinToString(", "))
+}

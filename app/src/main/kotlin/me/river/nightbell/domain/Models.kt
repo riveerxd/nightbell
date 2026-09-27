@@ -786,8 +786,38 @@ data class RepoFacts(
     val commentId: Long = 0L,
     val commentIssue: Int = 0,
     val commentAuthor: String = "",
+    /**
+     * What the release files had been downloaded when this check ran.
+     *
+     * Appended, like everything above, so a positional construction elsewhere
+     * keeps meaning what it did. `-1` is "not measured", which is every sample
+     * written before the track existed and every sample from a monitor that
+     * does not watch downloads, and it is why [GitHubActivity] can tell a real
+     * zero from a silence.
+     */
+    val latestDownloads: Int = -1,
+    val totalDownloads: Int = -1,
+    /**
+     * [totalDownloads] came from a page walk that reached the end.
+     *
+     * Recorded per sample rather than derived, because two samples can disagree
+     * about it: a repository that grew past the page cap between two checks has
+     * a complete reading followed by a floor, and differencing those two would
+     * report a fall that never happened.
+     */
+    val downloadsComplete: Boolean = false,
 ) {
     val measured: Boolean get() = stars >= 0
+
+    /**
+     * The number the history differences, or `-1` when there is none to trust.
+     *
+     * The cumulative total, because it is the one that only ever goes up while
+     * the repository keeps its releases. A latest-only monitor stores the
+     * newest release's count here too, since that is the whole of what it
+     * counted, so both modes difference the same field.
+     */
+    val downloadsReading: Int get() = if (downloadsComplete) totalDownloads else -1
 }
 
 @Serializable

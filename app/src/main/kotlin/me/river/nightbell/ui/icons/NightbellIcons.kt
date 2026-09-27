@@ -291,4 +291,39 @@ object NightbellIcons {
     // two adjacent controls wearing the same mark read as the same operation.
     // This is an arrow arriving on a floor: something lands on this device.
     val Download = stroke("Download", "M12 3.4 L12 14.6 M7.4 10 L12 14.6 L16.6 10 M5 19.4 L19 19.4")
+
+    // A release is a tag, and for most of this app's life it wore the arrow that
+    // means "a file lands on this device" instead. That mark belongs to the two
+    // places something is actually downloaded. This one is the label tied to a
+    // commit: a square corner with the eyelet, and a point at the far end.
+    // GitHub's own marks for the two counts beside the star, because a
+    // repository card is read by people who know those shapes. The warning
+    // triangle that stood in for an open issue said "something is wrong", and an
+    // open issue is not a fault.
+    val IssueOpen = stroke(
+        "IssueOpen",
+        "M12 3.4 A8.6 8.6 0 1 0 12 20.6 A8.6 8.6 0 1 0 12 3.4 " +
+            "M12 10.9 A1.1 1.1 0 1 0 12 13.1 A1.1 1.1 0 1 0 12 10.9",
+    )
+    // The pair matters more than either mark. An issue closing is the same
+    // object in the other state, so it is the same ring with a check in it
+    // rather than a bare tick, which is what the history row wore and which
+    // reads as "a check passed" on a screen full of checks that did.
+    val IssueClosed = stroke(
+        "IssueClosed",
+        "M12 3.4 A8.6 8.6 0 1 0 12 20.6 A8.6 8.6 0 1 0 12 3.4 " +
+            "M8.1 12.1 L10.9 14.9 L15.9 9.5",
+    )
+    val Fork = stroke(
+        "Fork",
+        "M6.5 3.4 A2.2 2.2 0 1 0 6.5 7.8 A2.2 2.2 0 1 0 6.5 3.4 " +
+            "M17.5 3.4 A2.2 2.2 0 1 0 17.5 7.8 A2.2 2.2 0 1 0 17.5 3.4 " +
+            "M12 16.2 A2.2 2.2 0 1 0 12 20.6 A2.2 2.2 0 1 0 12 16.2 " +
+            "M6.5 7.8 L6.5 12.4 L17.5 12.4 L17.5 7.8 M12 12.4 L12 16.2",
+    )
+
+    val Tag = stroke(
+        "Tag",
+        "M3.4 3.4 L12.6 3.4 L20.6 11.4 L11.4 20.6 L3.4 12.6 Z M7.8 7.8 L7.9 7.8",
+    )
 }

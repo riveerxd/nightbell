@@ -764,6 +764,9 @@ class AlertCenter(private val context: Context) {
         is GitHubEvent.NewIssue,
         is GitHubEvent.NewPull,
         is GitHubEvent.NewRelease,
+        is GitHubEvent.Downloads,
+        is GitHubEvent.DownloadMilestone,
+        is GitHubEvent.DownloadDigest,
         -> Severity.NEWS
     }
 

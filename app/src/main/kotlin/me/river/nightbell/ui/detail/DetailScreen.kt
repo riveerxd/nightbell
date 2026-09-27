@@ -59,6 +59,7 @@ import me.river.nightbell.domain.CertificateWatch
 import me.river.nightbell.domain.DigestMode
 import me.river.nightbell.domain.GitHubActivity
 import me.river.nightbell.domain.GitHubState
+import me.river.nightbell.domain.GitHubWatch
 import me.river.nightbell.domain.githubInstantMs
 import me.river.nightbell.domain.Health
 import me.river.nightbell.domain.Monitor
@@ -88,6 +89,7 @@ import me.river.nightbell.ui.components.LatencyBars
 import me.river.nightbell.ui.components.LatencyBudgetLegend
 import me.river.nightbell.ui.components.MetricTile
 import me.river.nightbell.ui.components.MicroTag
+import me.river.nightbell.ui.components.UNIT_GAP
 import me.river.nightbell.ui.components.NightbellButton
 import me.river.nightbell.ui.components.SectionHeader
 import me.river.nightbell.ui.components.StaggeredEntrance
@@ -640,16 +642,17 @@ private fun HeroCard(
 private fun RepoHeroFacts(monitor: Monitor, runtime: MonitorRuntime) {
     val state = runtime.github
     val watch = monitor.github
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
+    // No uniform spacing on this row. The gap between a number and its unit is
+    // not the gap between two separate facts, and one value for both put as
+    // much air inside "59 ★" as it put around the dot after it.
+    Row(verticalAlignment = Alignment.CenterVertically) {
         if (watch.notifyOnStars) {
             Text(
                 text = state.lastStarCount.toString(),
                 style = MaterialTheme.typography.bodySmall,
                 color = NightbellColors.TextSecondary,
             )
+            Spacer(Modifier.width(UNIT_GAP))
             Icon(
                 NightbellIcons.Star,
                 contentDescription = "stars",
@@ -658,6 +661,7 @@ private fun RepoHeroFacts(monitor: Monitor, runtime: MonitorRuntime) {
             )
         }
         if (watch.notifyOnIssues || watch.watchPullRequests) {
+            if (watch.notifyOnStars) Spacer(Modifier.width(6.dp))
             Text(
                 text = (if (watch.notifyOnStars) "· " else "") +
                     if (state.openIssues == 1) "1 open issue" else "${state.openIssues} open issues",
@@ -1366,6 +1370,127 @@ private fun EventRow(sample: Sample) {
  * of a narrow card is the tightest of the three, and a tile reading "open iss…"
  * is worse than one reading it a point smaller.
  */
+/**
+ * The lines under the download tiles: what the number covers, and what it is.
+ *
+ * Every one of these exists because the number on its own is ambiguous in a way
+ * that matters. A total that stopped at the page cap is a floor. A filter that
+ * matched nothing produces a zero that reads as "nobody downloaded this". And
+ * GitHub's counter is requests rather than people, which is stated here in the
+ * same terms `deploy/scripts/downloads.sh` already states it, because somebody
+ * reading "+7 downloads" will otherwise picture seven people.
+ */
+@Composable
+private fun DownloadDetail(watch: GitHubWatch, state: GitHubState, nowMs: Long) {
+    if (!state.downloadsSeeded) {
+        ConfigRow("Downloads", "Not read yet")
+        return
+    }
+
+    if (watch.downloadFilters.isNotEmpty()) {
+        ConfigRow("Counting", watch.downloadFilterText)
+        if (state.downloadsByFile.isEmpty()) {
+            // Not a zero. A zero here would be a claim about the repository,
+            // and this is a fact about the filter.
+            ConfigRow("No match", "No release file matches that")
+        }
+    }
+
+    state.downloadsByFile.forEach { file ->
+        ConfigRow(
+            file.pattern,
+            buildString {
+                append(file.downloads)
+                append(if (file.downloads == 1) " download" else " downloads")
+                append(" across ")
+                append(file.releases)
+                append(if (file.releases == 1) " release" else " releases")
+            },
+        )
+    }
+
+    if (watch.downloadsAcrossAllReleases && state.totalCoversReleases > 0) {
+        ConfigRow(
+            "Counted over",
+            if (state.totalComplete) {
+                "every release, ${state.totalCoversReleases} of them"
+            } else {
+                "the newest ${state.totalCoversReleases} releases, so the total is at least this"
+            },
+        )
+    }
+
+    if (state.downloadsReadAt > 0L) {
+        ConfigRow("Counted", formatRelative(state.downloadsReadAt, nowMs))
+    }
+
+    Spacer(Modifier.height(10.dp))
+    Text(
+        text = "GitHub counts requests for the file, not people. Mirrors, build servers and " +
+            "crawlers that fetch a whole release are in this number, and it is not updated " +
+            "the moment somebody downloads.",
+        style = MaterialTheme.typography.bodySmall,
+        color = NightbellColors.TextTertiary,
+    )
+    Spacer(Modifier.height(10.dp))
+}
+
+/**
+ * A download count over the thing it counted.
+ *
+ * Two lines rather than the one [RepoStatTile] draws, because this tile has
+ * three things to say and that one can carry two. The number and the glyph are
+ * the reading, tight together so they parse as one value; the caption under
+ * them is the scope, and it is the release tag itself where there is one.
+ */
+@Composable
+private fun RepoDownloadTile(
+    value: String,
+    caption: String,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(NightbellRadii.inCard)
+    // FlowRow rather than a width breakpoint. The number and its caption sit on
+    // one line wherever they both fit and the caption drops underneath where
+    // they do not, so one piece of code covers a wide phone, a narrow one, a
+    // long release tag and the largest font scale without anybody picking a dp
+    // value that is right on the handset it was tried on.
+    FlowRow(
+        modifier
+            .clip(shape)
+            .background(NightbellColors.sheen(0.05f))
+            .border(1.dp, NightbellColors.sheen(0.07f), shape)
+            .padding(horizontal = 10.dp, vertical = 11.dp),
+        horizontalArrangement = Arrangement.Center,
+        itemVerticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp),
+                color = NightbellColors.TextPrimary,
+                maxLines = 1,
+            )
+            Spacer(Modifier.width(UNIT_GAP))
+            Icon(
+                NightbellIcons.Download,
+                contentDescription = "downloads",
+                tint = NightbellColors.TextTertiary,
+                modifier = Modifier.size(15.dp),
+            )
+            // Inside the first item rather than as arrangement spacing, so it
+            // travels with the number and disappears when the caption wraps.
+            Spacer(Modifier.width(7.dp))
+        }
+        Text(
+            text = caption,
+            style = MaterialTheme.typography.bodySmall,
+            color = NightbellColors.TextTertiary,
+            maxLines = 1,
+        )
+    }
+}
+
 @Composable
 private fun RepoStatTile(
     value: String,
@@ -1390,7 +1515,9 @@ private fun RepoStatTile(
             color = NightbellColors.TextPrimary,
             maxLines = 1,
         )
-        Spacer(Modifier.width(6.dp))
+        // Same rule as MicroTag: a unit glyph sits tight against its number,
+        // a word after it does not.
+        Spacer(Modifier.width(if (icon != null) UNIT_GAP else 6.dp))
         if (icon != null) {
             Icon(
                 icon,
@@ -1467,7 +1594,7 @@ private fun ActivityRow(row: GitHubActivity.Row, nowMs: Long) {
         }
 
         is GitHubActivity.Issue -> {
-            icon = NightbellIcons.Warning
+            icon = NightbellIcons.IssueOpen
             accent = NightbellColors.Sky
             title = "#${row.number} ${row.title}".trim()
             subtitle = "Issue opened"
@@ -1475,7 +1602,7 @@ private fun ActivityRow(row: GitHubActivity.Row, nowMs: Long) {
         }
 
         is GitHubActivity.IssueCount -> {
-            icon = NightbellIcons.Check
+            icon = NightbellIcons.IssueClosed
             accent = if (row.closed > 0) NightbellColors.Mint else NightbellColors.Amber
             val moved = kotlin.math.abs(row.closed)
             title = if (row.closed > 0) {
@@ -1498,15 +1625,25 @@ private fun ActivityRow(row: GitHubActivity.Row, nowMs: Long) {
         }
 
         is GitHubActivity.Release -> {
-            icon = NightbellIcons.Import
+            icon = NightbellIcons.Tag
             accent = NightbellColors.Mint
             title = "Released ${row.tag}"
             subtitle = "New release published"
             trailing = ""
         }
 
+        is GitHubActivity.Downloads -> {
+            icon = NightbellIcons.Download
+            // Not mint. Mint is the colour that means a service is up, and a
+            // download count is not a health reading.
+            accent = NightbellColors.TextSecondary
+            title = if (row.delta == 1) "1 download" else "${row.delta} downloads"
+            subtitle = "${row.from} to ${row.to}"
+            trailing = ""
+        }
+
         is GitHubActivity.Forks -> {
-            icon = NightbellIcons.Layers
+            icon = NightbellIcons.Fork
             accent = NightbellColors.Violet
             title = if (row.to == 1) "1 fork" else "${row.to} forks"
             subtitle = "was ${row.from}"
@@ -1614,11 +1751,13 @@ private fun GitHubHealthCard(
             RepoStatTile(
                 value = state.openIssues.toString(),
                 label = if (state.openIssues == 1) "open issue" else "open issues",
+                icon = NightbellIcons.IssueOpen,
                 modifier = Modifier.weight(1f),
             )
             RepoStatTile(
                 value = state.forks.toString(),
                 label = if (state.forks == 1) "fork" else "forks",
+                icon = NightbellIcons.Fork,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -1634,6 +1773,41 @@ private fun GitHubHealthCard(
             )
         }
 
+        // Downloads get a row of their own rather than a fourth tile above.
+        // That row is three equal weights with a comment saying why, and a
+        // fourth would break it at the largest font scale; dropping the forks
+        // tile to make room would mean a fact disappearing because an unrelated
+        // setting changed, which is something the user can only find by trying.
+        if (monitor.github.trackDownloads && state.downloadsSeeded) {
+            // The glyph is the unit, so each tile reads "305 downloads" the way
+            // the one above reads "59 stars", and the caption underneath says
+            // which slice it counted. The caption is the tag itself, because
+            // "v3.13.0" answers *which* release without spending a word on it.
+            Row(
+                Modifier.fillMaxWidth().testTag("github-download-metrics"),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                RepoDownloadTile(
+                    value = state.latestDownloads.coerceAtLeast(0).toString(),
+                    caption = state.lastReleaseTag.ifBlank { "newest release" },
+                    modifier = Modifier.weight(1f),
+                )
+                if (monitor.github.downloadsAcrossAllReleases) {
+                    RepoDownloadTile(
+                        value = buildString {
+                            append(state.totalDownloads.coerceAtLeast(0))
+                            // The one character that stops a floor reading as a
+                            // total. The sentence under the card says the rest.
+                            if (!state.totalComplete) append('+')
+                        },
+                        caption = "total",
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+
         ConfigRow("Watching", monitor.github.summary)
         if (state.lastReleaseTag.isNotBlank()) {
             ConfigRow(
@@ -1647,6 +1821,7 @@ private fun GitHubHealthCard(
         if (state.lastIssueNumber > 0) {
             ConfigRow("Latest issue", "#${state.lastIssueNumber} ${state.lastIssueTitle}")
         }
+        if (monitor.github.trackDownloads) DownloadDetail(monitor.github, state, nowMs)
         val pushed = githubInstantMs(state.pushedAt)
         if (pushed > 0L) ConfigRow("Last push", formatRelative(pushed, nowMs))
         if (state.watchers > 0) ConfigRow("Watching it", state.watchers.toString())
@@ -1686,7 +1861,7 @@ private fun GitHubHealthCard(
                 NightbellButton(
                     text = "Latest issue",
                     onClick = { onOpen(state.lastIssueUrl) },
-                    icon = NightbellIcons.Warning,
+                    icon = NightbellIcons.IssueOpen,
                     tone = ButtonTone.Secondary,
                     modifier = Modifier.weight(1f),
                 )
@@ -1697,7 +1872,7 @@ private fun GitHubHealthCard(
             NightbellButton(
                 text = "Latest release",
                 onClick = { onOpen(state.lastReleaseUrl) },
-                icon = NightbellIcons.Import,
+                icon = NightbellIcons.Tag,
                 tone = ButtonTone.Secondary,
                 modifier = Modifier.fillMaxWidth(),
             )

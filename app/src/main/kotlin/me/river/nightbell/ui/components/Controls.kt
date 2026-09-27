@@ -668,6 +668,15 @@ fun <T> ChipSelector(
     modifier: Modifier = Modifier,
     accent: Color = NightbellColors.Aqua,
     icon: ((T) -> ImageVector?)? = null,
+    /**
+     * Which chips read as chosen.
+     *
+     * Defaults to the single selection this started as. A caller whose chips
+     * are independent of one another passes its own test instead, so a set of
+     * filters looks and behaves like every other chip row in the app rather
+     * than growing a second chip that only resembles the first.
+     */
+    isSelected: (T) -> Boolean = { it == selected },
 ) {
     FlowRow(
         modifier = modifier.fillMaxWidth(),
@@ -677,10 +686,10 @@ fun <T> ChipSelector(
         verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {
         options.forEach { option ->
-            val isSelected = option == selected
+            val chosen = isSelected(option)
             val chipShape = RoundedCornerShape(NightbellRadii.chip)
             val scale by animateFloatAsState(
-                targetValue = if (isSelected) 1f else 0.98f,
+                targetValue = if (chosen) 1f else 0.98f,
                 animationSpec = spring(dampingRatio = 0.6f),
                 label = "chipScale",
             )
@@ -701,7 +710,7 @@ fun <T> ChipSelector(
                     .defaultMinSize(minWidth = CHIP_MIN_WIDTH)
                     .clip(chipShape)
                     .background(
-                        if (isSelected) {
+                        if (chosen) {
                             Brush.linearGradient(
                                 listOf(accent.copy(alpha = 0.30f), accent.copy(alpha = 0.14f)),
                             )
@@ -714,7 +723,7 @@ fun <T> ChipSelector(
                     .border(
                         BorderStroke(
                             1.dp,
-                            if (isSelected) accent.copy(alpha = 0.55f) else NightbellColors.sheen(0.10f),
+                            if (chosen) accent.copy(alpha = 0.55f) else NightbellColors.sheen(0.10f),
                         ),
                         chipShape,
                     )
@@ -723,7 +732,7 @@ fun <T> ChipSelector(
                         interactionSource = remember { MutableInteractionSource() },
                     ) { onSelect(option) }
                     .padding(horizontal = 16.dp)
-                    .semantics { stateDescription = if (isSelected) "Selected" else "Not selected" },
+                    .semantics { stateDescription = if (chosen) "Selected" else "Not selected" },
                 verticalAlignment = Alignment.CenterVertically,
                 // Centred, not merely spaced. `spacedBy` alone packs from the
                 // start, so every label shorter than CHIP_MIN_WIDTH sat left of
@@ -735,14 +744,14 @@ fun <T> ChipSelector(
                     Icon(
                         it,
                         contentDescription = null,
-                        tint = if (isSelected) accent else NightbellColors.TextTertiary,
+                        tint = if (chosen) accent else NightbellColors.TextTertiary,
                         modifier = Modifier.size(13.dp),
                     )
                 }
                 Text(
                     text = label(option),
                     style = MaterialTheme.typography.labelLarge,
-                    color = if (isSelected) NightbellColors.TextPrimary else NightbellColors.TextSecondary,
+                    color = if (chosen) NightbellColors.TextPrimary else NightbellColors.TextSecondary,
                 )
             }
         }

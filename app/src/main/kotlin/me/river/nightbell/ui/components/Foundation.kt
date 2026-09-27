@@ -444,7 +444,10 @@ fun MicroTag(
             .background(background)
             .padding(horizontal = 9.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        // Tighter when the glyph is the unit. "59 ★" is one reading and wants
+        // the gap inside "491 ms", not the gap between a category icon and the
+        // words after it, which is what the wider value is for.
+        horizontalArrangement = Arrangement.spacedBy(if (iconAtEnd) UNIT_GAP else 5.dp),
     ) {
         if (icon != null && !iconAtEnd) {
             Icon(icon, contentDescription = iconDescription, tint = color, modifier = Modifier.size(11.dp))
@@ -459,6 +462,9 @@ fun MicroTag(
         }
     }
 }
+
+/** The gap between a number and the glyph that is its unit. */
+internal val UNIT_GAP = 2.dp
 
 /**
  * The rounded tile that fronts a monitor row.
