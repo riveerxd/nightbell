@@ -1,0 +1,5 @@
+Page element monitors now use a small fraction of the mobile data they did. They load from cache, skip fonts, video and trackers, and stop as soon as the element is found, while still asking the server for the page on every check. On real sites a check went from 150 to 350 KB down to under 10 KB. Settings shows what your monitors cost a month with the data saver on and off.
+
+The data saver is on by default, under Settings, Checks. Each page monitor still does one full load a day with no cache, so a broken file on the site cannot hide behind the cache for longer than that. A repository monitor that counts downloads reads the counts at most once an hour while the saver is on.
+
+If a page check has to see exactly what a first time visitor sees on every load, turn the saver off. The switch shows what that costs.

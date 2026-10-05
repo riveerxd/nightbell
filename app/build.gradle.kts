@@ -555,8 +555,17 @@ android {
         // is the mark the download count needed, so releases take a tag now. An
         // open issue wore the warning triangle, which claims a fault where there
         // is none.
-        versionCode = 43
-        versionName = "3.14.0"
+        //
+        // 3.15.0 stops a page check downloading the whole site every time. Ten
+        // page monitors at fifteen minutes cost one phone 7.14 GB of mobile data
+        // in a month, because the WebView ran with its cache off. The data saver
+        // loads through the cache, revalidates the document with its server on
+        // every check, skips fonts, media and trackers, and stops a load once
+        // every element is found and passing. A round of five real sites went
+        // from 2.74 MB to 199 KB. One cold load a day per monitor keeps a broken
+        // file from hiding behind the cache for longer than that.
+        versionCode = 44
+        versionName = "3.15.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
