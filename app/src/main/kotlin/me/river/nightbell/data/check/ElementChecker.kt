@@ -23,6 +23,7 @@ import me.river.nightbell.data.web.PickerScripts
 import me.river.nightbell.domain.Assertions
 import me.river.nightbell.domain.BrowserState
 import me.river.nightbell.domain.CheckResult
+import me.river.nightbell.domain.DataSaver
 import me.river.nightbell.domain.ElementTarget
 import me.river.nightbell.domain.FailureKind
 import me.river.nightbell.domain.PageLoadFailure
@@ -113,7 +114,12 @@ class ElementChecker(
         val anyFound: Boolean get() = results.any { it.found }
     }
 
-    suspend fun check(monitor: Monitor, certPin: String = ""): CheckResult {
+    /**
+     * @param cached load through the WebView's cache and skip what cannot change
+     *   the verdict. The page itself is still asked of its server every time; see
+     *   [locateAll]. False is the original behaviour, a cold load of everything.
+     */
+    suspend fun check(monitor: Monitor, certPin: String = "", cached: Boolean = false): CheckResult {
         val targets = monitor.targets
         if (targets.isEmpty()) {
             return CheckResult(
@@ -158,6 +164,7 @@ class ElementChecker(
                     certPin,
                     monitor.browserState,
                     record,
+                    cached,
                 )
             } else {
                 WebViewProxy.routed(endpoint) {
@@ -169,6 +176,7 @@ class ElementChecker(
                         certPin,
                         monitor.browserState,
                         record,
+                        cached,
                     )
                 }
             }
@@ -360,6 +368,14 @@ class ElementChecker(
          */
         state: BrowserState = BrowserState(),
         onExpiry: (PageExpiry) -> Unit = {},
+        /**
+         * Subresources come from cache where their headers allow it, and fonts,
+         * media and trackers are not fetched at all. The document is requested
+         * with `max-age=0`, so Chromium revalidates it with its server on every
+         * load: a dead origin still fails the check, it just stops costing the
+         * whole bundle every fifteen minutes. See [DataSaver].
+         */
+        cached: Boolean = false,
     ): PageResult? = withContext(Dispatchers.Main) {
         if (targets.isEmpty()) return@withContext PageResult()
         var webView: WebView? = null
@@ -375,7 +391,7 @@ class ElementChecker(
                 // network did.
                 var mainFrameError = PageLoadFailure.NONE
                 val view = WebView(context).also { webView = it }
-                configure(view)
+                configure(view, cached)
                 Diag.log(
                     LogEvent.PAGE_LOAD_START,
                     LogField.route("url", url),
@@ -456,6 +472,15 @@ class ElementChecker(
                         request: WebResourceRequest?,
                     ): WebResourceResponse? {
                         trace.requestsStarted++
+                        if (cached && request?.isForMainFrame != true &&
+                            DataSaver.shouldBlock(request?.url?.toString().orEmpty())
+                        ) {
+                            trace.requestsSkipped++
+                            return WebResourceResponse(
+                                "text/plain", "utf-8", 204, "No Content", emptyMap(),
+                                java.io.ByteArrayInputStream(ByteArray(0)),
+                            )
+                        }
                         return null
                     }
 
@@ -590,7 +615,7 @@ class ElementChecker(
 
                 Diag.log(
                     LogEvent.PAGE_CONFIG,
-                    LogField.tag("cache", "no_cache"),
+                    LogField.tag("cache", if (cached) "revalidate" else "no_cache"),
                     LogField.of("images", false),
                     LogField.of("js", true),
                     LogField.of("viewport_w", VIEWPORT_WIDTH),
@@ -614,7 +639,39 @@ class ElementChecker(
                     )
                 }
                 trace.stage = LoadStage.NAVIGATING
-                view.loadUrl(url)
+                if (cached) view.loadUrl(url, REVALIDATE) else view.loadUrl(url)
+
+                val script = PickerScripts.locateMany(targets)
+                // Under the saver, the verdict is read while the page is still
+                // loading, and a page whose every element is already there and
+                // passing is stopped on the spot. Measured on a real fleet: one
+                // site pulled about 2 MB of uncacheable banner images through
+                // fetch() after its content had rendered, on every check. Only a
+                // passing answer ends the load early. Anything missing or failing
+                // falls through to the full wait below, so no verdict gets weaker.
+                val storageReload = applies && state.localStorage.isNotBlank() && !seededEarly
+                if (cached && !storageReload) {
+                    while (!pageDone.isDone) {
+                        delay(EARLY_POLL_MS)
+                        val early = parsePage(view.evalJs(script), targets.size) ?: continue
+                        if (early.results.all { it.found } && evaluate(targets, early, 0).ok) {
+                            Diag.log(
+                                LogEvent.PAGE_DONE,
+                                LogField.of("found", targets.size),
+                                LogField.of("of", targets.size),
+                                LogField.ms("total", System.currentTimeMillis() - trace.startedAtMs),
+                                LogField.of("requests", trace.requestsStarted),
+                                LogField.of("skipped", trace.requestsSkipped),
+                                LogField.of("early", true),
+                            )
+                            return@withTimeoutOrNull early.copy(
+                                loadError = errors.toString(),
+                                loadErrorCode = mainFrameError,
+                                certSpki = presentedPin,
+                            )
+                        }
+                    }
+                }
                 pageDone.await()
 
                 if (applies && state.localStorage.isNotBlank() && !seededEarly) {
@@ -632,7 +689,6 @@ class ElementChecker(
                     LogField.ms("after", System.currentTimeMillis() - trace.startedAtMs),
                 )
 
-                val script = PickerScripts.locateMany(targets)
                 var attempt = 0
                 var best: PageResult? = null
                 trace.stage = LoadStage.POLLING
@@ -657,6 +713,7 @@ class ElementChecker(
                                 LogField.of("of", targets.size),
                                 LogField.ms("total", System.currentTimeMillis() - trace.startedAtMs),
                                 LogField.of("requests", trace.requestsStarted),
+                                LogField.of("skipped", trace.requestsSkipped),
                             )
                             return@withTimeoutOrNull parsed.copy(
                                 loadError = errors.toString(),
@@ -679,6 +736,7 @@ class ElementChecker(
                     LogField.of("of", targets.size),
                     LogField.ms("total", System.currentTimeMillis() - trace.startedAtMs),
                     LogField.of("requests", trace.requestsStarted),
+                    LogField.of("skipped", trace.requestsSkipped),
                     LogField.of("resource_errors", trace.resourceErrors),
                 )
                 (best ?: PageResult(results = List(targets.size) { Located(found = false) }))
@@ -816,6 +874,7 @@ class ElementChecker(
         var readyState: String = ""
         var pageFinished: Boolean = false
         var requestsStarted: Int = 0
+        var requestsSkipped: Int = 0
         var resourceErrors: Int = 0
         var resourceErrorsLogged: Int = 0
         var consoleErrors: Int = 0
@@ -829,14 +888,14 @@ class ElementChecker(
         return obj["label"]?.jsonPrimitive?.content.orEmpty().take(60)
     }
 
-    private fun configure(view: WebView) {
+    private fun configure(view: WebView, cached: Boolean) {
         view.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
             loadsImagesAutomatically = false
             blockNetworkImage = true
             mediaPlaybackRequiresUserGesture = true
-            cacheMode = WebSettings.LOAD_NO_CACHE
+            cacheMode = if (cached) WebSettings.LOAD_DEFAULT else WebSettings.LOAD_NO_CACHE
             userAgentString = MOBILE_UA
             useWideViewPort = true
             loadWithOverviewMode = true
@@ -898,6 +957,8 @@ class ElementChecker(
         private var continuation: CancellableContinuation<Unit>? = null
         private var done = false
 
+        val isDone: Boolean get() = done
+
         fun complete() {
             if (done) return
             done = true
@@ -926,6 +987,16 @@ class ElementChecker(
         private const val RETRY_DELAY_MS = 900L
         private const val MAX_ATTEMPTS = 5
         private const val SETTLE_BUDGET_MS = 6_000L
+
+        /**
+         * Chromium reads `max-age=0` on the navigation as "validate before use",
+         * not "bypass", so an unchanged document comes back as a 304 and a changed
+         * one in full. Either way the origin was asked.
+         */
+        private val REVALIDATE = mapOf("Cache-Control" to "max-age=0")
+
+        /** How often a saver load is read while it is still loading. */
+        private const val EARLY_POLL_MS = 400L
 
         /** Console lines kept per load. One broken script in a loop is not a log. */
         private const val CONSOLE_LINE_CAP = 12

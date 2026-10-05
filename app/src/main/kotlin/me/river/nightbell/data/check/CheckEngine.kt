@@ -1,6 +1,7 @@
 package me.river.nightbell.data.check
 
 import me.river.nightbell.data.diag.Diag
+import me.river.nightbell.domain.DataSaver
 import me.river.nightbell.domain.LogEvent
 import me.river.nightbell.domain.LogField
 import me.river.nightbell.data.NightbellStore
@@ -123,6 +124,28 @@ class CheckEngine(
     var isOnline: () -> Boolean = { true }
 
     /**
+     * Bytes this app has sent and received since boot, or negative where the
+     * platform will not say. Wired to `TrafficStats` by the graph.
+     *
+     * Read either side of a check to put a number on it. It counts the whole app,
+     * which is the point, because a page check's traffic happens inside the
+     * WebView where no client of ours can count it. The price is that two checks
+     * running at once cannot be told apart, so such a sample is thrown away rather
+     * than split by guesswork. See [DataSaver].
+     */
+    var trafficBytes: () -> Long = { -1L }
+
+    private val checksRunning = java.util.concurrent.atomic.AtomicInteger()
+    private val checksStarted = java.util.concurrent.atomic.AtomicLong()
+
+    /**
+     * When each page monitor last loaded with no cache. In memory on purpose, like
+     * [certProbedAt]: a restart costs one extra cold load, which also refreshes the
+     * full-cost measurement the estimate leans on.
+     */
+    private val coldLoadedAt = mutableMapOf<String, Long>()
+
+    /**
      * Runs the check without touching persisted state, for "Test now".
      *
      * @param certPin the key this monitor is already pinned to, if any. Empty from
@@ -130,8 +153,12 @@ class CheckEngine(
      *   test of a brand new monitor has nothing to compare against and reports
      *   what the server presented.
      */
-    suspend fun dryRun(monitor: Monitor, certPin: String = ""): CheckResult = when (monitor.kind) {
-        MonitorKind.WEBSITE_ELEMENT -> element.check(monitor, certPin)
+    suspend fun dryRun(
+        monitor: Monitor,
+        certPin: String = "",
+        cached: Boolean = false,
+    ): CheckResult = when (monitor.kind) {
+        MonitorKind.WEBSITE_ELEMENT -> element.check(monitor, certPin, cached)
         // A GitHub poll against a blank state: it reads the repository and reports
         // what is there, and because nothing is persisted it cannot seed a
         // baseline or announce anything. Which is exactly what "Test now" means.
@@ -433,6 +460,12 @@ class CheckEngine(
         )
         store.markChecking(monitorId, true)
         var githubOutcome: GitHubChecker.Outcome? = null
+        val coldLoad = monitor.kind == MonitorKind.WEBSITE_ELEMENT &&
+            (!settings.dataSaver || DataSaver.coldDue(coldLoadedAt[monitorId], nowMs()))
+        val alongside = checksRunning.incrementAndGet()
+        val generation = checksStarted.incrementAndGet()
+        val bytesBefore = trafficBytes()
+        var spent: Long? = null
         val result = try {
             if (monitor.kind == MonitorKind.GITHUB_REPO && github != null) {
                 // Polled here rather than through `dryRun`, because the interesting
@@ -446,7 +479,11 @@ class CheckEngine(
                 githubOutcome = outcome
                 outcome.result
             } else {
-                withCertificateExpiry(monitor, before, dryRun(monitor, before.certPin))
+                withCertificateExpiry(
+                    monitor,
+                    before,
+                    dryRun(monitor, before.certPin, cached = !coldLoad),
+                )
             }
         } catch (cancellation: CancellationException) {
             // The single most important catch in this app.
@@ -483,7 +520,36 @@ class CheckEngine(
             noteInternalError(monitor, settings, snapshot.checkerStreak, error)
             null
         } finally {
+            val bytesAfter = trafficBytes()
+            val alone = alongside == 1 && checksStarted.get() == generation
+            checksRunning.decrementAndGet()
+            if (alone && bytesBefore >= 0 && bytesAfter >= bytesBefore) spent = bytesAfter - bytesBefore
             store.markChecking(monitorId, false)
+        }
+        if (coldLoad && result != null) coldLoadedAt[monitorId] = nowMs()
+        val readDownloads = githubOutcome != null &&
+            githubOutcome?.state?.downloadsReadAt != before.github.downloadsReadAt
+        val costMode = if (!settings.dataSaver || coldLoad || readDownloads) {
+            DataSaver.Mode.FULL
+        } else {
+            DataSaver.Mode.SAVER
+        }
+        val bytesSpent = spent
+        val metered: (MonitorRuntime) -> MonitorRuntime = { runtime ->
+            when {
+                bytesSpent == null || bytesSpent <= 0L -> runtime
+                costMode == DataSaver.Mode.FULL ->
+                    runtime.copy(bytesFull = DataSaver.fold(runtime.bytesFull, bytesSpent))
+                else -> runtime.copy(bytesSaver = DataSaver.fold(runtime.bytesSaver, bytesSpent))
+            }
+        }
+        if (bytesSpent != null) {
+            Diag.log(
+                LogEvent.CHECK_BYTES,
+                LogField.monitor(monitorId),
+                LogField.of("bytes", bytesSpent),
+                LogField.tag("mode", costMode.name.lowercase()),
+            )
         }
         // Between the checker and the record: a failure that never reached
         // anything might be this phone rather than the service.
@@ -854,6 +920,7 @@ class CheckEngine(
                     .let(urgentMutation)
                     .let(certMutation)
                     .let(githubMutation)
+                    .let(metered)
             }
         }
         onStateChanged?.invoke()

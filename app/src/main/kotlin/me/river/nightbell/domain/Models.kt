@@ -889,6 +889,13 @@ data class MonitorRuntime(
     val lastElementTexts: List<String> = emptyList(),
 
     /**
+     * Bytes one check moved, averaged, split by how the check ran. See [DataSaver].
+     * Zero is "not measured yet", never "free".
+     */
+    val bytesFull: Long = 0L,
+    val bytesSaver: Long = 0L,
+
+    /**
      * Last-seen counts, ids and ETags for a [MonitorKind.GITHUB_REPO] monitor.
      *
      * Per monitor rather than global, because two monitors on two repositories
@@ -1299,6 +1306,12 @@ data class GlobalSettings(
     val defaultAlert: AlertPolicy = AlertPolicy(),
     val backgroundChecksEnabled: Boolean = true,
     val onlyOnUnmeteredNetwork: Boolean = false,
+    /**
+     * Load pages from cache and skip fonts, media and trackers. See [DataSaver].
+     * On by default: the verdict is the same either way, and off cost one fleet
+     * seven gigabytes in a month.
+     */
+    val dataSaver: Boolean = true,
     val defaultIntervalMinutes: Int = 15,
     val defaultTimeoutSeconds: Int = 15,
     val historyDepth: Int = 60,

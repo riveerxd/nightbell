@@ -1,5 +1,6 @@
 package me.river.nightbell.data.check
 
+import me.river.nightbell.domain.DataSaver
 import me.river.nightbell.domain.CheckResult
 import me.river.nightbell.domain.FailureKind
 import me.river.nightbell.domain.GitHubAsset
@@ -236,8 +237,13 @@ class GitHubChecker(
             var releasesEtag = previous.releasesEtag
             var downloads: DownloadReading? = null
             var assetTypes = emptyList<String>()
+            // The saver holds the wide call to once an hour whatever the refresh
+            // setting says. It is about 51 KB compressed for this repository and
+            // never answers 304, because the counts move on their own.
+            val saverHolds = settings.dataSaver &&
+                nowMs() - previous.downloadsReadAt in 0 until DataSaver.DOWNLOADS_FLOOR_MS
             val downloadsDue = watch.trackDownloads &&
-                (force || nowMs() >= previous.downloadsRetryAt) &&
+                (force || (nowMs() >= previous.downloadsRetryAt && !saverHolds)) &&
                 (rate.remaining < 0 || rate.remaining >= DOWNLOADS_BUDGET_FLOOR)
             if (watch.watchReleases || downloadsDue) {
                 // Three shapes, in order of what they cost. `releases/latest`

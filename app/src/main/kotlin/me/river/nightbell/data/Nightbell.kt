@@ -261,6 +261,12 @@ object Nightbell {
             // stays free of Android plumbing and remains unit-testable.
             engine.onStateChanged = ::notifyStateChanged
             engine.isOnline = network::isOnline
+            engine.trafficBytes = {
+                val uid = android.os.Process.myUid()
+                val rx = android.net.TrafficStats.getUidRxBytes(uid)
+                val tx = android.net.TrafficStats.getUidTxBytes(uid)
+                if (rx < 0 || tx < 0) -1L else rx + tx
+            }
             // Lets the engine skip its fallback post when the service is already
             // showing the (fully red, looping) page for that outage.
             engine.serviceIsPaging = NightbellMonitorService::isPaging

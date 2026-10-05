@@ -94,6 +94,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.river.nightbell.BuildConfig
 import me.river.nightbell.data.Nightbell
+import me.river.nightbell.domain.DataSaver
 import me.river.nightbell.domain.AppUpdate
 import me.river.nightbell.domain.CheckerHealth
 import me.river.nightbell.domain.CheckerLimit
@@ -161,6 +162,7 @@ fun SettingsScreen(
     val batteryOptimised by viewModel.batteryOptimised.collectAsStateWithLifecycle()
     val githubTokenRedacted by viewModel.githubTokenRedacted.collectAsStateWithLifecycle()
     val appUpdate by viewModel.appUpdate.collectAsStateWithLifecycle()
+    val dataEstimate by viewModel.dataEstimate.collectAsStateWithLifecycle()
     val updateInstall = rememberUpdateInstall()
     val context = LocalContext.current
     // Read once per composition of this screen rather than observed: widgets are
@@ -884,6 +886,15 @@ fun SettingsScreen(
                             onCheckedChange = { v -> viewModel.update { it.copy(onlyOnUnmeteredNetwork = v) } },
                             icon = NightbellIcons.Wifi,
                             accent = NightbellColors.Violet,
+                        )
+                        ToggleRow(
+                            title = "Data saver",
+                            subtitle = DataSaver.summary(dataEstimate, settings.dataSaver),
+                            checked = settings.dataSaver,
+                            onCheckedChange = { v -> viewModel.update { it.copy(dataSaver = v) } },
+                            icon = NightbellIcons.Gauge,
+                            accent = NightbellColors.Violet,
+                            modifier = Modifier.testTag("data-saver"),
                         )
                         Spacer(Modifier.height(6.dp))
                         StepperRow(

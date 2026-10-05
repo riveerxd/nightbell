@@ -99,6 +99,7 @@ enum class LogEvent(
     CHECK_DONE("check.done", LogArea.CHECK),
     CHECK_FAILED("check.failed", LogArea.CHECK, LogLevel.WARN),
     CHECK_SKIPPED("check.skipped", LogArea.CHECK),
+    CHECK_BYTES("check.bytes", LogArea.CHECK),
     CHECK_CANCELLED("check.cancelled", LogArea.CHECK),
     CHECK_HEALTH("check.health", LogArea.CHECK, LogLevel.WARN),
 

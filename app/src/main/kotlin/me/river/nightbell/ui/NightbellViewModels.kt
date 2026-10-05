@@ -1813,6 +1813,12 @@ class SettingsViewModel(private val graph: Nightbell.Graph) : ViewModel() {
         .map { it.monitors }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** What the fleet costs a month with the data saver off and on, as measured so far. */
+    val dataEstimate: StateFlow<me.river.nightbell.domain.DataSaver.Estimate?> = graph.store.snapshot
+        .map { me.river.nightbell.domain.DataSaver.monthly(it.monitors, it.runtimes) }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
     /**
      * The checker's own health — see [me.river.nightbell.domain.CheckerHealth].
      *

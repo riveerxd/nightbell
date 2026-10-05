@@ -175,6 +175,28 @@ class GitHubDownloadCheckerTest {
         assertFalse(seen.any { it.contains("/releases/latest") })
     }
 
+    private fun countsAsked(saver: Boolean, readAgoMs: Long): Boolean {
+        val seen = CopyOnWriteArrayList<String>()
+        pagedServer(listOf(listOf(releaseJson("v3.13.0", apk = 295))), seen = seen).use { server ->
+            runBlocking {
+                checker(server, GlobalSettings(dataSaver = saver)).poll(
+                    monitor(watch()),
+                    GitHubState(downloadsSeeded = true, downloadsReadAt = System.currentTimeMillis() - readAgoMs),
+                )
+            }
+        }
+        return seen.any { it.contains("per_page=100") }
+    }
+
+    @Test
+    fun `the saver reads the counts at most once an hour`() {
+        // About 51 KB compressed for this repository and never a 304, every
+        // fifteen minutes, was the cost the saver exists to cut.
+        assertFalse(countsAsked(saver = true, readAgoMs = 10 * 60_000L))
+        assertTrue(countsAsked(saver = true, readAgoMs = 61 * 60_000L))
+        assertTrue("with the saver off the refresh setting rules alone", countsAsked(saver = false, readAgoMs = 10 * 60_000L))
+    }
+
     @Test
     fun `not tracking downloads leaves the narrow call exactly as it was`() {
         val seen = CopyOnWriteArrayList<String>()
