@@ -40,6 +40,7 @@ import me.river.nightbell.ui.components.ToastMessage
 import me.river.nightbell.ui.dashboard.DashboardScreen
 import me.river.nightbell.ui.detail.DetailScreen
 import me.river.nightbell.ui.settings.SettingsScreen
+import me.river.nightbell.ui.settings.WebhookEditorScreen
 import me.river.nightbell.ui.setup.SetupScreen
 import me.river.nightbell.ui.theme.LocalNowMs
 import me.river.nightbell.ui.theme.NightbellColors
@@ -79,6 +80,9 @@ object Routes {
     const val SETUP_EDIT = "setup/{monitorId}"
     const val DETAIL = "detail/{monitorId}"
 
+    /** A webhook target. An empty id is a new one, so one route serves both. */
+    const val WEBHOOK = "webhook?id={id}"
+
     /**
      * Only ever called with false. The gate reaches the same destination as a
      * start destination, which navigation resolves by pattern rather than by a
@@ -91,6 +95,7 @@ object Routes {
 
     fun setupEdit(id: String) = "setup/$id"
     fun detail(id: String) = "detail/$id"
+    fun webhook(id: String?) = "webhook?id=${id.orEmpty()}"
 }
 
 /**
@@ -349,6 +354,7 @@ private fun NightbellNavHost(
                 onBack = { navController.popBackStack() },
                 onEdit = { navController.navigate(Routes.setupEdit(it)) },
                 onToast = onToast,
+                onOpenWebhook = { navController.navigate(Routes.webhook(it)) },
             )
         }
 
@@ -357,6 +363,20 @@ private fun NightbellNavHost(
                 onBack = { navController.popBackStack() },
                 onToast = onToast,
                 onOpenPagerSetup = { navController.navigate(Routes.pagerSetup(gate = false)) },
+                onOpenWebhook = { navController.navigate(Routes.webhook(it)) },
+            )
+        }
+
+        composable(
+            Routes.WEBHOOK,
+            arguments = listOf(navArgument("id") { defaultValue = ""; nullable = false }),
+            enterTransition = { slideInVertically(tween(340)) { it / 3 } + fadeIn(tween(240)) },
+            popExitTransition = { slideOutVertically(tween(280)) { it / 3 } + fadeOut(tween(200)) },
+        ) { entry ->
+            WebhookEditorScreen(
+                targetId = entry.arguments?.getString("id").orEmpty().ifBlank { null },
+                onClose = { navController.popBackStack() },
+                onToast = onToast,
             )
         }
     }

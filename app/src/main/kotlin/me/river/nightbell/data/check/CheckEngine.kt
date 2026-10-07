@@ -6,6 +6,11 @@ import me.river.nightbell.domain.LogEvent
 import me.river.nightbell.domain.LogField
 import me.river.nightbell.data.NightbellStore
 import me.river.nightbell.data.alerts.AlertCenter
+import me.river.nightbell.data.webhook.WebhookDispatcher
+import me.river.nightbell.domain.WebhookEvent
+import me.river.nightbell.domain.WebhookFacts
+import me.river.nightbell.domain.WebhookRouting
+import me.river.nightbell.domain.Secrets
 import me.river.nightbell.domain.AlertDecider
 import me.river.nightbell.domain.AlertPolicy
 import me.river.nightbell.domain.AppUpdate
@@ -122,6 +127,19 @@ class CheckEngine(
      * of false outages, and would poison the uptime history with them too.
      */
     var isOnline: () -> Boolean = { true }
+
+    /**
+     * Where webhook events are queued. Null switches webhooks off, which is what
+     * every test that is not about them wants. Set by the graph rather than
+     * passed in, like [announceAlert], to keep the constructor the tests share.
+     */
+    var webhooks: WebhookDispatcher? = null
+
+    /**
+     * Told that something was queued, so the graph can start a flush without
+     * the check pass waiting on somebody else's server to answer.
+     */
+    var onWebhooksQueued: (() -> Unit)? = null
 
     /**
      * Bytes this app has sent and received since boot, or negative where the
@@ -824,6 +842,9 @@ class CheckEngine(
                 lastAlertAt = before.lastCertAlertAt,
                 nowMs = result.at,
             )
+        // Webhook events that ride on the phone's own decision rather than on a
+        // track of their own. Collected here and queued after the runtime write.
+        val passSends = mutableListOf<Pair<String, WebhookFacts>>()
         if (certShouldAlert) {
             alerts.notifyCertExpiry(
                 monitor = monitor,
@@ -834,6 +855,13 @@ class CheckEngine(
                 policy = policy,
                 silent = false,
             )
+            passSends += passThrough(snapshot.settings, snapshot.groups, monitor, WebhookEvent.CERTIFICATE, true) {
+                webhookFacts(monitor, snapshot.groups, snapshot.settings, result, slo).copy(
+                    event = WebhookEvent.CERTIFICATE,
+                    certDaysLeft = CertificateWatch.daysLeft(after.certExpiresAt, result.at).toInt(),
+                    message = if (after.certIssuer.isBlank()) "" else "Issued by ${after.certIssuer}.",
+                )
+            }
         }
         // A renewed certificate has to take its notice down with it. Cancelling on
         // the level rather than on a transition means a notice left behind by a
@@ -882,7 +910,17 @@ class CheckEngine(
 
         // ---- github track ----------------------------------------------------
         val githubMutation = githubOutcome?.let {
-            applyGitHub(monitor, it, before, policy, settings, muted, minute)
+            applyGitHub(monitor, it, before, policy, settings, muted, minute) { event, allowed ->
+                passSends += passThrough(snapshot.settings, snapshot.groups, monitor, WebhookEvent.GITHUB, allowed) {
+                    webhookFacts(monitor, snapshot.groups, snapshot.settings, result, slo).copy(
+                        event = WebhookEvent.GITHUB,
+                        reason = "",
+                        headline = event.title(monitor.displayName),
+                        message = event.body,
+                        link = event.url,
+                    )
+                }
+            }
         } ?: { runtime: MonitorRuntime -> runtime }
 
         // NonCancellable, and this is load-bearing.
@@ -923,8 +961,119 @@ class CheckEngine(
                     .let(metered)
             }
         }
+        queueWebhooks(
+            snapshot = snapshot,
+            monitor = monitor,
+            paused = paused,
+            check = WebhookRouting.Check(
+                ok = result.ok,
+                consecutiveFailures = after.consecutiveFailures,
+                degraded = degraded,
+                at = result.at,
+            ),
+            phone = WebhookRouting.Phone(
+                policy = policy,
+                masterEnabled = snapshot.settings.masterAlertsEnabled,
+                muted = muted,
+                minuteOfDay = minute,
+            ),
+            base = webhookFacts(monitor, snapshot.groups, snapshot.settings, result, slo),
+            extra = passSends,
+        )
         onStateChanged?.invoke()
         return result
+    }
+
+    // ---- webhooks --------------------------------------------------------------
+
+    /**
+     * Runs every target's track for this check and queues what they decided,
+     * with [extra] from the tracks that ride on the phone's own decision.
+     *
+     * A pause stops all of it, followed or not. A pause is the button for "this
+     * phone's signal is not to be believed right now", and a channel full of
+     * people is the last place a walk through a car park should report outages.
+     */
+    private suspend fun queueWebhooks(
+        snapshot: me.river.nightbell.data.NightbellSnapshot,
+        monitor: Monitor,
+        paused: Boolean,
+        check: WebhookRouting.Check,
+        phone: WebhookRouting.Phone,
+        base: WebhookFacts,
+        extra: List<Pair<String, WebhookFacts>>,
+    ) {
+        val hooks = webhooks ?: return
+        val settings = snapshot.settings
+        if (paused || !settings.webhooksEnabled || settings.webhooks.isEmpty()) return
+        val outcome = WebhookRouting.decide(
+            targets = settings.webhooks,
+            state = store.currentSnapshot().webhookState,
+            monitorId = monitor.id,
+            groups = snapshot.groups,
+            check = check,
+            phone = phone,
+            base = base,
+        )
+        val sends = outcome.sends + extra
+        hooks.enqueue(sends, outcome.tracks)
+        if (sends.isNotEmpty()) onWebhooksQueued?.invoke()
+    }
+
+    private fun passThrough(
+        settings: GlobalSettings,
+        groups: List<me.river.nightbell.domain.MonitorGroup>,
+        monitor: Monitor,
+        event: WebhookEvent,
+        phoneAllowed: Boolean,
+        facts: () -> WebhookFacts,
+    ): List<Pair<String, WebhookFacts>> {
+        if (webhooks == null || !settings.webhooksEnabled || settings.webhooks.isEmpty()) return emptyList()
+        val targets = WebhookRouting.passThrough(settings.webhooks, monitor.id, groups, event, phoneAllowed)
+        if (targets.isEmpty()) return emptyList()
+        val built = facts()
+        return targets.map { it.id to built }
+    }
+
+    /**
+     * What every event about this check shares.
+     *
+     * The monitor's address goes out without any user info in it: a URL typed as
+     * `https://admin:hunter2@nas.lan` is a password, and a chat channel is the
+     * last place it belongs. The detail line is scrubbed of the GitHub token by
+     * the same backstop the screen uses, and cut short, because it can be a
+     * response body and a channel is not the place for one of those either.
+     */
+    private fun webhookFacts(
+        monitor: Monitor,
+        groups: List<me.river.nightbell.domain.MonitorGroup>,
+        settings: GlobalSettings,
+        result: CheckResult,
+        slo: Int,
+    ): WebhookFacts = WebhookFacts(
+        event = WebhookEvent.DOWN,
+        monitorId = monitor.id,
+        monitorName = monitor.displayName,
+        monitorUrl = withoutUserInfo(monitor.url.trim()),
+        monitorKind = monitor.kind.label,
+        reason = if (result.ok) "" else result.failureKind.headline,
+        message = Secrets.scrub(result.message, settings.githubToken),
+        detail = Secrets.scrub(result.detail, settings.githubToken).take(WEBHOOK_DETAIL_CHARS),
+        statusCode = result.statusCode,
+        latencyMs = result.latencyMs,
+        sloMs = slo,
+        at = result.at,
+        groups = groups.filter { monitor.id in it.memberIds }.map { it.displayTitle },
+        sender = settings.webhookSender.trim(),
+    )
+
+    private fun withoutUserInfo(url: String): String {
+        val scheme = url.substringBefore("://", "")
+        if (scheme.isEmpty()) return url
+        val rest = url.substringAfter("://")
+        val authority = rest.substringBefore('/').substringBefore('?').substringBefore('#')
+        if (!authority.contains('@')) return url
+        return scheme + "://" + authority.substringAfterLast('@') + rest.substring(authority.length)
     }
 
     /** Serialises probing so a burst of passes shares one round trip. */
@@ -1076,6 +1225,8 @@ class CheckEngine(
         settings: GlobalSettings,
         muted: Boolean,
         minute: Int,
+        /** Each event, and whether the phone's own switches let it through. For webhooks. */
+        onEvent: (GitHubEvent, Boolean) -> Unit = { _, _ -> },
     ): (MonitorRuntime) -> MonitorRuntime {
         val snapshot = outcome.snapshot ?: return { it }
         val evaluation = GitHubEvents.evaluate(
@@ -1105,6 +1256,7 @@ class CheckEngine(
                 LogField.count("events", evaluation.events.size),
             )
         }
+        evaluation.events.forEach { onEvent(it, allowed) }
         val state = evaluation.state
         return { runtime -> runtime.copy(github = state) }
     }
@@ -1584,6 +1736,26 @@ class CheckEngine(
             withContext(NonCancellable) {
                 store.updateRuntime(monitorId) { it.withUrgentState(outcome.state) }
             }
+            if (!snapshot.pause.isActive(nowMs())) {
+                val sends = passThrough(snapshot.settings, snapshot.groups, monitor, WebhookEvent.ACKNOWLEDGED, true) {
+                    WebhookFacts(
+                        event = WebhookEvent.ACKNOWLEDGED,
+                        monitorId = monitor.id,
+                        monitorName = monitor.displayName,
+                        monitorUrl = withoutUserInfo(monitor.url.trim()),
+                        monitorKind = monitor.kind.label,
+                        message = runtime.lastMessage,
+                        at = nowMs(),
+                        downSinceAt = runtime.urgentSinceAt,
+                        groups = snapshot.groups.filter { monitor.id in it.memberIds }.map { it.displayTitle },
+                        sender = snapshot.settings.webhookSender.trim(),
+                    )
+                }
+                if (sends.isNotEmpty()) {
+                    webhooks?.enqueue(sends)
+                    onWebhooksQueued?.invoke()
+                }
+            }
         }
         onStateChanged?.invoke()
     }
@@ -1776,6 +1948,9 @@ class CheckEngine(
          * so this is the smaller of the two limits and the one worth stating.
          */
         private const val SCRAPE_CHARS = 512 * 1024
+
+        /** A detail line can be a response body. A channel gets the start of it. */
+        private const val WEBHOOK_DETAIL_CHARS = 500
         private const val DUE_SLACK_MS = DueCheck.SLACK_MS
 
         /** Never wake more often than this, however tight the configured cadence. */

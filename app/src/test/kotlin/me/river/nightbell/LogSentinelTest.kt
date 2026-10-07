@@ -162,6 +162,11 @@ class LogSentinelTest {
     }
 
     @Test
+    fun `every string on WebhookTarget is classified`() {
+        assertClassified(me.river.nightbell.domain.WebhookTarget::class.java, "WebhookTarget")
+    }
+
+    @Test
     fun `every string on BrowserState is classified`() {
         assertClassified(BrowserState::class.java, "BrowserState")
     }
@@ -260,6 +265,19 @@ class LogSentinelTest {
                 "latencyReferenceUrl" to Rule.HOST,
                 "speakTemplate" to Rule.NEVER,
                 "speakVoice" to Rule.NEVER,
+                // What the user calls their phone, which is usually their own name.
+                "webhookSender" to Rule.NEVER,
+            ),
+            // A webhook address is the permission to post into a channel, so
+            // nothing about a target goes into a line except the start of its id.
+            "WebhookTarget" to mapOf(
+                "id" to Rule.SAFE,
+                "name" to Rule.NEVER,
+                "url" to Rule.NEVER,
+                "chatId" to Rule.NEVER,
+                "contentType" to Rule.SAFE,
+                "bodyTemplate" to Rule.NEVER,
+                "signingSecret" to Rule.NEVER,
             ),
             "BrowserState" to mapOf(
                 "origin" to Rule.HOST,

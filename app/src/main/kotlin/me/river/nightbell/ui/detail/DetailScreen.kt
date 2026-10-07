@@ -124,8 +124,10 @@ fun DetailScreen(
     onBack: () -> Unit,
     onEdit: (String) -> Unit,
     onToast: (ToastMessage) -> Unit,
+    onOpenWebhook: (String) -> Unit = {},
 ) {
     val viewModel = rememberDetailViewModel(monitorId)
+    val webhooks by viewModel.webhooks.collectAsStateWithLifecycle()
     val card by viewModel.card.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val offline by viewModel.offline.collectAsStateWithLifecycle()
@@ -372,7 +374,7 @@ fun DetailScreen(
 
         item(key = "config") {
             StaggeredEntrance(index = 4, key = "config-${monitor.id}", log = entrance) {
-                ConfigCard(monitor, accent)
+                ConfigCard(monitor, accent, webhooks, onOpenWebhook)
             }
         }
 
@@ -1155,7 +1157,12 @@ private fun firingSince(alert: FiringAlert, nowMs: Long): String {
 }
 
 @Composable
-private fun ConfigCard(monitor: Monitor, accent: Color) {
+private fun ConfigCard(
+    monitor: Monitor,
+    accent: Color,
+    webhooks: List<me.river.nightbell.domain.WebhookTarget> = emptyList(),
+    onOpenWebhook: (String) -> Unit = {},
+) {
     GlassCard {
         SectionHeader("Configuration", icon = NightbellIcons.Sliders, accent = accent)
         ConfigRow("Type", monitor.kind.label)
@@ -1276,6 +1283,47 @@ private fun ConfigCard(monitor: Monitor, accent: Color) {
             "Alerts",
             if (monitor.useGlobalAlerts) "Global policy" else monitor.alert.summary,
         )
+        // Each one a way back to its settings. A monitor whose outages land in a
+        // channel should say so here, where somebody wondering why the channel
+        // heard about it would look.
+        webhooks.forEach { target ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable { onOpenWebhook(target.id) }
+                    .padding(vertical = 5.dp)
+                    .testTag("detail-webhook-${target.id}"),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                LabelledRow(
+                    labelWidth = 112.dp,
+                    modifier = Modifier.weight(1f),
+                    label = { mod ->
+                        Text(
+                            text = "Posts to",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = NightbellColors.TextTertiary,
+                            modifier = mod,
+                        )
+                    },
+                    value = { mod ->
+                        Text(
+                            text = "${target.displayName} · ${target.format.label}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NightbellColors.TextSecondary,
+                            modifier = mod,
+                        )
+                    },
+                )
+                Icon(
+                    imageVector = NightbellIcons.ChevronRight,
+                    contentDescription = "Open ${target.displayName}",
+                    tint = NightbellColors.TextTertiary,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+        }
     }
 }
 

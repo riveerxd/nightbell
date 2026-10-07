@@ -146,6 +146,14 @@ enum class LogEvent(
     ALERT_PERMISSION("alert.permission", LogArea.ALERT),
     ALERT_RINGER("alert.ringer", LogArea.ALERT),
 
+    // Webhooks. A message that never reached a channel is reported by somebody
+    // who was not holding the phone, so the trace has to say which target, which
+    // event, and what the receiver answered, without the address it went to.
+    WEBHOOK_QUEUED("webhook.queued", LogArea.ALERT),
+    WEBHOOK_SENT("webhook.sent", LogArea.ALERT),
+    WEBHOOK_FAILED("webhook.failed", LogArea.ALERT, LogLevel.WARN),
+    WEBHOOK_DROPPED("webhook.dropped", LogArea.ALERT, LogLevel.WARN),
+
     // The store, which has had two data-shaped bugs of its own.
     STORE_READ_FAILED("store.read.failed", LogArea.STORE, LogLevel.ERROR),
     STORE_CORRUPT("store.corrupt", LogArea.STORE, LogLevel.ERROR),

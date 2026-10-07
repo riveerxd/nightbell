@@ -1629,6 +1629,18 @@ class DetailViewModel(
     val settings: StateFlow<GlobalSettings> = graph.store.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), GlobalSettings())
 
+    /** The webhooks this monitor's events go to, so the screen can link to each. */
+    val webhooks: StateFlow<List<me.river.nightbell.domain.WebhookTarget>> = graph.store.snapshot
+        .map { snap ->
+            if (!snap.settings.webhooksEnabled) {
+                emptyList()
+            } else {
+                snap.settings.webhooks.filter { it.enabled && it.scope.covers(monitorId, snap.groups) }
+            }
+        }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     var busy by mutableStateOf(false)
         private set
 
@@ -1934,6 +1946,40 @@ class SettingsViewModel(private val graph: Nightbell.Graph) : ViewModel() {
         while (true) {
             emit(Unit)
             delay(LIMIT_POLL_MS)
+        }
+    }
+
+    // ---- webhooks --------------------------------------------------------------
+
+    /**
+     * Every target with the line under it. On the slow tick as well as on store
+     * changes, so "Last delivered 4 min ago" keeps moving while the screen is open.
+     */
+    val webhookRows: StateFlow<List<Pair<me.river.nightbell.domain.WebhookTarget, me.river.nightbell.domain.WebhookStatusLine.Line>>> =
+        graph.store.snapshot
+            .combine(ticker()) { snapshot, _ ->
+                val now = System.currentTimeMillis()
+                snapshot.settings.webhooks.map { target ->
+                    target to me.river.nightbell.domain.WebhookStatusLine.of(
+                        target = target,
+                        status = snapshot.webhookState.status[target.id],
+                        queued = snapshot.webhookState.queuedFor(target.id),
+                        nowMs = now,
+                    )
+                }
+            }
+            .distinctUntilChanged()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Off throws the queue away rather than holding it. Held, it would all be
+     * posted the moment the switch came back on, hours late and in a burst,
+     * which is the opposite of what turning it off was for.
+     */
+    fun setWebhooksEnabled(on: Boolean) {
+        viewModelScope.launch {
+            graph.store.updateSettings { it.copy(webhooksEnabled = on) }
+            if (!on) graph.webhooks.clear()
         }
     }
 

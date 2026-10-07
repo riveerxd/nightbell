@@ -154,8 +154,11 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onToast: (ToastMessage) -> Unit,
     onOpenPagerSetup: () -> Unit = {},
+    /** Null opens a new one. */
+    onOpenWebhook: (String?) -> Unit = {},
 ) {
     val viewModel = rememberSettingsViewModel()
+    val webhookRows by viewModel.webhookRows.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val checkerHealth by viewModel.checkerHealth.collectAsStateWithLifecycle()
     val checkerLimit by viewModel.checkerLimit.collectAsStateWithLifecycle()
@@ -453,8 +456,21 @@ fun SettingsScreen(
                 }
             }
 
+            item(key = "webhooks") {
+                StaggeredEntrance(index = 4, key = "webhooks", log = entrance) {
+                    WebhooksCard(
+                        rows = webhookRows,
+                        enabled = settings.webhooksEnabled,
+                        sender = settings.webhookSender,
+                        onEnabledChange = viewModel::setWebhooksEnabled,
+                        onSenderChange = { value -> viewModel.updateText { it.copy(webhookSender = value) } },
+                        onOpen = onOpenWebhook,
+                    )
+                }
+            }
+
             item(key = "pause") {
-                StaggeredEntrance(index = 4, key = "pause", log = entrance) {
+                StaggeredEntrance(index = 5, key = "pause", log = entrance) {
                     GlassCard {
                         SectionHeader("Pause button", icon = NightbellIcons.Pause, accent = NightbellColors.Amber)
                         Text(
@@ -1565,11 +1581,11 @@ fun SettingsScreen(
                         )
                         Spacer(Modifier.height(10.dp))
                         ToggleRow(
-                            title = "Include the GitHub token",
+                            title = "Include tokens and webhook addresses",
                             subtitle = if (settings.includeSecretsInExport) {
-                                "The file will carry a working credential"
+                                "The file will carry working credentials"
                             } else {
-                                "Left out, you'll paste it again on the new phone"
+                                "Left out, you'll paste them again on the new phone"
                             },
                             checked = settings.includeSecretsInExport,
                             onCheckedChange = { v ->
@@ -1586,8 +1602,8 @@ fun SettingsScreen(
                             Column {
                                 Spacer(Modifier.height(4.dp))
                                 WarningPanel(
-                                    "Anyone who opens the file can use the token as you until you " +
-                                        "revoke it, and that stays true of every copy the file makes " +
+                                    "Anyone who opens the file can use them as you until you " +
+                                        "revoke them, and that stays true of every copy the file makes " +
                                         "on the way to the other phone. Off is the right answer " +
                                         "unless you are moving the file by hand and deleting it after.",
                                 )
@@ -2848,3 +2864,120 @@ private fun formatLogSize(bytes: Long): String = when {
 private fun logFileStamp(): String =
     java.text.SimpleDateFormat("yyyyMMdd-HHmm", java.util.Locale.US)
         .format(java.util.Date())
+
+/**
+ * Where events go besides this phone, and how each place is doing.
+ *
+ * Rows rather than cards inside the card, and the status line under each is the
+ * point of the row: a webhook that has quietly been failing for a week is the
+ * failure this card exists to make visible, so rose is kept for exactly that.
+ */
+@Composable
+private fun WebhooksCard(
+    rows: List<Pair<me.river.nightbell.domain.WebhookTarget, me.river.nightbell.domain.WebhookStatusLine.Line>>,
+    enabled: Boolean,
+    sender: String,
+    onEnabledChange: (Boolean) -> Unit,
+    onSenderChange: (String) -> Unit,
+    onOpen: (String?) -> Unit,
+) {
+    val failing = enabled && rows.any { it.second.tone == me.river.nightbell.domain.WebhookStatusLine.Tone.FAILING }
+    GlassCard(accent = if (failing) NightbellColors.Rose else Color.Transparent) {
+        SectionHeader("Webhooks", icon = NightbellIcons.Link, accent = NightbellColors.Aqua)
+        Text(
+            text = "Post outages to Teams, Slack, Discord, Google Chat, ntfy, Gotify, Telegram or any " +
+                "address you choose. Sent straight from this phone, with nothing in between.",
+            style = MaterialTheme.typography.bodySmall,
+            color = NightbellColors.TextTertiary,
+        )
+        if (rows.isNotEmpty()) {
+            Spacer(Modifier.height(6.dp))
+            ToggleRow(
+                title = "Send webhooks",
+                subtitle = if (enabled) {
+                    "On for every webhook below that is switched on"
+                } else {
+                    "Off. Nothing is sent, and nothing is saved up for later"
+                },
+                checked = enabled,
+                onCheckedChange = onEnabledChange,
+                icon = NightbellIcons.Link,
+                accent = NightbellColors.Aqua,
+                modifier = Modifier.testTag("webhooks-enabled"),
+            )
+            GlassDivider(Modifier.padding(vertical = 6.dp))
+            rows.forEach { (target, line) ->
+                val tone = when (line.tone) {
+                    me.river.nightbell.domain.WebhookStatusLine.Tone.FAILING -> NightbellColors.Rose
+                    me.river.nightbell.domain.WebhookStatusLine.Tone.WAITING -> NightbellColors.Amber
+                    me.river.nightbell.domain.WebhookStatusLine.Tone.QUIET -> NightbellColors.TextTertiary
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable { onOpen(target.id) }
+                        .padding(vertical = 10.dp)
+                        .testTag("webhook-row-${target.id}"),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = target.displayName,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = if (enabled && target.enabled) NightbellColors.TextPrimary else NightbellColors.TextTertiary,
+                        )
+                        Text(
+                            text = target.format.label + " · " + eventsSummary(target),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NightbellColors.TextSecondary,
+                        )
+                        Text(
+                            text = line.text,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = tone,
+                            modifier = Modifier.testTag("webhook-status-${target.id}"),
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Icon(
+                        imageVector = NightbellIcons.ChevronRight,
+                        contentDescription = "Edit ${target.displayName}",
+                        tint = NightbellColors.TextTertiary,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        NightbellButton(
+            text = "Add a webhook",
+            onClick = { onOpen(null) },
+            icon = NightbellIcons.Plus,
+            tone = ButtonTone.Secondary,
+            modifier = Modifier.fillMaxWidth().testTag("webhook-add"),
+        )
+        if (rows.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            GlassField(
+                value = sender,
+                onValueChange = onSenderChange,
+                label = "Sign messages as",
+                placeholder = "Nightbell",
+                helper = "Shown on every message. Worth setting when two phones post into one channel.",
+                accent = NightbellColors.Aqua,
+                corner = NightbellRadii.inCard,
+                modifier = Modifier.testTag("webhook-sender"),
+            )
+        }
+    }
+}
+
+private fun eventsSummary(target: me.river.nightbell.domain.WebhookTarget): String {
+    val chosen = me.river.nightbell.domain.WebhookEvent.choosable.filter { it in target.events }
+    return when {
+        chosen.isEmpty() -> "nothing chosen"
+        chosen.size <= 2 -> chosen.joinToString(" and ") { it.label.lowercase() }
+        else -> "${chosen.size} kinds of event"
+    }
+}

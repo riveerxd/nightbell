@@ -103,6 +103,14 @@ class NightbellApplication : Application() {
                 add(monitor.name)
             }
             snap.groups.forEach { add(it.title) }
+            // Every address, header value and signing secret of every webhook,
+            // plus the phone's own name, which is somebody's name more often
+            // than not.
+            snap.settings.webhooks.forEach { target ->
+                addAll(target.secrets)
+                add(target.name)
+            }
+            add(snap.settings.webhookSender)
         }.filter { it.isNotBlank() }
         knownSecrets = built
         knownSecretsRevision = snap.revision

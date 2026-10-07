@@ -18,6 +18,9 @@ import me.river.nightbell.data.health.SystemLimits
 import me.river.nightbell.data.icons.FaviconStore
 import me.river.nightbell.data.net.NetworkMonitor
 import me.river.nightbell.data.work.MonitorScheduler
+import me.river.nightbell.data.webhook.WebhookDispatcher
+import me.river.nightbell.data.webhook.WebhookSender
+import me.river.nightbell.data.webhook.WebhookWake
 import me.river.nightbell.data.work.NightbellMonitorService
 import me.river.nightbell.BuildConfig
 import me.river.nightbell.domain.Summary
@@ -148,6 +151,34 @@ object Nightbell {
 
         val scheduler = MonitorScheduler(context)
         val network = NetworkMonitor(context)
+
+        /**
+         * Reads settings per send rather than capturing them, so an address or a
+         * proxy corrected in Settings applies to the very next retry.
+         */
+        val webhookSender = WebhookSender(
+            settingsFor = { store.snapshot.value.settings },
+            appVersion = BuildConfig.VERSION_NAME,
+        )
+        private val webhookWake = WebhookWake(context)
+        val webhooks = WebhookDispatcher(
+            store = store,
+            sender = webhookSender,
+            isOnline = { network.isOnline() },
+            wakeAt = webhookWake::at,
+        )
+
+        init {
+            engine.webhooks = webhooks
+            // Fire and forget on the app scope: the check pass that queued these
+            // has its own work to finish, and the outbox is already on disk.
+            engine.onWebhooksQueued = {
+                appScope.launch {
+                    runCatchingCancellable { webhooks.flush() }
+                        .onFailure { Diag.logError(LogEvent.WEBHOOK_FAILED, it) }
+                }
+            }
+        }
         val favicons = FaviconStore(context, isOnline = network::isOnline)
         val limits = SystemLimits(context, isOnline = network::isOnline)
 

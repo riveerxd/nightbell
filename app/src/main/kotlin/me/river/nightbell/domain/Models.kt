@@ -1567,6 +1567,30 @@ data class GlobalSettings(
      */
     val updateSourceMigratedToSite: Boolean = false,
 
+    // ---- Webhooks ------------------------------------------------------------
+    /**
+     * Where events are posted besides this phone's own notifications.
+     *
+     * Configuration, so it lives here and travels in a backup, minus every
+     * address and key unless [includeSecretsInExport] says otherwise. What has
+     * been sent and what is still queued is state, and lives in
+     * [me.river.nightbell.domain.WebhookState] instead.
+     */
+    val webhooks: List<WebhookTarget> = emptyList(),
+    /**
+     * One switch for all of them, for the evening a receiver is being rebuilt
+     * and should not be posted to. Separate from [masterAlertsEnabled], which
+     * is about this phone.
+     */
+    val webhooksEnabled: Boolean = true,
+    /**
+     * How this phone signs its messages, "On-call Pixel". Blank says Nightbell.
+     *
+     * Worth setting when two phones post into one channel, which is the normal
+     * shape of an on-call rota.
+     */
+    val webhookSender: String = "",
+
     // ---- Diagnostics ---------------------------------------------------------
     /**
      * Whether the app writes its own log to a file the user can hand over.

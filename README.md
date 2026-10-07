@@ -176,6 +176,12 @@ how it sounds, the haptic pattern, how hard it escalates, and when to stay quiet
 > only. There is a setting to override that if you want a pager that answers to
 > nothing.
 
+Outages can also go to a team: Microsoft Teams, Slack, Discord, Google Chat,
+ntfy, Gotify, Telegram, or any URL with a body you write yourself. Each webhook
+runs the same threshold and cooldown as the phone, retries when the receiver is
+down, and can ignore your quiet hours so the channel still hears at 3am. The
+details are in [docs/reference.md](docs/reference.md#webhooks).
+
 ---
 
 ## The home-screen widget

@@ -377,6 +377,201 @@ would silently break the one guarantee strict mode exists to make. Shipping this
 through Google Play would need that subtype justified in review; sideloading is
 unaffected.
 
+## Webhooks
+
+Events can be posted somewhere besides this phone's notification shade: a team
+channel, a push service, an automation tool, a script. Settings, Alerts,
+Webhooks. Each place is a **target**, and a target has a format, an address,
+the events it wants, the monitors it covers and a few switches.
+
+Everything is sent straight from the phone. There is no relay and no account.
+
+### Formats
+
+| Format | Address | What is sent |
+| --- | --- | --- |
+| Plain JSON | any URL | the documented object below |
+| Microsoft Teams | a Workflows webhook URL | an Adaptive Card 1.4 in a `message` envelope |
+| Slack | an incoming webhook URL | `text` plus `blocks`; Mattermost and Rocket.Chat read `text` |
+| Discord | a channel webhook URL | one embed, coloured by severity, with mentions disabled |
+| Google Chat | a space webhook URL | `text` |
+| ntfy | the topic URL | JSON to the server root, with title, priority, tags and click |
+| Gotify | server URL with `?token=` | JSON to `/message` with a priority |
+| Telegram | the bot token, plus a chat ID | `sendMessage`, plain text, no parse mode |
+| Custom request | any URL, placeholders allowed | your method, content type, headers and body |
+
+Teams' old Office 365 connector URLs (`*.webhook.office.com`) are retired by
+Microsoft. The editor warns about one and still lets it be saved.
+
+Every chat format says the same two things, a title and a sentence, so a
+monitor reads the same in Teams as in Telegram:
+
+| Event | Title | Sentence |
+| --- | --- | --- |
+| `down` | Payments API is down | Unexpected status: HTTP 503 |
+| `still_down` | Payments API is still down | Down for 35 min. Unexpected status: HTTP 503 |
+| `recovered` | Payments API is back up | Down for 37 min. Answered in 212 ms. |
+| `degraded` | Payments API is slow | Answered in 3.2 s, over its 2.5 s budget. |
+| `degraded_recovered` | Payments API is back to normal speed | Answered in 340 ms, inside its 2.5 s budget. |
+| `certificate` | Payments API's certificate expires in 3 days | Issued by R11. |
+| `github` | the repository notification's own title | its own line |
+| `acknowledged` | Payments API: urgent page answered | Acknowledged on On-call Pixel. It is still down. |
+| `test` | Test from Nightbell to Ops | If you can read this, the webhook works. Nothing is down. |
+
+### When something is sent
+
+Down, still down, back up, slow and back to speed each run on a **track of
+their own per target**, through the same escalation as the phone:
+the monitor's failure threshold, cooldown and repeat interval. "Still down" is
+the repeat; ticking it on a target turns the repeat on for that target at the
+monitor's interval, even where the phone does not repeat.
+
+A target either follows the phone or does not:
+
+- **Not following** (the default) ignores what is about the phone's owner:
+  quiet hours, a mute, the master alert switch, and the monitor's own alert
+  switches. A channel is read by people who are awake when you are not.
+- **Following** sends only when the phone would notify as well.
+
+Its own track is why a target that ignores quiet hours still posts an outage
+once and not on every check of the night: the phone's track stops advancing
+while it is quiet, so reading the phone's state would look like a fresh outage
+each time.
+
+Certificate notices, repository news and an acknowledged page have no
+escalation to run. They go out when the phone's own decision says so; a target
+that does not follow the phone also gets repository news during the phone's
+quiet hours and mute.
+
+Three things stop every webhook regardless:
+
+- a **pause** from the dashboard, because a pause means this phone's signal is
+  not to be believed, and a car park should not report outages to a team;
+- the phone being **offline**, or an outage that **Check my connection first**
+  proves is local, because no check runs at all then;
+- the **Send webhooks** switch, which also throws away anything waiting.
+
+### Delivery
+
+Events are written to an outbox in the store before anything is sent, so a
+check that runs in a WorkManager process Android reclaims a moment later still
+gets its events out. The app then tries straight away and arms a WorkManager
+wake a minute later as a backstop.
+
+- A 2xx is delivered. No answer, 408, 425, 429 and 5xx are retried at 30 s,
+  1, 2, 4, 8 and 16 min, then every 30 min. `Retry-After` in seconds wins, up
+  to an hour.
+- Any other 4xx is a refusal. The same message would be refused the same way
+  forever, so it is dropped and the target's row says why.
+- After a day of retrying a delivery is dropped and counted.
+- Deliveries to one target go in the order they happened. A down that is
+  backing off holds back the recovery behind it.
+- At most 200 deliveries wait in total. Past that the oldest go, and are
+  counted against their target.
+- Each delivery has an id that survives its retries, sent as
+  `X-Nightbell-Delivery` and `delivery_id`. Delivery is at least once, so a
+  receiver that cares can drop a repeat.
+
+The settings row under each target says, in order of importance: off; needs
+its address; failing, with the receiver's reason; waiting; last delivered;
+nothing sent yet. Failing is the only rose one.
+
+### Plain JSON
+
+```json
+{
+  "schema": 1,
+  "event": "down",
+  "event_label": "Down",
+  "severity": "down",
+  "title": "Payments API is down",
+  "text": "Unexpected status: HTTP 503",
+  "monitor": {
+    "id": "…",
+    "name": "Payments API",
+    "url": "https://pay.example.com/health",
+    "kind": "Status check",
+    "groups": ["Production"]
+  },
+  "check": {
+    "reason": "Unexpected status",
+    "message": "HTTP 503",
+    "detail": "…",
+    "status_code": 503,
+    "latency_ms": 412,
+    "slo_ms": 2500
+  },
+  "at": "2026-10-07T14:02:00Z",
+  "at_unix": 1791381720,
+  "down_since": "2026-10-07T13:57:00Z",
+  "down_for_seconds": 300,
+  "certificate_days_left": null,
+  "link": "https://pay.example.com/health",
+  "sender": "On-call Pixel",
+  "delivery_id": "…",
+  "test": false
+}
+```
+
+`severity` is `down`, `warning`, `good` or `info`. `schema` changes only if a
+field changes meaning. The monitor's address is sent without any `user:pass@`
+in it, and `detail` is cut to 500 characters.
+
+### Custom requests and placeholders
+
+Method, content type, headers and body are yours. `{{name}}` placeholders work
+in the address, in header values and in the body:
+
+`event`, `event_label`, `severity`, `title`, `text`, `monitor`, `monitor_id`,
+`monitor_url`, `link`, `kind`, `reason`, `message`, `detail`, `status_code`,
+`latency_ms`, `latency`, `slo_ms`, `at`, `at_unix`, `at_local`, `down_since`,
+`down_for`, `down_for_s`, `cert_days_left`, `groups`, `sender`, `delivery_id`,
+`test`.
+
+Values are escaped for where they land: JSON string escaping in a JSON body
+(write `"{{title}}"` inside quotes), URL encoding in a form body and in the
+address, and nothing in a plain text body. An unknown placeholder is sent as
+typed, and the editor names it. An empty body sends the plain JSON object.
+
+### Headers and signing
+
+Every request carries `User-Agent: Nightbell/<version>`, `X-Nightbell-Event`
+and `X-Nightbell-Delivery`. Extra headers can be added per target, for ntfy's
+`Authorization: Bearer …` or anything else.
+
+With a signing secret set, a request also carries:
+
+```
+X-Nightbell-Timestamp: 1791381720
+X-Nightbell-Signature: sha256=<hex HMAC-SHA256 of "1791381720.<raw body>">
+```
+
+The timestamp is the moment that attempt left, so a retry is signed afresh.
+Checking one in Python:
+
+```python
+expected = "sha256=" + hmac.new(secret, f"{ts}.{body}".encode(), hashlib.sha256).hexdigest()
+```
+
+### Secrets
+
+A webhook address is the permission to post into that channel. Addresses,
+header values and the signing secret are treated like the GitHub token: shown
+redacted once saved (`hooks.slack.com/…wxyz`), never written to the
+diagnostic log, scrubbed out of any error message before it is stored or
+shown, and left out of a backup unless **Include tokens and webhook
+addresses** is on. A target imported without its address stays configured and
+says it needs the address pasted again. Queues, tracks and delivery history
+never travel in a backup.
+
+A target can accept any certificate, for a self-signed receiver on a homelab
+box, and can go through the SOCKS5 proxy from Settings, for a receiver on a
+hidden service. Without a proxy configured, a target set to use one sends
+nothing rather than going out directly.
+
+The monitor screen lists every webhook its events go to, each a link back to
+that webhook's settings.
+
 ## Home-screen widget
 
 A worst-first list of monitors, configurable per instance:

@@ -164,7 +164,19 @@ object BackupCodec {
  */
 fun NightbellSnapshot.withoutSecrets(): NightbellSnapshot =
     copy(
-        settings = settings.copy(githubToken = ""),
+        settings = settings.copy(
+            githubToken = "",
+            // A webhook address is the permission to post into that channel, so
+            // it leaves with the token. The target itself survives, named and
+            // configured, and its row says the address needs pasting again.
+            webhooks = settings.webhooks.map { target ->
+                target.copy(
+                    url = "",
+                    signingSecret = "",
+                    headers = target.headers.map { it.copy(value = "") },
+                )
+            },
+        ),
         monitors = monitors.map {
             it.copy(
                 browserState = BrowserState(),

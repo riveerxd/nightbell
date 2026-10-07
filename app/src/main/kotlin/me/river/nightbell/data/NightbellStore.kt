@@ -24,6 +24,8 @@ import me.river.nightbell.domain.MonitorRuntime
 import me.river.nightbell.domain.PauseState
 import me.river.nightbell.domain.ReferenceSample
 import me.river.nightbell.domain.UpdateState
+import me.river.nightbell.domain.WebhookState
+import me.river.nightbell.domain.WebhookTarget
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -87,6 +89,13 @@ data class NightbellSnapshot(
      * state with an expiry ("remind me tomorrow", "never this version").
      */
     val update: UpdateState = UpdateState(),
+    /**
+     * What webhooks have been told, and what is still waiting to be sent.
+     *
+     * Top level and not part of a backup, for the reason [pause] is top level:
+     * the targets are a preference, this is state. See [WebhookState].
+     */
+    val webhookState: WebhookState = WebhookState(),
     /**
      * Monotonic write counter, bumped by every [NightbellStore.mutate].
      *
@@ -492,6 +501,32 @@ class NightbellStore(
 
     suspend fun setPause(state: PauseState) = mutate { snap -> snap.copy(pause = state) }
 
+    /** Adds a webhook target, or replaces the one with the same id in place. */
+    suspend fun upsertWebhook(target: WebhookTarget) = mutate { snap ->
+        val list = snap.settings.webhooks
+        val next = if (list.any { it.id == target.id }) {
+            list.map { if (it.id == target.id) target else it }
+        } else {
+            list + target
+        }
+        snap.copy(settings = snap.settings.copy(webhooks = next))
+    }
+
+    /** Removes a target and, in the same write, everything queued for it. */
+    suspend fun deleteWebhook(id: String) = mutate { snap ->
+        val next = snap.settings.webhooks.filterNot { it.id == id }
+        snap.copy(
+            settings = snap.settings.copy(webhooks = next),
+            webhookState = snap.webhookState.pruned(
+                targetIds = next.map { it.id }.toSet(),
+                monitorIds = snap.monitors.map { it.id }.toSet(),
+            ),
+        )
+    }
+
+    suspend fun updateWebhookState(transform: (WebhookState) -> WebhookState) =
+        mutate { snap -> snap.copy(webhookState = transform(snap.webhookState)) }
+
     suspend fun updateAppUpdate(transform: (UpdateState) -> UpdateState) =
         mutate { snap -> snap.copy(update = transform(snap.update)) }
 
@@ -546,10 +581,18 @@ class NightbellStore(
         val runtimes = scrubFakeCrashState(snapshot.runtimes)
         val settings = retireGoogleReference(snapshot.settings)
         val groups = pruneGroups(snapshot.groups, monitors.map { it.id }.toSet())
+        // A deleted target or monitor must not leave a queue behind that keeps
+        // being retried against nothing. Pruned on read for the same reason the
+        // groups are: deletes and imports come in through more than one door.
+        val webhookState = snapshot.webhookState.pruned(
+            targetIds = settings.webhooks.map { it.id }.toSet(),
+            monitorIds = monitors.map { it.id }.toSet(),
+        )
         return if (monitors == snapshot.monitors &&
             runtimes == snapshot.runtimes &&
             settings == snapshot.settings &&
-            groups == snapshot.groups
+            groups == snapshot.groups &&
+            webhookState == snapshot.webhookState
         ) {
             snapshot
         } else {
@@ -559,6 +602,7 @@ class NightbellStore(
                 runtimes = runtimes,
                 settings = settings,
                 groups = groups,
+                webhookState = webhookState,
             )
         }
     }
