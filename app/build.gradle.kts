@@ -564,8 +564,16 @@ android {
         // every element is found and passing. A round of five real sites went
         // from 2.74 MB to 199 KB. One cold load a day per monitor keeps a broken
         // file from hiding behind the cache for longer than that.
-        versionCode = 44
-        versionName = "3.15.0"
+        //
+        // 3.16.0 posts outages to a team as well as to this phone: Teams, Slack,
+        // Discord, Google Chat, ntfy, Gotify, Telegram, or a request the user writes.
+        // Each webhook runs the monitor's own threshold, cooldown and repeat on a
+        // track of its own, because the phone's track stops while it is quiet and a
+        // channel that ignores quiet hours would otherwise hear the same outage on
+        // every check of the night. Events are queued in the store before anything is
+        // sent, so a check in a worker Android reclaims still gets them out.
+        versionCode = 45
+        versionName = "3.16.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

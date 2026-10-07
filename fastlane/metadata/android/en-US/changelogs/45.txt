@@ -1,0 +1,5 @@
+Outages can now be posted to a team, not only to this phone. Nightbell sends them to Microsoft Teams, Slack, Discord, Google Chat, ntfy, Gotify, Telegram, or any address with a body you write yourself, straight from the phone with nothing in between. Each webhook keeps the failure threshold and cooldown your alerts use, so a flaky endpoint does not flood a channel.
+
+Add one under Settings, Alerts, Webhooks. Choose what it hears about (down, still down, back up, slow, an expiring certificate, GitHub activity, an urgent page being answered) and which monitors or groups it covers, then send a test message and see the service's own answer. A webhook ignores your quiet hours and mute unless you tell it to follow the phone, because a channel is read by people who are awake when you are not. A pause from the dashboard stops every webhook.
+
+A message that cannot be delivered waits and is retried in order for up to a day, and the settings row says when a webhook is failing and why. Webhook addresses never go into a log, and stay out of a backup unless you include them.
