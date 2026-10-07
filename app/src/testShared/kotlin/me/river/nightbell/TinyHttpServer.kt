@@ -1,7 +1,5 @@
 package me.river.nightbell
 
-import java.io.BufferedReader
-import java.io.InputStreamReader
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.CopyOnWriteArrayList
@@ -99,8 +97,12 @@ class TinyHttpServer(
 
     private fun serve(socket: Socket) {
         socket.use { client ->
-            val reader = BufferedReader(InputStreamReader(client.getInputStream()))
-            val requestLine = reader.readLine() ?: return
+            // Read as bytes, not through a Reader. Content-Length counts bytes, and
+            // a Reader counts characters, so a UTF-8 body with one "é" in it left
+            // the server waiting for a character that was never coming while the
+            // client waited for an answer.
+            val input = java.io.BufferedInputStream(client.getInputStream())
+            val requestLine = readLine(input) ?: return
             val parts = requestLine.split(" ")
             if (parts.size < 2) return
             val method = parts[0]
@@ -108,7 +110,7 @@ class TinyHttpServer(
 
             val headers = mutableMapOf<String, String>()
             while (true) {
-                val line = reader.readLine() ?: break
+                val line = readLine(input) ?: break
                 if (line.isEmpty()) break
                 val idx = line.indexOf(':')
                 if (idx > 0) {
@@ -118,14 +120,14 @@ class TinyHttpServer(
 
             val length = headers["content-length"]?.toIntOrNull() ?: 0
             val body = if (length > 0) {
-                val buffer = CharArray(length)
+                val buffer = ByteArray(length)
                 var read = 0
                 while (read < length) {
-                    val n = reader.read(buffer, read, length - read)
+                    val n = input.read(buffer, read, length - read)
                     if (n <= 0) break
                     read += n
                 }
-                String(buffer, 0, read)
+                String(buffer, 0, read, Charsets.UTF_8)
             } else {
                 ""
             }
@@ -153,6 +155,18 @@ class TinyHttpServer(
             if (method != "HEAD") out.write(payload)
             out.flush()
         }
+    }
+
+    /** One CRLF-terminated line, decoded as UTF-8 so a header carrying one survives. */
+    private fun readLine(input: java.io.InputStream): String? {
+        val bytes = java.io.ByteArrayOutputStream()
+        while (true) {
+            val b = input.read()
+            if (b == -1) return if (bytes.size() == 0) null else bytes.toString("UTF-8")
+            if (b == '\n'.code) break
+            bytes.write(b)
+        }
+        return bytes.toString("UTF-8").removeSuffix("\r")
     }
 
     override fun close() {
