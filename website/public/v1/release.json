@@ -1,11 +1,11 @@
 {
   "schema": 1,
-  "version": "3.15.0",
-  "versionCode": 44,
-  "tag": "v3.15.0",
-  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.15.0",
-  "notes": "Nightbell 3.15.0",
-  "apkUrl": "https://github.com/riveerxd/nightbell/releases/download/v3.15.0/Nightbell-3.15.0-release.apk",
-  "apkSize": 2535264,
-  "apkSha256": "8e7e43b81ba0dc43941026c6b92e4aff8e577c91e542ed19fa75eb08a9ff261e"
+  "version": "3.16.0",
+  "versionCode": 45,
+  "tag": "v3.16.0",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.16.0",
+  "notes": "Nightbell 3.16.0",
+  "apkUrl": "https://github.com/riveerxd/nightbell/releases/download/v3.16.0/Nightbell-3.16.0-release.apk",
+  "apkSize": 2617640,
+  "apkSha256": "4c20f455785a1661ed03ebece9e4b5ac2fb212be05ba0df707e0c3df86fc966e"
 }
