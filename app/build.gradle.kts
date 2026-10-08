@@ -572,8 +572,14 @@ android {
         // channel that ignores quiet hours would otherwise hear the same outage on
         // every check of the night. Events are queued in the store before anything is
         // sent, so a check in a worker Android reclaims still gets them out.
-        versionCode = 45
-        versionName = "3.16.0"
+        //
+        // 3.17.0 confirms a failure 30 seconds apart instead of one schedule period
+        // apart, so a threshold of three pages about a minute after the first failed
+        // check rather than three WorkManager periods later. The retries run inside
+        // the background run that found the failure, because a delayed work request
+        // is exactly what Doze holds back. Issue 20.
+        versionCode = 46
+        versionName = "3.17.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
