@@ -36,6 +36,7 @@ import me.river.nightbell.domain.UpdateSource
 import me.river.nightbell.domain.UrgentAlerts
 import me.river.nightbell.domain.runCatchingCancellable
 import me.river.nightbell.domain.Reachability
+import me.river.nightbell.domain.QuickRetry
 import me.river.nightbell.domain.StatusExpectation
 import me.river.nightbell.domain.StatusMode
 import me.river.nightbell.domain.HttpMethod
@@ -43,6 +44,7 @@ import java.util.Calendar
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -127,6 +129,14 @@ class CheckEngine(
      * of false outages, and would poison the uptime history with them too.
      */
     var isOnline: () -> Boolean = { true }
+
+    /**
+     * The gap between two confirming checks, and how long one background run may
+     * spend on them. See [QuickRetry]. Vars so a device test can run a threshold
+     * of three in seconds instead of a minute; nothing else sets them.
+     */
+    var quickRetryGapMs: Long = QuickRetry.GAP_MS
+    var quickRetryBudgetMs: Long = QuickRetry.BUDGET_MS
 
     /**
      * Where webhook events are queued. Null switches webhooks off, which is what
@@ -440,7 +450,7 @@ class CheckEngine(
         // and a monitor's own worker sharing one wake-up produced two checks a
         // second apart, which is the duplicate-sample symptom the outer gate was
         // added to fix.
-        if (!force && !isDue(monitor, before, nowMs())) {
+        if (!force && !isDue(monitor, before, settings, nowMs())) {
             Diag.log(LogEvent.CHECK_SKIPPED, LogField.monitor(monitorId), LogField.tag("why", "not_due"))
             return null
         }
@@ -1790,7 +1800,7 @@ class CheckEngine(
         val witness = PassWitness()
         for (monitor in snapshot.monitors) {
             if (!monitor.enabled) continue
-            if (!force && !isDue(monitor, snapshot.runtimes[monitor.id], now)) continue
+            if (!force && !isDue(monitor, snapshot.runtimes[monitor.id], snapshot.settings, now)) continue
             run(monitor.id, force, witness)
             ran++
         }
@@ -1809,15 +1819,88 @@ class CheckEngine(
      * Prefer the [Monitor]/[MonitorRuntime] overload when the caller already holds
      * a snapshot; this one re-reads the store, and decoding it is not free.
      */
-    fun isDue(monitor: Monitor, runtime: MonitorRuntime?, nowMs: Long = nowMs()): Boolean {
+    fun isDue(
+        monitor: Monitor,
+        runtime: MonitorRuntime?,
+        settings: GlobalSettings,
+        nowMs: Long = nowMs(),
+    ): Boolean {
         if (!monitor.enabled) return false
-        return DueCheck.isDue(monitor.intervalMinutes, runtime?.lastCheckedAt ?: 0L, nowMs)
+        if (DueCheck.isDue(monitor.intervalMinutes, runtime?.lastCheckedAt ?: 0L, nowMs)) return true
+        // A failure still short of its threshold is due again well before its
+        // interval. Answered here rather than by each caller so the in-lock gate,
+        // the worker's gate and the strict service all agree on it.
+        return runtime != null &&
+            QuickRetry.due(monitor, policyOf(monitor, settings), runtime, nowMs, quickRetryGapMs)
     }
+
+    private fun policyOf(monitor: Monitor, settings: GlobalSettings): AlertPolicy =
+        if (monitor.useGlobalAlerts) settings.defaultAlert else monitor.alert
 
     suspend fun isDue(monitorId: String, nowMs: Long = nowMs()): Boolean {
         val snapshot = store.currentSnapshot()
         val monitor = snapshot.monitors.firstOrNull { it.id == monitorId } ?: return false
-        return isDue(monitor, snapshot.runtimes[monitorId], nowMs)
+        return isDue(monitor, snapshot.runtimes[monitorId], snapshot.settings, nowMs)
+    }
+
+    /**
+     * Runs the confirming checks a failure below its threshold is owed, then
+     * returns. [QuickRetry] has the why.
+     *
+     * Called by every background path once its own check or pass is finished,
+     * and inside the same execution on purpose: a delayed one-time work request
+     * is exactly what Doze holds back, and the phone asleep in a drawer is the
+     * case this exists for. A running worker keeps its wake lock, so a delay in
+     * here is honoured to the second.
+     *
+     * Bounded by [quickRetryBudgetMs] from the moment it starts. What is left
+     * when that runs out goes back to the schedule, which is all that used to
+     * happen anyway.
+     *
+     * Each confirming check goes through [run] unforced, so the offline gate, the
+     * pause and the in-lock due gate all apply. That last one is what lets the
+     * sweep and a monitor's own worker run this side by side: whichever wakes
+     * first checks, and the other finds the monitor not due and lets it go.
+     *
+     * @param only restricts it to one monitor, for a worker that owns one.
+     * @return how many confirming checks ran.
+     */
+    suspend fun confirmPending(only: String? = null): Int {
+        val deadline = nowMs() + quickRetryBudgetMs
+        // A monitor whose confirming check produced nothing (offline, a dead
+        // local network, a checker that threw, or another loop got there first)
+        // is dropped for the rest of this run. Without that, a check that comes
+        // back null leaves the monitor still owed and still overdue, and this
+        // loop spins on it as fast as it can return.
+        val dropped = mutableSetOf<String>()
+        var ran = 0
+        while (true) {
+            val snapshot = store.currentSnapshot()
+            if (snapshot.pause.stopsChecks(nowMs())) return ran
+            val owed = snapshot.monitors.mapNotNull { monitor ->
+                if (only != null && monitor.id != only) return@mapNotNull null
+                if (monitor.id in dropped) return@mapNotNull null
+                val runtime = snapshot.runtimes[monitor.id] ?: return@mapNotNull null
+                val policy = policyOf(monitor, snapshot.settings)
+                if (!QuickRetry.pending(monitor, policy, runtime)) return@mapNotNull null
+                monitor.id to runtime.lastCheckedAt + quickRetryGapMs
+            }
+            if (owed.isEmpty()) return ran
+            val next = owed.minOf { it.second }
+            if (next > deadline) {
+                Diag.log(LogEvent.CHECK_SKIPPED, LogField.tag("why", "quick_retry_budget"))
+                return ran
+            }
+            val wait = next - nowMs()
+            if (wait > 0) delay(wait)
+            for ((id, dueAt) in owed) {
+                if (dueAt > nowMs()) continue
+                if (!isOnline()) return ran
+                Diag.log(LogEvent.CHECK_RETRY, LogField.monitor(id))
+                val result = run(id, force = false, witness = PassWitness())
+                if (result == null) dropped += id else ran++
+            }
+        }
     }
 
     /**
@@ -1850,6 +1933,12 @@ class CheckEngine(
                     runtime.lastCheckedAt + monitor.intervalMinutes * 60_000L - DUE_SLACK_MS - now
                 }
                 soonest = minOf(soonest, due)
+                if (runtime != null) {
+                    val policy = policyOf(monitor, snapshot.settings)
+                    if (QuickRetry.pending(monitor, policy, runtime)) {
+                        soonest = minOf(soonest, runtime.lastCheckedAt + quickRetryGapMs - now)
+                    }
+                }
             }
             if (monitor.urgent && runtime != null) {
                 UrgentAlerts.nextRepeatDelayMs(runtime.urgentState, now, monitor.urgentRepeatMinutes)

@@ -1811,6 +1811,7 @@ private fun MonitorRowCard(
                             text = when {
                                 reading -> runtime.lastReading
                                 muted -> "${runtime.lastMessage} · muted, no alerts"
+                                card.streak != null -> "${runtime.lastMessage} · ${card.streak.line}"
                                 else -> runtime.lastMessage
                             },
                             // A reading is re-rendered on every check and its digits

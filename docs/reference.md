@@ -173,6 +173,11 @@ Every monitor either inherits the global alert policy or overrides it:
   before you trust it.
 - **Escalation**: failure threshold (ignore blips), cooldown between alerts,
   optional repeat-while-down nagging.
+- **Retry right away**, on by default and shown only when the threshold is above
+  one. The failures that confirm an outage are checked 30 s apart inside the same
+  background run instead of one schedule period apart, so a threshold of three
+  pages about a minute after the first failure rather than 30 minutes or more.
+  See below.
 - **Quiet hours** with midnight wrap-around, and an optional
   "still notify, but silently" bypass.
 - Inline notification actions: **Re-check now**, **Mute 1h**, and
@@ -325,6 +330,29 @@ uses a policy that **cannot cancel work in flight**
 (`ExistingPeriodicWorkPolicy.UPDATE` for cadence, `ExistingWorkPolicy.KEEP` for
 "check now"). That is not a style preference, see the 1.6.0 section of HANDOFF
 for what the previous `REPLACE`-everywhere design did to real users.
+
+### Confirming a failure
+
+A threshold above one used to be counted in scheduled checks, and in the
+background a scheduled check is 15 minutes away at best. With **Retry right
+away** on, a failing check that is still short of the threshold is re-checked
+`QuickRetry.GAP_MS` (30 s) later, and again, until the monitor either passes or
+reaches the threshold and alerts. The rules are in `domain/QuickRetry.kt`.
+
+- The retries run inside the worker, sweep or reconnect pass that found the
+  failure, before it returns. A delayed one-time work request is exactly what
+  Doze holds back, and a running worker keeps its wake lock. In strict mode the
+  service loop simply wakes for them.
+- One run spends at most `QuickRetry.BUDGET_MS` (4 minutes) on them, well
+  inside WorkManager's 10 minute limit. Anything left goes back to the schedule.
+- They go through the same gates as any scheduled check: offline, a pause, and a
+  dead local network all end the retries without counting them as failures.
+- Only a check that produced a failing verdict starts one, so a phone sitting in
+  a car park does not re-check every monitor twice a minute.
+- GitHub repositories stay on their schedule, because they spend a shared rate
+  limit.
+- A failing card says where it stands: "1 of 3 failures, re-checking every 30s",
+  or "before it alerts" with the switch off.
 
 ### Checker health, separately from monitor health
 

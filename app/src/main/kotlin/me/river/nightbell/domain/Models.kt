@@ -473,6 +473,17 @@ data class AlertPolicy(
     val alertOnRecovery: Boolean = true,
     /** Consecutive failures required before shouting. Kills flaky-network noise. */
     val failureThreshold: Int = 1,
+    /**
+     * Confirm a failure with checks [QuickRetry.GAP_MS] apart rather than waiting
+     * for the schedule to produce the rest of [failureThreshold].
+     *
+     * On by default, stored policies included. Waiting meant a threshold of two
+     * paged half an hour after the outage began, which is not what anybody who
+     * set two to ignore blips asked for, and a pager that alerts sooner than it
+     * used to is the safe direction to change. The switch is there for whoever
+     * really did want the threshold measured in scheduled checks.
+     */
+    val quickRetry: Boolean = true,
     val sound: SoundChoice = SoundChoice.DEFAULT_NOTIFICATION,
     val vibrate: Boolean = true,
     /**
@@ -1107,6 +1118,12 @@ data class MonitorCard(
     val monitor: Monitor,
     val runtime: MonitorRuntime,
     val checking: Boolean = false,
+    /**
+     * Failing, but not yet enough to alert. Null otherwise. Carried on the card
+     * because a red card with no notification behind it reads as the pager being
+     * broken unless it says why it has not spoken yet.
+     */
+    val streak: QuickRetry.Streak? = null,
 )
 
 /** Why a check failed — drives the copy shown to the user. */

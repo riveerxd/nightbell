@@ -75,7 +75,7 @@ class MonitorWorker(context: Context, params: WorkerParameters) : CoroutineWorke
             // Answered from the snapshot already in hand — the store is a JSON
             // document behind DataStore, so re-reading it here would decode the
             // whole thing a second time for one timestamp.
-            if (!force && !graph.engine.isDue(monitor, snapshot.runtimes[monitorId])) {
+            if (!force && !graph.engine.isDue(monitor, snapshot.runtimes[monitorId], snapshot.settings)) {
                 Diag.log(LogEvent.SCHED_WORKER_NOT_DUE, LogField.monitor(monitorId))
                 return Result.success()
             }
@@ -87,6 +87,10 @@ class MonitorWorker(context: Context, params: WorkerParameters) : CoroutineWorke
                 LogField.of("attempt", runAttemptCount),
             )
             graph.engine.run(monitorId, force = force)
+            // Before returning, because returning is what lets the phone sleep.
+            // A failure short of its threshold is confirmed now rather than one
+            // fifteen-minute period per failure later.
+            graph.engine.confirmPending(only = monitorId)
             Result.success()
         } catch (cancellation: CancellationException) {
             // WorkManager stopped us: constraints no longer met, execution window
@@ -137,6 +141,7 @@ class SweepWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
                 LogField.count("monitors", snapshot.monitors.size),
             )
             val ran = graph.engine.runAllDue()
+            graph.engine.confirmPending()
             // Repair after the pass. This used to be the single biggest source of
             // false crash alerts: `syncAll` REPLACEd the unique work of every
             // monitor, cancelling each check that was running in parallel with

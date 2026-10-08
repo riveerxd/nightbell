@@ -21,6 +21,7 @@ import me.river.nightbell.domain.Monitor
 import me.river.nightbell.domain.MonitorCard
 import me.river.nightbell.domain.MonitorGroup
 import me.river.nightbell.domain.MonitorRuntime
+import me.river.nightbell.domain.QuickRetry
 import me.river.nightbell.domain.PauseState
 import me.river.nightbell.domain.ReferenceSample
 import me.river.nightbell.domain.UpdateState
@@ -224,11 +225,17 @@ class NightbellStore(
 
     val cards: Flow<List<MonitorCard>> = combine(snapshot, inFlight) { snap, busy ->
         snap.monitors.map { monitor ->
+            val runtime = snap.runtimes[monitor.id]
+                ?: MonitorRuntime(health = if (monitor.enabled) Health.UNKNOWN else Health.PAUSED)
             MonitorCard(
                 monitor = monitor,
-                runtime = snap.runtimes[monitor.id]
-                    ?: MonitorRuntime(health = if (monitor.enabled) Health.UNKNOWN else Health.PAUSED),
+                runtime = runtime,
                 checking = monitor.id in busy,
+                streak = QuickRetry.streak(
+                    monitor = monitor,
+                    policy = if (monitor.useGlobalAlerts) snap.settings.defaultAlert else monitor.alert,
+                    runtime = runtime,
+                ),
             )
         }
     }

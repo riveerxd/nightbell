@@ -67,6 +67,7 @@ import me.river.nightbell.domain.FiringAlert
 import me.river.nightbell.domain.alertsFiring
 import me.river.nightbell.domain.alertsFiringLine
 import me.river.nightbell.domain.MonitorCard
+import me.river.nightbell.domain.QuickRetry
 import me.river.nightbell.domain.MonitorKind
 import me.river.nightbell.domain.PrometheusWatch
 import me.river.nightbell.domain.PrometheusSource
@@ -249,7 +250,7 @@ fun DetailScreen(
 
         item(key = "hero") {
             StaggeredEntrance(index = 0, key = "hero-${monitor.id}", log = entrance) {
-                HeroCard(monitor, runtime, health, current.checking, accent, accentEnd, now)
+                HeroCard(monitor, runtime, health, current.checking, current.streak, accent, accentEnd, now)
             }
         }
 
@@ -521,6 +522,7 @@ private fun HeroCard(
     runtime: MonitorRuntime,
     health: Health,
     checking: Boolean,
+    streak: QuickRetry.Streak?,
     accent: Color,
     accentEnd: Color,
     nowMs: Long,
@@ -565,6 +567,8 @@ private fun HeroCard(
                     // the same information twice, and the worse of the two.
                     val headline = if (runtime.lastAlerts.isNotEmpty()) {
                         runtime.alertsFiringLine
+                    } else if (streak != null && runtime.lastMessage.isNotBlank()) {
+                        "${runtime.lastMessage} · ${streak.line}"
                     } else {
                         runtime.lastMessage.ifBlank {
                             when {

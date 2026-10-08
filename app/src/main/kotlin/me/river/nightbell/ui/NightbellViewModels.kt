@@ -829,6 +829,7 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
         viewModelScope.launch {
             try {
                 val count = graph.engine.runAllDue(force = true)
+                confirmAfterTap(graph, monitorId = null)
                 // Zero is a warning and not a success: the button ran and
                 // nothing happened, which is the one answer here a user would
                 // want to look at twice.
@@ -874,6 +875,7 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
             } finally {
                 checkingNow.remove(monitorId)
             }
+            confirmAfterTap(graph, monitorId)
         }
     }
 
@@ -1665,6 +1667,7 @@ class DetailViewModel(
             } finally {
                 busy = false
             }
+            confirmAfterTap(graph, monitorId)
         }
     }
 
@@ -2103,6 +2106,7 @@ class SettingsViewModel(private val graph: Nightbell.Graph) : ViewModel() {
                 if (graph.network.isOnline()) {
                     graph.appScope.launch {
                         runCatchingCancellable { graph.engine.runAllDue(force = true) }
+                        runCatchingCancellable { graph.engine.confirmPending() }
                     }
                 }
             } catch (error: Throwable) {
@@ -2529,3 +2533,17 @@ fun durationLabel(minutes: Int): String = when {
 
 /** The two directions a backup can move. See [SettingsViewModel.transfer]. */
 enum class Transfer { EXPORT, IMPORT }
+
+/**
+ * A tapped check that fails short of its threshold is confirmed like a scheduled
+ * one, on the app scope so walking away from the screen does not cancel it.
+ * Without this the card says "1 of 3 failures" and then waits for the schedule,
+ * which is the half hour [me.river.nightbell.domain.QuickRetry] exists to remove.
+ *
+ * @param monitorId the one monitor that was checked, or null after a whole pass.
+ */
+private fun confirmAfterTap(graph: Nightbell.Graph, monitorId: String?) {
+    graph.appScope.launch {
+        runCatchingCancellable { graph.engine.confirmPending(only = monitorId) }
+    }
+}

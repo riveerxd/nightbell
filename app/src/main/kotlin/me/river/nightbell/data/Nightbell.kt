@@ -309,6 +309,7 @@ object Nightbell {
                 appScope.launch {
                     runCatchingCancellable { engine.runAllDue() }
                     notifyStateChanged()
+                    runCatchingCancellable { engine.confirmPending() }
                 }
             }
             network.start()

@@ -32,6 +32,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import me.river.nightbell.domain.AlertPolicy
+import me.river.nightbell.domain.QuickRetry
 import me.river.nightbell.domain.SoundChoice
 import me.river.nightbell.domain.VibrationStyle
 import me.river.nightbell.ui.icons.NightbellIcons
@@ -41,6 +42,18 @@ import me.river.nightbell.ui.theme.NightbellColors
 fun formatMinuteOfDay(minute: Int): String {
     val safe = ((minute % 1440) + 1440) % 1440
     return "%02d:%02d".format(safe / 60, safe % 60)
+}
+
+/** How long [retries] confirming checks take, in the words the subtitle uses. */
+internal fun quickRetryLead(retries: Int): String {
+    val seconds = retries * QuickRetry.GAP_MS / 1000
+    val minutes = seconds / 60
+    val rest = seconds % 60
+    return when {
+        minutes == 0L -> "${rest}s"
+        rest == 0L -> "$minutes min"
+        else -> "$minutes min ${rest}s"
+    }
 }
 
 private fun soundIcon(choice: SoundChoice) = when (choice) {
@@ -279,6 +292,31 @@ fun AlertPolicyEditor(
                     color = NightbellColors.TextTertiary,
                     modifier = Modifier.padding(start = 2.dp, bottom = 8.dp),
                 )
+                // Only while there is something to retry. At one failure the first
+                // failed check already alerts, and a switch that changes nothing
+                // is a control somebody has to try in order to understand.
+                AnimatedVisibility(
+                    visible = policy.failureThreshold > 1,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically(),
+                ) {
+                    val retries = policy.failureThreshold - 1
+                    ToggleRow(
+                        title = "Retry right away",
+                        subtitle = if (policy.quickRetry) {
+                            "Re-checks every ${QuickRetry.GAP_MS / 1000}s after a failure, so it " +
+                                "alerts about ${quickRetryLead(retries)} after the first failed check"
+                        } else {
+                            "Waits for the next scheduled check each time, " +
+                                if (retries == 1) "so one extra interval" else "so $retries extra intervals"
+                        },
+                        checked = policy.quickRetry,
+                        onCheckedChange = { onChange(policy.copy(quickRetry = it)) },
+                        icon = NightbellIcons.Refresh,
+                        accent = accent,
+                        modifier = Modifier.testTag("policy-quick-retry"),
+                    )
+                }
 
                 StepperRow(
                     title = "Cooldown",

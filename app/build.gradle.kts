@@ -771,5 +771,6 @@ dependencies {
     androidTestImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.okhttp.tls)
     androidTestImplementation(libs.androidx.exifinterface)
+    androidTestImplementation(libs.androidx.work.testing)
     debugImplementation(libs.compose.ui.test.manifest)
 }
