@@ -25,12 +25,17 @@ import androidx.work.testing.TestListenableWorkerBuilder
 import androidx.work.workDataOf
 import java.net.ServerSocket
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import me.river.nightbell.NightbellTestSupport.appContext
 import me.river.nightbell.NightbellTestSupport.awaitTrue
 import me.river.nightbell.NightbellTestSupport.captureScreenshot
 import me.river.nightbell.data.Nightbell
+import me.river.nightbell.data.diag.Diag
 import me.river.nightbell.data.work.MonitorWorker
+import me.river.nightbell.data.work.SweepWorker
 import me.river.nightbell.domain.AlertPolicy
 import me.river.nightbell.domain.GlobalSettings
 import me.river.nightbell.domain.Health
@@ -271,6 +276,60 @@ class QuickRetryInstrumentedTest {
         composeRule.captureScreenshot("quick-retry-06-check-all-paged")
     }
 
+    /**
+     * Code review: a loop that lost the race for a retry used to give the monitor
+     * up and return. When the winner was a tapped check's loop on the app scope,
+     * which holds no wake lock, the worker that did hold one returned and let the
+     * phone sleep through the rest of the streak.
+     */
+    @Test
+    fun aLoopThatLosesTheRaceForARetryKeepsWaiting() {
+        seed(deadUrl, AlertPolicy(failureThreshold = 4, cooldownMinutes = 0))
+        graph.engine.quickRetryGapMs = 1_000L
+
+        val returnedAt = runBlocking {
+            graph.engine.run("api", force = false)
+            List(2) {
+                async(Dispatchers.Default) {
+                    graph.engine.confirmPending(only = "api")
+                    System.currentTimeMillis()
+                }
+            }.awaitAll()
+        }
+
+        val after = runtime()
+        assertEquals(4, after.consecutiveFailures)
+        assertTrue(after.alerting)
+        val streakEnded = after.samples.last().at
+        returnedAt.forEach {
+            assertTrue("a loop gave up ${streakEnded - it}ms before the streak ended", it >= streakEnded)
+        }
+    }
+
+    /**
+     * Code review: the sweep confirmed before its schedule repair and urgent tick,
+     * so a page already repeating for another monitor waited minutes behind a
+     * failure that had not even alerted yet.
+     */
+    @Test
+    fun theSweepFinishesItsOwnWorkBeforeItConfirms() {
+        seed(deadUrl, AlertPolicy(failureThreshold = 3, cooldownMinutes = 0))
+        graph.engine.quickRetryGapMs = 1_000L
+        val worker = TestListenableWorkerBuilder<SweepWorker>(appContext).build()
+
+        val result = runBlocking { worker.doWork() }
+
+        assertEquals(ListenableWorker.Result.success(), result)
+        assertEquals(3, runtime().consecutiveFailures)
+        val lines = Diag.recent()
+        val sweep = lines.subList(lines.indexOfLast { "sched.sweep.start" in it }, lines.size)
+        val done = sweep.indexOfFirst { "sched.sweep.done ran=" in it }
+        val retry = sweep.indexOfFirst { "check.retry" in it }
+        assertTrue("the sweep never confirmed", retry >= 0)
+        assertTrue("the sweep never finished", done >= 0)
+        assertTrue("a retry ran before the sweep's own work was done", done < retry)
+    }
+
     private fun openAlertSettings() {
         scenario = ActivityScenario.launch(MainActivity::class.java)
         composeRule.waitForIdle()
@@ -342,7 +401,7 @@ class QuickRetryInstrumentedTest {
         }
         scenario = ActivityScenario.launch(MainActivity::class.java)
         composeRule.waitUntil(10_000) {
-            composeRule.onAllNodesWithText("1 of 3 failures, re-checking every 30s", substring = true)
+            composeRule.onAllNodesWithText("1 of 3 failures before it alerts", substring = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
         composeRule.captureScreenshot("quick-retry-04-card")

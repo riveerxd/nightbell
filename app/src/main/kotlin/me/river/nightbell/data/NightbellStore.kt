@@ -22,6 +22,7 @@ import me.river.nightbell.domain.MonitorCard
 import me.river.nightbell.domain.MonitorGroup
 import me.river.nightbell.domain.MonitorRuntime
 import me.river.nightbell.domain.QuickRetry
+import me.river.nightbell.domain.SpokenPage
 import me.river.nightbell.domain.PauseState
 import me.river.nightbell.domain.ReferenceSample
 import me.river.nightbell.domain.UpdateState
@@ -233,8 +234,9 @@ class NightbellStore(
                 checking = monitor.id in busy,
                 streak = QuickRetry.streak(
                     monitor = monitor,
-                    policy = if (monitor.useGlobalAlerts) snap.settings.defaultAlert else monitor.alert,
+                    policy = SpokenPage.policyFor(monitor, snap.settings),
                     runtime = runtime,
+                    silenced = QuickRetry.silenced(snap.settings, runtime, System.currentTimeMillis()),
                 ),
             )
         }

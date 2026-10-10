@@ -33,32 +33,32 @@ class QuickRetryTest {
 
     @Test
     fun `a first failure under a threshold of three owes a retry`() {
-        assertTrue(QuickRetry.pending(monitor, policy, failing(1)))
-        assertTrue(QuickRetry.pending(monitor, policy, failing(2)))
+        assertTrue(QuickRetry.pending(monitor, policy, failing(1), silenced = false))
+        assertTrue(QuickRetry.pending(monitor, policy, failing(2), silenced = false))
     }
 
     @Test
     fun `the retry is due one gap after the failure, not before`() {
         val runtime = failing(1)
-        assertFalse(QuickRetry.due(monitor, policy, runtime, now + QuickRetry.GAP_MS - 1))
-        assertTrue(QuickRetry.due(monitor, policy, runtime, now + QuickRetry.GAP_MS))
+        assertFalse(QuickRetry.due(monitor, policy, runtime, silenced = false, nowMs = now + QuickRetry.GAP_MS - 1))
+        assertTrue(QuickRetry.due(monitor, policy, runtime, silenced = false, nowMs = now + QuickRetry.GAP_MS))
     }
 
     @Test
     fun `reaching the threshold ends it, because the alert has been decided`() {
-        assertFalse(QuickRetry.pending(monitor, policy, failing(3)))
-        assertFalse(QuickRetry.pending(monitor, policy, failing(4)))
+        assertFalse(QuickRetry.pending(monitor, policy, failing(3), silenced = false))
+        assertFalse(QuickRetry.pending(monitor, policy, failing(4), silenced = false))
     }
 
     @Test
     fun `a monitor already alerting is left to the schedule`() {
-        assertFalse(QuickRetry.pending(monitor, policy, failing(1).copy(alerting = true)))
+        assertFalse(QuickRetry.pending(monitor, policy, failing(1).copy(alerting = true), silenced = false))
     }
 
     @Test
     fun `a threshold of one has nothing to confirm`() {
-        assertFalse(QuickRetry.pending(monitor, AlertPolicy(failureThreshold = 1), failing(1)))
-        assertNull(QuickRetry.streak(monitor, AlertPolicy(failureThreshold = 1), failing(1)))
+        assertFalse(QuickRetry.pending(monitor, AlertPolicy(failureThreshold = 1), failing(1), silenced = false))
+        assertNull(QuickRetry.streak(monitor, AlertPolicy(failureThreshold = 1), failing(1), silenced = false))
     }
 
     @Test
@@ -67,13 +67,13 @@ class QuickRetryTest {
             lastCheckedAt = now,
             samples = listOf(Sample(at = now, ok = true, latencyMs = 40L)),
         )
-        assertFalse(QuickRetry.pending(monitor, policy, ok))
-        assertNull(QuickRetry.streak(monitor, policy, ok))
+        assertFalse(QuickRetry.pending(monitor, policy, ok, silenced = false))
+        assertNull(QuickRetry.streak(monitor, policy, ok, silenced = false))
     }
 
     @Test
     fun `switched off, it waits for the schedule`() {
-        assertFalse(QuickRetry.pending(monitor, policy.copy(quickRetry = false), failing(1)))
+        assertFalse(QuickRetry.pending(monitor, policy.copy(quickRetry = false), failing(1), silenced = false))
     }
 
     /**
@@ -83,31 +83,55 @@ class QuickRetryTest {
     @Test
     fun `an attempt that produced no verdict does not keep retrying`() {
         val noVerdict = failing(1).copy(lastCheckedAt = now + 5_000L)
-        assertFalse(QuickRetry.pending(monitor, policy, noVerdict))
+        assertFalse(QuickRetry.pending(monitor, policy, noVerdict, silenced = false))
     }
 
     @Test
     fun `github repositories stay on their schedule`() {
         val repo = monitor.copy(kind = MonitorKind.GITHUB_REPO)
-        assertFalse(QuickRetry.pending(repo, policy, failing(1)))
+        assertFalse(QuickRetry.pending(repo, policy, failing(1), silenced = false))
     }
 
     @Test
     fun `alerts that will never be posted are not chased`() {
-        assertFalse(QuickRetry.pending(monitor, policy.copy(enabled = false), failing(1)))
-        assertFalse(QuickRetry.pending(monitor, policy.copy(alertOnDown = false), failing(1)))
-        assertFalse(QuickRetry.pending(monitor.copy(enabled = false), policy, failing(1)))
+        assertFalse(QuickRetry.pending(monitor, policy.copy(enabled = false), failing(1), silenced = false))
+        assertFalse(QuickRetry.pending(monitor, policy.copy(alertOnDown = false), failing(1), silenced = false))
+        assertFalse(QuickRetry.pending(monitor.copy(enabled = false), policy, failing(1), silenced = false))
     }
 
     @Test
-    fun `the card line says how far along it is and what happens next`() {
-        val quick = QuickRetry.streak(monitor, policy, failing(1))
-        assertEquals("1 of 3 failures, re-checking every 30s", quick?.line)
-        assertEquals(now + QuickRetry.GAP_MS, quick?.retryAt)
+    fun `the card line says how far along it is and nothing it cannot know`() {
+        assertEquals("1 of 3 failures before it alerts", QuickRetry.streak(monitor, policy, failing(1), silenced = false)?.line)
+        assertEquals(
+            "2 of 3 failures before it alerts",
+            QuickRetry.streak(monitor, policy.copy(quickRetry = false), failing(2), silenced = false)?.line,
+        )
+    }
 
-        val slow = QuickRetry.streak(monitor, policy.copy(quickRetry = false), failing(2))
-        assertEquals("2 of 3 failures before it alerts", slow?.line)
-        assertNull(slow?.retryAt)
+    /** Code review: retrying towards an alert that will never be posted. */
+    @Test
+    fun `a muted monitor or a switched off master is neither retried nor counted`() {
+        val runtime = failing(1)
+        assertFalse(QuickRetry.pending(monitor, policy, runtime, silenced = true))
+        assertNull(QuickRetry.streak(monitor, policy, runtime, silenced = true))
+
+        val settings = me.river.nightbell.domain.GlobalSettings()
+        assertFalse(QuickRetry.silenced(settings, runtime, now))
+        assertTrue(QuickRetry.silenced(settings.copy(masterAlertsEnabled = false), runtime, now))
+        assertTrue(QuickRetry.silenced(settings, runtime.copy(mutedUntil = now + 60_000L), now))
+        assertFalse("an expired mute is not a mute", QuickRetry.silenced(settings, runtime.copy(mutedUntil = now - 1), now))
+    }
+
+    /**
+     * Code review: the stepper goes to ten, and nine retries thirty seconds apart
+     * did not fit the four minutes the budget used to allow, so the editor's
+     * "about 4 min 30s" was a promise the loop broke.
+     */
+    @Test
+    fun `the budget fits every threshold the stepper allows`() {
+        val lastRetryDue = (10 - 1) * QuickRetry.GAP_MS
+        assertTrue(lastRetryDue < QuickRetry.BUDGET_MS)
+        assertTrue("must stay inside WorkManager's ten minutes", QuickRetry.BUDGET_MS < 10 * 60_000L)
     }
 
     /**

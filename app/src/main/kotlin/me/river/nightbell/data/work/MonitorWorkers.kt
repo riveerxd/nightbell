@@ -141,7 +141,6 @@ class SweepWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
                 LogField.count("monitors", snapshot.monitors.size),
             )
             val ran = graph.engine.runAllDue()
-            graph.engine.confirmPending()
             // Repair after the pass. This used to be the single biggest source of
             // false crash alerts: `syncAll` REPLACEd the unique work of every
             // monitor, cancelling each check that was running in parallel with
@@ -174,6 +173,10 @@ class SweepWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
                 .onFailure { Diag.log(LogEvent.UPDATE_CHECK_FAILED, LogField.error("why", it)) }
 
             Diag.log(LogEvent.SCHED_SWEEP_DONE, LogField.count("ran", ran))
+            // Last, after the urgent tick and the repair. Confirming can hold this
+            // run for minutes, and a page already repeating for another monitor
+            // must not wait behind a failure that has not even alerted yet.
+            graph.engine.confirmPending()
             Result.success()
         } catch (cancellation: CancellationException) {
             Diag.log(LogEvent.SCHED_SWEEP_STOPPED)

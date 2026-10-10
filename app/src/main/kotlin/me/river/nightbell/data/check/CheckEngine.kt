@@ -37,6 +37,7 @@ import me.river.nightbell.domain.UrgentAlerts
 import me.river.nightbell.domain.runCatchingCancellable
 import me.river.nightbell.domain.Reachability
 import me.river.nightbell.domain.QuickRetry
+import me.river.nightbell.domain.SpokenPage
 import me.river.nightbell.domain.StatusExpectation
 import me.river.nightbell.domain.StatusMode
 import me.river.nightbell.domain.HttpMethod
@@ -1830,12 +1831,15 @@ class CheckEngine(
         // A failure still short of its threshold is due again well before its
         // interval. Answered here rather than by each caller so the in-lock gate,
         // the worker's gate and the strict service all agree on it.
-        return runtime != null &&
-            QuickRetry.due(monitor, policyOf(monitor, settings), runtime, nowMs, quickRetryGapMs)
+        return runtime != null && QuickRetry.due(
+            monitor = monitor,
+            policy = SpokenPage.policyFor(monitor, settings),
+            runtime = runtime,
+            silenced = QuickRetry.silenced(settings, runtime, nowMs),
+            nowMs = nowMs,
+            gapMs = quickRetryGapMs,
+        )
     }
-
-    private fun policyOf(monitor: Monitor, settings: GlobalSettings): AlertPolicy =
-        if (monitor.useGlobalAlerts) settings.defaultAlert else monitor.alert
 
     suspend fun isDue(monitorId: String, nowMs: Long = nowMs()): Boolean {
         val snapshot = store.currentSnapshot()
@@ -1860,17 +1864,20 @@ class CheckEngine(
      * Each confirming check goes through [run] unforced, so the offline gate, the
      * pause and the in-lock due gate all apply. That last one is what lets the
      * sweep and a monitor's own worker run this side by side: whichever wakes
-     * first checks, and the other finds the monitor not due and lets it go.
+     * first checks, and the other finds the monitor not due and waits for the
+     * next one rather than giving it up. Giving it up was a real hand-off bug: a
+     * tapped check's loop on the app scope, which holds no wake lock, could win
+     * the race, and the worker that did hold one then returned and let the phone
+     * sleep through the rest.
      *
      * @param only restricts it to one monitor, for a worker that owns one.
      * @return how many confirming checks ran.
      */
     suspend fun confirmPending(only: String? = null): Int {
         val deadline = nowMs() + quickRetryBudgetMs
-        // A monitor whose confirming check produced nothing (offline, a dead
-        // local network, a checker that threw, or another loop got there first)
-        // is dropped for the rest of this run. Without that, a check that comes
-        // back null leaves the monitor still owed and still overdue, and this
+        // A monitor whose confirming check produced nothing and that nobody else
+        // checked either (offline, a pause, a checker that threw) is dropped for
+        // the rest of this run. Without that it stays owed and overdue, and this
         // loop spins on it as fast as it can return.
         val dropped = mutableSetOf<String>()
         var ran = 0
@@ -1881,27 +1888,39 @@ class CheckEngine(
                 if (only != null && monitor.id != only) return@mapNotNull null
                 if (monitor.id in dropped) return@mapNotNull null
                 val runtime = snapshot.runtimes[monitor.id] ?: return@mapNotNull null
-                val policy = policyOf(monitor, snapshot.settings)
-                if (!QuickRetry.pending(monitor, policy, runtime)) return@mapNotNull null
-                monitor.id to runtime.lastCheckedAt + quickRetryGapMs
+                val policy = SpokenPage.policyFor(monitor, snapshot.settings)
+                val silenced = QuickRetry.silenced(snapshot.settings, runtime, nowMs())
+                if (!QuickRetry.pending(monitor, policy, runtime, silenced)) return@mapNotNull null
+                Owed(monitor.id, runtime.lastCheckedAt)
             }
             if (owed.isEmpty()) return ran
-            val next = owed.minOf { it.second }
+            val next = owed.minOf { it.checkedAt + quickRetryGapMs }
             if (next > deadline) {
                 Diag.log(LogEvent.CHECK_SKIPPED, LogField.tag("why", "quick_retry_budget"))
                 return ran
             }
             val wait = next - nowMs()
             if (wait > 0) delay(wait)
-            for ((id, dueAt) in owed) {
-                if (dueAt > nowMs()) continue
+            // One witness per round, the way a pass shares one: losing signal
+            // fails every monitor in the round at once, and one probe answers
+            // that for all of them.
+            val witness = PassWitness()
+            for (entry in owed) {
+                if (entry.checkedAt + quickRetryGapMs > nowMs()) continue
                 if (!isOnline()) return ran
-                Diag.log(LogEvent.CHECK_RETRY, LogField.monitor(id))
-                val result = run(id, force = false, witness = PassWitness())
-                if (result == null) dropped += id else ran++
+                Diag.log(LogEvent.CHECK_RETRY, LogField.monitor(entry.id))
+                if (run(entry.id, force = false, witness = witness) != null) {
+                    ran++
+                    continue
+                }
+                val now = store.currentSnapshot().runtimes[entry.id]?.lastCheckedAt
+                if (now == entry.checkedAt) dropped += entry.id
             }
         }
     }
+
+    /** A monitor owed a confirming check, and the check its due time counts from. */
+    private data class Owed(val id: String, val checkedAt: Long)
 
     /**
      * Millis until the earliest of: the next monitor becoming due, or the next
@@ -1934,8 +1953,9 @@ class CheckEngine(
                 }
                 soonest = minOf(soonest, due)
                 if (runtime != null) {
-                    val policy = policyOf(monitor, snapshot.settings)
-                    if (QuickRetry.pending(monitor, policy, runtime)) {
+                    val policy = SpokenPage.policyFor(monitor, snapshot.settings)
+                    val silenced = QuickRetry.silenced(snapshot.settings, runtime, now)
+                    if (QuickRetry.pending(monitor, policy, runtime, silenced)) {
                         soonest = minOf(soonest, runtime.lastCheckedAt + quickRetryGapMs - now)
                     }
                 }

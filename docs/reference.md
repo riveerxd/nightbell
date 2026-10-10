@@ -340,19 +340,36 @@ away** on, a failing check that is still short of the threshold is re-checked
 reaches the threshold and alerts. The rules are in `domain/QuickRetry.kt`.
 
 - The retries run inside the worker, sweep or reconnect pass that found the
-  failure, before it returns. A delayed one-time work request is exactly what
-  Doze holds back, and a running worker keeps its wake lock. In strict mode the
-  service loop simply wakes for them.
-- One run spends at most `QuickRetry.BUDGET_MS` (4 minutes) on them, well
-  inside WorkManager's 10 minute limit. Anything left goes back to the schedule.
+  failure, before it returns, because a delayed one-time work request is
+  exactly what Doze holds back. In strict mode the service loop simply wakes
+  for them.
+- Doze still decides how long that run lives. Measured on API 34 with
+  `dumpsys deviceidle force-idle`: an app under battery optimisation has its
+  running worker stopped the moment the phone goes idle, and its network cut,
+  so the retries left over go back to the schedule, and the next worker that
+  runs takes the overdue one first. Exempted from battery optimisation, the
+  same worker kept retrying 30 s apart through deep idle and paged on time.
+  The sleeping case is therefore no worse than before this existed, and only
+  better with the exemption or strict mode.
+- A loop that finds a retry already taken by another (the sweep and the
+  monitor's own worker both wake for it) keeps waiting for the next one. It
+  only gives a monitor up when nobody checked it.
+- One run spends at most `QuickRetry.BUDGET_MS` (7 minutes) on them, enough
+  for the nine retries a threshold of 10 needs and still inside WorkManager's
+  10 minute limit. Anything left goes back to the schedule. The sweep confirms
+  last, after the urgent tick, so a page already repeating never waits on them.
+- Muted monitors and a switched off master switch are not retried: nothing
+  would be posted at the end of it.
 - They go through the same gates as any scheduled check: offline, a pause, and a
   dead local network all end the retries without counting them as failures.
 - Only a check that produced a failing verdict starts one, so a phone sitting in
   a car park does not re-check every monitor twice a minute.
 - GitHub repositories stay on their schedule, because they spend a shared rate
   limit.
-- A failing card says where it stands: "1 of 3 failures, re-checking every 30s",
-  or "before it alerts" with the switch off.
+- A failing card that has not alerted yet says where it stands: "1 of 3
+  failures before it alerts". It does not claim to be retrying, because whether
+  a retry is running depends on the network and the budget, which the card
+  cannot see.
 
 ### Checker health, separately from monitor health
 

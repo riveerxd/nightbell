@@ -27,59 +27,59 @@ object QuickRetry {
 
     /**
      * How long one background run may spend confirming before it hands back to
-     * the schedule.
+     * the schedule, measured to when the last confirming check is due.
      *
-     * WorkManager stops a worker after ten minutes. Element checks boot a WebView
-     * each time and a threshold of ten is nine retries, so this leaves room for
-     * the checks themselves inside the window. Whatever is left over is picked up
-     * by the next scheduled check, which is exactly what happened before.
+     * The threshold stepper goes to ten, which is nine checks thirty seconds
+     * apart: four and a half minutes before the checks themselves take any time.
+     * Seven minutes covers that with room for slow checks, and stays inside the
+     * ten WorkManager allows a worker before it stops it. Whatever is left over
+     * goes back to the schedule, which is all that used to happen anyway.
      */
-    const val BUDGET_MS = 4 * 60_000L
+    const val BUDGET_MS = 7 * 60_000L
 
     /** Where a failing monitor stands against its threshold. */
-    data class Streak(
-        val failed: Int,
-        val needed: Int,
-        /** When the next confirming check is due, or null when it waits for the schedule. */
-        val retryAt: Long?,
-    ) {
+    data class Streak(val failed: Int, val needed: Int) {
         /**
          * The clause the card and the detail screen add to the failure message.
          *
-         * No countdown. The UI clock ticks every twenty seconds, so "retrying in
-         * 25s" would sit on 25 for most of the wait and then jump past zero.
+         * Says nothing about retrying. Whether a retry is actually running depends
+         * on the network, the budget and the platform, none of which the card can
+         * see, and a line that said "re-checking" while the phone sat offline was
+         * the card describing work that was not happening. The count is always
+         * true.
          */
-        val line: String
-            get() = if (retryAt == null) {
-                "$failed of $needed failures before it alerts"
-            } else {
-                "$failed of $needed failures, re-checking every ${GAP_MS / 1000}s"
-            }
+        val line: String get() = "$failed of $needed failures before it alerts"
     }
 
     /**
      * The streak a monitor is in, or null when it is not counting towards an alert.
      *
      * Null when it is passing, when it is already alerting, when the threshold is
-     * one (the first failure already alerted), and when its alerts are off: a
-     * count towards a notification that will never be posted is not worth a line.
+     * one (the first failure already alerted), and when nothing would be posted
+     * at the end of it: alerts off for the monitor, the master switch off, or the
+     * monitor muted. A count towards a notification that will never come is not
+     * worth a line.
      */
     fun streak(
         monitor: Monitor,
         policy: AlertPolicy,
         runtime: MonitorRuntime,
-        gapMs: Long = GAP_MS,
+        silenced: Boolean,
     ): Streak? {
-        if (!monitor.enabled || !policy.enabled || !policy.alertOnDown) return null
+        if (silenced || !monitor.enabled || !policy.enabled || !policy.alertOnDown) return null
         val needed = policy.failureThreshold.coerceAtLeast(1)
         val failed = runtime.consecutiveFailures
         if (needed <= 1 || failed <= 0 || failed >= needed || runtime.alerting) return null
-        return Streak(
-            failed = failed,
-            needed = needed,
-            retryAt = if (pending(monitor, policy, runtime)) runtime.lastCheckedAt + gapMs else null,
-        )
+        return Streak(failed = failed, needed = needed)
     }
+
+    /**
+     * Whether nothing this monitor could reach would ever be posted: the master
+     * switch is off or the monitor is muted. Retrying towards that alert would be
+     * spending checks, and a WebView boot each for a page monitor, on silence.
+     */
+    fun silenced(settings: GlobalSettings, runtime: MonitorRuntime, nowMs: Long): Boolean =
+        !settings.masterAlertsEnabled || runtime.mutedUntil > nowMs
 
     /**
      * Whether a confirming check is owed for this monitor.
@@ -95,13 +95,15 @@ object QuickRetry {
      * limit shared with everything else on the token, and what they report is
      * activity rather than an outage anybody needs paging about within a minute.
      */
-    fun pending(monitor: Monitor, policy: AlertPolicy, runtime: MonitorRuntime): Boolean {
+    fun pending(
+        monitor: Monitor,
+        policy: AlertPolicy,
+        runtime: MonitorRuntime,
+        silenced: Boolean,
+    ): Boolean {
         if (!policy.quickRetry) return false
         if (monitor.kind == MonitorKind.GITHUB_REPO) return false
-        if (!monitor.enabled || !policy.enabled || !policy.alertOnDown) return false
-        val needed = policy.failureThreshold.coerceAtLeast(1)
-        val failed = runtime.consecutiveFailures
-        if (failed <= 0 || failed >= needed || runtime.alerting) return false
+        if (streak(monitor, policy, runtime, silenced) == null) return false
         val last = runtime.samples.lastOrNull() ?: return false
         return !last.ok && last.at == runtime.lastCheckedAt
     }
@@ -111,7 +113,8 @@ object QuickRetry {
         monitor: Monitor,
         policy: AlertPolicy,
         runtime: MonitorRuntime,
+        silenced: Boolean,
         nowMs: Long,
         gapMs: Long = GAP_MS,
-    ): Boolean = pending(monitor, policy, runtime) && nowMs - runtime.lastCheckedAt >= gapMs
+    ): Boolean = pending(monitor, policy, runtime, silenced) && nowMs - runtime.lastCheckedAt >= gapMs
 }
