@@ -236,7 +236,9 @@ class NightbellStore(
                     monitor = monitor,
                     policy = SpokenPage.policyFor(monitor, snap.settings),
                     runtime = runtime,
-                    silenced = QuickRetry.silenced(snap.settings, runtime, System.currentTimeMillis()),
+                    silenced = System.currentTimeMillis().let { now ->
+                        QuickRetry.silenced(snap.settings, snap.pause.isActive(now), runtime, now)
+                    },
                 ),
             )
         }

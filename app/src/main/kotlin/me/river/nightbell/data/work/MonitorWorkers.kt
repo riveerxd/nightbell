@@ -51,6 +51,7 @@ import kotlinx.coroutines.flow.first
 class MonitorWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
+        val startedAt = System.currentTimeMillis()
         val monitorId = inputData.getString(KEY_MONITOR_ID) ?: return Result.failure()
         val force = inputData.getBoolean(KEY_FORCE, false)
         return try {
@@ -90,7 +91,7 @@ class MonitorWorker(context: Context, params: WorkerParameters) : CoroutineWorke
             // Before returning, because returning is what lets the phone sleep.
             // A failure short of its threshold is confirmed now rather than one
             // fifteen-minute period per failure later.
-            graph.engine.confirmPending(only = monitorId)
+            graph.engine.confirmPending(only = monitorId, startedAt = startedAt)
             Result.success()
         } catch (cancellation: CancellationException) {
             // WorkManager stopped us: constraints no longer met, execution window
@@ -131,6 +132,7 @@ class MonitorWorker(context: Context, params: WorkerParameters) : CoroutineWorke
 class SweepWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
+        val startedAt = System.currentTimeMillis()
         return try {
             // Inside the try — see MonitorWorker.doWork for why.
             val graph = Nightbell.install(applicationContext)
@@ -172,11 +174,13 @@ class SweepWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
             runCatchingCancellable { graph.engine.checkForAppUpdate() }
                 .onFailure { Diag.log(LogEvent.UPDATE_CHECK_FAILED, LogField.error("why", it)) }
 
-            Diag.log(LogEvent.SCHED_SWEEP_DONE, LogField.count("ran", ran))
             // Last, after the urgent tick and the repair. Confirming can hold this
             // run for minutes, and a page already repeating for another monitor
-            // must not wait behind a failure that has not even alerted yet.
-            graph.engine.confirmPending()
+            // must not wait behind a failure that has not even alerted yet. The
+            // done line waits for it, so a sweep stopped while confirming does not
+            // read in the log as one stopped after it finished.
+            val confirmed = graph.engine.confirmPending(startedAt = startedAt)
+            Diag.log(LogEvent.SCHED_SWEEP_DONE, LogField.count("ran", ran), LogField.count("confirmed", confirmed))
             Result.success()
         } catch (cancellation: CancellationException) {
             Diag.log(LogEvent.SCHED_SWEEP_STOPPED)

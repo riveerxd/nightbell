@@ -27,13 +27,17 @@ object QuickRetry {
 
     /**
      * How long one background run may spend confirming before it hands back to
-     * the schedule, measured to when the last confirming check is due.
+     * the schedule, counted from when the run started rather than from when it
+     * began confirming. WorkManager's ten minutes count from the start too, and a
+     * sweep that spent two of them on its own pass and then confirmed for seven
+     * more was stopped mid-check.
      *
      * The threshold stepper goes to ten, which is nine checks thirty seconds
      * apart: four and a half minutes before the checks themselves take any time.
-     * Seven minutes covers that with room for slow checks, and stays inside the
-     * ten WorkManager allows a worker before it stops it. Whatever is left over
-     * goes back to the schedule, which is all that used to happen anyway.
+     * Seven minutes covers that for quick checks and leaves three for the one
+     * already running when it ends. Slow checks at a high threshold do not all
+     * fit, and what is left over goes back to the schedule, which is all that
+     * used to happen anyway.
      */
     const val BUDGET_MS = 7 * 60_000L
 
@@ -75,11 +79,16 @@ object QuickRetry {
 
     /**
      * Whether nothing this monitor could reach would ever be posted: the master
-     * switch is off or the monitor is muted. Retrying towards that alert would be
-     * spending checks, and a WebView boot each for a page monitor, on silence.
+     * switch is off, monitoring is paused, or the monitor is muted. Retrying
+     * towards that alert would be spending checks, and a WebView boot each for a
+     * page monitor, on silence.
+     *
+     * A pause is passed in on its own because it lives beside the settings, not
+     * in them. The engine reads it as the master switch being off, and leaving it
+     * out here had the card counting towards an alert the pause would swallow.
      */
-    fun silenced(settings: GlobalSettings, runtime: MonitorRuntime, nowMs: Long): Boolean =
-        !settings.masterAlertsEnabled || runtime.mutedUntil > nowMs
+    fun silenced(settings: GlobalSettings, paused: Boolean, runtime: MonitorRuntime, nowMs: Long): Boolean =
+        paused || !settings.masterAlertsEnabled || runtime.mutedUntil > nowMs
 
     /**
      * Whether a confirming check is owed for this monitor.

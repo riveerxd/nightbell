@@ -323,11 +323,34 @@ class QuickRetryInstrumentedTest {
         assertEquals(3, runtime().consecutiveFailures)
         val lines = Diag.recent()
         val sweep = lines.subList(lines.indexOfLast { "sched.sweep.start" in it }, lines.size)
-        val done = sweep.indexOfFirst { "sched.sweep.done ran=" in it }
+        val repaired = sweep.indexOfFirst { "sched.sync" in it }
         val retry = sweep.indexOfFirst { "check.retry" in it }
+        val done = sweep.indexOfFirst { "sched.sweep.done ran=" in it }
         assertTrue("the sweep never confirmed", retry >= 0)
-        assertTrue("the sweep never finished", done >= 0)
-        assertTrue("a retry ran before the sweep's own work was done", done < retry)
+        assertTrue("the sweep never repaired the schedule", repaired >= 0)
+        assertTrue("a retry ran before the sweep's own work was done", repaired < retry)
+        assertTrue("the sweep said it was done while it was still confirming", done > retry)
+    }
+
+    /**
+     * Code review: the budget counted from when confirming began, so a worker
+     * that had already spent minutes on its own pass could confirm on past the
+     * ten WorkManager allows and be stopped mid-check. It counts from when the
+     * run started now, which a worker hands in.
+     */
+    @Test
+    fun theBudgetCountsFromWhenTheRunStarted() {
+        seed(deadUrl, AlertPolicy(failureThreshold = 10, cooldownMinutes = 0))
+        graph.engine.quickRetryGapMs = 1_000L
+
+        val ran = runBlocking {
+            graph.engine.run("api", force = false)
+            val startedAt = System.currentTimeMillis() - QuickRetry.BUDGET_MS + 2_500L
+            graph.engine.confirmPending(only = "api", startedAt = startedAt)
+        }
+
+        assertTrue("$ran retries ran inside two and a half seconds of budget", ran in 1..3)
+        assertFalse("the budget ran out long before the threshold", runtime().alerting)
     }
 
     private fun openAlertSettings() {

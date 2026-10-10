@@ -116,10 +116,27 @@ class QuickRetryTest {
         assertNull(QuickRetry.streak(monitor, policy, runtime, silenced = true))
 
         val settings = me.river.nightbell.domain.GlobalSettings()
-        assertFalse(QuickRetry.silenced(settings, runtime, now))
-        assertTrue(QuickRetry.silenced(settings.copy(masterAlertsEnabled = false), runtime, now))
-        assertTrue(QuickRetry.silenced(settings, runtime.copy(mutedUntil = now + 60_000L), now))
-        assertFalse("an expired mute is not a mute", QuickRetry.silenced(settings, runtime.copy(mutedUntil = now - 1), now))
+        assertFalse(QuickRetry.silenced(settings, paused = false, runtime, now))
+        assertTrue(QuickRetry.silenced(settings.copy(masterAlertsEnabled = false), paused = false, runtime, now))
+        assertTrue(QuickRetry.silenced(settings, paused = false, runtime.copy(mutedUntil = now + 60_000L), now))
+        assertFalse(
+            "an expired mute is not a mute",
+            QuickRetry.silenced(settings, paused = false, runtime.copy(mutedUntil = now - 1), now),
+        )
+    }
+
+    /**
+     * Code review: a pause silences every alert the way the master switch does,
+     * and the card still counted towards one with monitoring paused.
+     */
+    @Test
+    fun `a pause silences the streak like the master switch does`() {
+        val runtime = failing(1)
+        val settings = me.river.nightbell.domain.GlobalSettings()
+        assertTrue(QuickRetry.silenced(settings, paused = true, runtime, now))
+        assertNull(
+            QuickRetry.streak(monitor, policy, runtime, QuickRetry.silenced(settings, paused = true, runtime, now)),
+        )
     }
 
     /**

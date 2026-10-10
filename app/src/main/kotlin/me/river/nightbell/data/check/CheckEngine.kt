@@ -1830,12 +1830,14 @@ class CheckEngine(
         if (DueCheck.isDue(monitor.intervalMinutes, runtime?.lastCheckedAt ?: 0L, nowMs)) return true
         // A failure still short of its threshold is due again well before its
         // interval. Answered here rather than by each caller so the in-lock gate,
-        // the worker's gate and the strict service all agree on it.
+        // the worker's gate and the strict service all agree on it. No pause is
+        // passed: the in-lock gate hands in settings that already read a pause as
+        // the master switch off, and that gate is the one that decides.
         return runtime != null && QuickRetry.due(
             monitor = monitor,
             policy = SpokenPage.policyFor(monitor, settings),
             runtime = runtime,
-            silenced = QuickRetry.silenced(settings, runtime, nowMs),
+            silenced = QuickRetry.silenced(settings, paused = false, runtime, nowMs),
             nowMs = nowMs,
             gapMs = quickRetryGapMs,
         )
@@ -1854,12 +1856,16 @@ class CheckEngine(
      * Called by every background path once its own check or pass is finished,
      * and inside the same execution on purpose: a delayed one-time work request
      * is exactly what Doze holds back, and the phone asleep in a drawer is the
-     * case this exists for. A running worker keeps its wake lock, so a delay in
-     * here is honoured to the second.
+     * case this exists for. That only helps as long as Android lets the run
+     * live: under battery optimisation Doze stops a running worker the moment
+     * the phone goes idle, measured on API 34, and the leftovers go back to the
+     * schedule. Exempted, the delays in here are honoured through deep idle.
      *
-     * Bounded by [quickRetryBudgetMs] from the moment it starts. What is left
-     * when that runs out goes back to the schedule, which is all that used to
-     * happen anyway.
+     * Bounded by [quickRetryBudgetMs] from [startedAt], which a worker sets to
+     * when it started so its own work counts against WorkManager's ten minutes.
+     * The bound is checked before every check, not once per round, because a
+     * round of several slow checks can otherwise run minutes past it. What is
+     * left when it runs out goes back to the schedule.
      *
      * Each confirming check goes through [run] unforced, so the offline gate, the
      * pause and the in-lock due gate all apply. That last one is what lets the
@@ -1873,8 +1879,8 @@ class CheckEngine(
      * @param only restricts it to one monitor, for a worker that owns one.
      * @return how many confirming checks ran.
      */
-    suspend fun confirmPending(only: String? = null): Int {
-        val deadline = nowMs() + quickRetryBudgetMs
+    suspend fun confirmPending(only: String? = null, startedAt: Long = nowMs()): Int {
+        val deadline = startedAt + quickRetryBudgetMs
         // A monitor whose confirming check produced nothing and that nobody else
         // checked either (offline, a pause, a checker that threw) is dropped for
         // the rest of this run. Without that it stays owed and overdue, and this
@@ -1889,7 +1895,8 @@ class CheckEngine(
                 if (monitor.id in dropped) return@mapNotNull null
                 val runtime = snapshot.runtimes[monitor.id] ?: return@mapNotNull null
                 val policy = SpokenPage.policyFor(monitor, snapshot.settings)
-                val silenced = QuickRetry.silenced(snapshot.settings, runtime, nowMs())
+                val now = nowMs()
+                val silenced = QuickRetry.silenced(snapshot.settings, snapshot.pause.isActive(now), runtime, now)
                 if (!QuickRetry.pending(monitor, policy, runtime, silenced)) return@mapNotNull null
                 Owed(monitor.id, runtime.lastCheckedAt)
             }
@@ -1907,6 +1914,10 @@ class CheckEngine(
             val witness = PassWitness()
             for (entry in owed) {
                 if (entry.checkedAt + quickRetryGapMs > nowMs()) continue
+                if (nowMs() > deadline) {
+                    Diag.log(LogEvent.CHECK_SKIPPED, LogField.tag("why", "quick_retry_budget"))
+                    return ran
+                }
                 if (!isOnline()) return ran
                 Diag.log(LogEvent.CHECK_RETRY, LogField.monitor(entry.id))
                 if (run(entry.id, force = false, witness = witness) != null) {
@@ -1954,7 +1965,7 @@ class CheckEngine(
                 soonest = minOf(soonest, due)
                 if (runtime != null) {
                     val policy = SpokenPage.policyFor(monitor, snapshot.settings)
-                    val silenced = QuickRetry.silenced(snapshot.settings, runtime, now)
+                    val silenced = QuickRetry.silenced(snapshot.settings, snapshot.pause.isActive(now), runtime, now)
                     if (QuickRetry.pending(monitor, policy, runtime, silenced)) {
                         soonest = minOf(soonest, runtime.lastCheckedAt + quickRetryGapMs - now)
                     }
