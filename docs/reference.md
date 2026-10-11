@@ -14,6 +14,7 @@ watch it, chart it, and shout when it breaks.
 | **Request & response** | Full control: GET·POST·PUT·PATCH·DELETE·HEAD, custom headers, request body and content type, plus a response-body assertion. |
 | **Page element** | Loads the real page in an embedded browser and watches **any number** of DOM nodes you picked by tapping them, all resolved against one page load. |
 | **Prometheus** | Reads a metrics endpoint, a PromQL query or an Alertmanager. Three sources, one kind. See below. |
+| **Health endpoint** | Reads a service's own report of itself in the health report format: a verdict, each part, the rules that decided it and the evidence. Signs in the way the service's own clients do, including single sign-on. See below. |
 | **GitHub repository** | Watches a repository over the public API: stars, issues, pull requests, comments, releases and how often the release files are downloaded. See below. |
 
 ### A GitHub repository
@@ -160,6 +161,55 @@ list is a **conjunction**, one mismatch marks the monitor down, and the alert
 names the element that broke. Booting the WebView and waiting for hydration is
 what an element check actually costs, so watching six nodes costs almost exactly
 what watching one costs.
+
+### Health endpoint
+
+The service serves one JSON document in the health report format
+(`docs/health-format.md`, with `docs/health-format.schema.json`). Its top-level
+`status` is the verdict and is what pages; each component explains it with the
+conditions that decided it (what was measured, the rule, the outcome) and a log
+of what the service saw. The body decides, not the status code: a `503` carrying
+a report is that report. A body that is not the format is a failure called "Not
+a health endpoint", with its first 200 characters shown, because the usual
+cause is a web app's catch-all page answering 200 for every path. ASP.NET's
+plain `Healthy`, `Degraded` and `Unhealthy` are read too, without parts.
+
+Down is `FailureKind.REPORTED_DOWN`, headlined by the report's `message`, else
+the worst part's. Degraded is a pass with `CheckResult.degraded` set, which
+`AlertDecider.advance` treats exactly like a reading over the latency budget:
+amber, the degraded track's cooldown and repeat, and it counts as up in uptime.
+The report is replaced by every check that read one and cleared by one that did
+not. At most 50 parts, 20 rules and 50 log entries a part, and 200 of each
+across the report, are kept, because the runtime is rewritten on every check.
+
+With **Treat as down if the report is older than** set, `checkedAt` is compared
+with the response's own `Date` header, so the phone's clock cannot make a fresh
+report look stale. A negative age is clamped to zero: Kestrel stamps `Date`
+before its writer runs.
+
+**Signing in.** None, Headers (a fixed key), Basic, or single sign-on. Single
+sign-on has four ways in: through the web app in a WebView (the app's own Sign
+in is caught, the provider found from it, and Nightbell's own PKCE request made
+with `offline_access` and `prompt=login`; the callback page is never allowed to
+load, so it cannot spend the code), username and password, a service account,
+or a pasted refresh token. Tokens, the password and the client secret live in a
+`CredentialVault` outside the snapshot, encrypted with an AES-256-GCM key in
+AndroidKeyStore that needs no user authentication, so checks run while locked.
+They never go into a backup; a restored single sign-on monitor says it needs
+signing in. A refresh and the vault write are one uncancellable step, so a
+worker cancelled after the provider rotated a token cannot lose the new one.
+
+What each sign-in outcome claims:
+
+| Situation | Outcome | Pages |
+| --- | --- | --- |
+| Not signed in, session ended, password or secret refused, vault unreadable | No verdict. The card says "Not checking · Sign in needed" in neutral grey. A notification on "Monitors that can't sign in" when it starts and then once a day | No |
+| Provider unreachable or 5xx | Down, "Sign-in server unreachable" | Yes |
+| Fresh token, API answers 401 after one forced refresh and retry | Down, "Signed in, but the API refused the token" | Yes |
+| Fresh token, API answers 403 | Down, "Access refused (403)", hint about a missing role | Yes |
+
+A refused password or client secret is tried once per change and never on a
+schedule, so it cannot trip a provider's brute force lockout.
 
 ## Alerting
 
@@ -1289,7 +1339,8 @@ keytool -genkeypair -v -keystore keystore/nightbell-release.jks -alias nightbell
 
 ## Testing
 
-**242 JVM + 67 on-device = 309 automated tests.**
+**1237 JVM + 567 on-device = 1804 automated tests.** Counted from the source;
+the table below has not been recounted row by row since it was first written.
 
 | Suite | Count | Covers |
 | --- | ---: | --- |
@@ -1320,6 +1371,17 @@ keytool -genkeypair -v -keystore keystore/nightbell-release.jks -alias nightbell
 | `WidgetInstrumentedTest` | 34 | RemoteViews **inflation**, ordering, every theme/density, custom colours at three opacities, the settings cog, config persistence and id remapping, the planner's heights against the views that get drawn |
 | `WidgetConfigUiTest` | 2 | the widget's own settings screen, driven: the monitor count on Auto, pinned to a number, and back |
 | `ScreenshotTest` | 3 | drives every screen and writes PNGs |
+| `HealthFormatTest` | 41 | the health report format: the ASP.NET outputs, aliases, unknown words, the marker, size, timestamps, staleness, caps, conditions and the log |
+| `HealthEndpointCheckTest` | 9 | real sockets: headers sent, 503 with a report, the size limit, staleness by the server's clock, a vault sign-in replacing a typed header |
+| `HealthEndToEndTest` | 6 | broker, checker and a fake provider together: one refresh on a 401, token refused, 403, signed out sends nothing, provider down, basic |
+| `TokenBrokerTest` | 16 | cached tokens, the 30 s margin, rotation, `invalid_grant` per grant, one password try, `invalid_scope`, provider down, one refresh for two callers, cancellation after the answer, an unreadable vault, rediscovery |
+| `OidcRequestsTest` | 12 | PKCE (the RFC 7636 vector), the authorization URL, recognising the web app's request, issuer discovery, the callback, token answers |
+| `JwtPeekTest`, `SignInReminderTest`, `HealthValidationTest` | 12 | pasted tokens, the once-a-day notice, what setup refuses |
+| `MonitorKindDecodingTest`, `StoreCorruptionTest` | 9 | a kind from a newer build and an unreadable store, neither costing every monitor |
+| `HealthEndpointSetupInstrumentedTest` | 6 | setup driven against a local server: no sign-in needed, needs a sign-in, a fixed key, typing alone is enough, a login page instead of a report, a changed address |
+| `HealthComponentsInstrumentedTest` | 7 | the report card with none, one, three, 64 parts, a disagreement, not checking, rotation |
+| `CredentialVaultInstrumentedTest` | 3 | AndroidKeyStore round trip, a lost key reading as signed out, pruning |
+| `SsoSignInInstrumentedTest` | 4 | browser sign-in through a fake web app and provider: code caught and exchanged once, refusal, offline access refused, a moved address signing in through the new web app |
 
 `WidgetInstrumentedTest` calls `RemoteViews.apply()` rather than asserting on
 the builder, because that runs the same inflation the launcher's process runs, an unsupported view, a method that isn't `@RemotableViewMethod`, or a missing

@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Health report format, version 1",
+  "description": "What a service serves so that a health endpoint monitor can show its state, the rules that decided it, and the evidence. See health-format.md for how each field is read.",
+  "type": "object",
+  "required": ["healthReport", "status"],
+  "properties": {
+    "healthReport": {
+      "description": "Format version. Also how the document is recognised.",
+      "const": 1
+    },
+    "status": { "$ref": "#/$defs/status" },
+    "message": {
+      "description": "One line saying what is wrong. The first 200 characters are shown.",
+      "type": "string"
+    },
+    "checkedAt": { "$ref": "#/$defs/timestamp" },
+    "service": { "description": "Which service wrote this. The first 60 characters are shown.", "type": "string" },
+    "version": { "description": "The running build. The first 40 characters are shown.", "type": "string" },
+    "environment": { "description": "production, staging, and so on. The first 40 characters are shown.", "type": "string" },
+    "components": {
+      "description": "The parts that make up the verdict, in display order. The first 50 are shown.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/component" }
+    }
+  },
+  "$defs": {
+    "status": {
+      "description": "up, degraded or down. Readers also accept ok, pass, healthy, warn, warning, fail, error and unhealthy in any case; this schema accepts only the canonical three so that new endpoints use them.",
+      "enum": ["up", "degraded", "down"]
+    },
+    "timestamp": {
+      "description": "RFC 3339 date and time with an offset, for example 2026-10-09T14:02:11Z.",
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?(Z|[+-]\\d{2}:\\d{2})$"
+    },
+    "id": {
+      "description": "Stable identifier. Never change it once shipped.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._-]{1,64}$"
+    },
+    "component": {
+      "type": "object",
+      "required": ["id", "status"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "description": "Display name, defaults to id. The first 60 characters are shown.", "type": "string" },
+        "status": { "$ref": "#/$defs/status" },
+        "message": { "description": "What is wrong with this part, or a short reading. The first 200 characters are shown.", "type": "string" },
+        "since": { "$ref": "#/$defs/timestamp" },
+        "value": { "type": "number" },
+        "unit": { "description": "Printed after value. The first 16 characters are shown.", "type": "string" },
+        "durationMs": { "description": "How long this part's own check took.", "type": "number", "minimum": 0 },
+        "conditions": {
+          "description": "The rules that decided this part's status. The first 20 are shown.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/condition" }
+        },
+        "log": {
+          "description": "What happened, newest last. The first 50 are shown.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/logEntry" }
+        }
+      }
+    },
+    "condition": {
+      "type": "object",
+      "required": ["id", "status"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "description": "Display name, defaults to id. The first 60 characters are shown.", "type": "string" },
+        "status": { "$ref": "#/$defs/status" },
+        "observed": { "description": "What was measured. Strings are cut to 80 characters.", "anyOf": [{ "type": "number" }, { "type": "string" }, { "type": "boolean" }] },
+        "rule": { "description": "The threshold, in words. The first 80 characters are shown.", "type": "string" },
+        "unit": { "description": "Printed after observed. The first 16 characters are shown.", "type": "string" },
+        "window": { "description": "The span the measurement covers, such as 5m. The first 16 characters are shown.", "type": "string" },
+        "message": { "description": "The first 200 characters are shown.", "type": "string" }
+      }
+    },
+    "logEntry": {
+      "type": "object",
+      "required": ["at", "level", "message"],
+      "properties": {
+        "at": { "$ref": "#/$defs/timestamp" },
+        "level": { "enum": ["info", "warn", "error"] },
+        "message": { "description": "The first 500 characters are shown.", "type": "string" },
+        "data": {
+          "description": "Flat key and value pairs. The first 20 keys are shown; strings are cut to 200 characters.",
+          "type": "object",
+          "additionalProperties": { "anyOf": [{ "type": "string" }, { "type": "number" }, { "type": "boolean" }, { "type": "null" }] }
+        }
+      }
+    }
+  }
+}

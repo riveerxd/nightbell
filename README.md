@@ -12,7 +12,7 @@
   <img src="https://img.shields.io/badge/targetSdk-36-3a3f4b?style=flat-square" alt="targetSdk 36" />
   <a href="https://f-droid.org/en/packages/me.river.nightbell/"><img src="https://img.shields.io/f-droid/v/me.river.nightbell?style=flat-square&logo=fdroid&logoColor=white&color=1976D2&label=F-Droid" alt="Version on F-Droid" /></a>
   <a href="../../releases/latest"><img src="https://img.shields.io/github/v/release/riveerxd/nightbell?style=flat-square&color=2F6BFF&label=release" alt="Latest release" /></a>
-  <img src="https://img.shields.io/badge/tests-823%20JVM%20+%20456%20on--device-2FD98A?style=flat-square" alt="Tests" />
+  <img src="https://img.shields.io/badge/tests-1237%20JVM%20+%20567%20on--device-2FD98A?style=flat-square" alt="Tests" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/licence-Apache%202.0-3a3f4b?style=flat-square" alt="Apache 2.0" /></a>
 </p>
 
@@ -30,6 +30,7 @@
   <a href="https://nightbell.app">nightbell.app</a> &nbsp;·&nbsp;
   <a href="#why">Why</a> &nbsp;·&nbsp;
   <a href="#what-it-watches">What it watches</a> &nbsp;·&nbsp;
+  <a href="#your-services-own-health-report">Health reports</a> &nbsp;·&nbsp;
   <a href="#getting-the-alerts-to-actually-arrive">Alerts</a> &nbsp;·&nbsp;
   <a href="#the-home-screen-widget">Widget</a> &nbsp;·&nbsp;
   <a href="#how-it-works">How it works</a> &nbsp;·&nbsp;
@@ -39,8 +40,8 @@
 </div>
 
 Point it at anything that answers over HTTP, at one element on a rendered web
-page, or at a GitHub repository, and it watches it, charts it, and gets loud when
-it breaks. **No server, no
+page, at a Prometheus server, at your service's own health report, or at a
+GitHub repository, and it watches it, charts it, and gets loud when it breaks. **No server, no
 account, no middleman.** The phone in your pocket does the checking, and the only
 host it contacts that you did not choose is a connectivity probe you can change or
 switch off.
@@ -76,6 +77,8 @@ wakes the screen if the phone is locked.
 | **Status check** | Hit a URL, assert on the status code. Exact, any 2xx, a range, or any response at all. |
 | **Request and response** | Pick the method, set headers and a body, then assert on what comes back. Contains, does not contain, equals, regex, or a JSON field by path. |
 | **Page element** | Loads the real page in an embedded WebView and watches DOM nodes you picked by tapping them. Existence, text, or an attribute. |
+| **Prometheus** | Reads an exporter's metrics, a PromQL query, or an Alertmanager's firing alerts. |
+| **Health endpoint** | Reads a report your service writes about itself: which part is in trouble, the rule that decided it, and what it saw. Signs in the way your own clients do, single sign-on included. |
 | **GitHub repository** | Polls one repository and reports what changed about it: stars, issues, releases, pull requests and comments. |
 
 Page-element monitors watch any number of nodes per page and resolve them all
@@ -134,6 +137,28 @@ stronger than trusting the system store rather than weaker: a CA can be talked
 into issuing for a name it should not, and no amount of that produces the key the
 monitor already recorded. Certificates from CAs you installed on the phone
 yourself are trusted as well.
+
+### Your service's own health report
+
+A status code tells you the server answered. It does not tell you that card
+payments have been failing for four minutes while everything else is fine.
+Only your service knows that, so the Health endpoint monitor lets it say so.
+
+Your service serves one JSON document: an overall verdict, the parts that
+make it up, the rule each part was judged by with the value it measured, and
+a short log of what it saw. The verdict is what pages. The rest is what you
+read when it does, so at 3am you can tell a real outage from a flaky probe
+without opening a server log.
+
+The endpoint can stay behind the same sign-in as the rest of your API: a
+fixed header, basic auth, or single sign-on through your own web app. If the
+monitor's sign-in lapses it says "Not checking" instead of paging you about
+an outage that is not there.
+
+The format, the field limits, how responses are read and a drop-in ASP.NET
+Core writer are in [docs/health-format.md](docs/health-format.md). An
+existing ASP.NET health check that answers plain `Healthy` works before you
+write any JSON.
 
 ---
 
@@ -217,7 +242,7 @@ and a certificate expiring next Tuesday never gets reported as an outage tonight
 
 ```mermaid
 flowchart LR
-    M["Monitors<br/>HTTP · request · page element · repository"] --> E["CheckEngine"]
+    M["Monitors<br/>HTTP · request · page element · Prometheus · health report · repository"] --> E["CheckEngine"]
     E -->|folds each result| DB[("State<br/>one JSON doc")]
     E --> A1["Down and recovery"]
     E --> A2["Degraded on latency"]
@@ -330,7 +355,7 @@ Needs JDK 17 and an Android SDK with API 36. `local.properties` wants
 ```bash
 ./gradlew :app:assembleDebug          # debuggable
 ./gradlew :app:assembleRelease        # minified, needs keystore/keystore.properties
-./gradlew :app:testDebugUnitTest      # 635 JVM tests
+./gradlew :app:testDebugUnitTest      # 1237 JVM tests
 ```
 
 Release builds are signed from `keystore/keystore.properties`, which is
@@ -338,15 +363,15 @@ gitignored along with the key itself. Without it the release task still builds,
 just unsigned.
 
 <details>
-<summary><b>Tests: 635 JVM + 353 on-device</b></summary>
+<summary><b>Tests: 1237 JVM + 567 on-device</b></summary>
 
 <br/>
 
-635 JVM tests cover the pure logic: the alert state machines, escalation,
+1237 JVM tests cover the pure logic: the alert state machines, escalation,
 quiet-hours arithmetic, assertions, the latency baseline, backup round-trips, and
 the widget's column arithmetic, which decides whether a monitor is visible at all
 and can otherwise only be exercised by dragging a widget around a home screen.
-353 instrumented tests cover the parts that need a real Android: notifications,
+567 instrumented tests cover the parts that need a real Android: notifications,
 channels, the foreground service, the WebView element checker, widgets, the
 launcher icon's transparency, and a suite that drives a genuine
 connection-refused outage all the way to a red page on screen.
