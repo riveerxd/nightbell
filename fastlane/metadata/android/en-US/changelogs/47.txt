@@ -1,0 +1,5 @@
+Nightbell can now read a health report your service writes about itself. Instead of only knowing that a server answered, it shows which part is in trouble, the rule that decided it with the value it measured, and what the service saw along the way. The overall verdict pages you; the rest is there when it does.
+
+The new Health endpoint monitor signs in the way your own clients do: a fixed header, basic auth, or single sign-on through your web app, a username and password, a service account or a pasted token. If Nightbell's own sign-in lapses it says "Not checking" instead of paging you about an outage that is not there. A plain ASP.NET Healthy, Degraded or Unhealthy answer works too, before you write any JSON. The format is documented in docs/health-format.md in the repository.
+
+If this version ever finds a store it cannot read, such as one written by a newer version, it keeps it instead of writing an empty one over it, so your monitors are still there for a version that can read them.

@@ -578,8 +578,16 @@ android {
         // check rather than three WorkManager periods later. The retries run inside
         // the background run that found the failure, because a delayed work request
         // is exactly what Doze holds back. Issue 20.
-        versionCode = 46
-        versionName = "3.17.0"
+        //
+        // 3.18.0 adds the Health endpoint kind: a service serves a report of
+        // itself in docs/health-format.md, the verdict pages, and the parts, rules
+        // and log explain it. Nightbell signs in the way the service's own clients
+        // do, single sign-on included, and a sign-in it cannot keep is "Not
+        // checking", never an outage. A store this build cannot read is kept rather
+        // than written over, because a kind from a newer build used to read as an
+        // empty store and the next write erased every monitor.
+        versionCode = 47
+        versionName = "3.18.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
