@@ -28,6 +28,7 @@ import me.river.nightbell.domain.Health
 import me.river.nightbell.domain.Monitor
 import me.river.nightbell.domain.OpenMetrics
 import me.river.nightbell.domain.MonitorKind
+import me.river.nightbell.domain.SignInReminder
 import me.river.nightbell.domain.MonitorRuntime
 import me.river.nightbell.domain.PauseState
 import me.river.nightbell.domain.NetworkBaseline
@@ -147,6 +148,13 @@ class CheckEngine(
     var webhooks: WebhookDispatcher? = null
 
     /**
+     * Signs health monitors in and checks them. Null leaves them checked as
+     * plain requests with no sign-in, which is what the unit-level tests want.
+     * Set by the graph, like [webhooks].
+     */
+    var health: HealthChecker? = null
+
+    /**
      * Told that something was queued, so the graph can start a flush without
      * the check pass waiting on somebody else's server to answer.
      */
@@ -192,7 +200,30 @@ class CheckEngine(
         // what is there, and because nothing is persisted it cannot seed a
         // baseline or announce anything. Which is exactly what "Test now" means.
         MonitorKind.GITHUB_REPO -> githubDryRun(monitor)
+        MonitorKind.HEALTH_ENDPOINT -> healthDryRun(monitor, certPin)
         else -> http.check(monitor, certPin)
+    }
+
+    /**
+     * "Test" on a health monitor. The same sign-in a check uses, through the
+     * same broker lock, so a test in setup cannot race a scheduled check into
+     * spending one refresh token twice.
+     */
+    private suspend fun healthDryRun(monitor: Monitor, certPin: String): CheckResult {
+        val checker = health ?: return http.check(monitor, certPin)
+        val outcome = checker.check(monitor, certPin)
+        outcome.result?.let { return it }
+        val auth = outcome.auth ?: me.river.nightbell.domain.HealthAuth()
+        return CheckResult(
+            ok = false,
+            latencyMs = 0,
+            failureKind = FailureKind.BAD_CONFIG,
+            message = auth.problem.headline.ifBlank { "Not signed in" },
+            detail = auth.detail,
+            hint = "Nothing was sent to the endpoint. Sign in, then test again.",
+            health = me.river.nightbell.domain.HealthState(auth = auth),
+            at = nowMs(),
+        )
     }
 
     /**
@@ -479,6 +510,15 @@ class CheckEngine(
             return null
         }
 
+        // Every scheduled path already skips these through `runs`. This is for the
+        // forced ones: there is no checker to hand the monitor to, and the `else`
+        // in `dryRun` would otherwise treat it as a status check of whatever URL
+        // the newer build stored.
+        if (monitor.kind == MonitorKind.UNSUPPORTED) {
+            Diag.log(LogEvent.CHECK_SKIPPED, LogField.monitor(monitorId), LogField.tag("why", "unsupported_kind"))
+            return null
+        }
+
         Diag.log(
             LogEvent.CHECK_START,
             LogField.monitor(monitorId),
@@ -489,6 +529,8 @@ class CheckEngine(
         )
         store.markChecking(monitorId, true)
         var githubOutcome: GitHubChecker.Outcome? = null
+        var healthOutcome: HealthChecker.Outcome? = null
+        val healthChecker = health
         val coldLoad = monitor.kind == MonitorKind.WEBSITE_ELEMENT &&
             (!settings.dataSaver || DataSaver.coldDue(coldLoadedAt[monitorId], nowMs()))
         val alongside = checksRunning.incrementAndGet()
@@ -506,6 +548,13 @@ class CheckEngine(
                 // re-check has asked to look now, whatever the ladder says.
                 val outcome = github.poll(monitor, before.github, force = force)
                 githubOutcome = outcome
+                outcome.result
+            } else if (monitor.kind == MonitorKind.HEALTH_ENDPOINT && healthChecker != null) {
+                // Through the broker rather than `dryRun`, because a check that
+                // could not sign in has something to record that is not a
+                // verdict: which sign-in trouble, and whether it was announced.
+                val outcome = healthChecker.check(monitor, before.certPin)
+                healthOutcome = outcome
                 outcome.result
             } else {
                 withCertificateExpiry(
@@ -632,12 +681,33 @@ class CheckEngine(
             // not touch health, samples or any alert track. What it *is* evidence
             // of is the budget, so that much is written down and shown on the card.
             val rateState = githubOutcome?.takeIf { it.rateLimited }?.state
+            // A health monitor that could not sign in. Not a verdict, so no
+            // sample and no alert track, but not nothing either: the card has to
+            // say it is not checking, and somebody has to be told once.
+            val signIn = healthOutcome?.takeIf { result == null }?.auth
+            val announce = signIn != null &&
+                settings.masterAlertsEnabled &&
+                SignInReminder.shouldNotify(before.report.auth, signIn.problem, nowMs())
             store.updateRuntime(monitorId) {
                 it.copy(
                     lastCheckedAt = nowMs(),
                     github = rateState ?: it.github,
+                    // Neutral, not the last verdict: a card left rose or mint
+                    // while nothing is being checked would be claiming to know.
+                    health = if (signIn != null) Health.UNKNOWN else it.health,
+                    report = if (signIn != null) {
+                        it.report.copy(
+                            components = emptyList(),
+                            componentsTotal = 0,
+                            auth = SignInReminder.failed(it.report.auth, signIn.problem, signIn.detail, nowMs(), announce),
+                        )
+                    } else {
+                        it.report
+                    },
                 )
             }
+            if (announce && signIn != null) alerts.notifySignInNeeded(monitor, signIn.problem)
+            if (signIn != null) onStateChanged?.invoke()
             if (rateState != null) {
                 Diag.log(LogEvent.CHECK_SKIPPED, LogField.monitor(monitorId), LogField.tag("why", "rate_limited"))
                 onStateChanged?.invoke()
@@ -673,7 +743,10 @@ class CheckEngine(
             degradedAboveMs = if (slo > 0 && !suspect) slo.toLong() else Long.MAX_VALUE,
             judgedLatencyMs = judgedLatency,
         )
-        val degraded = !suspect && AlertDecider.isDegraded(result.ok, judgedLatency, slo.toLong())
+        // A report saying degraded is not a latency reading, so a connection too
+        // poor to judge slowness through has nothing to say about it.
+        val degraded = (result.ok && result.degraded) ||
+            (!suspect && AlertDecider.isDegraded(result.ok, judgedLatency, slo.toLong()))
         val policy: AlertPolicy = if (monitor.useGlobalAlerts) settings.defaultAlert else monitor.alert
         val muted = before.mutedUntil > nowMs()
         val minute = minuteOfDay()
@@ -963,7 +1036,7 @@ class CheckEngine(
                             before.lastDegradedAlertAt
                         },
                         mutedUntil = before.mutedUntil,
-                        health = if (!monitor.enabled) Health.PAUSED else after.health,
+                        health = if (!monitor.runs) Health.PAUSED else after.health,
                     )
                     .withUrgentState(urgentOutcome.state)
                     .let(urgentMutation)
@@ -1076,6 +1149,9 @@ class CheckEngine(
         at = result.at,
         groups = groups.filter { monitor.id in it.memberIds }.map { it.displayTitle },
         sender = settings.webhookSender.trim(),
+        // Degraded by its own report, or a health monitor whose report is fine
+        // again: the words for slowness would be explaining a reading nobody took.
+        reported = result.degraded || (monitor.kind == MonitorKind.HEALTH_ENDPOINT && result.ok),
     )
 
     private fun withoutUserInfo(url: String): String {
@@ -1721,6 +1797,10 @@ class CheckEngine(
         failureKind = FailureKind.UNKNOWN,
         message = runtime.lastMessage.ifBlank { "Still down" },
         detail = runtime.lastDetail,
+        // The report's parts, so a page rebuilt from the runtime lists them the
+        // same as the one built from the check. Alertmanager's list has this gap
+        // on this path; it is not copied here.
+        health = runtime.report.takeIf { it.components.isNotEmpty() },
         at = nowMs(),
     )
 
@@ -1800,7 +1880,7 @@ class CheckEngine(
         // unless something in here fails without reaching anything.
         val witness = PassWitness()
         for (monitor in snapshot.monitors) {
-            if (!monitor.enabled) continue
+            if (!monitor.runs) continue
             if (!force && !isDue(monitor, snapshot.runtimes[monitor.id], snapshot.settings, now)) continue
             run(monitor.id, force, witness)
             ran++
@@ -1826,7 +1906,7 @@ class CheckEngine(
         settings: GlobalSettings,
         nowMs: Long = nowMs(),
     ): Boolean {
-        if (!monitor.enabled) return false
+        if (!monitor.runs) return false
         if (DueCheck.isDue(monitor.intervalMinutes, runtime?.lastCheckedAt ?: 0L, nowMs)) return true
         // A failure still short of its threshold is due again well before its
         // interval. Answered here rather than by each caller so the in-lock gate,
@@ -1956,7 +2036,7 @@ class CheckEngine(
         var soonest = Long.MAX_VALUE
         for (monitor in snapshot.monitors) {
             val runtime = snapshot.runtimes[monitor.id]
-            if (monitor.enabled) {
+            if (monitor.runs) {
                 val due = if (runtime == null || runtime.lastCheckedAt <= 0L) {
                     0L
                 } else {

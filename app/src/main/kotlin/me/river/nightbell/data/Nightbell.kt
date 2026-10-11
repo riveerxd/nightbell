@@ -7,7 +7,12 @@ import android.content.Context
 import me.river.nightbell.data.alerts.AlertCenter
 import me.river.nightbell.data.alerts.PageSpeaker
 import me.river.nightbell.data.alerts.UrgentAlarm
+import me.river.nightbell.data.auth.CredentialVault
+import me.river.nightbell.data.auth.DataStoreVaultStorage
+import me.river.nightbell.data.auth.KeystoreCipher
+import me.river.nightbell.data.auth.TokenBroker
 import me.river.nightbell.data.check.CheckEngine
+import me.river.nightbell.data.check.HealthChecker
 import me.river.nightbell.data.check.ElementChecker
 import me.river.nightbell.data.check.GitHubChecker
 import me.river.nightbell.data.check.HttpChecker
@@ -34,6 +39,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -109,6 +115,22 @@ object Nightbell {
             updates = updates,
             installedVersion = { BuildConfig.VERSION_NAME },
         )
+
+        /** Health monitors' sign-in secrets, outside the snapshot. See [CredentialVault]. */
+        val vault = CredentialVault(DataStoreVaultStorage(context), KeystoreCipher())
+        val broker = TokenBroker(vault, http.provider)
+        init {
+            engine.health = HealthChecker(broker, fetch = { monitor, pin, authorization ->
+                http.check(monitor, pin, authorization = authorization)
+            })
+            // Once the store has been read, so an entry is only ever dropped
+            // against the real list of monitors and never against the empty
+            // defaults the store starts on.
+            appScope.launch {
+                store.loadedFlow.first { it }
+                runCatchingCancellable { vault.prune(store.snapshot.value.monitors.map { it.id }.toSet()) }
+            }
+        }
         init {
             // Ordinary alerts are spoken from here rather than from the service:
             // only an URGENT monitor keeps a service alive, and the monitor a user

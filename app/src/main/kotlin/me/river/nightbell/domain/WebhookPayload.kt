@@ -57,8 +57,8 @@ object WebhookPayload {
             WebhookEvent.DOWN -> "$name is down"
             WebhookEvent.STILL_DOWN -> "$name is still down"
             WebhookEvent.RECOVERED -> "$name is back up"
-            WebhookEvent.DEGRADED -> "$name is slow"
-            WebhookEvent.DEGRADED_RECOVERED -> "$name is back to normal speed"
+            WebhookEvent.DEGRADED -> if (facts.reported) "$name reports degraded" else "$name is slow"
+            WebhookEvent.DEGRADED_RECOVERED -> if (facts.reported) "$name is no longer degraded" else "$name is back to normal speed"
             WebhookEvent.CERTIFICATE -> when {
                 facts.certDaysLeft < 0 -> "$name's certificate has expired"
                 facts.certDaysLeft == 0 -> "$name's certificate expires today"
@@ -93,13 +93,17 @@ object WebhookPayload {
                 append("Answered in $latency.")
             }
             WebhookEvent.DEGRADED ->
-                if (facts.sloMs > 0) {
+                if (facts.reported) {
+                    facts.detail.lineSequence().firstOrNull { it.isNotBlank() } ?: "The service says it is working, worse than it should."
+                } else if (facts.sloMs > 0) {
                     "Answered in $latency, over its ${latencyText(facts.sloMs.toLong())} budget."
                 } else {
                     "Answered in $latency."
                 }
             WebhookEvent.DEGRADED_RECOVERED ->
-                if (facts.sloMs > 0) {
+                if (facts.reported) {
+                    "The service reports itself working normally again."
+                } else if (facts.sloMs > 0) {
                     "Answered in $latency, inside its ${latencyText(facts.sloMs.toLong())} budget."
                 } else {
                     "Answered in $latency."

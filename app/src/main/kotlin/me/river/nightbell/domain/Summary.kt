@@ -103,7 +103,7 @@ object Summary {
                 id = monitor.id,
                 name = monitor.displayName,
                 host = monitor.prettyHost,
-                health = if (!monitor.enabled || fleetPaused) Health.PAUSED else runtime.health,
+                health = if (!monitor.runs || fleetPaused) Health.PAUSED else runtime.health,
                 latencyMs = runtime.lastLatencyMs,
                 lastCheckedAt = runtime.lastCheckedAt,
                 urgent = monitor.urgent,

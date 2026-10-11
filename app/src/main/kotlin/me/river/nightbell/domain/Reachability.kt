@@ -63,6 +63,10 @@ object Reachability {
      */
     fun neverReachedAnything(kind: FailureKind): Boolean = when (kind) {
         FailureKind.DNS, FailureKind.CONNECT, FailureKind.TIMEOUT -> true
+        // Usually a transport failure on the way to the provider, which a dead
+        // phone network produces just as well. A provider answering 5xx spends
+        // one probe that then vouches for the network, and pages as it should.
+        FailureKind.SIGN_IN_SERVER -> true
         FailureKind.NONE,
         FailureKind.TLS,
         FailureKind.STATUS,
@@ -70,6 +74,9 @@ object Reachability {
         FailureKind.ELEMENT,
         FailureKind.RENDER,
         FailureKind.METRIC,
+        FailureKind.REPORTED_DOWN,
+        FailureKind.NOT_HEALTH_FORMAT,
+        FailureKind.TOKEN_REFUSED,
         FailureKind.BAD_CONFIG,
         FailureKind.UNKNOWN,
         -> false

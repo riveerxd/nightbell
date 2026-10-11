@@ -12,6 +12,7 @@ object Validation {
         NAME, URL, METHOD, HEADERS, BODY, STATUS, ASSERTION, JSON_PATH,
         INTERVAL, TIMEOUT, ELEMENT, ELEMENT_TEXT, LATENCY_SLO, URGENT, PROXY,
         REPO, GITHUB, TOKEN, TLS, METRIC, LABELS, PROMQL, ALERTS,
+        SIGN_IN, STALE,
     }
 
     /** Past this many watched elements the settle loop is worth warning about. */
@@ -148,10 +149,12 @@ object Validation {
         // and judging it against a body assertion left behind by a draft that
         // used to be a request kind would block saving on a field that is not
         // on screen to fix.
-        if (monitor.kind == MonitorKind.PROMETHEUS) {
-            reportPrometheus(monitor, notes)
-        } else {
-            reportHttpExpectations(monitor, notes)
+        // A health endpoint's verdict is its body, so there is no status or body
+        // expectation to state, the same as Prometheus.
+        when (monitor.kind) {
+            MonitorKind.PROMETHEUS -> reportPrometheus(monitor, notes)
+            MonitorKind.HEALTH_ENDPOINT -> reportHealth(monitor, notes)
+            else -> reportHttpExpectations(monitor, notes)
         }
 
         // Reaching a hidden service at all.
@@ -318,6 +321,30 @@ object Validation {
      * Validating all three at once would turn that convenience into a form that
      * cannot be saved until every unused field is cleared.
      */
+    private fun reportHealth(monitor: Monitor, notes: MutableList<Note>) {
+        val watch = monitor.health
+        when (watch.signIn) {
+            HealthSignIn.NONE -> Unit
+            HealthSignIn.HEADERS -> if (monitor.headers.none { !it.isBlank }) {
+                notes += Note(Field.SIGN_IN, Severity.ERROR, "Add the header the API expects, such as Authorization")
+            }
+            HealthSignIn.BASIC -> if (watch.username.isBlank()) {
+                notes += Note(Field.SIGN_IN, Severity.ERROR, "Enter the username")
+            }
+            HealthSignIn.SSO -> if (watch.tokenEndpoint.isBlank() || watch.clientId.isBlank()) {
+                notes += Note(Field.SIGN_IN, Severity.ERROR, "Sign in, or enter the provider details, before saving")
+            }
+        }
+        if (watch.staleAfterMinutes < 0) {
+            notes += Note(Field.STALE, Severity.ERROR, "The age limit can't be negative")
+        } else if (watch.staleAfterMinutes in 1 until monitor.intervalMinutes) {
+            notes += Note(
+                Field.STALE, Severity.HINT,
+                "Shorter than the check interval. Fine if the service refreshes its report more often than Nightbell reads it.",
+            )
+        }
+    }
+
     private fun reportPrometheus(monitor: Monitor, notes: MutableList<Note>) {
         val watch = monitor.prometheus
         when (watch.source) {

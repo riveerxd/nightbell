@@ -202,7 +202,7 @@ fun SetupScreen(
     // gesture walks the wizard backwards, exactly as the footer's Back does.
     // Disabled while the picker is up — that has its own handler, and it needs to
     // consume Back for in-page navigation first.
-    BackHandler(enabled = !viewModel.pickerOpen) {
+    BackHandler(enabled = !viewModel.pickerOpen && !viewModel.browserSignInOpen) {
         when {
             confirmDiscard -> confirmDiscard = false
             viewModel.step > 0 -> viewModel.back()
@@ -353,6 +353,8 @@ fun SetupScreen(
         )
 
         MetricBrowserSheet(viewModel = viewModel, accent = accent)
+
+        SsoSignInOverlay(viewModel)
 
         DiscardDraftPrompt(
             visible = confirmDiscard,
@@ -655,7 +657,7 @@ private fun StepKind(draft: Monitor, onSelect: (MonitorKind) -> Unit) {
         style = MaterialTheme.typography.bodyMedium,
         color = NightbellColors.TextSecondary,
     )
-    MonitorKind.entries.forEachIndexed { index, kind ->
+    MonitorKind.entries.filter { it.offered }.forEachIndexed { index, kind ->
         val selected = draft.kind == kind
         val (accent, _) = accentFor(index * 2)
         val scale by animateFloatAsState(
@@ -745,6 +747,8 @@ private fun StepTarget(
         GitHubTargetCard(viewModel, draft, report, accent)
     } else if (draft.kind == MonitorKind.PROMETHEUS) {
         PrometheusTargetCard(viewModel, draft, report, accent)
+    } else if (draft.kind == MonitorKind.HEALTH_ENDPOINT) {
+        HealthTargetCard(viewModel, draft, report, accent)
     } else {
         GlassField(
             value = draft.url,
@@ -1024,7 +1028,7 @@ private fun CapturedElementRow(
 }
 
 @Composable
-private fun HeadersEditor(
+internal fun HeadersEditor(
     headers: List<HeaderPair>,
     onChange: (List<HeaderPair>) -> Unit,
     note: Validation.Note?,
@@ -1148,6 +1152,11 @@ private fun StepExpectations(
 
     if (draft.kind == MonitorKind.PROMETHEUS) {
         PrometheusExpectationCard(viewModel, draft, report, accent)
+        return
+    }
+
+    if (draft.kind == MonitorKind.HEALTH_ENDPOINT) {
+        HealthExpectationCard(viewModel, draft, report, accent)
         return
     }
 

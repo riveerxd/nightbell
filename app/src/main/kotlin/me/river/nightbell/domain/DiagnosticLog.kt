@@ -189,6 +189,17 @@ enum class LogEvent(
 
     // The proxy override the page checker installs around a routed load.
     PROXY_CLEAR_FAILED("proxy.clear.failed", LogArea.HTTP, LogLevel.WARN),
+
+    // A health monitor's own sign-in. Refreshes are logged on purpose: whether a
+    // token kept itself alive overnight is the first question about this feature
+    // and the log is the only place the answer can come from. Never a token.
+    AUTH_TOKEN("auth.token", LogArea.HTTP),
+    AUTH_REFRESH("auth.refresh", LogArea.HTTP),
+    AUTH_REFUSED("auth.refused", LogArea.HTTP, LogLevel.WARN),
+    AUTH_PROVIDER_DOWN("auth.provider.down", LogArea.HTTP, LogLevel.WARN),
+    AUTH_SIGN_IN_NEEDED("auth.sign_in_needed", LogArea.HTTP, LogLevel.WARN),
+    AUTH_DISCOVERY("auth.discovery", LogArea.HTTP),
+    VAULT_UNREADABLE("vault.unreadable", LogArea.STORE, LogLevel.ERROR),
     ;
 }
 

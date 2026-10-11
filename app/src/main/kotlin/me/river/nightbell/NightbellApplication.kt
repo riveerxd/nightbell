@@ -90,7 +90,12 @@ class NightbellApplication : Application() {
      * putting them through this pass makes that true of every line rather than
      * of every line somebody remembered.
      */
-    private fun secretsIn(graph: Nightbell.Graph): Collection<String> {
+    private fun secretsIn(graph: Nightbell.Graph): Collection<String> =
+        // Outside the cache: a refresh rotates a token without the snapshot
+        // moving, and the cache is keyed on the snapshot's revision.
+        snapshotSecrets(graph) + graph.vault.knownSecrets()
+
+    private fun snapshotSecrets(graph: Nightbell.Graph): Collection<String> {
         val snap = graph.store.snapshot.value
         val cached = knownSecrets
         if (cached != null && knownSecretsRevision == snap.revision) return cached

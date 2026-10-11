@@ -97,6 +97,8 @@ import me.river.nightbell.domain.groupsHolding
 import me.river.nightbell.domain.Health
 import me.river.nightbell.domain.Monitor
 import me.river.nightbell.domain.MonitorCard
+import me.river.nightbell.domain.AuthProblem
+import me.river.nightbell.domain.HealthFormat
 import me.river.nightbell.domain.MonitorKind
 import me.river.nightbell.domain.MonitorQuery
 import me.river.nightbell.domain.MonitorRuntime
@@ -168,6 +170,8 @@ fun kindIcon(kind: MonitorKind) = when (kind) {
     MonitorKind.WEBSITE_ELEMENT -> NightbellIcons.Pointer
     MonitorKind.GITHUB_REPO -> NightbellIcons.Repo
     MonitorKind.PROMETHEUS -> NightbellIcons.Gauge
+    MonitorKind.HEALTH_ENDPOINT -> NightbellIcons.Activity
+    MonitorKind.UNSUPPORTED -> NightbellIcons.Info
 }
 
 @Composable
@@ -1716,9 +1720,20 @@ private fun MonitorRowCard(
         // most of why somebody sets one of these up, and opening the monitor to
         // find it would be hiding the answer behind a tap. Every other kind's
         // passing message is "HTTP 200 in 41ms", which is why this is not general.
-        val reading = monitor.kind == MonitorKind.PROMETHEUS &&
-            runtime.ok(monitor.enabled) &&
-            runtime.lastReading.isNotBlank()
+        val reportKind = monitor.kind == MonitorKind.HEALTH_ENDPOINT
+        // A health monitor that cannot sign in is not checking. Said in neutral
+        // grey, because colour is for the service and this is about Nightbell.
+        val notChecking = reportKind && runtime.report.auth.problem != AuthProblem.NONE
+        val partsLine = if (reportKind && runtime.ok(monitor.enabled)) {
+            HealthFormat.summary(runtime.report).ifBlank { null }
+        } else {
+            null
+        }
+        val reading = notChecking || partsLine != null || (
+            monitor.kind == MonitorKind.PROMETHEUS &&
+                runtime.ok(monitor.enabled) &&
+                runtime.lastReading.isNotBlank()
+            )
         AnimatedVisibility(
             visible = reading || (!runtime.ok(monitor.enabled) && runtime.lastMessage.isNotBlank()),
             enter = fadeIn(),
@@ -1728,6 +1743,7 @@ private fun MonitorRowCard(
             // and not passing judgement on it. The status pill above already
             // carries the health, in the colour that means health.
             val tone = when {
+                notChecking -> NightbellColors.TextTertiary
                 reading -> accent
                 muted -> NightbellColors.Amber
                 else -> NightbellColors.Rose
@@ -1753,6 +1769,8 @@ private fun MonitorRowCard(
                 ) {
                     Icon(
                         when {
+                            notChecking -> NightbellIcons.Shield
+                            partsLine != null -> NightbellIcons.Layers
                             reading -> NightbellIcons.Gauge
                             muted -> NightbellIcons.BellOff
                             else -> NightbellIcons.Warning
@@ -1809,6 +1827,8 @@ private fun MonitorRowCard(
                     } else {
                         Text(
                             text = when {
+                                notChecking -> "Not checking · Sign in needed"
+                                partsLine != null -> partsLine
                                 reading -> runtime.lastReading
                                 muted -> "${runtime.lastMessage} · muted, no alerts"
                                 card.streak != null -> "${runtime.lastMessage} · ${card.streak.line}"
@@ -1890,7 +1910,8 @@ private fun MonitorRowCard(
             // Per-card actions step aside during selection: a re-check button that
             // fires a real request is the last thing that should be one mis-tap
             // away while the finger is busy picking rows.
-            if (!selecting) {
+            // Neither button can do anything for a kind this build cannot run.
+            if (!selecting && monitor.kind != MonitorKind.UNSUPPORTED) {
                 GlassIconButton(
                     icon = if (monitor.enabled) NightbellIcons.Pause else NightbellIcons.Play,
                     onClick = { onToggle(!monitor.enabled) },

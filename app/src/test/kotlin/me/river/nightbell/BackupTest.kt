@@ -17,6 +17,11 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import me.river.nightbell.domain.HealthAuth
+import me.river.nightbell.domain.HealthComponent
+import me.river.nightbell.domain.HealthState
+import me.river.nightbell.domain.MonitorKind
+import kotlinx.serialization.json.Json
 import org.junit.Test
 
 /**
@@ -313,5 +318,39 @@ class BackupTest {
         val twice = BackupCodec.decode(encoded(once)).getOrThrow().toImportableSnapshot()
 
         assertEquals(once, twice)
+    }
+
+    @Test
+    fun `a restored health monitor has no report and no sign-in record`() {
+        val backup = NightbellBackup(
+            snapshot = NightbellSnapshot(
+                monitors = listOf(monitor("a").copy(kind = MonitorKind.HEALTH_ENDPOINT)),
+                runtimes = mapOf(
+                    "a" to MonitorRuntime(
+                        report = HealthState(
+                            components = listOf(HealthComponent(id = "payments")),
+                            auth = HealthAuth(account = "alice", offline = true),
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        val imported = backup.toImportableSnapshot()
+
+        assertEquals(HealthState(), imported.runtimes.getValue("a").report)
+    }
+
+    @Test
+    fun `a backup never carries a token, because the snapshot never holds one`() {
+        val text = Json { encodeDefaults = true }.encodeToString(
+            NightbellSnapshot(monitors = listOf(monitor("a").copy(kind = MonitorKind.HEALTH_ENDPOINT))),
+        )
+
+        // Not "password": the Prometheus watch has a field by that name, which
+        // withoutSecrets() already clears.
+        listOf("accessToken", "refreshToken", "clientSecret").forEach {
+            assertFalse(it, text.contains(it))
+        }
     }
 }

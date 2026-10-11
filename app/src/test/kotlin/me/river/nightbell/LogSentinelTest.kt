@@ -258,6 +258,8 @@ class LogSentinelTest {
                 "body" to Rule.NEVER,
                 "contentType" to Rule.SAFE,
                 "proxyHost" to Rule.HOST,
+                // A kind name a newer build wrote, never anything the user typed.
+                "unsupportedKind" to Rule.SAFE,
             ),
             "GlobalSettings" to mapOf(
                 "githubToken" to Rule.FINGERPRINT,

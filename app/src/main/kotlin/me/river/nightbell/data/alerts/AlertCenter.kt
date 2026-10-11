@@ -28,12 +28,15 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import me.river.nightbell.domain.AlertPolicy
+import me.river.nightbell.domain.AuthProblem
 import me.river.nightbell.domain.AppUpdate
 import me.river.nightbell.domain.CertificateWatch
 import me.river.nightbell.domain.CheckResult
 import me.river.nightbell.domain.GitHubEvent
 import me.river.nightbell.domain.LiveTimeline
 import me.river.nightbell.domain.Monitor
+import me.river.nightbell.domain.MonitorKind
+import me.river.nightbell.domain.HealthFormat
 import me.river.nightbell.domain.SoundChoice
 import me.river.nightbell.domain.VibrationStyle
 
@@ -79,7 +82,7 @@ class AlertCenter(private val context: Context) {
             .setSmallIcon(R.drawable.ic_stat_alert)
             .setContentTitle(title)
             .setContentText(body)
-            .setStyle(alertList(result) ?: NotificationCompat.BigTextStyle().bigText(expanded))
+            .setStyle(alertList(result) ?: partList(result) ?: NotificationCompat.BigTextStyle().bigText(expanded))
             .setColor(DOWN_COLOR)
             .setColorized(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -121,6 +124,21 @@ class AlertCenter(private val context: Context) {
         val style = NotificationCompat.InboxStyle()
         result.alerts.take(ALERT_LINES).forEach { style.addLine(it.line) }
         val hidden = result.alerts.size - ALERT_LINES
+        if (hidden > 0) style.setSummaryText("and $hidden more")
+        return style
+    }
+
+    /**
+     * A health report's parts that are not up, one to a row, for the same
+     * reason and with the same seven-row limit as [alertList]. Null when the
+     * report named none, which leaves the paragraph and its message.
+     */
+    private fun partList(result: CheckResult): NotificationCompat.InboxStyle? {
+        val lines = result.health?.components?.let(HealthFormat::troubleLines).orEmpty()
+        if (lines.isEmpty()) return null
+        val style = NotificationCompat.InboxStyle()
+        lines.take(ALERT_LINES).forEach { style.addLine(it) }
+        val hidden = lines.size - ALERT_LINES
         if (hidden > 0) style.setSummaryText("and $hidden more")
         return style
     }
@@ -183,6 +201,13 @@ class AlertCenter(private val context: Context) {
                                 append("\n").append(it.line)
                             }
                             val hidden = result.alerts.size - ALERT_LINES
+                            if (hidden > 0) append("\nand $hidden more")
+                        }
+                        val parts = result.health?.components?.let(HealthFormat::troubleLines).orEmpty()
+                        if (parts.isNotEmpty()) {
+                            append("\n")
+                            parts.take(ALERT_LINES).forEach { append("\n").append(it) }
+                            val hidden = parts.size - ALERT_LINES
                             if (hidden > 0) append("\nand $hidden more")
                         }
                         append("\n\nThis alert repeats every ")
@@ -414,6 +439,35 @@ class AlertCenter(private val context: Context) {
         repeat: Boolean,
     ) {
         val channelId = channelFor(policy, Severity.DEGRADED, silent)
+        if (result.degraded) {
+            // The service said so itself. "Slow" and a latency budget would be
+            // explaining a reading nobody took.
+            val lines = result.health?.components?.let(HealthFormat::troubleLines).orEmpty()
+            val reported = baseBuilder(channelId, monitor, silent)
+                .setSmallIcon(R.drawable.ic_stat_alert)
+                .setContentTitle(
+                    if (repeat) "${monitor.displayName} still reports degraded" else "${monitor.displayName} reports degraded",
+                )
+                .setContentText(lines.firstOrNull() ?: "The service says it is working, worse than it should")
+                .setStyle(partList(result) ?: NotificationCompat.BigTextStyle().bigText(monitor.url))
+                .setColor(DEGRADED_COLOR)
+                .setColorized(true)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setCategory(NotificationCompat.CATEGORY_STATUS)
+                .addAction(
+                    R.drawable.ic_stat_refresh,
+                    "Re-check now",
+                    AlertActionReceiver.pendingIntent(context, AlertActionReceiver.ACTION_RECHECK, monitor.id),
+                )
+                .addAction(
+                    R.drawable.ic_stat_mute,
+                    "Mute 1h",
+                    AlertActionReceiver.pendingIntent(context, AlertActionReceiver.ACTION_MUTE_1H, monitor.id),
+                )
+                .build()
+            post(monitor.id.degradedNotificationId(), reported)
+            return
+        }
         val notification = baseBuilder(channelId, monitor, silent)
             .setSmallIcon(R.drawable.ic_stat_alert)
             .setContentTitle(
@@ -461,8 +515,20 @@ class AlertCenter(private val context: Context) {
         val channelId = channelFor(policy, Severity.RECOVERY, silent)
         val notification = baseBuilder(channelId, monitor, silent)
             .setSmallIcon(R.drawable.ic_stat_ok)
-            .setContentTitle("${monitor.displayName} is fast again")
-            .setContentText("${result.latencyMs} ms — back under the $sloMs ms budget")
+            .setContentTitle(
+                if (monitor.kind == MonitorKind.HEALTH_ENDPOINT) {
+                    "${monitor.displayName} is no longer degraded"
+                } else {
+                    "${monitor.displayName} is fast again"
+                },
+            )
+            .setContentText(
+                if (monitor.kind == MonitorKind.HEALTH_ENDPOINT) {
+                    result.message
+                } else {
+                    "${result.latencyMs} ms, back under the $sloMs ms budget"
+                },
+            )
             .setColor(UP_COLOR)
             .setColorized(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -617,6 +683,55 @@ class AlertCenter(private val context: Context) {
     }
 
     fun cancelCheckerHealth() = compat.cancel(CHECKER_HEALTH_NOTIFICATION_ID)
+
+    // ---- sign-in trouble ------------------------------------------------------
+
+    /**
+     * A health monitor that cannot sign in and so is not checking.
+     *
+     * Not a page, and not on any alert channel, because it says nothing about the
+     * service: the service may be fine, and the danger is the opposite one, a
+     * monitor that silently stopped watching. So it is posted once when it
+     * starts and then at most once a day (see [me.river.nightbell.domain.SignInReminder]),
+     * on its own channel, in its own id space outside the alert ranges so the
+     * reconciliation sweep never takes it down.
+     */
+    fun notifySignInNeeded(monitor: Monitor, problem: AuthProblem) {
+        val notification = NotificationCompat.Builder(context, signInChannel())
+            .setSmallIcon(R.drawable.ic_stat_brand)
+            .setContentTitle("${monitor.displayName} is not checking")
+            .setContentText("${problem.headline}. Open the monitor to sign in again.")
+            .setContentIntent(openMonitorIntent(monitor.id))
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .setOnlyAlertOnce(true)
+            .setShowWhen(true)
+            .setWhen(System.currentTimeMillis())
+            .build()
+        post(monitor.id.signInNotificationId(), notification)
+    }
+
+    fun cancelSignInNeeded(monitorId: String) = compat.cancel(monitorId.signInNotificationId())
+
+    private fun signInChannel(): String {
+        if (manager.getNotificationChannel(SIGN_IN_CHANNEL) != null) return SIGN_IN_CHANNEL
+        val channel = NotificationChannel(
+            SIGN_IN_CHANNEL,
+            "Monitors that can't sign in",
+            NotificationManager.IMPORTANCE_DEFAULT,
+        ).apply {
+            group = GROUP_HEALTH
+            description = "A health monitor whose own sign-in has ended. It is not checking until you sign in again. " +
+                "Never a claim that the service is down."
+            enableVibration(false)
+            setSound(null, null)
+            setShowBadge(true)
+            lockscreenVisibility = Notification.VISIBILITY_PRIVATE
+        }
+        manager.createNotificationChannel(channel)
+        return SIGN_IN_CHANNEL
+    }
 
     /** Vibration is frozen into a channel at creation, so there is one of each. */
     fun healthChannel(vibrate: Boolean, style: VibrationStyle): String {
@@ -1407,6 +1522,7 @@ class AlertCenter(private val context: Context) {
         private const val NOTIFICATION_GROUP = "nightbell.alerts"
         const val SERVICE_CHANNEL = "nightbell.service.strict"
         const val HEALTH_CHANNEL = "nightbell.health.checker"
+        const val SIGN_IN_CHANNEL = "nightbell.health.signin"
 
         /**
          * Versioned on purpose. A channel's importance, sound and DND bypass are
@@ -1464,3 +1580,6 @@ internal fun String.certNotificationId(): Int = 400_000 + (hashCode() and 0x7FFF
  * only has to separate two events belonging to the same repository.
  */
 internal fun String.githubEventId(): Int = 500_000 + (hashCode() and 0x7FFF)
+
+/** Outside every alert space, so the stray sweep never cancels a sign-in notice. */
+internal fun String.signInNotificationId(): Int = 600_000 + (hashCode() and 0x7FFF)

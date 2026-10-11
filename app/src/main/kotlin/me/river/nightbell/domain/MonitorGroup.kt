@@ -348,4 +348,4 @@ object GroupRollup {
  * one right now", and the dashboard was already computing it inline.
  */
 val MonitorCard.effectiveHealth: Health
-    get() = if (!monitor.enabled) Health.PAUSED else runtime.health
+    get() = if (!monitor.runs) Health.PAUSED else runtime.health

@@ -1,7 +1,15 @@
 package me.river.nightbell.domain
 
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.KeepGeneratedSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonTransformingSerializer
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 
 /** What kind of thing a monitor watches. */
 @Serializable
@@ -41,6 +49,27 @@ enum class MonitorKind {
      */
     @SerialName("prometheus")
     PROMETHEUS,
+
+    /**
+     * Reads a service's own report of itself in the Nightbell health format,
+     * signed in the way the service's own clients sign in. The contract is
+     * `docs/health-format.md`; how Nightbell holds the sign-in is [HealthWatch].
+     */
+    @SerialName("health_endpoint")
+    HEALTH_ENDPOINT,
+
+    /**
+     * A kind this build does not know, read from a store a newer build wrote.
+     *
+     * Never offered, never checked. It exists so that meeting one costs that
+     * monitor and nothing else: before it, a single unknown name failed the
+     * decode of the whole snapshot, the store fell back to empty, and the next
+     * write saved the empty one over every monitor the user had. The name the
+     * newer build wrote is kept in [Monitor.unsupportedKind] and goes back out
+     * unchanged, so upgrading again finds the monitor as it was left.
+     */
+    @SerialName("unsupported")
+    UNSUPPORTED,
     ;
 
     val label: String
@@ -50,6 +79,8 @@ enum class MonitorKind {
             WEBSITE_ELEMENT -> "Page element"
             GITHUB_REPO -> "GitHub repo"
             PROMETHEUS -> "Prometheus"
+            HEALTH_ENDPOINT -> "Health endpoint"
+            UNSUPPORTED -> "Made by a newer Nightbell"
         }
 
     val blurb: String
@@ -59,7 +90,12 @@ enum class MonitorKind {
             WEBSITE_ELEMENT -> "Watch one element on a real rendered page."
             GITHUB_REPO -> "Stars, issues, comments and releases on one repository."
             PROMETHEUS -> "Scrape metrics, run PromQL, or watch Alertmanager."
+            HEALTH_ENDPOINT -> "Read what a service says about each of its parts."
+            UNSUPPORTED -> "Update Nightbell to check this monitor."
         }
+
+    /** Whether setup can offer this kind for a new monitor. */
+    val offered: Boolean get() = this != UNSUPPORTED
 }
 
 @Serializable
@@ -539,7 +575,9 @@ data class AlertPolicy(
         }.joinToString(" · ")
 }
 
-@Serializable
+@OptIn(ExperimentalSerializationApi::class)
+@KeepGeneratedSerializer
+@Serializable(with = MonitorSerializer::class)
 data class Monitor(
     val id: String,
     val name: String = "",
@@ -578,6 +616,11 @@ data class Monitor(
      * kind, and defaulted so a store written before this existed still decodes.
      */
     val prometheus: PrometheusWatch = PrometheusWatch(),
+    /**
+     * What a [MonitorKind.HEALTH_ENDPOINT] monitor reads and how it signs in.
+     * Ignored by every other kind, and defaulted so older stores still decode.
+     */
+    val health: HealthWatch = HealthWatch(),
     val timeoutSeconds: Int = 15,
     val intervalMinutes: Int = 15,
     /**
@@ -668,7 +711,21 @@ data class Monitor(
     val latencySloMs: Int = 0,
     val accent: Int = 0,
     val createdAt: Long = 0L,
+    /**
+     * The kind name a newer build wrote, when [kind] is [MonitorKind.UNSUPPORTED].
+     * Empty on every monitor this build understands. See [MonitorSerializer].
+     */
+    val unsupportedKind: String = "",
 ) {
+    /**
+     * Whether the schedule checks this monitor at all.
+     *
+     * [enabled] is the user's switch. A monitor of a kind this build cannot run
+     * is off as well, without that being written into its switch: the newer
+     * build it came from would then find it paused.
+     */
+    val runs: Boolean get() = enabled && kind != MonitorKind.UNSUPPORTED
+
     val displayName: String
         get() = name.ifBlank {
             // A repository is named `owner/repo` everywhere else in the world, so
@@ -739,6 +796,40 @@ data class Monitor(
         if (!proxied) return timeoutSeconds
         if (proxyTimeoutSeconds > 0) return proxyTimeoutSeconds
         return maxOf(timeoutSeconds, settings.proxiedTimeoutSeconds)
+    }
+}
+
+/**
+ * Reads a [Monitor] whose kind this build may not know.
+ *
+ * On the monitor rather than on [MonitorKind], because an enum's serializer sees
+ * one string and has nowhere to keep it. The monitor does: an unknown name is
+ * read as [MonitorKind.UNSUPPORTED] with the name moved to
+ * [Monitor.unsupportedKind], and written back under the name it came with.
+ */
+object MonitorSerializer : JsonTransformingSerializer<Monitor>(Monitor.generatedSerializer()) {
+    private val known: Set<String> = MonitorKind.serializer().descriptor.let { kinds ->
+        (0 until kinds.elementsCount).map(kinds::getElementName).toSet()
+    }
+
+    override fun transformDeserialize(element: JsonElement): JsonElement {
+        if (element !is JsonObject) return element
+        val name = (element["kind"] as? JsonPrimitive)?.contentOrNull ?: return element
+        if (name in known) return element
+        return JsonObject(
+            element + mapOf(
+                "kind" to JsonPrimitive("unsupported"),
+                "unsupportedKind" to JsonPrimitive(name),
+            ),
+        )
+    }
+
+    override fun transformSerialize(element: JsonElement): JsonElement {
+        if (element !is JsonObject) return element
+        val original = element["unsupportedKind"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        val rest = JsonObject(element - "unsupportedKind")
+        if (original.isBlank() || element["kind"]?.jsonPrimitive?.contentOrNull != "unsupported") return rest
+        return JsonObject(rest + ("kind" to JsonPrimitive(original)))
     }
 }
 
@@ -914,6 +1005,12 @@ data class MonitorRuntime(
      * announce the first one's issues and then go permanently quiet.
      */
     val github: GitHubState = GitHubState(),
+
+    /**
+     * What a [MonitorKind.HEALTH_ENDPOINT] monitor last read, and its sign-in.
+     * Not called `health`, which is this monitor's [Health] verdict above.
+     */
+    val report: HealthState = HealthState(),
 
     // ---- degraded track -----------------------------------------------------
     /**
@@ -1143,6 +1240,18 @@ enum class FailureKind {
      * payload: the server is healthy and is reporting that something else is not.
      */
     METRIC,
+
+    /** A health document was read and its verdict is down. */
+    REPORTED_DOWN,
+
+    /** Something answered, and it was not the Nightbell health format. */
+    NOT_HEALTH_FORMAT,
+
+    /** The sign-in provider could not be reached, so nobody can sign in to the service either. */
+    SIGN_IN_SERVER,
+
+    /** Nightbell held a fresh token and the API refused it anyway. */
+    TOKEN_REFUSED,
     BAD_CONFIG,
     UNKNOWN,
     ;
@@ -1159,6 +1268,10 @@ enum class FailureKind {
             ELEMENT -> "Element check failed"
             RENDER -> "Page did not render"
             METRIC -> "Reported a problem"
+            REPORTED_DOWN -> "Reported down"
+            NOT_HEALTH_FORMAT -> "Not a health endpoint"
+            SIGN_IN_SERVER -> "Sign-in server unreachable"
+            TOKEN_REFUSED -> "Signed in, but the API refused the token"
             BAD_CONFIG -> "Monitor misconfigured"
             UNKNOWN -> "Check failed"
         }
@@ -1176,6 +1289,10 @@ enum class FailureKind {
             ELEMENT -> "The page rendered but the element or its text didn't match."
             RENDER -> "The page failed to load in the embedded browser."
             METRIC -> "The endpoint answered. What it reported is the problem."
+            REPORTED_DOWN -> "The service answered and says it is down. The parts below say where."
+            NOT_HEALTH_FORMAT -> "A deploy may have replaced the endpoint, or the URL points at the web app."
+            SIGN_IN_SERVER -> "If Nightbell cannot reach the provider, neither can the service's users."
+            TOKEN_REFUSED -> "Real users' tokens would be refused the same way. The account may lack a role."
             BAD_CONFIG -> "Fix the monitor's URL or assertion and try again."
             UNKNOWN -> "See the technical detail below."
         }
@@ -1229,6 +1346,21 @@ data class CheckResult(
      * answer. Sorted worst first.
      */
     val alerts: List<FiringAlert> = emptyList(),
+    /**
+     * Answered, and worse than it should be, for a reason other than latency.
+     *
+     * A health document saying `degraded` sets it. [AlertDecider.advance] treats
+     * it exactly like a reading over the latency budget, so the degraded track's
+     * cooldown, repeat and amber all apply without a second copy of them, and
+     * uptime still counts it as up because it answered.
+     */
+    val degraded: Boolean = false,
+    /**
+     * What a [MonitorKind.HEALTH_ENDPOINT] check read, replacing the runtime's.
+     * An empty one clears it: a check that could not read a document has no
+     * parts to show. Null on every other kind, which leaves the runtime's alone.
+     */
+    val health: HealthState? = null,
     val at: Long = 0L,
 ) {
     /** The next step to show, specific where the check had one. */

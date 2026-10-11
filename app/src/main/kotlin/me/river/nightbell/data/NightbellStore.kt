@@ -5,6 +5,7 @@ import me.river.nightbell.domain.LogEvent
 import me.river.nightbell.domain.LogField
 import android.content.Context
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -133,7 +134,7 @@ class NightbellStore(
         encodeDefaults = true
     }
 
-    private val key = stringPreferencesKey("snapshot_v1")
+    private val key = SNAPSHOT_KEY
 
     /** Set while a check is in flight so the UI can show its live shimmer. */
     private val inFlight = MutableStateFlow<Set<String>>(emptySet())
@@ -227,7 +228,7 @@ class NightbellStore(
     val cards: Flow<List<MonitorCard>> = combine(snapshot, inFlight) { snap, busy ->
         snap.monitors.map { monitor ->
             val runtime = snap.runtimes[monitor.id]
-                ?: MonitorRuntime(health = if (monitor.enabled) Health.UNKNOWN else Health.PAUSED)
+                ?: MonitorRuntime(health = if (monitor.runs) Health.UNKNOWN else Health.PAUSED)
             MonitorCard(
                 monitor = monitor,
                 runtime = runtime,
@@ -550,27 +551,22 @@ class NightbellStore(
     private suspend fun mutate(transform: (NightbellSnapshot) -> NightbellSnapshot) {
         var written: NightbellSnapshot? = null
         context.nightbellDataStore.edit { prefs ->
-            val current = decode(prefs[key])
-            // The revision is stamped here rather than by the transform, so it is
-            // assigned under DataStore's write lock and cannot be skipped. It also
-            // means an imported backup (`replaceAll`) is renumbered onto the end of
-            // this store's history instead of carrying whatever counter the file was
-            // written with, which could be lower than what is on disk.
-            val next = transform(current).copy(revision = current.revision + 1)
-            written = next
-            prefs[key] = json.encodeToString(next)
+            written = commit(prefs, ::decodeOrNull, { json.encodeToString(it) }, transform)
         }
         // Before returning, so a caller that writes and then reads `snapshot.value`
         // sees its own write. `edit` has already committed at this point.
         written?.let(::publish)
     }
 
-    private fun decode(raw: String?): NightbellSnapshot {
+    private fun decode(raw: String?): NightbellSnapshot = decodeOrNull(raw) ?: NightbellSnapshot()
+
+    /** Null when [raw] is there and cannot be read, which is not the same as empty. */
+    private fun decodeOrNull(raw: String?): NightbellSnapshot? {
         if (raw.isNullOrBlank()) return NightbellSnapshot()
         return runCatching { json.decodeFromString<NightbellSnapshot>(raw) }
             .onFailure { Diag.logError(LogEvent.STORE_CORRUPT, it) }
-            .getOrDefault(NightbellSnapshot())
-            .let(::migrate)
+            .getOrNull()
+            ?.let(::migrate)
     }
 
     /**
@@ -672,5 +668,58 @@ class NightbellStore(
 
     companion object {
         private const val TAG = "NightbellStore"
+
+        internal val SNAPSHOT_KEY = stringPreferencesKey("snapshot_v1")
+
+        /**
+         * Where a store this build could not read is kept, untouched.
+         *
+         * Until 3.17 an unreadable document read as an empty store, and the next
+         * write of any kind, a worker stamping a check time included, saved that
+         * empty store over it. Every monitor the user had was gone, and the
+         * document that held them with it, so not even a later build that could
+         * read it had anything left to read.
+         */
+        internal val UNREADABLE_KEY = stringPreferencesKey("snapshot_unreadable")
+
+        /**
+         * One write, applied inside DataStore's `edit`. Returns what was written,
+         * or null when nothing was.
+         *
+         * Split out of [mutate] so it can be exercised without a [Context].
+         */
+        internal fun commit(
+            prefs: MutablePreferences,
+            read: (String?) -> NightbellSnapshot?,
+            encode: (NightbellSnapshot) -> String,
+            transform: (NightbellSnapshot) -> NightbellSnapshot,
+        ): NightbellSnapshot? {
+            val raw = prefs[SNAPSHOT_KEY]
+            val readable = read(raw)
+            val current = readable ?: NightbellSnapshot()
+            if (readable == null && raw != null) {
+                // The first copy is the one worth having. A later failure is the
+                // same document again, or one this build already wrote.
+                if (prefs[UNREADABLE_KEY] == null) prefs[UNREADABLE_KEY] = raw
+                Diag.log(LogEvent.STORE_REPAIR, LogField.tag("what", "unreadable_store_kept"))
+            }
+            // The revision is stamped here rather than by the transform, so it is
+            // assigned under DataStore's write lock and cannot be skipped. It also
+            // means an imported backup (`replaceAll`) is renumbered onto the end of
+            // this store's history instead of carrying whatever counter the file was
+            // written with, which could be lower than what is on disk.
+            val changed = transform(current)
+            // A write that carries nothing the user made leaves the unreadable
+            // document where it is. What usually does this is a worker recording a
+            // check of a monitor that, as far as this build knows, does not exist,
+            // and the runtime it adds for that ghost is not worth the document.
+            val userMadeNothing = changed.monitors.isEmpty() &&
+                changed.groups.isEmpty() &&
+                changed.settings == current.settings
+            if (readable == null && userMadeNothing) return null
+            val next = changed.copy(revision = current.revision + 1)
+            prefs[SNAPSHOT_KEY] = encode(next)
+            return next
+        }
     }
 }

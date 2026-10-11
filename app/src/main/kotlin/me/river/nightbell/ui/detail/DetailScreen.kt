@@ -68,7 +68,10 @@ import me.river.nightbell.domain.alertsFiring
 import me.river.nightbell.domain.alertsFiringLine
 import me.river.nightbell.domain.MonitorCard
 import me.river.nightbell.domain.QuickRetry
+import me.river.nightbell.domain.AuthProblem
 import me.river.nightbell.domain.MonitorKind
+import me.river.nightbell.domain.HealthSignIn
+import me.river.nightbell.domain.HealthFormat
 import me.river.nightbell.domain.PrometheusWatch
 import me.river.nightbell.domain.PrometheusSource
 import me.river.nightbell.domain.PrometheusCheck
@@ -177,7 +180,7 @@ fun DetailScreen(
     val monitor = current.monitor
     val runtime = current.runtime
     val (accent, accentEnd) = accentFor(monitor.accent)
-    val health = if (!monitor.enabled) Health.PAUSED else runtime.health
+    val health = if (!monitor.runs) Health.PAUSED else runtime.health
     val now = LocalNowMs.current
 
     // A repository monitor's history is the repository's history, not the poll's.
@@ -228,14 +231,18 @@ fun DetailScreen(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                Spacer(Modifier.width(10.dp))
-                GlassIconButton(
-                    icon = NightbellIcons.Pencil,
-                    onClick = { onEdit(monitor.id) },
-                    contentDescription = "Edit monitor",
-                    accent = accent,
-                    size = 38.dp,
-                )
+                // Setup would rebuild it as a kind this build knows and save that
+                // over the one the newer build wrote.
+                if (monitor.kind != MonitorKind.UNSUPPORTED) {
+                    Spacer(Modifier.width(10.dp))
+                    GlassIconButton(
+                        icon = NightbellIcons.Pencil,
+                        onClick = { onEdit(monitor.id) },
+                        contentDescription = "Edit monitor",
+                        accent = accent,
+                        size = 38.dp,
+                    )
+                }
             }
         }
 
@@ -254,7 +261,24 @@ fun DetailScreen(
             }
         }
 
-        item(key = "actions") {
+        if (monitor.kind == MonitorKind.UNSUPPORTED) {
+            item(key = "unsupported") {
+                GlassCard(Modifier.fillMaxWidth().testTag("unsupported-kind")) {
+                    Text(
+                        text = "Made by a newer Nightbell",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = NightbellColors.TextPrimary,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "This version cannot check a monitor of this kind. It is kept as it " +
+                            "was and checked again once Nightbell is updated.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = NightbellColors.TextSecondary,
+                    )
+                }
+            }
+        } else item(key = "actions") {
             StaggeredEntrance(index = 1, key = "actions-${monitor.id}", log = entrance) {
                 ActionsRow(
                     enabled = monitor.enabled,
@@ -304,6 +328,19 @@ fun DetailScreen(
         // the verdict. Issue 14 asked for a view of the alerts and named two
         // alert viewers, and "2 firing: DiskFillingUp (critical)" answers
         // "should I get up" without answering "what is going on".
+        if (monitor.kind == MonitorKind.HEALTH_ENDPOINT) {
+            item(key = "report") {
+                StaggeredEntrance(index = 2, key = "report-${monitor.id}", log = entrance) {
+                    HealthReportCard(
+                        monitor = monitor,
+                        report = runtime.report,
+                        nowMs = now,
+                        accent = accent,
+                    )
+                }
+            }
+        }
+
         if (runtime.lastAlerts.isNotEmpty()) {
             item(key = "alerts") {
                 StaggeredEntrance(index = 2, key = "alerts-${monitor.id}", log = entrance) {
@@ -565,7 +602,11 @@ private fun HeroCard(
                     // The verdict sentence names the first three and ellipsises
                     // the rest, which directly above a list of all of them is
                     // the same information twice, and the worse of the two.
-                    val headline = if (runtime.lastAlerts.isNotEmpty()) {
+                    val headline = if (monitor.kind == MonitorKind.HEALTH_ENDPOINT &&
+                        runtime.report.auth.problem != AuthProblem.NONE
+                    ) {
+                        "Not checking · Sign in needed"
+                    } else if (runtime.lastAlerts.isNotEmpty()) {
                         runtime.alertsFiringLine
                     } else if (streak != null && runtime.lastMessage.isNotBlank()) {
                         "${runtime.lastMessage} · ${streak.line}"
@@ -573,6 +614,11 @@ private fun HeroCard(
                         runtime.lastMessage.ifBlank {
                             when {
                                 runtime.lastCheckedAt <= 0 -> "Not checked yet"
+                                // A health report's degraded is the service's own word,
+                                // not a reading over a budget: name the part it blamed.
+                                health == Health.DEGRADED && monitor.kind == MonitorKind.HEALTH_ENDPOINT ->
+                                    HealthFormat.summary(runtime.report).ifBlank { runtime.lastReading }
+                                        .ifBlank { "Reported degraded" }
                                 // DEGRADED is a pass, so lastMessage is empty — spell
                                 // out why the card is amber rather than green.
                                 health == Health.DEGRADED ->
@@ -1232,6 +1278,24 @@ private fun ConfigCard(
             // that must not be readable over somebody's shoulder, and "set" is
             // the whole of what the user came here to confirm.
             if (watch.hasBasicAuth) ConfigRow("Sign in", "basic auth as ${watch.username}")
+            if (monitor.headers.isNotEmpty()) {
+                ConfigRow("Headers", monitor.headers.joinToString(", ") { it.name })
+            }
+        } else if (monitor.kind == MonitorKind.HEALTH_ENDPOINT) {
+            // No method or expected status: the report's own verdict is the check.
+            ConfigRow(
+                "Sign-in",
+                when (monitor.health.signIn) {
+                    HealthSignIn.NONE -> "none"
+                    HealthSignIn.HEADERS -> "fixed key in headers"
+                    HealthSignIn.BASIC -> "basic auth as ${monitor.health.username}"
+                    HealthSignIn.SSO -> "single sign-on, ${monitor.health.grant.name.lowercase().replace('_', ' ')}"
+                },
+            )
+            ConfigRow(
+                "Report age limit",
+                if (monitor.health.staleAfterMinutes > 0) "${monitor.health.staleAfterMinutes} min" else "off",
+            )
             if (monitor.headers.isNotEmpty()) {
                 ConfigRow("Headers", monitor.headers.joinToString(", ") { it.name })
             }

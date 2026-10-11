@@ -1,5 +1,6 @@
 package me.river.nightbell.data.check
 
+import me.river.nightbell.data.auth.ProviderHttp
 import me.river.nightbell.data.diag.Diag
 import me.river.nightbell.domain.LogEvent
 import me.river.nightbell.domain.LogField
@@ -7,12 +8,14 @@ import me.river.nightbell.domain.Assertions
 import me.river.nightbell.domain.CheckResult
 import me.river.nightbell.domain.FailureKind
 import me.river.nightbell.domain.GlobalSettings
+import me.river.nightbell.domain.HealthFormat
 import me.river.nightbell.domain.HttpMethod
 import me.river.nightbell.domain.Monitor
 import me.river.nightbell.domain.MonitorKind
 import me.river.nightbell.domain.PrometheusCheck
 import me.river.nightbell.domain.ProxyRoute
 import me.river.nightbell.domain.TlsFailure
+import me.river.nightbell.domain.TlsTrust
 import me.river.nightbell.domain.Validation
 import java.io.ByteArrayOutputStream
 import java.io.EOFException
@@ -25,6 +28,7 @@ import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.security.cert.CertPathValidatorException
+import java.time.Instant
 import java.security.cert.CertificateException
 import java.security.cert.X509Certificate
 import java.util.concurrent.TimeUnit
@@ -36,6 +40,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.Call
 import okhttp3.Connection
 import okhttp3.EventListener
+import okhttp3.FormBody
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -82,6 +87,14 @@ class HttpChecker(
          * same proxy, the same trust mode and the same retry as a real check.
          */
         previewChars: Int = MAX_PREVIEW,
+        /**
+         * An `Authorization` value from somewhere other than the monitor's own
+         * headers: a health monitor's bearer token or basic credentials, which
+         * live in the credential vault and never on the monitor. Wins over a
+         * header the user typed, because choosing a sign-in method is the more
+         * specific of the two statements.
+         */
+        authorization: String? = null,
     ): CheckResult = withContext(Dispatchers.IO) {
         val urlNote = Validation.urlNote(monitor.url)
         if (urlNote?.severity == Validation.Severity.ERROR) {
@@ -132,7 +145,7 @@ class HttpChecker(
         val tlsSession = TlsTrustConfig.apply(builder, monitor.tlsTrust, certPin)
         val client = builder.build()
 
-        val request = runCatching { buildRequest(monitor) }.getOrElse { error ->
+        val request = runCatching { buildRequest(monitor, authorization) }.getOrElse { error ->
             return@withContext CheckResult(
                 ok = false,
                 latencyMs = 0,
@@ -224,6 +237,9 @@ class HttpChecker(
         val started = System.nanoTime()
         return try {
             call.execute().use { response ->
+                if (monitor.kind == MonitorKind.HEALTH_ENDPOINT) {
+                    return healthResult(monitor, response, elapsedMs(started), tlsSession)
+                }
                 val body = if (monitor.method == HttpMethod.HEAD) "" else readBoundedBody(response)
                 val latency = elapsedMs(started)
                 val leaf = leafCertificate(response, tlsSession)
@@ -350,7 +366,7 @@ class HttpChecker(
     private fun socksProxy(route: ProxyRoute.Endpoint): Proxy =
         Proxy(Proxy.Type.SOCKS, InetSocketAddress(route.host, route.port))
 
-    private fun buildRequest(monitor: Monitor): Request {
+    private fun buildRequest(monitor: Monitor, authorization: String? = null): Request {
         val prometheus = monitor.kind == MonitorKind.PROMETHEUS
         // The URL a Prometheus monitor fetches is not the URL its owner typed:
         // the query and the API path are assembled from the watch. See
@@ -378,6 +394,13 @@ class HttpChecker(
             // would otherwise still be posting the old body at them.
             return builder.get().build()
         }
+        if (monitor.kind == MonitorKind.HEALTH_ENDPOINT) {
+            if (monitor.headers.none { it.name.equals("Accept", true) }) {
+                builder.header("Accept", "application/json, text/plain")
+            }
+            if (authorization != null) builder.header("Authorization", authorization)
+            return builder.get().build()
+        }
 
         val method = monitor.method.name
         if (monitor.method.allowsBody) {
@@ -387,6 +410,115 @@ class HttpChecker(
             builder.method(method, null)
         }
         return builder.build()
+    }
+
+    /**
+     * The sign-in provider behind a health monitor, reached the way the
+     * monitor itself is: through its proxy, within its timeout, under its trust
+     * mode. Except a pin. One recorded key cannot cover two hosts, so a pinned
+     * monitor's provider is held to the CAs this phone trusts.
+     */
+    val provider: ProviderHttp = object : ProviderHttp {
+        override suspend fun post(monitor: Monitor, url: String, form: Map<String, String>): ProviderHttp.Answer {
+            val body = FormBody.Builder().apply { form.forEach { (k, v) -> add(k, v) } }.build()
+            return providerCall(monitor, Request.Builder().url(url).post(body))
+        }
+
+        override suspend fun get(monitor: Monitor, url: String): ProviderHttp.Answer =
+            providerCall(monitor, Request.Builder().url(url).get())
+    }
+
+    private suspend fun providerCall(monitor: Monitor, request: Request.Builder): ProviderHttp.Answer =
+        withContext(Dispatchers.IO) {
+            val settings = settingsFor()
+            val route = ProxyRoute.forMonitor(monitor, settings)
+            if (route is ProxyRoute.Route.Unconfigured) {
+                return@withContext ProviderHttp.Answer(0, "", "No proxy to route through")
+            }
+            val endpoint = (route as? ProxyRoute.Route.Via)?.endpoint
+            val timeout = monitor.effectiveTimeoutSeconds(settings, proxied = endpoint != null).toLong()
+            val builder = base.newBuilder()
+                .connectTimeout(timeout, TimeUnit.SECONDS)
+                .readTimeout(timeout, TimeUnit.SECONDS)
+                .writeTimeout(timeout, TimeUnit.SECONDS)
+                .callTimeout(timeout + 5, TimeUnit.SECONDS)
+                .apply { if (endpoint != null) proxy(socksProxy(endpoint)) }
+            val trust = if (monitor.tlsTrust == TlsTrust.PINNED) TlsTrust.SYSTEM else monitor.tlsTrust
+            TlsTrustConfig.apply(builder, trust, "")
+            val call = request
+                .header("User-Agent", USER_AGENT)
+                .header("Accept", "application/json")
+                .build()
+            try {
+                builder.build().newCall(call).execute().use { response ->
+                    val bytes = readBoundedBytes(response, PROVIDER_BODY_BYTES)
+                    ProviderHttp.Answer(response.code, bytes.toString(Charsets.UTF_8))
+                }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: Throwable) {
+                ProviderHttp.Answer(0, "", describe(error, classify(error), monitor))
+            }
+        }
+
+    /**
+     * A health endpoint's answer, read by [HealthFormat] rather than by the
+     * monitor's assertions: the body is the verdict, whatever the status code.
+     * Timed at the headers, like every other kind, so a large report does not
+     * read as a slow service.
+     */
+    private fun healthResult(
+        monitor: Monitor,
+        response: okhttp3.Response,
+        latency: Long,
+        tlsSession: TlsTrustConfig.Session?,
+    ): CheckResult {
+        val bytes = readBoundedBytes(response, HealthFormat.MAX_BODY_BYTES + 1)
+        val oversize = bytes.size > HealthFormat.MAX_BODY_BYTES
+        val body = if (oversize) "" else bytes.toString(Charsets.UTF_8)
+        val reading = HealthFormat.parse(
+            status = response.code,
+            body = body,
+            dateHeader = response.headers.getDate("Date")?.toInstant(),
+            now = Instant.ofEpochMilli(nowMs()),
+            staleAfterMinutes = monitor.health.staleAfterMinutes,
+            oversize = oversize,
+        )
+        val leaf = leafCertificate(response, tlsSession)
+        val result = HealthFormat.result(reading, response.code, latency, nowMs(), monitor.health.signIn)
+        Diag.log(
+            LogEvent.HTTP_RESPONSE,
+            LogField.monitor(monitor.id),
+            LogField.of("status", response.code),
+            LogField.ms("latency", latency),
+            LogField.tag("protocol", response.protocol.name),
+            LogField.count("body_bytes", bytes.size),
+            LogField.of("passed", result.ok),
+            LogField.of("kind", result.failureKind),
+            LogField.tag("reading", reading::class.java.simpleName.lowercase()),
+            LogField.count("parts", result.health?.components?.size ?: 0),
+        )
+        return result.copy(
+            certExpiresAt = leaf?.notAfter?.time ?: 0L,
+            certIssuer = issuerOf(leaf),
+            certSpki = TlsTrustConfig.pinOf(leaf),
+        )
+    }
+
+    private fun readBoundedBytes(response: okhttp3.Response, limit: Int): ByteArray {
+        val stream = response.body.byteStream()
+        val out = ByteArrayOutputStream()
+        val buffer = ByteArray(8 * 1024)
+        while (out.size() < limit) {
+            val read = try {
+                stream.read(buffer)
+            } catch (_: IOException) {
+                break
+            }
+            if (read <= 0) break
+            out.write(buffer, 0, minOf(read, limit - out.size()))
+        }
+        return out.toByteArray()
     }
 
     private fun readBoundedBody(response: okhttp3.Response): String {
@@ -630,6 +762,9 @@ class HttpChecker(
         /** `CN=…` inside an X.500 DN, stopping at the first unescaped comma. */
         private val CN_IN_DN = Regex("""CN=((?:\\.|[^,])*)""")
         private const val MAX_BODY_BYTES = 512 * 1024
+
+        /** A token response or a discovery document. Neither is ever near this. */
+        private const val PROVIDER_BODY_BYTES = 64 * 1024
         private const val MAX_PREVIEW = 4_000
         const val USER_AGENT = "NightbellMonitor/1.0 (Android)"
     }

@@ -3,6 +3,7 @@ package me.river.nightbell.data.transfer
 import me.river.nightbell.data.NightbellSnapshot
 import me.river.nightbell.domain.BrowserState
 import me.river.nightbell.domain.Health
+import me.river.nightbell.domain.HealthState
 import me.river.nightbell.domain.MonitorRuntime
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -255,6 +256,10 @@ private fun MonitorRuntime.forFreshInstall(paused: Boolean): MonitorRuntime = co
     lastMessage = "",
     lastReading = "",
     lastAlerts = emptyList(),
+    // The parts belong to a report this install never read, and the sign-in
+    // record describes tokens that stayed in the old phone's vault. A restored
+    // single sign-on monitor finds an empty vault and says it needs signing in.
+    report = HealthState(),
     lastDetail = "",
     consecutiveFailures = 0,
     consecutiveSuccesses = 0,

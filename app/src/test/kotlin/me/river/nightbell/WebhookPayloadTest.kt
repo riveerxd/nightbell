@@ -271,4 +271,35 @@ class WebhookPayloadTest {
         assertEquals("340 ms", WebhookPayload.latencyText(340))
         assertEquals("3.2 s", WebhookPayload.latencyText(3_200))
     }
+
+    // ---- health reports ----------------------------------------------------------
+
+    @Test
+    fun `a health report's down event carries its message and one line per troubled part`() {
+        val facts = down.copy(
+            monitorKind = "Health endpoint",
+            reason = "Reported down",
+            message = "Card payments are failing",
+            detail = "Payments down: 14 card payments failed\nEmail queue degraded: 340 waiting",
+        )
+
+        assertEquals("Reported down: Card payments are failing", WebhookPayload.text(facts))
+        val json = body(target(WebhookFormat.NIGHTBELL_JSON), facts)
+        assertEquals("Health endpoint", json["monitor"]!!.jsonObject["kind"]!!.jsonPrimitive.content)
+        assertTrue(render(target(WebhookFormat.NIGHTBELL_JSON), facts).body!!.contains("Email queue degraded"))
+    }
+
+    @Test
+    fun `a reported degraded is not called slow`() {
+        val facts = down.copy(
+            event = WebhookEvent.DEGRADED,
+            reported = true,
+            detail = "payments degraded: 3 card payments failed",
+            sloMs = 2500,
+        )
+
+        assertEquals("Payments API reports degraded", WebhookPayload.title(facts))
+        assertEquals("payments degraded: 3 card payments failed", WebhookPayload.text(facts))
+        assertEquals("Payments API is no longer degraded", WebhookPayload.title(facts.copy(event = WebhookEvent.DEGRADED_RECOVERED)))
+    }
 }

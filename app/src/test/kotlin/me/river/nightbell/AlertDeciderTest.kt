@@ -9,6 +9,9 @@ import me.river.nightbell.domain.MonitorRuntime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import me.river.nightbell.domain.HealthAuth
+import me.river.nightbell.domain.HealthComponent
+import me.river.nightbell.domain.HealthState
 import org.junit.Test
 
 class AlertDeciderTest {
@@ -191,5 +194,52 @@ class AlertDeciderTest {
         assertEquals(90f, runtime.uptimePercent, 0.01f)
         assertTrue(runtime.averageLatencyMs > 0)
         assertTrue(runtime.p95LatencyMs >= runtime.averageLatencyMs)
+    }
+
+    // ---- a report that says degraded ----------------------------------------------
+
+    @Test
+    fun `a report saying degraded is degraded however fast it answered`() {
+        val after = AlertDecider.advance(
+            previous = MonitorRuntime(),
+            result = CheckResult(ok = true, latencyMs = 40, degraded = true, at = now),
+            historyDepth = 10,
+            degradedAboveMs = Long.MAX_VALUE,
+        )
+
+        assertEquals(Health.DEGRADED, after.health)
+        // It answered, so uptime counts it.
+        assertEquals(100f, after.uptimePercent, 0.01f)
+    }
+
+    @Test
+    fun `without the flag a fast answer stays up`() {
+        val after = AlertDecider.advance(
+            previous = MonitorRuntime(),
+            result = CheckResult(ok = true, latencyMs = 40, at = now),
+            historyDepth = 10,
+            degradedAboveMs = 2_500,
+        )
+
+        assertEquals(Health.UP, after.health)
+    }
+
+    @Test
+    fun `a report replaces the last one and leaves the sign-in alone`() {
+        val auth = HealthAuth(account = "alice", lastRefreshAt = 5L)
+        val previous = MonitorRuntime(
+            report = HealthState(components = listOf(HealthComponent(id = "old")), auth = auth),
+        )
+        val fresh = HealthState(components = listOf(HealthComponent(id = "new")))
+
+        val read = AlertDecider.advance(previous, CheckResult(ok = true, latencyMs = 1, health = fresh, at = now), 10)
+        val unread = AlertDecider.advance(previous, CheckResult(ok = false, latencyMs = 1, health = HealthState(), at = now), 10)
+        val otherKind = AlertDecider.advance(previous, CheckResult(ok = true, latencyMs = 1, at = now), 10)
+
+        assertEquals(listOf("new"), read.report.components.map { it.id })
+        assertEquals(auth, read.report.auth)
+        assertTrue(unread.report.components.isEmpty())
+        assertEquals(auth, unread.report.auth)
+        assertEquals(previous.report, otherKind.report)
     }
 }

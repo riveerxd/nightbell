@@ -126,7 +126,7 @@ object MonitorQuery {
      * filtering has to agree with the card the user is looking at.
      */
     private fun effectiveHealth(card: MonitorCard): Health =
-        if (!card.monitor.enabled) Health.PAUSED else card.runtime.health
+        if (!card.monitor.runs) Health.PAUSED else card.runtime.health
 
     /**
      * Substring match over name, URL and, for page-element monitors, the element

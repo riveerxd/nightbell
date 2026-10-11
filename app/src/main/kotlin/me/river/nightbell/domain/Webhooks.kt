@@ -295,6 +295,12 @@ data class WebhookFacts(
     val link: String = "",
     val groups: List<String> = emptyList(),
     val sender: String = "",
+    /**
+     * Degraded because the service's own report said so, not because it was
+     * slow. Changes the words of the degraded events and nothing in the payload's
+     * fields, so a receiver parsing the JSON sees the same shape as before.
+     */
+    val reported: Boolean = false,
 )
 
 /**

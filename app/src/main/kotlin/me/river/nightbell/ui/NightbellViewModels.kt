@@ -27,6 +27,12 @@ import me.river.nightbell.domain.CheckerLimit
 import me.river.nightbell.domain.ElementTarget
 import me.river.nightbell.data.alerts.PageSpeaker
 import me.river.nightbell.domain.GlobalSettings
+import me.river.nightbell.domain.HealthAuth
+import me.river.nightbell.domain.HealthSignIn
+import me.river.nightbell.domain.HealthWatch
+import me.river.nightbell.domain.JwtPeek
+import me.river.nightbell.domain.OidcRequests
+import me.river.nightbell.domain.SsoGrant
 import me.river.nightbell.domain.SpokenPage
 import me.river.nightbell.domain.OpenMetrics
 import me.river.nightbell.data.check.CheckEngine
@@ -60,6 +66,7 @@ import me.river.nightbell.ui.dashboard.DashboardRow
 import me.river.nightbell.ui.dashboard.GroupDraft
 import me.river.nightbell.ui.dashboard.GroupTarget
 import java.util.UUID
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -1061,6 +1068,45 @@ class SetupViewModel(
     var loadingAssetTypes by mutableStateOf(false)
         private set
 
+    // ---- health endpoint ------------------------------------------------------
+    //
+    // Above `init` for the reason `thresholdInput` is: the init block runs to its
+    // first suspension inside the constructor and reads some of these.
+
+    /** What the address answered with no sign-in, which decides whether the sign-in card asks for one. */
+    var healthProbe by mutableStateOf<CheckResult?>(null)
+        private set
+
+    var probing by mutableStateOf(false)
+        private set
+
+    /** The vault's view of this monitor's sign-in. Null is "not signed in". Never a token. */
+    var signInStatus by mutableStateOf<HealthAuth?>(null)
+        private set
+
+    var signingIn by mutableStateOf(false)
+        private set
+
+    /** What the last sign-in attempt said, in words, or null. Not error-coloured: it is not about the service. */
+    var signInMessage by mutableStateOf<String?>(null)
+        private set
+
+    /** Typed, never stored on the draft. They go to the vault on sign-in and nowhere else. */
+    var passwordInput by mutableStateOf("")
+    var clientSecretInput by mutableStateOf("")
+    var pastedTokenInput by mutableStateOf("")
+
+    var discovering by mutableStateOf(false)
+        private set
+
+    /** "Found realm main", or why nothing was found. */
+    var discoveryNote by mutableStateOf<String?>(null)
+        private set
+
+    /** The browser sign-in overlay is up. */
+    var browserSignInOpen by mutableStateOf(false)
+        private set
+
     /**
      * Ask GitHub what files this repository ships.
      *
@@ -1133,8 +1179,332 @@ class SetupViewModel(
             // threshold somebody had already chosen.
             thresholdInput = PrometheusWatch.formatValue(draft.prometheus.threshold)
             baseline = draft
+            endpointOrigin = originOf(draft.url)
+            if (draft.health.redirectUri.isNotBlank()) providerOrigin = signInOrigin()
             loading = false
+            if (draft.kind == MonitorKind.HEALTH_ENDPOINT) refreshSignInStatus()
         }
+    }
+
+    // ---- health endpoint ------------------------------------------------------
+
+    fun updateHealth(transform: (HealthWatch) -> HealthWatch) {
+        update { it.copy(health = transform(it.health)) }
+    }
+
+    private var probeJob: Job? = null
+
+    /**
+     * One request with no sign-in, to learn whether the address needs one.
+     *
+     * Leaving the field used to be the only trigger, and Back puts the keyboard
+     * away without leaving it, so a typed address could sit there with the card
+     * still asking to be left. Now a pause in typing is enough: [setUrl] waits
+     * [PROBE_PAUSE_MS] after the last keystroke, which keeps it to one request
+     * per address rather than one per character. Leaving the field skips the wait.
+     */
+    fun probeHealth(afterMs: Long = 0L) {
+        probeJob?.cancel()
+        probing = false
+        if (draft.kind != MonitorKind.HEALTH_ENDPOINT) return
+        val url = draft.url.trim()
+        if (url.isBlank()) return
+        if (Validation.urlNote(url)?.severity == Validation.Severity.ERROR) return
+        val probe = draft.copy(health = draft.health.copy(signIn = HealthSignIn.NONE))
+        probeJob = viewModelScope.launch {
+            if (afterMs > 0) delay(afterMs)
+            probing = true
+            try {
+                val answer = graph.engine.dryRun(probe)
+                // An answer for an address that is no longer in the field says nothing about this one.
+                if (draft.url.trim() == url) healthProbe = answer
+            } finally {
+                probing = false
+            }
+        }
+    }
+
+    fun setSignIn(method: HealthSignIn) {
+        updateHealth { it.copy(signIn = method) }
+        signInMessage = null
+    }
+
+    fun setGrant(grant: SsoGrant) {
+        updateHealth { it.copy(grant = grant) }
+        signInMessage = null
+    }
+
+    fun refreshSignInStatus() {
+        viewModelScope.launch { signInStatus = graph.broker.status(draft) }
+    }
+
+    /**
+     * The provider's details from its issuer address. Fills the endpoints in
+     * and leaves the client ID alone, which discovery cannot know.
+     */
+    fun discover(issuer: String) {
+        val address = issuer.trim().trimEnd('/')
+        if (address.isBlank() || discovering) return
+        discovering = true
+        discoveryNote = null
+        viewModelScope.launch {
+            try {
+                val found = graph.broker.discover(draft, address)
+                if (found == null) {
+                    discoveryNote = "No provider answered at that address. For Keycloak it ends in /realms/<name>."
+                } else {
+                    updateHealth {
+                        it.copy(
+                            issuer = found.issuer,
+                            authorizationEndpoint = found.authorizationEndpoint,
+                            tokenEndpoint = found.tokenEndpoint,
+                        )
+                    }
+                    discoveryNote = found.label
+                }
+            } finally {
+                discovering = false
+            }
+        }
+    }
+
+    /**
+     * Fills the provider and client from a pasted token without trusting it.
+     * The refresh that follows on sign-in is what decides whether it is good.
+     */
+    fun pasteToken(text: String) {
+        pastedTokenInput = text
+        val claims = JwtPeek.claims(text) ?: return
+        if (claims.issuer.isNotBlank() && draft.health.issuer.isBlank()) discover(claims.issuer)
+        if (claims.authorizedParty.isNotBlank() && draft.health.clientId.isBlank()) {
+            updateHealth { it.copy(clientId = claims.authorizedParty) }
+        }
+    }
+
+    /** Signs in with whatever the chosen method needs, then tests the endpoint with the result. */
+    fun signIn() {
+        if (signingIn) return
+        val watch = draft.health
+        if (watch.grant == SsoGrant.PASTED && watch.signIn == HealthSignIn.SSO) {
+            val claims = JwtPeek.claims(pastedTokenInput)
+            if (claims != null && claims.isAccess) {
+                val minutes = ((claims.expiresAt * 1000L - System.currentTimeMillis()) / 60_000L).coerceAtLeast(0L)
+                signInMessage = "That is an access token. It expires in $minutes minutes. " +
+                    "Paste the refresh token, or use a fixed key in Headers."
+                return
+            }
+        }
+        signingIn = true
+        signInMessage = null
+        viewModelScope.launch {
+            try {
+                val access = graph.broker.signIn(
+                    monitor = draft,
+                    password = passwordInput,
+                    clientSecret = clientSecretInput,
+                    pastedRefreshToken = if (watch.grant == SsoGrant.PASTED) pastedTokenInput else "",
+                )
+                afterSignIn(access)
+            } finally {
+                signingIn = false
+            }
+        }
+    }
+
+    /**
+     * Back to the form for the chosen way of signing in. The stored sign-in is
+     * replaced when the form is submitted, not here, so backing out of the
+     * form leaves it as it was.
+     */
+    fun signInAgain() {
+        signInMessage = null
+        if (draft.health.grant == SsoGrant.BROWSER) openBrowserSignIn() else signInStatus = null
+    }
+
+    fun signOut() {
+        viewModelScope.launch {
+            graph.broker.signOut(draft.id)
+            signInStatus = null
+            signInMessage = null
+            passwordInput = ""
+            clientSecretInput = ""
+            pastedTokenInput = ""
+        }
+    }
+
+    private suspend fun afterSignIn(access: me.river.nightbell.data.auth.TokenBroker.Access) {
+        when (access) {
+            is me.river.nightbell.data.auth.TokenBroker.Access.Granted -> {
+                signInStatus = access.auth
+                passwordInput = ""
+                clientSecretInput = ""
+                pastedTokenInput = ""
+                testResult = graph.engine.dryRun(draft)
+            }
+            is me.river.nightbell.data.auth.TokenBroker.Access.SignInNeeded -> {
+                signInStatus = null
+                signInMessage = listOf(access.problem.headline, access.detail)
+                    .filter { it.isNotBlank() }
+                    .joinToString(". ")
+            }
+            is me.river.nightbell.data.auth.TokenBroker.Access.ProviderDown -> {
+                signInMessage = "${access.message}. ${access.detail}".trim().trimEnd('.') +
+                    ". Check the provider address, or try again when it is back."
+            }
+            is me.river.nightbell.data.auth.TokenBroker.Access.Open -> signInMessage = null
+        }
+    }
+
+    // ---- browser sign-in ------------------------------------------------------
+
+    fun openBrowserSignIn() {
+        signInMessage = null
+        browserSignInOpen = true
+    }
+
+    fun closeBrowserSignIn() {
+        browserSignInOpen = false
+    }
+
+    /** Where the browser sign-in starts: the typed web app, else the health URL's origin. */
+    val webAppAddress: String
+        get() = UrlInput.completed(draft.health.webAppUrl).ifBlank { originOf(draft.url) }
+
+    private fun originOf(address: String): String = OidcRequests.originOf(UrlInput.completed(address)).lowercase()
+
+    private fun signInOrigin(): String = OidcRequests.originOf(webAppAddress).lowercase()
+
+    /** The health URL's last origin that was not blank, so the web app can follow it. */
+    private var endpointOrigin = ""
+
+    /** The web app origin the provider, client and redirect in the draft were read from. Blank when none were. */
+    private var providerOrigin = ""
+
+    /**
+     * Provider details set aside when the web app moved, with the origin they
+     * belong to. A slip in the host while editing would otherwise cost a
+     * sign-in: going back to the old address brings them back, unless a new
+     * sign-in has happened since.
+     */
+    private var parkedProvider: Pair<String, HealthWatch>? = null
+
+    fun setWebAppUrl(value: String) {
+        updateHealth { it.copy(webAppUrl = value) }
+        followSignInOrigin()
+    }
+
+    /**
+     * A web app typed as the endpoint's own host moves with it. Only that case:
+     * a web app on another host, such as an admin site beside the API, is the
+     * user's own answer and is left alone.
+     */
+    private fun followEndpoint() {
+        val now = originOf(draft.url)
+        if (now.isBlank()) return
+        val was = endpointOrigin
+        endpointOrigin = now
+        if (was.isBlank() || was == now) return
+        val typed = UrlInput.completed(draft.health.webAppUrl)
+        val typedOrigin = OidcRequests.originOf(typed)
+        if (typedOrigin.lowercase() != was) return
+        updateHealth { it.copy(webAppUrl = now + typed.substring(typedOrigin.length)) }
+    }
+
+    /**
+     * The browser sign-in goes straight to the provider when it already knows
+     * one, without opening the web app. Those details were read from one web
+     * app, so a monitor moved from staging to production kept sending its user
+     * to the staging login. They are forgotten the moment the sign-in address
+     * stops being the one they came from.
+     */
+    private fun followSignInOrigin() {
+        val now = signInOrigin()
+        parkedProvider?.let { (origin, kept) ->
+            if (now == origin && draft.health.redirectUri.isBlank()) {
+                updateHealth {
+                    it.copy(
+                        issuer = kept.issuer,
+                        authorizationEndpoint = kept.authorizationEndpoint,
+                        tokenEndpoint = kept.tokenEndpoint,
+                        clientId = kept.clientId,
+                        redirectUri = kept.redirectUri,
+                        scope = kept.scope,
+                    )
+                }
+                providerOrigin = origin
+                parkedProvider = null
+                refreshSignInStatus()
+                return
+            }
+        }
+        if (providerOrigin.isBlank() || now.isBlank() || now == providerOrigin) return
+        val browser = draft.health.grant == SsoGrant.BROWSER
+        parkedProvider = providerOrigin to draft.health
+        providerOrigin = ""
+        updateHealth {
+            // The redirect only ever comes from a web app. The rest is typed by
+            // hand for the other grants and has nothing to do with this address.
+            if (browser) {
+                it.copy(issuer = "", authorizationEndpoint = "", tokenEndpoint = "", clientId = "", redirectUri = "", scope = "")
+            } else {
+                it.copy(redirectUri = "")
+            }
+        }
+        if (browser) {
+            // The stored session belongs to the old provider. It stays in the
+            // vault until a new sign-in replaces it, so cancelling the edit
+            // leaves the monitor working as it was.
+            signInStatus = null
+            signInMessage = null
+        }
+    }
+
+    /**
+     * Finds the provider behind the web app's own sign-in request and keeps
+     * what Nightbell needs from it. Null when no candidate's discovery document
+     * vouches for the endpoint the web app was going to.
+     */
+    suspend fun adoptWebAppRequest(intercepted: OidcRequests.Intercepted): OidcRequests.Discovery? {
+        for (issuer in OidcRequests.issuerCandidates(intercepted.endpoint)) {
+            val found = graph.broker.discover(draft, issuer) ?: continue
+            if (!OidcRequests.matches(found, intercepted)) continue
+            updateHealth {
+                it.copy(
+                    issuer = found.issuer,
+                    authorizationEndpoint = found.authorizationEndpoint,
+                    tokenEndpoint = found.tokenEndpoint,
+                    clientId = intercepted.clientId,
+                    redirectUri = intercepted.redirectUri,
+                    scope = intercepted.scope,
+                )
+            }
+            providerOrigin = signInOrigin()
+            parkedProvider = null
+            return found
+        }
+        return null
+    }
+
+    /** The code the provider sent back, exchanged once, then a test with the new token. */
+    suspend fun finishBrowserSignIn(code: String, verifier: String): String? {
+        val access = graph.broker.exchangeCode(
+            monitor = draft,
+            code = code,
+            verifier = verifier,
+            redirectUri = draft.health.redirectUri,
+            clientSecret = clientSecretInput,
+        )
+        afterSignIn(access)
+        return signInMessage
+    }
+
+    /** Setup closed without saving a new monitor: its sign-in goes with it. */
+    override fun onCleared() {
+        if (!isEditing && !saved && draft.kind == MonitorKind.HEALTH_ENDPOINT) {
+            val id = draft.id
+            graph.appScope.launch { runCatchingCancellable { graph.broker.signOut(id) } }
+        }
+        super.onCleared()
     }
 
     fun update(transform: (Monitor) -> Monitor) {
@@ -1156,7 +1526,14 @@ class SetupViewModel(
     /** Every edit of the URL field, from either of the two screens that has one. */
     fun setUrl(value: String) {
         urlSchemeAdded = false
+        val changed = value.trim() != draft.url
         update { it.copy(url = value.trim()) }
+        if (changed && draft.kind == MonitorKind.HEALTH_ENDPOINT) {
+            healthProbe = null
+            followEndpoint()
+            followSignInOrigin()
+            probeHealth(afterMs = PROBE_PAUSE_MS)
+        }
     }
 
     /**
@@ -1220,6 +1597,18 @@ class SetupViewModel(
                 assertion = BodyAssertion(),
                 body = "",
             ).withTargets(emptyList())
+
+            MonitorKind.HEALTH_ENDPOINT -> draft.copy(
+                kind = kind,
+                method = me.river.nightbell.domain.HttpMethod.GET,
+                // The report is the verdict, so neither of these has a field on
+                // the health screen, for the same reason as Prometheus above.
+                status = StatusExpectation(mode = StatusMode.ANY),
+                assertion = BodyAssertion(),
+                body = "",
+            ).withTargets(emptyList())
+
+            MonitorKind.UNSUPPORTED -> draft
         }
         thresholdInput = PrometheusWatch.formatValue(draft.prometheus.threshold)
         testResult = null
@@ -1602,6 +1991,9 @@ class SetupViewModel(
 
     companion object {
         const val LAST_STEP = 3
+
+        /** How long typing has to stop before the health address is tried. */
+        const val PROBE_PAUSE_MS = 800L
 
         /** Below this, an unauthenticated device runs out of GitHub budget. */
         const val MIN_GITHUB_INTERVAL = 15

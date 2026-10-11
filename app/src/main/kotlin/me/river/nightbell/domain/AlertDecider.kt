@@ -224,7 +224,7 @@ object AlertDecider {
         return previous.copy(
             health = when {
                 !result.ok -> Health.DOWN
-                isDegraded(true, judgedLatencyMs, degradedAboveMs) -> Health.DEGRADED
+                result.degraded || isDegraded(true, judgedLatencyMs, degradedAboveMs) -> Health.DEGRADED
                 else -> Health.UP
             },
             lastCheckedAt = result.at,
@@ -258,6 +258,10 @@ object AlertDecider {
                 previous.certExpiresAt
             },
             certIssuer = result.certIssuer.ifBlank { previous.certIssuer },
+            // Same rule as lastAlerts: replaced by a check that read a report,
+            // cleared by one that could not. The sign-in is not the check's to
+            // change, so it is carried across untouched.
+            report = result.health?.copy(auth = previous.report.auth) ?: previous.report,
             samples = history,
         )
     }
