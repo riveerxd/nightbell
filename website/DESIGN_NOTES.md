@@ -579,7 +579,7 @@ Written down in advance, and checked against the finished page.
   2026-08-08 did not, and one of them was rose, spending the page's down colour
   as decoration five sections before the outage it belongs to.
 
-  The reference for the field was the drifting blob background on videre.cz, and
+  The reference for the field was the drifting blob background on another site, and
   the differences are the point: eight rather than thirty, an order of magnitude
   fainter, four times slower, translate only with no scale, and radial gradients
   rather than 64 px blur filters, because this page runs a scroll-driven stage

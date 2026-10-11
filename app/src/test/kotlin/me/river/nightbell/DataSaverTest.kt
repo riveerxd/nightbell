@@ -13,21 +13,21 @@ import org.junit.Test
 
 class DataSaverTest {
 
-    private val page = Monitor(id = "p", name = "page", url = "https://riveer.cz", kind = MonitorKind.WEBSITE_ELEMENT)
+    private val page = Monitor(id = "p", name = "page", url = "https://shop.example.com", kind = MonitorKind.WEBSITE_ELEMENT)
 
     @Test
     fun fontsMediaAndTrackersAreSkippedButScriptsAndStylesAreNot() {
-        assertTrue(DataSaver.shouldBlock("https://riveer.cz/fonts/inter.woff2"))
-        assertTrue(DataSaver.shouldBlock("https://cdn.x.cz/a.TTF?v=3"))
-        assertTrue(DataSaver.shouldBlock("https://riveer.cz/hero.mp4"))
+        assertTrue(DataSaver.shouldBlock("https://shop.example.com/fonts/inter.woff2"))
+        assertTrue(DataSaver.shouldBlock("https://cdn.example.net/a.TTF?v=3"))
+        assertTrue(DataSaver.shouldBlock("https://shop.example.com/hero.mp4"))
         assertTrue(DataSaver.shouldBlock("https://www.googletagmanager.com/gtag/js?id=G-1"))
         assertTrue(DataSaver.shouldBlock("https://region1.google-analytics.com/g/collect"))
         assertTrue(DataSaver.shouldBlock("https://fonts.googleapis.com/css2?family=Inter"))
         assertTrue(DataSaver.shouldBlock("https://www.youtube.com/embed/abc"))
 
-        assertFalse(DataSaver.shouldBlock("https://riveer.cz/assets/app.3f9a.js"))
-        assertFalse(DataSaver.shouldBlock("https://riveer.cz/style.css"))
-        assertFalse(DataSaver.shouldBlock("https://riveer.cz/api/status"))
+        assertFalse(DataSaver.shouldBlock("https://shop.example.com/assets/app.3f9a.js"))
+        assertFalse(DataSaver.shouldBlock("https://shop.example.com/style.css"))
+        assertFalse(DataSaver.shouldBlock("https://shop.example.com/api/status"))
         assertFalse(DataSaver.shouldBlock("https://www.youtube.com/watch?v=abc"))
         // A host that only ends with a blocked name is not that host.
         assertFalse(DataSaver.shouldBlock("https://notclarity.ms/app.js"))
@@ -80,7 +80,7 @@ class DataSaverTest {
 
     @Test
     fun aMonitorTheSaverDoesNotChangeCostsTheSameEitherWay() {
-        val http = Monitor(id = "h", name = "api", url = "https://x.cz", kind = MonitorKind.HTTP_STATUS, intervalMinutes = 30)
+        val http = Monitor(id = "h", name = "api", url = "https://api.example.com", kind = MonitorKind.HTTP_STATUS, intervalMinutes = 30)
         assertEquals(1_440L * 2_000L to 1_440L * 2_000L, DataSaver.perMonth(http, MonitorRuntime(bytesSaver = 2_000L)))
     }
 

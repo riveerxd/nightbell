@@ -39,7 +39,7 @@ class StoreFreshnessInstrumentedTest {
         resetApp()
         runBlocking {
             store.upsert(monitor("riveer"))
-            store.upsert(monitor("videre"))
+            store.upsert(monitor("shop"))
         }
     }
 
@@ -65,7 +65,7 @@ class StoreFreshnessInstrumentedTest {
     @Test
     fun aRecoveredMonitorIsNotStillDownInTheFleetTheWidgetRenders() = runBlocking {
         store.updateRuntime("riveer") { it.copy(health = Health.DOWN) }
-        store.updateRuntime("videre") { it.copy(health = Health.UP, lastLatencyMs = 2_150) }
+        store.updateRuntime("shop") { it.copy(health = Health.UP, lastLatencyMs = 2_150) }
 
         val duringOutage = fleet()
         assertEquals(1, duringOutage.down)
@@ -106,7 +106,7 @@ class StoreFreshnessInstrumentedTest {
     @Test
     fun aRestoreWithAStaleRevisionStillWins() = runBlocking {
         store.updateRuntime("riveer") { it.copy(health = Health.DOWN) }
-        store.updateRuntime("videre") { it.copy(health = Health.DOWN) }
+        store.updateRuntime("shop") { it.copy(health = Health.DOWN) }
         val current = store.snapshot.value.revision
         assertTrue(current > 1L)
 

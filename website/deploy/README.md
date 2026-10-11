@@ -20,8 +20,8 @@ deploy/
 ## The origin is not a spare VPS
 
 This matters more than anything else on this page. The host is a **shared
-production box serving fifteen sites**, several of them somebody's business:
-`clinicm`, `nclinic.cz`, `ocnipetriny.cz`, `faktury.riveer.cz` and others.
+production box serving fifteen sites**, several of them other people's
+businesses.
 
 - **A bad `nginx -t` takes all fifteen down together.** Always test before
   reloading. `deploy.sh` does; do the same by hand.

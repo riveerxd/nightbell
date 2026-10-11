@@ -23,27 +23,13 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class RealDataSaverInstrumentedTest {
 
-    // The selectors are the ones the reporting fleet watches, so the early stop
-    // fires exactly when it would have on that phone.
+    // Public pages that carry images and stylesheets worth caching, each with an
+    // element that has sat in the same place for years.
     private val sites = listOf(
         "https://nightbell.app" to "div.hero-copy:nth-of-type(1) > div.actions > a.btn.btn-primary:nth-of-type(1)",
-        "https://riveer.cz" to "div.hero__acts > a.btn.btn--pri:nth-of-type(1)",
-        "https://videre.cz" to "div.flex.flex-col > a.inline-flex.items-center:nth-of-type(1)",
-        "https://www.clinicm.cz/" to "a.group.px-8:nth-of-type(1)",
-        "https://flirtycall.me" to "div.character-card.group:nth-of-type(1) > " +
-            "div.character-info-overlay.absolute:nth-of-type(2) > div.text-white > " +
-            "div.flex.items-center:nth-of-type(1) > h3.text-xl.font-bold",
-    )
-
-    /** The fallbacks the picker captured alongside the selector, as on the phone. */
-    private val fallbacks = mapOf(
-        "https://flirtycall.me" to ElementTarget(
-            xpath = "/html/body[1]/div[1]/div[1]/main[1]/div[1]/main[1]/div[1]/div[2]/div[1]/div[1]/" +
-                "div[1]/div[2]/div[1]/div[1]/h3[1]",
-            tagName = "h3",
-            classSignature = "text-xl font-bold leading-tight",
-            textSnippet = "Megan",
-        ),
+        "https://www.wikipedia.org" to "h1.central-textlogo-wrapper",
+        "https://f-droid.org/en/" to "a.site-title",
+        "https://www.gnu.org/" to "h2",
     )
 
     private fun spent(block: () -> Unit): Long {
@@ -64,7 +50,7 @@ class RealDataSaverInstrumentedTest {
                 name = url,
                 kind = MonitorKind.WEBSITE_ELEMENT,
                 url = url,
-                element = (fallbacks[url] ?: ElementTarget()).copy(cssSelector = selector),
+                element = ElementTarget(cssSelector = selector),
                 timeoutSeconds = 30,
             )
             var found = ""

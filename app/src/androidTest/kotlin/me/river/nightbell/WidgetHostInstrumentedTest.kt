@@ -126,8 +126,8 @@ class WidgetHostInstrumentedTest {
     @Test
     fun aRecoveryReachesTheLauncher() {
         runBlocking {
-            store.upsert(Monitor(id = "riveer", name = "Riveer.cz", url = "https://riveer.cz"))
-            store.updateRuntime("riveer") {
+            store.upsert(Monitor(id = "shop", name = "Shop", url = "https://shop.example.com"))
+            store.updateRuntime("shop") {
                 it.copy(health = Health.DOWN, lastCheckedAt = System.currentTimeMillis())
             }
         }
@@ -135,7 +135,7 @@ class WidgetHostInstrumentedTest {
 
         // The write a completed, successful check makes. No refresh call of any kind.
         runBlocking {
-            store.updateRuntime("riveer") {
+            store.updateRuntime("shop") {
                 it.copy(
                     health = Health.UP,
                     lastLatencyMs = 3_240,
