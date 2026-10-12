@@ -326,28 +326,31 @@ Order matters. Steps 2 and 3 are the ones that are easy to get backwards.
    the tag must stay on the commit the APK recorded.
 8. **Update the fdroiddata metadata**: `versionName`, `versionCode`, `commit` as a
    full hash, `CurrentVersion`, `CurrentVersionCode`.
-9. **Update the website**, which is the step this list did not have and which cost
-   three releases. Edit `RELEASE` in `website/site.config.mjs`: `version`, `tag`,
-   `apkName`, `apkUrl`, `apkBytes`, `apkSha256`, `versionCode`, together, and take
-   the digest and the byte count from the asset **downloaded back off the release**
-   rather than from the local build. Then regenerate the two files that carry a
-   version and verify:
+9. **Update the website.** Edit `RELEASE` in `website/src/lib/site.ts`:
+   `version`, `tag`, `apkName`, `apkUrl`, `apkBytes`, `apkSha256`, `versionCode`,
+   together, and take the digest and the byte count from the asset **downloaded
+   back off the release** rather than from the local build:
 
    ```bash
-   npm run download-redirect     # snippets/nightbell/download-target.conf
-   npm run version-manifest      # public/v1/release.json, which the app reads
-   npm run verify                # fails if either is stale
+   curl -sL -o /tmp/nb.apk https://github.com/riveerxd/nightbell/releases/download/vX.Y.Z/Nightbell-X.Y.Z-release.apk
+   stat -c %s /tmp/nb.apk && sha256sum /tmp/nb.apk
    ```
 
-   `verify` only checks those two, it does not write them, so a bump without the
-   first two commands is a failed verify rather than a wrong file. It now also
-   asks GitHub what the latest tag actually is and fails if `RELEASE` disagrees,
-   which is the check the note below used to say nothing could do.
-10. **Deploy the site and copy the Nginx snippet.** `deploy.sh` uploads `dist/`
-    only, so `deploy/nginx/snippets/nightbell/download-target.conf` has to be
-    installed on the box and Nginx reloaded, or `/download` keeps handing out the
-    previous APK. Then purge the Cloudflare cache. Full procedure in
-    `website/deploy/README.md`.
+   Then `cd website && npm run build`. Every build rewrites the two files that
+   carry a version from that block, through `scripts/release-files.mjs`:
+   `public/v1/release.json`, which every installed app reads, and
+   `download-target.generated.conf`, the `/download` redirect. Commit
+   `public/v1/release.json` with the bump; `UpdateCheckerTest` reads it. If the
+   release changed anything a page describes, change the copy in the same pass:
+   `website/content/reference.md`, `website/src/lib/faq.ts`, and the homepage
+   sections in `website/src/components/site/`.
+10. **Deploy the site.** `NIGHTBELL_HOST=<origin> website/deploy/scripts/deploy.sh`
+    builds, checks that `RELEASE` matches GitHub's latest tag, installs the nginx
+    config with a backup of `/etc/nginx` and a rollback if `nginx -t` fails, which
+    is also what installs the new `/download` target and the CSP hashes for this
+    build, then uploads and switches the `current` symlink. Then purge the
+    Cloudflare cache and check the manifest and `/download` from outside. Every
+    command for both steps is in `website/README.md`, "When a release ships".
 
 ### Why steps 9 and 10 are on this list at all
 
@@ -363,11 +366,11 @@ broken link to report. Every number on the page agreed with every other number,
 because they were all generated from the same stale block, and internal
 consistency is what made it invisible.
 
-`npm run verify` catches the generated snippet disagreeing with `site.config.mjs`.
-It now also catches `site.config.mjs` disagreeing with GitHub:
-`gen-version-manifest.mjs --check` asks the API for the latest tag and fails on a
-mismatch, in either direction, so a block left three versions behind and a release
-that was never published both stop the deploy. A network failure or a rate limit
+The generated files cannot disagree with `site.ts`, because every build writes
+them from it. `deploy.sh` catches `site.ts` disagreeing with GitHub: it asks the
+API for the latest tag and stops on a mismatch, in either direction, so a block
+left three versions behind and a release that was never published both stop the
+deploy. A network failure or a rate limit
 warns and passes, because a deploy must not depend on GitHub being reachable, so
 this reduces the human's job on this list rather than removing it.
 
