@@ -365,7 +365,7 @@ Three layers, and the app is explicit about what each one can promise:
 | --- | --- | --- |
 | Per-monitor `PeriodicWorkRequest` | the monitor's interval, **floored at 15 min** | Android's floor, not a Nightbell setting |
 | 15-minute repair sweep | anything overdue, at 15-min granularity | also re-arms missing periodic work |
-| Strict foreground service | exactly as configured, down to ~15 s | costs a permanent notification and battery |
+| Strict foreground service | exactly as configured, down to the 1 minute minimum | costs a permanent notification and battery |
 
 **Sub-15-minute intervals cannot be honoured in the background.**
 `PeriodicWorkRequest.MIN_PERIODIC_INTERVAL_MILLIS` is 15 minutes and WorkManager
@@ -457,7 +457,7 @@ The tradeoffs, stated plainly in the UI as well as here:
 
 | | Strict off (default) | Strict on |
 | --- | --- | --- |
-| Cadence | best-effort; Doze may delay | as configured, down to ~15 s |
+| Cadence | best-effort; Doze may delay | as configured, down to the 1 minute minimum |
 | Battery | negligible | real, a wake per due check |
 | Notification | none | permanent, un-dismissable (Android's rule) |
 | Survives reboot | yes | yes |
@@ -467,7 +467,7 @@ An unacknowledged URGENT outage starts the same service on its own regardless of
 the setting, and stops it the moment you acknowledge or the monitor recovers.
 
 The service declares `foregroundServiceType="specialUse"` rather than
-`dataSync`, because `dataSync` is capped at six hours per day on API 34+, which
+`dataSync`, because `dataSync` is capped at six hours per day from Android 15 (API 35), which
 would silently break the one guarantee strict mode exists to make. Shipping this
 through Google Play would need that subtype justified in review; sideloading is
 unaffected.
@@ -1000,13 +1000,14 @@ your settings to a JSON file, through the Storage Access Framework, so Nightbell
 needs no storage permission, the destination is yours to pick, and nothing is
 uploaded anywhere.
 
-It also exists because **2.0.0 changed the app's `applicationId` to
-`me.river.nightbell`, and that is not a rename.** Android identifies an app by that
-id, so 2.0.0 installs *beside* an earlier version rather than updating it: new
-data directory, no monitors, and no way for it to read the older install's files.
-No signing key or manifest setting changes that. Export from the old install,
-install 2.0.0, import, and export **before** uninstalling anything, because once
-the old app is gone so is its data.
+It also exists because **3.0.0 changed the app's `applicationId` from
+`me.river.pulse` to `me.river.nightbell`, and that is not a rename.** Android
+identifies an app by that id, so 3.0.0 installs *beside* Pulse 2.x rather than
+updating it: new data directory, no monitors, and no way for it to read the older
+install's files. No signing key or manifest setting changes that. Export from the
+old install, install the new one, import, and export **before** uninstalling
+anything, because once the old app is gone so is its data. (2.0.0 did the same
+once before, when it moved 1.x to `me.river.pulse`.)
 
 Placed home-screen widgets do not come across either: a launcher stores the
 provider as a fully-qualified class name, so they belong to the old app. Drag them
@@ -1047,7 +1048,7 @@ for the maintainer's benefit, so it is worth being exact about. It carries a
 ever successful check and `tap` when the user pressed Check now, so at most
 `Nightbell/<version> (Android; new; tap)`. Nothing else. The origin logs a
 timestamp, a status and that string, in `census.log`, and the log format holds no
-address and no hash of one. `website/scripts/validate.mjs` fails the site build if
+address and no hash of one. `website/deploy/scripts/deploy.sh` refuses to deploy if
 `$remote_addr` or an alias appears in it.
 
 That yields two numbers: an exact count of installs, from the word `new` said once
