@@ -201,14 +201,22 @@ is per-server, so it does not affect the other fourteen sites.
 ## Deploying
 
 ```bash
-NIGHTBELL_HOST=user@host ./deploy/scripts/deploy.sh
-NIGHTBELL_HOST=user@host ./deploy/scripts/deploy.sh --dry-run
+NIGHTBELL_HOST=user@host ./deploy/scripts/deploy.sh            # config, then files
+NIGHTBELL_HOST=user@host ./deploy/scripts/deploy.sh --files    # files only
 ```
 
-It runs `npm run verify` first, which checks the assets are in sync, builds, runs
-the validator and then writes the precompressed files. It refuses to deploy if
-`dist/index.html.gz` is missing, because `gzip_static` would then have nothing to
-serve and every visitor would pay 155 kB for a 34 kB document.
+It builds first: `npm run build` copies the films in from `docs/video`, writes
+`public/v1/release.json` and the `/download` target from `RELEASE` in
+`src/lib/site.ts`, builds `out/`, hashes the inline scripts into
+`csp.generated.conf` and writes a `.gz` beside every text file. It refuses to deploy
+if `RELEASE` disagrees with GitHub's latest tag, if any `nightbell_` log format
+records an address, or if `out/index.html.gz` is missing.
+
+Then the config, before the files, with `/etc/nginx` backed up to
+`/root/nginx-backup-<stamp>.tgz` and restored if `nginx -t` fails: the server block,
+`security-headers.conf` with this build's CSP line, `download-target.conf`, and the
+three logrotate rules. Config first because the new CSP only adds allowances, so
+the old pages keep working under it until the switch.
 
 Each build goes to `releases/<utc-timestamp>/` and `current` is moved onto it with
 a single rename, so no request can observe a half-written root. The last five
@@ -286,13 +294,9 @@ curl -sI https://nightbell.app/download | grep -i '^HTTP\|^location\|^cache-cont
 sudo logrotate --debug /etc/logrotate.d/nightbell-download   # dry run, no rotation
 ```
 
-`deploy.sh` uploads `dist/` only, so **the Nginx config and the snippet are not
-deployed by it.** After a release, `download-target.conf` changes and has to be
-copied to the box and Nginx reloaded, or `/download` keeps handing out the previous
-APK. `npm run verify` fails if the snippet has drifted from `RELEASE`, and the
-validator fails if the page links to `/download` while the server block has no
-`location` for it, so both halves of that mistake are caught before a deploy. What
-neither can see is the config sitting un-copied on this machine.
+`deploy.sh` installs `download-target.conf` with the rest of the config on every
+deploy, generated from `RELEASE` by the build, so `/download` moves to the new APK
+in the same step as the page.
 
 ## Counting installs
 
@@ -329,8 +333,8 @@ actually updated.
 
 **Nothing here can identify a device**, and that is enforced rather than intended.
 The log format holds a timestamp, a status and the User-Agent, and
-`npm run validate` fails the build if `$remote_addr` or any of its aliases appears
-in it. No hash of an address either: a salted hash on disk is still personal data
+`deploy.sh` refuses to run if `$remote_addr` or any of its aliases appears in a
+`nightbell_` log format. No hash of an address either: a salted hash on disk is still personal data
 with a retention obligation attached, and all it buys is retention curves. There
 is no per install identifier anywhere in the app to log even if somebody wanted
 one. The full reasoning is in the `nightbell_census` `log_format` comment in
@@ -338,8 +342,9 @@ one. The full reasoning is in the `nightbell_census` `log_format` comment in
 
 ### Installing it
 
-The manifest itself needs nothing: `gen-version-manifest.mjs` writes it into
-`public/`, Astro copies it into `dist/`, and `deploy.sh` ships it with the site.
+The manifest itself needs nothing: `scripts/release-files.mjs` writes it into
+`public/` on every build, Next copies it into `out/`, and `deploy.sh` ships it with
+the site.
 There is no per release step and nothing to forget.
 
 The server block and the rotation are one-time, and `nightbell.app.conf` above
@@ -382,7 +387,7 @@ Order matters once, at the introduction. An install of 3.10.0 reading a `/v1/`
 that 404s gets null, says nothing, and shows "couldn't reach nightbell.app" on the
 Settings card until the file appears. Harmless and self-healing, but it means the
 site deploy comes first. After that the two move together and the ordering stops
-mattering: the manifest ships in `dist/` on the same deploy as the page.
+mattering: the manifest ships in `out/` on the same deploy as the page.
 
 ### Why not Google Analytics
 
@@ -402,15 +407,14 @@ do.
 
 | Path | Header | Why |
 | --- | --- | --- |
-| `/_astro/*` | `max-age=31536000, immutable` | Astro content-hashes these. A changed file is a different URL, so this can never be stale. |
-| `/fonts/*` | `max-age=31536000, immutable` | Pinned latin subsets at fixed weights. Their bytes are not a moving target, and replacing a face is a deliberate act at which point the filename changes too. |
+| `/_next/static/*` | `max-age=31536000, immutable` | Next content-hashes these, the self-hosted fonts included. A changed file is a different URL, so this can never be stale. |
+| `/hero/*`, `/screens/*` | `max-age=604800` | App captures and the 3D phone's textures. A re-shot screen keeps its name, so a week, not a year, and the deploy purges Cloudflare. |
 | `/media/*` | `max-age=2592000` | **Deliberately not a year.** These names stay the same when the promo is re-cut, so `immutable` would pin last month's frame in people's browsers for a year, where no Cloudflare purge can reach it. Lighthouse docks a point or two for this; that is the right trade. |
 | `*.html`, `/` | `no-cache` | Permits storing, requires revalidating, so a release is live on the next request. A 304 is about 150 bytes. |
 | `robots.txt`, `sitemap.xml`, `site.webmanifest` | `max-age=3600` | Cloudflare raises anything under its four hour browser-TTL floor, so these are observed as 14400. Harmless. |
 
-The principled fix for the media tier is to route those files through
-`astro:assets` so their names carry a content hash, at which point they move to the
-`/_astro/` tier and can take the year safely. That is a change to the asset
+The principled fix for the media tier is to give those files content-hashed names,
+at which point they can take the year safely. That is a change to the asset
 pipeline, not to a cache header.
 
 ## The one Nginx footgun in here
@@ -425,7 +429,7 @@ block *and* in every location that sets a header of its own. Add a location, add
 the include. The test that catches the mistake:
 
 ```bash
-curl -sI https://nightbell.app/_astro/<any-hashed-file> | grep -ci content-security-policy
+curl -sI https://nightbell.app/_next/static/<any-hashed-file> | grep -ci content-security-policy
 ```
 
 Anything other than `1` means that location is serving with no CSP.
@@ -471,22 +475,22 @@ directly fetchable, dotfiles 404, seven security headers present on 200 **and** 
   consent banner, no CSP exception, and nothing about a visitor leaving this box.
   See "Counting downloads". The deliberate cost is that there is no funnel and no
   session, only clicks with a referrer.
-- **No CI deploy.** The APK hash in `site.config.mjs` has to be measured from the
+- **No CI deploy.** The APK hash in `src/lib/site.ts` has to be measured from the
   artifact as GitHub serves it, which is a step a human does. A pipeline that
   deployed without it would publish an unverified hash, and that is the one number
   on the site that must never be wrong.
 
 ## The honest weak points
 
-**`style-src` carries `'unsafe-inline'`.** Astro is configured with
-`inlineStylesheets: 'always'`, so the stylesheet arrives in a `<style>` block, and
-the page carries 121 `style="..."` attributes. A hash covers the block but
-attributes need `'unsafe-hashes'` plus one hash each, and 121 hashes in a header is
-not a security control. What it costs is narrow: CSS injection stays possible if
-markup injection is ever possible, and on a site built from static files with no
-user input, no query parameters and no backend, markup injection has no route in.
-`script-src` is strict with no `'unsafe-inline'` and no hashes, verified against the
-build rather than assumed: it emits zero inline handlers and zero inline scripts.
+**`style-src` carries `'unsafe-inline'`.** The page sets inline `style`
+attributes, which a hash cannot cover without `'unsafe-hashes'` and one hash each.
+What it costs is narrow: CSS injection stays possible if markup injection is ever
+possible, and on a site built from static files with no user input, no query
+parameters and no backend, markup injection has no route in.
+`script-src` has no `'unsafe-inline'`: Next puts its hydration data in inline
+scripts, and each one is allowed by its own sha256, regenerated by
+`scripts/csp.mjs` on every build and installed by `deploy.sh` with the build it was
+made from. A stale list is not a soft failure: every page loads as dead HTML.
 
 **`connect-src` is `'self'` rather than `'none'`.** The page makes no fetch, no XHR
 and no WebSocket, so `'none'` was correct and is what shipped first. It was

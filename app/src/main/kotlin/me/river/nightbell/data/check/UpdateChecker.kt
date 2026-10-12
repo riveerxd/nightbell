@@ -88,7 +88,7 @@ class UpdateChecker(
      * Deliberately the dullest of the three: a static file with flat fields, no
      * array to walk and no field that means something different depending on a
      * sibling. It is generated from the same block the download button is
-     * generated from, by `website/scripts/gen-version-manifest.mjs`, so it cannot
+     * generated from, by `website/scripts/release-files.mjs`, so it cannot
      * disagree with the site around it.
      *
      * A missing or unparseable manifest returns null and the caller says nothing,

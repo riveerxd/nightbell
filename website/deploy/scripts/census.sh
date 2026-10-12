@@ -119,6 +119,13 @@ fi
 # is a request and not a control, so the residual is worth seeing.
 SINCE="$(date -u -d "$DAYS days ago" +%F)"
 
+# Debug builds report "-debug" in the version, and they are the maintainer's own
+# test runs: every instrumented suite clears the app's data, so each run arrived
+# as a burst of "new installs". In October they were 92% of every new install
+# ever counted. They are counted on their own line and kept out of every figure
+# that is meant to describe users.
+debug_lines=$(printf '%s\n' "$LINES" | awk -F'"' '$2 ~ /^Nightbell\/[^ ;)]*-debug/' | grep -c . || true)
+LINES="$(printf '%s\n' "$LINES" | awk -F'"' '$2 !~ /^Nightbell\/[^ ;)]*-debug/')"
 app_lines=$(printf '%s\n' "$LINES" | awk -F'"' '$2 ~ /^Nightbell\//' | grep -c . || true)
 total_lines=$(printf '%s\n' "$LINES" | grep -c . || true)
 other=$((total_lines - app_lines))
@@ -127,12 +134,19 @@ other=$((total_lines - app_lines))
 new_total=$(printf '%s\n' "$LINES" | awk -F'"' '$2 ~ /^Nightbell\/.*; new[;)]/' | grep -c . || true)
 tapped=$(printf '%s\n' "$LINES" | awk -F'"' '$2 ~ /^Nightbell\/.*; tap\)/' | grep -c . || true)
 bad_status=$(printf '%s\n' "$LINES" | awk '$2 != 200' | grep -c . || true)
-first=$(printf '%s\n' "$LINES" | awk 'NF {print substr($0, 1, 10)}' | sort | head -1)
+# One awk pass rather than `sort | head -1`, which under pipefail takes the whole
+# script down the moment the log outgrows the 64k pipe buffer: head leaves after
+# the first line, sort dies on the broken pipe, and 141 propagates. It worked for
+# two weeks and then stopped, silently, with no output at all.
+first=$(printf '%s\n' "$LINES" | awk 'NF { d = substr($0, 1, 10); if (m == "" || d < m) m = d } END { print m }')
 
 printf 'Nightbell census, %s on %s\n\n' "$LOG" "$HOST"
 printf '  first line        %s\n' "${first:-none}"
 printf '  app requests      %s\n' "$app_lines"
 printf '  new installs      %s   exact, one per install ever\n' "$new_total"
+if [ "$debug_lines" -gt 0 ]; then
+  printf '  debug builds      %s   development and test runs, left out of everything here\n' "$debug_lines"
+fi
 if [ "$other" -gt 0 ]; then
   printf '  not the app       %s   crawlers, scanners, hand written curls\n' "$other"
 fi

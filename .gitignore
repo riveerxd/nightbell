@@ -47,7 +47,7 @@ docs/growth-prep/
 # history is permanent and a 50 MB mistake cannot be taken back out of a clone.
 #
 # What ships is the result, committed under docs/video and copied into the site
-# by `website/npm run assets`:
+# by website/scripts/media.mjs on every build:
 #
 #   docs/video/nightbell-promo.mp4          40 s, the film in the hero
 #   docs/video/nightbell-alert-firing.mp4   11 s, the payoff cut

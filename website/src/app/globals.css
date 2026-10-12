@@ -1,0 +1,571 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-archivo);
+  --font-mono: var(--font-jetbrains);
+  --font-heading: var(--font-archivo);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+  --animate-shiny-text: shiny-text 8s infinite;
+  @keyframes shiny-text {
+  0%, 90%, 100% {
+    background-position: calc(-100% - var(--shiny-width)) 0;
+    }
+  30%, 60% {
+    background-position: calc(100% + var(--shiny-width)) 0;
+    }
+  }
+  --animate-aurora: aurora 8s ease-in-out infinite alternate
+;
+  @keyframes aurora {
+  0% {
+    background-position: 0% 50%;
+    transform: rotate(-5deg) scale(0.9);}
+  25% {
+    background-position: 50% 100%;
+    transform: rotate(5deg) scale(1.1);}
+  50% {
+    background-position: 100% 50%;
+    transform: rotate(-3deg) scale(0.95);}
+  75% {
+    background-position: 50% 0%;
+    transform: rotate(3deg) scale(1.05);}
+  100% {
+    background-position: 0% 50%;
+    transform: rotate(-5deg) scale(0.9);}}
+  --animate-marquee: marquee var(--duration) infinite linear;
+  --animate-marquee-vertical: marquee-vertical var(--duration) linear infinite;
+  @keyframes marquee {
+  from {
+    transform: translateX(0);}
+  to {
+    transform: translateX(calc(-100% - var(--gap)));}}
+  @keyframes marquee-vertical {
+  from {
+    transform: translateY(0);}
+  to {
+    transform: translateY(calc(-100% - var(--gap)));}}
+  --animate-shine: shine var(--duration) infinite linear;
+  @keyframes shine {
+  0% {
+    background-position: 0% 0%;}
+  50% {
+    background-position: 100% 100%;}
+  to {
+    background-position: 0% 0%;}}
+  --animate-meteor: meteor 5s linear infinite;
+  @keyframes meteor {
+  0% {
+    transform: rotate(var(--angle)) translateX(0);
+    opacity: 1;}
+  70% {
+    opacity: 1;}
+  100% {
+    transform: rotate(var(--angle)) translateX(-500px);
+    opacity: 0;}}
+  --animate-shimmer-slide: shimmer-slide var(--speed) ease-in-out infinite alternate;
+  --animate-spin-around: spin-around calc(var(--speed) * 2) infinite linear;
+  @keyframes shimmer-slide {
+  to {
+    transform: translate(calc(100cqw - 100%), 0);}}
+  @keyframes spin-around {
+  0% {
+    transform: translateZ(0) rotate(0);}
+  15%, 35% {
+    transform: translateZ(0) rotate(90deg);}
+  65%, 85% {
+    transform: translateZ(0) rotate(270deg);}
+  100% {
+    transform: translateZ(0) rotate(360deg);}}
+  --animate-rainbow: rainbow var(--speed, 2s) infinite linear;
+  --color-color-5: var(--color-5);
+  --color-color-4: var(--color-4);
+  --color-color-3: var(--color-3);
+  --color-color-2: var(--color-2);
+  --color-color-1: var(--color-1);
+  @keyframes rainbow {
+  0% {
+    background-position: 0%;}
+  100% {
+    background-position: 200%;}}
+  --animate-pulse: pulse var(--duration) ease-out infinite;
+  --animate-pulse-ripple: pulse-ripple var(--duration) cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  @keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 var(--pulse-color, oklch(from var(--bg) l c h / 0.5));}
+  50% {
+    box-shadow: 0 0 0 var(--distance) var(--pulse-color, oklch(from var(--bg) l c h / 0.5));}}
+  @keyframes pulse-ripple {
+  0% {
+    box-shadow: 0 0 0 0 oklch(from var(--pulse-color, var(--bg)) l c h / 1);}
+  100% {
+    box-shadow: 0 0 0 var(--distance) oklch(from var(--pulse-color, var(--bg)) l c h / 0);}}
+  --animate-orbit: orbit calc(var(--duration)*1s) linear infinite;
+  @keyframes orbit {
+  0% {
+    transform: rotate(calc(var(--angle) * 1deg)) translateY(calc(var(--radius) * 1px)) rotate(calc(var(--angle) * -1deg));}
+  100% {
+    transform: rotate(calc(var(--angle) * 1deg + 360deg)) translateY(calc(var(--radius) * 1px)) rotate(calc((var(--angle) * -1deg) - 360deg));}}
+  --animate-blink-cursor: blink-cursor 1.2s step-end infinite;
+  @keyframes blink-cursor {
+  0%, 49% {
+    opacity: 1;}
+  50%, 100% {
+    opacity: 0;}}
+  --animate-background-position-spin: background-position-spin 3000ms infinite alternate;
+  @keyframes background-position-spin {
+  0% {
+    background-position: top center;}
+  100% {
+    background-position: bottom center;}}
+  --animate-ripple: ripple var(--duration,2s) ease calc(var(--i, 0)*.2s) infinite;
+  @keyframes ripple {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);}
+  50% {
+    transform: translate(-50%, -50%) scale(0.9);}}}
+
+:root {
+  --radius: 0.75rem;
+  --background: #eceef2;
+  --foreground: #0a0c10;
+  --card: #ffffff;
+  --card-foreground: #0a0c10;
+  --popover: #ffffff;
+  --popover-foreground: #0a0c10;
+  --primary: #2d67f5;
+  --primary-foreground: #ffffff;
+  --secondary: #e2e5ea;
+  --secondary-foreground: #0a0c10;
+  --muted: #e2e5ea;
+  --muted-foreground: #5a6372;
+  --accent: #e8eefc;
+  --accent-foreground: #0a0c10;
+  --destructive: #d92d3a;
+  --border: #e2e5ea;
+  --input: #dcdfe5;
+  --ring: #2f6bff;
+  --up: #076f42;
+  --degraded: #8f5900;
+  --down: #c2262f;
+  /* The status colours above are dark enough to pass as text on white, which
+     makes a filled bar or dot read as forest green and brown. Fills take the
+     brighter tone, since the words beside them carry the meaning. */
+  --up-fill: #1fb874;
+  --degraded-fill: #eba000;
+  --down-fill: #d7323c;
+  --brand: #2459dc;
+  --surface: #ffffff;
+  --surface-2: #f5f6f8;
+  /* Elevation is a highlight on the top edge plus two shadows tinted toward the
+     page's own blue-grey, never pure black: one tight for contact, one long and
+     soft for height. Each step up lifts the card further off the page. */
+  --elev-1: inset 0 1px 0 rgb(255 255 255 / 0.9), 0 1px 2px rgb(22 30 48 / 0.06), 0 10px 24px -12px rgb(22 30 48 / 0.16);
+  --elev-2: inset 0 1px 0 rgb(255 255 255 / 0.9), 0 2px 4px rgb(22 30 48 / 0.06), 0 28px 56px -20px rgb(22 30 48 / 0.26);
+  --elev-3: inset 0 1px 0 rgb(255 255 255 / 0.9), 0 4px 8px rgb(22 30 48 / 0.06), 0 60px 120px -36px rgb(22 30 48 / 0.42);
+  --grid: rgb(10 12 16 / 0.07);
+  --chart-1: #2f6bff;
+  --chart-2: #0c9a5b;
+  --chart-3: #b26f00;
+  --chart-4: #e0313d;
+  --chart-5: #5a6372;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0a0c10;
+  --sidebar-primary: #2f6bff;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #eceef2;
+  --sidebar-accent-foreground: #0a0c10;
+  --sidebar-border: #e2e5ea;
+  --sidebar-ring: #2f6bff;
+  --color-1: #2f6bff;
+  --color-2: #2fd98a;
+  --color-3: #ffb020;
+  --color-4: #ff4d57;
+  --color-5: #6f95ff;
+}
+
+.dark {
+  --background: #0b0d12;
+  --foreground: #f4f6f9;
+  --card: #101218;
+  --card-foreground: #f4f6f9;
+  --popover: #101218;
+  --popover-foreground: #f4f6f9;
+  --primary: #2d67f5;
+  --primary-foreground: #ffffff;
+  --secondary: #171a22;
+  --secondary-foreground: #f4f6f9;
+  --muted: #171a22;
+  --muted-foreground: #8d95a3;
+  --accent: #131b2e;
+  --accent-foreground: #f4f6f9;
+  --destructive: #ff4d57;
+  --border: rgb(255 255 255 / 0.08);
+  --input: rgb(255 255 255 / 0.12);
+  --ring: #2f6bff;
+  --up: #2fd98a;
+  --degraded: #ffb020;
+  --down: #ff4d57;
+  --up-fill: var(--up);
+  --degraded-fill: var(--degraded);
+  --down-fill: var(--down);
+  --brand: #4c80ff;
+  --surface: #13161d;
+  --surface-2: #191c24;
+  --elev-1: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 1px 2px rgb(0 0 0 / 0.5), 0 12px 28px -12px rgb(0 0 0 / 0.8);
+  --elev-2: inset 0 1px 0 rgb(255 255 255 / 0.07), 0 2px 4px rgb(0 0 0 / 0.5), 0 32px 64px -20px rgb(0 0 0 / 0.9);
+  --elev-3: inset 0 1px 0 rgb(255 255 255 / 0.08), 0 4px 8px rgb(0 0 0 / 0.5), 0 70px 140px -30px rgb(0 0 0 / 0.95);
+  --grid: rgb(255 255 255 / 0.05);
+  --sidebar: #101218;
+  --sidebar-foreground: #f4f6f9;
+  --sidebar-primary: #2f6bff;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #171a22;
+  --sidebar-accent-foreground: #f4f6f9;
+  --sidebar-border: rgb(255 255 255 / 0.08);
+  --sidebar-ring: #2f6bff;
+}
+
+@theme inline {
+  --color-up: var(--up);
+  --color-degraded: var(--degraded);
+  --color-down: var(--down);
+  --color-up-fill: var(--up-fill);
+  --color-degraded-fill: var(--degraded-fill);
+  --color-down-fill: var(--down-fill);
+  --color-brand: var(--brand);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --shadow-elev-1: var(--elev-1);
+  --shadow-elev-2: var(--elev-2);
+  --shadow-elev-3: var(--elev-3);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-background text-foreground;
+    text-rendering: optimizeLegibility;
+  }
+  /* A grid item defaults to min-width: auto, so one long unbroken line (a
+     command, a JSON path, a digest) can widen its track past the screen. On a
+     phone that widens the layout viewport itself and the whole page renders
+     zoomed out. Twice on the landing page before this rule existed. */
+  :where(.grid) > * {
+    min-width: 0;
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--brand) 35%, transparent);
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 3px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@utility container-page {
+  width: 100%;
+  max-width: 80rem;
+  margin-inline: auto;
+  padding-inline: 1.25rem;
+  @media (width >= 48rem) {
+    padding-inline: 2rem;
+  }
+}
+
+@utility eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+@utility text-balance-pretty {
+  text-wrap: balance;
+}
+
+@utility grid-lines {
+  background-image:
+    linear-gradient(to right, var(--grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
+  background-size: 64px 64px;
+}
+  ::view-transition-old(root), ::view-transition-new(root) {
+    animation: none;
+    mix-blend-mode: normal;}
+/* The display voice: Archivo pulled to its narrowest width, set in capitals.
+   It is the pager and the alarm clock, so it is the only place the type shouts. */
+/*
+  What a headline is drawn in until Archivo arrives. The shared fallback is
+  Arial or Roboto at their normal width, while every headline is Archivo
+  squeezed to 62 per cent, so on a slow connection the headline first wrapped
+  over more lines and then jumped when the font landed. Measured against the
+  real headlines, bold Arial sets them 0.68 times as wide, so at 68 per cent it
+  breaks every line in the same place and nothing moves when the swap happens.
+*/
+@font-face {
+  font-family: "Body Fallback";
+  src: local("Arial"), local("ArialMT"), local("Roboto"), local("Roboto-Regular"), local("Liberation Sans"), local("Helvetica");
+  size-adjust: 98.8%;
+  ascent-override: 88.87%;
+  descent-override: 21.26%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: "Display Fallback";
+  src: local("Arial Bold"), local("Arial-BoldMT"), local("Roboto Bold"), local("Roboto-Bold"), local("Liberation Sans Bold"), local("Helvetica Bold");
+  font-weight: 100 900;
+  size-adjust: 68%;
+}
+
+@utility display {
+  font-family: var(--font-display, var(--font-archivo));
+  font-stretch: 62%;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: -0.012em;
+  line-height: 0.86;
+}
+/*
+  Big numbers: the times, the status codes, the 15. They were a dot-matrix
+  face, a fourth typeface on the page and too harsh beside the rest; now they
+  are the headline face with figures of equal width, so a cycling code or a
+  ticking time never changes width.
+*/
+@utility dotmatrix {
+  font-family: var(--font-display, var(--font-archivo));
+  font-stretch: 62%;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes scrollcue {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(300%); }
+}
+
+/* Load-in for the hero. Transform and opacity only, so nothing reflows. */
+@keyframes rise {
+  from { transform: translateY(105%); }
+  to { transform: none; }
+}
+.rise {
+  animation: rise 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes rise-soft {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+.rise-soft {
+  animation: rise-soft 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* See components/ui/blur-fade.tsx. Scroll position drives it, so it never
+   holds content back waiting for script. */
+/* Focus, not fade: opacity stays at 1 so text is at full contrast at every
+   point of the reveal, including whenever a checker happens to look at it. */
+/*
+  On a phone the hero's picture phone starts just under the buttons. Whether
+  the two buttons share a row depends on the width and the font, so its top is
+  anchored to the row itself and the browser places it before the first paint.
+  Placed by script after load it jumped, which counted as layout shift; a
+  second copy placed in the flow doubled the picture in the markup. Browsers
+  without anchor positioning keep the plain percentage in the markup.
+*/
+.hero-cta { anchor-name: --hero-cta; }
+@supports (anchor-name: --a) {
+  @media (max-width: 767px) {
+    .hero-static { position-anchor: --hero-cta; top: calc(anchor(bottom) + 24px); }
+  }
+}
+
+/* A slide only. It used to blur in as well, which left body copy unreadable
+   for the first half second it was on screen. */
+@keyframes reveal {
+  from { transform: translateY(22px); }
+  to { transform: none; }
+}
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal {
+      animation: reveal linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry calc(70% + var(--reveal-delay, 0%));
+    }
+  }
+}
+
+/* Rings leaving the Acknowledge button while the phone rings. Scaled more on
+   the short axis so a pill grows by about the same few pixels all round, and
+   transform only, so the page never shifts. */
+@keyframes ack-ring {
+  from { transform: scale(1); opacity: 0.7; }
+  to { transform: scale(1.12, 1.45); opacity: 0; }
+}
+.ack-ring { animation: ack-ring 2.4s cubic-bezier(0.2, 0.6, 0.3, 1) infinite; }
+
+@keyframes stepfill {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+/* Long-form reference. Tables scroll inside themselves so a wide matrix never
+   widens the page. */
+.doc {
+  max-width: 48rem;
+  font-size: 1rem;
+  line-height: 1.75;
+  color: color-mix(in oklab, var(--foreground) 82%, transparent);
+}
+.doc > * + * { margin-top: 1.1rem; }
+.doc h2 {
+  font-family: var(--font-archivo);
+  font-stretch: 62%;
+  font-weight: 800;
+  text-transform: uppercase;
+  font-size: clamp(2rem, 4vw, 3rem);
+  line-height: 0.95;
+  color: var(--foreground);
+  margin-top: 4.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+  scroll-margin-top: 5rem;
+}
+.doc h2:first-child { margin-top: 0; border-top: 0; padding-top: 0; }
+.doc h3 {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--foreground);
+  margin-top: 2.75rem;
+  scroll-margin-top: 5rem;
+}
+.doc h4 { font-weight: 700; color: var(--foreground); margin-top: 2rem; }
+.doc strong { color: var(--foreground); font-weight: 650; }
+.doc a { color: var(--brand); text-decoration: underline; text-underline-offset: 3px; }
+.doc ul, .doc ol { padding-left: 1.25rem; }
+.doc ul { list-style: disc; }
+.doc ol { list-style: decimal; }
+.doc li + li { margin-top: 0.35rem; }
+.doc li::marker { color: var(--muted-foreground); }
+.doc code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  padding: 0.1em 0.35em;
+  overflow-wrap: anywhere;
+}
+.doc pre {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.875rem;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+.doc pre code { background: none; border: 0; padding: 0; overflow-wrap: normal; }
+.doc table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+.doc th, .doc td {
+  border-bottom: 1px solid var(--border);
+  padding: 0.7rem 1rem 0.7rem 0;
+  text-align: left;
+  vertical-align: top;
+  min-width: 8rem;
+}
+/* On a phone a column holds its words, not eight rems: the tables fit and
+   wrap, and only one that still cannot fit scrolls sideways. */
+@media (max-width: 640px) {
+  .doc th, .doc td { min-width: 0; padding-right: 0.75rem; }
+}
+.doc th {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  font-weight: 500;
+}
+.doc blockquote {
+  border-left: 2px solid var(--brand);
+  padding-left: 1.25rem;
+  color: var(--muted-foreground);
+}
+.doc hr { border-color: var(--border); margin: 3rem 0; }
+
+/* See PhoneFrame: a filter on the flat wrapper, so no layer can clip it. */
+.phone-shadow {
+  filter: drop-shadow(0 4px 6px rgb(22 30 48 / 0.08)) drop-shadow(0 36px 40px rgb(22 30 48 / 0.26));
+}
+.dark .phone-shadow {
+  filter: drop-shadow(0 4px 8px rgb(0 0 0 / 0.5)) drop-shadow(0 40px 48px rgb(0 0 0 / 0.75));
+}

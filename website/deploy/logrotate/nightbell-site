@@ -1,0 +1,64 @@
+# Rotation for the site access log.
+#
+#   install to  /etc/logrotate.d/nightbell-site
+#   check with  sudo logrotate --debug /etc/logrotate.d/nightbell-site
+#
+# ## Why this is a third file
+#
+# Same reason nightbell-census is a second one. The three logs answer different
+# questions and will want different policies, and a stanza naming a file the
+# distro's nginx stanza already claims makes logrotate refuse to start, which
+# stops rotation for all fifteen sites on this box rather than just this one.
+# All three live under /var/log/nginx/nightbell/ because the distro's glob is
+# /var/log/nginx/*.log and it is not recursive.
+#
+# The directory already exists wherever download.log does. On a box that has
+# never served the download redirect:
+#
+#   sudo mkdir -p /var/log/nginx/nightbell
+#
+# ## The policy, and why this one is the file to watch
+#
+# monthly with sixty rotations is five years, matching the other two. The volume
+# is not comparable to theirs, and that is the thing to keep an eye on. The
+# download log is one line per human pressing a button and the census log is one
+# line per install per six hours; this one is one line per page request, and most
+# page requests to this site are made by crawlers. In September 2026 the shared
+# box log was taking roughly a hundred thousand bot requests a fortnight across
+# fifteen sites, so a few megabytes a month here is the expected order and a few
+# hundred is the point at which bots.sh should stop pulling the whole history back
+# over ssh and start summarising on the box.
+#
+# Nothing in this file is personal data. See the nightbell_site log_format in
+# deploy/nginx/nightbell.app.conf for the fields it holds and for the address it
+# deliberately does not.
+/var/log/nginx/nightbell/site.log {
+    monthly
+    rotate 60
+    missingok
+
+    # An empty month should not consume a rotation slot. Unlike the other two, an
+    # empty month here is not a bug report on its own: it means nothing reached
+    # the origin, which on a site behind a cache that serves most pages from the
+    # edge is a thing that can legitimately happen.
+    notifempty
+
+    compress
+
+    # The most recent rotation stays uncompressed, so the common case of reading
+    # the current and previous file is a plain read. `zcat -f` in bots.sh handles
+    # both either way.
+    delaycompress
+
+    # Matches the ownership the distro's nginx stanza uses, which is what makes
+    # these readable by a user in the adm group without sudo.
+    create 0640 www-data adm
+
+    # nginx holds the log open by descriptor, so after the rename it would keep
+    # writing to the rotated file forever. USR1 makes the master reopen every log
+    # it has.
+    sharedscripts
+    postrotate
+        if [ -f /run/nginx.pid ]; then kill -USR1 "$(cat /run/nginx.pid)"; fi
+    endscript
+}

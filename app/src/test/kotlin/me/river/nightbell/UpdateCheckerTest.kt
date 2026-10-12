@@ -46,7 +46,7 @@ class UpdateCheckerTest {
     """.trimIndent()
 
     /**
-     * Byte for byte what `website/scripts/gen-version-manifest.mjs` writes.
+     * Byte for byte what `website/scripts/release-files.mjs` writes.
      *
      * Copied out of `website/public/v1/release.json` rather than retyped, because
      * a fixture that agrees with an idea of the payload instead of with the
@@ -369,7 +369,7 @@ class UpdateCheckerTest {
     @Test
     fun `the parser agrees with the file the website actually generates`() {
         // The fixture above is a copy, and a copy is a thing that goes stale. This
-        // reads the real output of website/scripts/gen-version-manifest.mjs, so
+        // reads the real output of website/scripts/release-files.mjs, so
         // renaming a field on the site fails here instead of at four in the
         // morning six weeks later when every install has quietly stopped seeing
         // releases. The two ends of this feature live in different languages in
