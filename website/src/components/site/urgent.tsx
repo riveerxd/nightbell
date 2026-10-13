@@ -1,9 +1,10 @@
 "use client"
 
 import { useEffect, useRef } from "react"
-import { motion, useReducedMotion } from "motion/react"
+import { motion } from "motion/react"
 
 import media from "@/lib/media.json"
+import { useStill } from "@/lib/use-still"
 import { cn } from "@/lib/utils"
 
 import { Deep, DeepGroup } from "./deep"
@@ -79,7 +80,7 @@ function Payoff() {
 }
 
 export function Urgent() {
-  const still = useReducedMotion()
+  const still = useStill()
   const rise = (i: number) =>
     still
       ? {}

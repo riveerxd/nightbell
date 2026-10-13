@@ -2,10 +2,11 @@
 
 import { useLayoutEffect, useRef, useState } from "react"
 import { Play, X } from "lucide-react"
-import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform } from "motion/react"
+import { AnimatePresence, motion, useScroll, useTransform } from "motion/react"
 
 import media from "@/lib/media.json"
 import { MEDIA } from "@/lib/site"
+import { useStill } from "@/lib/use-still"
 
 const TRANSCRIPT = [
   { t: "0:01", s: "Most uptime alerts are one more notification you swipe away." },
@@ -34,7 +35,7 @@ export function Film() {
   const closeBtn = useRef<HTMLButtonElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
   const stage = useRef<HTMLDivElement>(null)
-  const still = useReducedMotion()
+  const still = useStill()
   // Straight and full size by the time the poster is in the middle of the
   // screen, which is where it is watched. Finishing as its top reached the top
   // of the screen meant it only settled on the way out.

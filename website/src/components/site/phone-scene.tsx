@@ -56,7 +56,7 @@ const span = (p: number, a: number, b: number) => clamp01((p - a) / (b - a))
 const smooth = (t: number) => t * t * (3 - 2 * t)
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 
-function useTextures() {
+function useTextures(onFail: () => void) {
   // a frame on demand needs a nudge when the pixels arrive, or a page loaded
   // part way down would never draw them
   const invalidate = useThree((st) => st.invalidate)
@@ -67,12 +67,12 @@ function useTextures() {
     // half the texture's height on a laptop, so the GPU read a half-size mipmap
     // and the screen came out visibly softer than the page around it.
     return ["/hero/calm-hd.webp", "/hero/lock-hd.webp", "/hero/alarm-hd.webp", "/hero/quiet-hd.webp"].map((src) => {
-      const t = loader.load(src, () => invalidate())
+      const t = loader.load(src, () => invalidate(), undefined, onFail)
       t.colorSpace = THREE.SRGBColorSpace
       t.anisotropy = Math.min(16, gl.capabilities.getMaxAnisotropy())
       return t
     })
-  }, [invalidate, gl])
+  }, [invalidate, gl, onFail])
 }
 
 /*
@@ -108,12 +108,14 @@ function Phone({
   restTop,
   acked,
   onReady,
+  onFail,
 }: {
   progress: MotionValue<number>
   mobile: boolean
   restTop: number | null
   acked: boolean
   onReady: () => void
+  onFail: () => void
 }) {
   const told = useRef(false)
   const group = useRef<THREE.Group>(null)
@@ -124,7 +126,7 @@ function Phone({
   const pool = useRef<THREE.MeshBasicMaterial>(null)
   const shadow = useRef<THREE.Mesh>(null)
   const size = useThree((st) => st.size)
-  const [calmTex, lockTex, alarmTex, quietTex] = useTextures()
+  const [calmTex, lockTex, alarmTex, quietTex] = useTextures(onFail)
   const dark = useDarkPage()
 
   const body = useMemo(() => {
@@ -307,12 +309,14 @@ export default function PhoneScene({
   restTop = null,
   acked,
   onReady,
+  onFail,
 }: {
   progress: MotionValue<number>
   mobile: boolean
   restTop?: number | null
   acked: boolean
   onReady: () => void
+  onFail: () => void
 }) {
   const host = useRef<HTMLDivElement>(null)
   // The screen's own density, so the screenshot is as sharp as the page around
@@ -337,6 +341,10 @@ export default function PhoneScene({
         onCreated={({ gl }) => {
           gl.toneMapping = THREE.ACESFilmicToneMapping
           gl.toneMappingExposure = 1.05
+          // Phones drop a context under memory pressure, often while the tab
+          // sits in the background. Restoring it means rebuilding every texture
+          // at the worst moment, so the hero takes the picture phone instead.
+          gl.domElement.addEventListener("webglcontextlost", onFail, { once: true })
         }}
         frameloop={onScreen ? "demand" : "never"}
       >
@@ -350,7 +358,7 @@ export default function PhoneScene({
             It was brand blue until the body went lighter on the dark page; then
             it painted the whole edge blue, so it is a cool white now. */}
         <directionalLight position={[-3, 1.5, -2]} intensity={1.6} color="#dfe6f5" />
-        <Phone progress={progress} mobile={mobile} restTop={restTop} acked={acked} onReady={onReady} />
+        <Phone progress={progress} mobile={mobile} restTop={restTop} acked={acked} onReady={onReady} onFail={onFail} />
       </Canvas>
     </div>
   )

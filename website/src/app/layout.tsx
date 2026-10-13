@@ -66,8 +66,10 @@ export const viewport: Viewport = {
   WebGL drawn in software (no GPU: the frame rate collapses and the page stalls
   for seconds) all get the picture instead. force3d is for the e2e suite, whose
   headless browser renders in software but still has to exercise the 3D path.
+  ?no3d is the other way round: any browser plays the picture phone, which is
+  what most older phones get and otherwise cannot be seen from a desk.
 */
-const GL3D = `function gl3d(){try{if(matchMedia("(prefers-reduced-motion: reduce)").matches)return false;var g=document.createElement("canvas").getContext("webgl2");if(!g)return false;var f=false;try{f=localStorage.getItem("force3d")==="1"}catch(e){}if(f)return true;var d=g.getExtension("WEBGL_debug_renderer_info");var r=d?String(g.getParameter(d.UNMASKED_RENDERER_WEBGL)):"";return !/swiftshader|llvmpipe|softpipe|software/i.test(r)}catch(e){return false}}`
+const GL3D = `function gl3d(){try{if(/[?&]no3d\\b/.test(location.search))return false;if(matchMedia("(prefers-reduced-motion: reduce)").matches)return false;var g=document.createElement("canvas").getContext("webgl2");if(!g)return false;var f=false;try{f=localStorage.getItem("force3d")==="1"}catch(e){}if(f)return true;var d=g.getExtension("WEBGL_debug_renderer_info");var r=d?String(g.getParameter(d.UNMASKED_RENDERER_WEBGL)):"";return !/swiftshader|llvmpipe|softpipe|software/i.test(r)}catch(e){return false}}`
 const themeScript = `try{var t=localStorage.getItem("theme");if(t!=="light")document.documentElement.classList.add("dark")}catch(e){document.documentElement.classList.add("dark")}`+GL3D+`if(gl3d())document.documentElement.classList.add("gl3d")`
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

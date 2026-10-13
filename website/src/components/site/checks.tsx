@@ -2,9 +2,10 @@
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
 import { MousePointer2 } from "lucide-react"
-import { AnimatePresence, motion, useInView, useReducedMotion } from "motion/react"
+import { AnimatePresence, motion, useInView } from "motion/react"
 import { siGithub, siPrometheus, type SimpleIcon } from "simple-icons"
 
+import { useStill } from "@/lib/use-still"
 import { cn } from "@/lib/utils"
 
 import { PhoneFrame } from "./depth"
@@ -40,7 +41,7 @@ const CODES = ["200", "204", "503", "no response"]
 function StatusDemo() {
   const box = useRef<HTMLDivElement>(null)
   const seen = useInView(box, { once: true, amount: 0.6 })
-  const still = useReducedMotion()
+  const still = useStill()
   const last = CODES.length - 1
   const [i, setI] = useState(0)
   useEffect(() => {
@@ -246,7 +247,7 @@ const LOG = [
 ] as const
 
 function HealthDemo() {
-  const still = useReducedMotion()
+  const still = useStill()
   // the line runs 0 to 20 failures; the rule says down at 10, the report saw 14
   const at = (n: number) => `${(n / 20) * 100}%`
   return (
@@ -414,7 +415,7 @@ const KINDS: Kind[] = [
 */
 export function Checks() {
   const [active, setActive] = useState(0)
-  const still = useReducedMotion()
+  const still = useStill()
   const base = useId()
   const tabs = useRef<(HTMLButtonElement | null)[]>([])
   const k = KINDS[active]

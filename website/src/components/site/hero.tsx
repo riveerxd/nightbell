@@ -1,9 +1,18 @@
 "use client"
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react"
+import { Component, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import dynamic from "next/dynamic"
 import { ArrowRight, Check, Download, TriangleAlert } from "lucide-react"
-import { AnimatePresence, motion, useMotionValueEvent, useScroll, useTransform } from "motion/react"
+import {
+  AnimatePresence,
+  motion,
+  useAnimationFrame,
+  useMotionValue,
+  useMotionValueEvent,
+  useScroll,
+  useTransform,
+  type MotionValue,
+} from "motion/react"
 
 import { Ripple } from "@/components/ui/ripple"
 import { ShimmerLink } from "@/components/ui/shimmer-link"
@@ -40,7 +49,39 @@ function useMedia(q: string, server = false) {
 
 // the head script has already decided, and marked the root
 const hasWebGL = () => document.documentElement.classList.contains("gl3d")
-const useWebGL = () => useSyncExternalStore(() => () => {}, hasWebGL, () => false)
+const glListeners = new Set<() => void>()
+const useWebGL = () =>
+  useSyncExternalStore(
+    (cb) => {
+      glListeners.add(cb)
+      return () => glListeners.delete(cb)
+    },
+    hasWebGL,
+    () => false
+  )
+// A phone the head script let through can still fail to draw: the scene's
+// chunk never arrives, a screen texture does not, or the GPU refuses or drops
+// the context. Each of those left an empty stage or took the whole page down
+// with it, so any of them hands the hero to the picture phone for good.
+function drop3d() {
+  document.documentElement.classList.remove("gl3d")
+  glListeners.forEach((cb) => cb())
+}
+
+class SceneBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false }
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+  componentDidCatch() {
+    drop3d()
+  }
+  render() {
+    return this.state.failed ? null : this.props.children
+  }
+}
+// false in the server render, so nothing decided on the client is in the HTML
+const useClient = () => useSyncExternalStore(() => () => {}, () => true, () => false)
 
 /* The 3D phone starts once the page has loaded and the browser is idle, so it
    never competes with the first paint or with the reader's first scroll. */
@@ -66,11 +107,17 @@ function useClock() {
   return String(s).padStart(2, "0")
 }
 
-/* The phone as a picture: first paint, no WebGL, reduced motion. */
-function StaticPhone({ className }: { className?: string }) {
+/*
+  The phone as a picture: first paint, reduced motion, and every browser that
+  does not get the 3D one, which is most older phones. The picture plays the
+  same story: the lock screen and the alarm come up on the same beats, and
+  `useFlatPose` moves it through the same poses. It was a still that faded out
+  on the first scroll, and the alarm then played to an empty stage.
+*/
+function StaticPhone({ screens }: { screens?: Screens }) {
   return (
-    <figure className={cn("pointer-events-none [perspective:1600px]", className)}>
-      <PhoneFrame edge="right" className="shadow-elev-3 [transform:rotateY(-22deg)_rotateX(5deg)_rotateZ(3deg)]">
+    <figure className="pointer-events-none">
+      <PhoneFrame edge="right">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/hero/calm.webp"
@@ -82,10 +129,175 @@ function StaticPhone({ className }: { className?: string }) {
           fetchPriority="high"
           className="block w-full"
         />
+        {/* only where the picture is the phone that plays: a browser that draws
+            the 3D one, or stays still, never downloads these */}
+        {screens &&
+          (["lock", "alarm", "quiet"] as const).map((k) => (
+            <motion.img
+              key={k}
+              src={`/hero/${k}.webp`}
+              alt=""
+              width={1080}
+              height={2400}
+              decoding="async"
+              style={{ opacity: screens[k] }}
+              className="absolute inset-0 block size-full"
+            />
+          ))}
       </PhoneFrame>
       <figcaption className="sr-only">All 5 operational</figcaption>
     </figure>
   )
+}
+
+type Screens = { lock: MotionValue<number>; alarm: MotionValue<number>; quiet: MotionValue<number> }
+
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v))
+const span = (p: number, a: number, b: number) => clamp01((p - a) / (b - a))
+const smooth = (t: number) => t * t * (3 - 2 * t)
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t
+
+type Pose = { x: number; y: number; s: number; rx: number; ry: number; rz: number }
+// the tilt the picture has always had beside the headline
+const REST: Pose = { x: 0, y: 0, s: 1, rx: 5, ry: -22, rz: 3 }
+
+/*
+  The 3D phone's choreography for the picture, in pixels and degrees: resting
+  beside the headline, turned to face the reader from 0.1 to 0.3, stepped
+  aside for the words from 0.4 to 0.5, floating while it waits and buzzing
+  from the alarm until it is acknowledged. Eased toward each frame the way the
+  3D one is, so a fast flick still reads as a motion.
+
+  Poses are offsets from where the CSS put it, measured from the box around the
+  picture, which is never transformed itself. The first paint and the first
+  frame of the story are then the same picture in the same place, and nothing
+  jumps when the script arrives.
+
+  Only transform and opacity change, on one layer. An old phone that cannot
+  draw WebGL can still do that at the full frame rate.
+*/
+function useFlatPose({
+  on,
+  story,
+  acked,
+  mobile,
+  stage,
+  box,
+  panel,
+}: {
+  on: boolean
+  story: MotionValue<number>
+  acked: boolean
+  mobile: boolean
+  stage: React.RefObject<HTMLElement | null>
+  box: React.RefObject<HTMLElement | null>
+  panel: React.RefObject<HTMLElement | null>
+}) {
+  const x = useMotionValue(REST.x)
+  const y = useMotionValue(REST.y)
+  const scale = useMotionValue(REST.s)
+  const rotateX = useMotionValue(REST.rx)
+  const rotateY = useMotionValue(REST.ry)
+  const rotateZ = useMotionValue(REST.rz)
+  const lock = useMotionValue(0)
+  const alarm = useMotionValue(0)
+  const quiet = useMotionValue(0)
+  const geo = useRef<{ sw: number; sh: number; top: number; panelTop: number } | null>(null)
+  const pose = useRef<Pose | null>(null)
+  const seen = useRef(true)
+
+  useEffect(() => {
+    const s = stage.current
+    if (!on || !s) return
+    const measure = () => {
+      const header = document.querySelector("header")?.getBoundingClientRect().height ?? 64
+      geo.current = {
+        sw: s.clientWidth,
+        sh: s.clientHeight,
+        top: header + 16,
+        // layout, not the box on screen: the panel slides up as it arrives
+        panelTop: panel.current?.offsetTop ?? s.clientHeight / 2,
+      }
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(s)
+    if (panel.current) ro.observe(panel.current)
+    // nothing to move once the hero has scrolled away
+    const io = new IntersectionObserver(([e]) => (seen.current = e.isIntersecting))
+    io.observe(s)
+    return () => {
+      ro.disconnect()
+      io.disconnect()
+    }
+  }, [on, stage, panel])
+
+  useAnimationFrame((ms, delta) => {
+    const s = stage.current
+    const b = box.current
+    if (!on || !geo.current || !s || !b || !seen.current) return
+    // Read every frame. On a phone the box is anchored under the buttons, and
+    // those rise with the copy as it fades, so a size observer never hears that
+    // it moved; measured once, the phone jumped 60px when anything else
+    // remeasured. Nothing here writes layout, so the read is cheap.
+    const sr = s.getBoundingClientRect()
+    const br = b.getBoundingClientRect()
+    const g = { ...geo.current, cx: br.left - sr.left + br.width / 2, cy: br.top - sr.top + br.height / 2, h: br.height }
+    const p = story.get()
+    const t = ms / 1000
+    // A phone this falls back on can draw at four frames a second; held to
+    // 100ms a step, every ease ran two and a half times slower than meant
+    const dt = Math.min(delta, 250) / 1000
+
+    // the captions sit on the bottom eighth, two lines at most
+    const floor = g.sh * 0.92 - 88
+    const fitFace = Math.min(mobile ? 1 : 1.15, (floor - g.top) / g.h)
+    const face: Pose = { x: g.sw / 2 - g.cx, y: (g.top + floor) / 2 - g.cy, s: fitFace, rx: 0, ry: 0, rz: 0 }
+    // On a phone the words take the bottom of the screen, so the phone steps up
+    // above them, smaller, rather than off the top edge the way the 3D one does.
+    const roof = mobile ? g.panelTop - 20 : g.sh - 40
+    const fitSide = Math.max(0.3, Math.min(mobile ? 1 : 1.05, (roof - g.top) / g.h))
+    const side: Pose = mobile
+      ? { x: g.sw / 2 - g.cx, y: g.top + (g.h * fitSide) / 2 - g.cy, s: fitSide, rx: 2, ry: 8, rz: -2 }
+      : { x: -g.h * 0.04, y: (g.top + roof) / 2 - g.cy, s: fitSide, rx: 0, ry: -12, rz: -1 }
+
+    // The turn is done by 0.22, sooner than the 3D one's 0.3: the first caption
+    // comes up at 0.2, and a picture still on its way, still large, ran into it.
+    const m = smooth(span(p, 0.1, 0.22))
+    const a = smooth(span(p, 0.4, 0.5))
+    const target = { ...REST }
+    for (const k of Object.keys(target) as (keyof Pose)[]) target[k] = lerp(lerp(REST[k], face[k], m), side[k], a)
+
+    const idle = 1 - m
+    target.y += Math.sin(t * 0.9) * 6 * idle
+    target.ry += Math.sin(t * 0.5) * 4 * idle
+
+    // a page opened part way down starts there instead of flying in
+    const c = (pose.current ??= { ...target })
+    const k = 1 - Math.exp(-dt * 7)
+    for (const key of Object.keys(c) as (keyof Pose)[]) c[key] = lerp(c[key], target[key], k)
+
+    // the buzz goes on after the easing, which would otherwise eat it; the motor
+    // runs in bursts, as in the 3D phone
+    const ring = acked ? 0 : span(p, 0.33, 0.37)
+    const buzz = ring * (Math.sin(t * 5) > 0 ? 1 : 0.15)
+    x.set(c.x + Math.sin(t * 70) * 3.5 * buzz)
+    y.set(c.y + Math.sin(t * 62) * 1.5 * buzz)
+    scale.set(c.s)
+    rotateX.set(c.rx)
+    rotateY.set(c.ry)
+    rotateZ.set(c.rz + Math.sin(t * 55) * 1.2 * buzz)
+
+    lock.set(smooth(span(p, 0.22, 0.28)))
+    const al = smooth(span(p, 0.32, 0.36))
+    alarm.set(al)
+    // acknowledged, the page closes back to the lock screen with nothing on it
+    const qTo = acked && al > 0.5 ? 1 : 0
+    const q = quiet.get()
+    quiet.set(Math.abs(q - qTo) < 0.002 ? qTo : lerp(q, qTo, 1 - Math.exp(-dt * 5)))
+  })
+
+  return { style: { x, y, scale, rotateX, rotateY, rotateZ }, screens: { lock, alarm, quiet } }
 }
 
 const WORDS = ["The", "uptime", "monitor", "that", "actually", "wakes", "you", "up."]
@@ -196,6 +408,8 @@ export function Hero() {
   const ref = useRef<HTMLElement>(null)
   const stage = useRef<HTMLDivElement>(null)
   const ctaRow = useRef<HTMLDivElement>(null)
+  const flatBox = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
   const restTop = useRestTop(ctaRow, stage)
   const [acked, setAcked] = useState(false)
   const [live, setLive] = useState(false)
@@ -206,6 +420,7 @@ export function Hero() {
   const gl = useWebGL()
   const ready3d = useIdle()
   const three = gl && !still && ready3d
+  const flat = useClient() && !gl && !still
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end end"] })
   // Every beat below is timed on 0 to 0.5. The story is finished at 80% of the
   // pinned scroll, so the last beat, the phone ringing beside the words, holds
@@ -231,7 +446,7 @@ export function Hero() {
   // the rings follow the phone to the side it steps to
   const ringX = useTransform(story, [0.4, 0.5], ["0%", mobile ? "0%" : "22%"])
   const ringY = useTransform(story, [0.4, 0.5], ["0%", mobile ? "-22%" : "0%"])
-  const staticOpacity = useTransform(story, [0.08, 0.18], [1, 0])
+  const flatPose = useFlatPose({ on: flat, story, acked, mobile, stage, box: flatBox, panel: panelRef })
 
   return (
     <section
@@ -240,7 +455,10 @@ export function Hero() {
       aria-label="Nightbell, the uptime monitor that actually wakes you up"
       className="relative h-[290vh] motion-reduce:h-auto"
     >
-      <div ref={stage} className="sticky top-0 h-dvh overflow-hidden motion-reduce:static motion-reduce:h-auto motion-reduce:min-h-dvh">
+      <div
+        ref={stage}
+        className="sticky top-0 h-dvh overflow-hidden motion-reduce:static motion-reduce:h-auto motion-reduce:min-h-dvh max-md:motion-reduce:flex max-md:motion-reduce:flex-col"
+      >
         <motion.div
           style={{ opacity: acked ? 0 : ring, x: ringX, y: ringY }}
           className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-700 motion-reduce:hidden"
@@ -259,23 +477,31 @@ export function Hero() {
             // above the picture, so the picture stays solid underneath until the
             // 3D phone has fully faded in; crossfading the two left a pale ghost
             <div className={cn("absolute inset-0 z-[1] transition-opacity duration-500", ready ? "opacity-100" : "opacity-0")}>
-              <PhoneScene progress={story} mobile={mobile} restTop={restTop} acked={acked} onReady={() => setReady(true)} />
+              <SceneBoundary>
+                <PhoneScene progress={story} mobile={mobile} restTop={restTop} acked={acked} onReady={() => setReady(true)} onFail={drop3d} />
+              </SceneBoundary>
             </div>
           )}
         </div>
-        <motion.div
-          style={{ opacity: staticOpacity }}
+        <div
+          ref={flatBox}
           className={cn(
-            "hero-static absolute w-[64vw] max-w-[17rem] motion-reduce:!opacity-100",
+            "hero-static absolute w-[64vw] max-w-[17rem]",
             "top-[56%] left-[20%] md:top-1/2 md:bottom-auto md:left-auto md:right-[9%] md:w-[clamp(14rem,21vw,19rem)] md:max-w-none md:translate-x-0 md:-translate-y-1/2",
             // Where the 3D phone will be drawn, the picture never shows: it was a
             // second phone in a slightly different pose for the moment the two
             // overlapped. Decided in the head script, before the first paint.
-            "[.gl3d_&]:invisible"
+            "[.gl3d_&]:invisible",
+            flat && "hero-flat",
+            // Unpinned on a phone, a picture hung below the buttons ran down over
+            // the next section, so there it takes its place in the page instead.
+            "max-md:motion-reduce:relative max-md:motion-reduce:inset-auto max-md:motion-reduce:order-last max-md:motion-reduce:mx-auto max-md:motion-reduce:mt-12 max-md:motion-reduce:mb-20"
           )}
         >
-          <StaticPhone />
-        </motion.div>
+          <motion.div style={{ ...flatPose.style, transformPerspective: 1600 }} className="will-change-transform">
+            <StaticPhone screens={flat ? flatPose.screens : undefined} />
+          </motion.div>
+        </div>
 
         {/* the copy */}
         <motion.div
@@ -325,6 +551,7 @@ export function Hero() {
 
         {/* and the phone keeps ringing beside the words until you answer it */}
         <motion.div
+          ref={panelRef}
           style={{ opacity: panel, y: panelY }}
           className={cn(
             "container-page absolute inset-x-0 bottom-[7vh] z-20 opacity-0 md:top-1/2 md:bottom-auto md:-translate-y-1/2 motion-reduce:hidden",

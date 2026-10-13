@@ -435,7 +435,7 @@
 */
 .hero-cta { anchor-name: --hero-cta; }
 @supports (anchor-name: --a) {
-  @media (max-width: 767px) {
+  @media (max-width: 767px) and (prefers-reduced-motion: no-preference) {
     .hero-static { position-anchor: --hero-cta; top: calc(anchor(bottom) + 24px); }
   }
 }
@@ -568,4 +568,11 @@
 }
 .dark .phone-shadow {
   filter: drop-shadow(0 4px 8px rgb(0 0 0 / 0.5)) drop-shadow(0 40px 48px rgb(0 0 0 / 0.75));
+}
+/* The picture phone that moves goes without. A blurred filter under a 3D
+   transform that changes every frame ran Opera on a low memory phone out of
+   tile memory, and the captions beside it stopped drawing; the shadow itself
+   barely reads against the dark page. */
+.hero-flat .phone-shadow {
+  filter: none;
 }

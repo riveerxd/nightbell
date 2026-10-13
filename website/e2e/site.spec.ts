@@ -201,9 +201,14 @@ test.describe("reduced motion", () => {
   test.use({ reducedMotion: "reduce" })
   test("the hero is a normal page, not a pinned stage", async ({ page }) => {
     await page.goto("/")
+    // The picture sits in the page under the buttons on a phone, which makes
+    // the hero taller than a screen on a short one like the iPhone 15, so the
+    // check is that the stage is not pinned and the run is not the 290vh one.
+    const stage = await page.locator("#top > div").first().evaluate((el) => getComputedStyle(el).position)
+    expect(stage).not.toBe("sticky")
     const h = await page.locator("#top").evaluate((el) => el.getBoundingClientRect().height)
     const vh = await page.evaluate(() => window.innerHeight)
-    expect(h).toBeLessThan(vh * 1.6)
+    expect(h).toBeLessThan(vh * 2)
     await expect(page.getByRole("link", { name: /Download APK/ }).first()).toBeVisible()
   })
 })
@@ -218,6 +223,135 @@ test.describe("reduced motion, scrolled", () => {
     await expect(page.getByText("1 of 5 is down")).toHaveCount(0)
   })
 })
+
+test.describe("reduced motion, hydrated", () => {
+  test.use({ reducedMotion: "reduce" })
+  test("the page hydrates without a mismatch and keeps the dark theme", async ({ page }) => {
+    // motion's own reduced-motion hook answered differently in the first client
+    // render than on the server; React threw the tree away and the dark class
+    // on the root went with it
+    const errors = watchErrors(page)
+    await page.goto("/")
+    await page.waitForLoadState("load")
+    await page.waitForTimeout(1500)
+    expect(errors.filter((e) => /hydrat|#418|#423/i.test(e))).toEqual([])
+    await expect(page.locator("html")).toHaveClass(/\bdark\b/)
+  })
+
+  test("the hero picture ends before the next section starts", async ({ page }) => {
+    await page.goto("/")
+    const phone = await page.locator("#top .hero-static").boundingBox()
+    const film = await page.locator("#film").boundingBox()
+    expect(phone!.y + phone!.height).toBeLessThanOrEqual(film!.y + 1)
+  })
+})
+
+// WebKit in the container composites the whole home page in software and
+// manages a frame every second or two there, with or without the picture phone, so
+// the picture phone's per-frame pose gets this long to arrive
+const PAINT = { timeout: 15_000 }
+
+test("without 3D the picture phone plays the alarm and goes quiet on Acknowledge", async ({ page, browserName }) => {
+  test.slow(browserName === "webkit", "a frame every second or two in the container, see PAINT")
+  // what an older phone gets: no WebGL 2, or one drawn in software. It was a
+  // still that faded out on the first scroll while the alarm played to nothing.
+  const errors = watchErrors(page)
+  await page.goto("/?no3d")
+  await expect(page.locator("html")).not.toHaveClass(/\bgl3d\b/)
+  const phone = page.locator("#top .hero-static")
+  const alarm = phone.locator('img[src="/hero/alarm.webp"]')
+  await expect(alarm).toHaveCount(1)
+  // no blurred filter on a layer that moves every frame: on a low memory phone
+  // it ran out of tile memory and the words beside it stopped drawing
+  expect(await phone.locator(".phone-shadow").evaluate((el) => getComputedStyle(el).filter)).toBe("none")
+  const run = await page.locator("#top").evaluate((el) => el.getBoundingClientRect().height - innerHeight)
+  // story 0.3, at 48% of the pinned run: turned to face the reader, in the middle
+  await page.evaluate((y) => window.scrollTo({ top: y, behavior: "instant" }), run * 0.48)
+  await expect
+    .poll(() => phone.locator("figure").evaluate((el) => Math.abs(el.getBoundingClientRect().left + el.getBoundingClientRect().width / 2 - innerWidth / 2)), PAINT)
+    .toBeLessThan(12)
+
+  // story 0.5, at 80%: the alarm is up and the phone is still on screen beside
+  // the words; it used to have faded out by now
+  await page.evaluate((y) => window.scrollTo({ top: y, behavior: "instant" }), run * 0.8)
+  await expect.poll(() => alarm.evaluate((el) => Number(getComputedStyle(el).opacity)), PAINT).toBeGreaterThan(0.95)
+  await expect(phone.locator("figure")).toBeInViewport(PAINT)
+
+  await page.getByRole("button", { name: "Acknowledge" }).click()
+  const quiet = phone.locator('img[src="/hero/quiet.webp"]')
+  await expect.poll(() => quiet.evaluate((el) => Number(getComputedStyle(el).opacity)), PAINT).toBeGreaterThan(0.95)
+  expect(errors).toEqual([])
+})
+
+test("a phone with only WebGL 1, as Safari was before iOS 15, gets the picture phone with no flag", async ({ page }) => {
+  const errors = watchErrors(page)
+  await page.addInitScript(() => {
+    const get = HTMLCanvasElement.prototype.getContext
+    HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, type: string, ...rest: unknown[]) {
+      if (type === "webgl2") return null
+      return (get as (...a: unknown[]) => RenderingContext | null).call(this, type, ...rest)
+    } as typeof get
+    localStorage.setItem("force3d", "1")
+  })
+  await page.goto("/")
+  await expect(page.locator("html")).not.toHaveClass(/\bgl3d\b/)
+  const phone = page.locator("#top .hero-static")
+  await expect(phone).toBeVisible()
+  const run = await page.locator("#top").evaluate((el) => el.getBoundingClientRect().height - innerHeight)
+  await page.evaluate((y) => window.scrollTo({ top: y, behavior: "instant" }), run * 0.8)
+  await expect.poll(() => phone.locator('img[src="/hero/alarm.webp"]').evaluate((el) => Number(getComputedStyle(el).opacity)), PAINT).toBeGreaterThan(0.95)
+  await expect(phone.locator("figure")).toBeInViewport(PAINT)
+  await expect(page.locator("#top canvas")).toHaveCount(0)
+  expect(errors).toEqual([])
+})
+
+// A phone that passes the head script's check can still fail to draw the 3D
+// phone. Each of these left the stage empty or replaced the whole site with
+// the error page, on exactly the old and flaky phones the picture exists for.
+const FAULTS: Record<string, (page: Page) => Promise<unknown>> = {
+  "its code does not arrive": (page) =>
+    page.route(/\/_next\/static\/chunks\/.+\.js$/, async (route) => {
+      const res = await route.fetch()
+      if ((await res.text()).includes("WebGLRenderer")) await route.abort()
+      else await route.fulfill({ response: res })
+    }),
+  "its screens do not arrive": (page) => page.route(/-hd\.webp$/, (route) => route.abort()),
+  "the GPU will not give it a context": (page) =>
+    page.addInitScript(() => {
+      // the head script's probe gets its context; the scene's own canvas does not
+      const get = HTMLCanvasElement.prototype.getContext
+      let calls = 0
+      HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, type: string, ...rest: unknown[]) {
+        if (/webgl/.test(type) && calls++ > 0) return null
+        return (get as (...a: unknown[]) => RenderingContext | null).call(this, type, ...rest)
+      } as typeof get
+    }),
+  "the GPU drops its context": async () => {},
+}
+
+for (const [fault, inject] of Object.entries(FAULTS)) {
+  test(`the picture phone takes over when the 3D phone fails: ${fault}`, async ({ page }) => {
+    const gl = await page.evaluate(() => !!document.createElement("canvas").getContext("webgl2"))
+    test.skip(!gl, "no WebGL 2 here, so the 3D path never starts")
+    await page.addInitScript(() => localStorage.setItem("force3d", "1"))
+    await inject(page)
+    await page.goto("/")
+    if (fault === "the GPU drops its context") {
+      await expect(page.locator("#top canvas")).toHaveCount(1)
+      await page.locator("#top canvas").evaluate((c: HTMLCanvasElement) => c.getContext("webgl2")?.getExtension("WEBGL_lose_context")?.loseContext())
+    }
+    const phone = page.locator("#top .hero-static")
+    // the scene only finds out once it has loaded and asked for its screens,
+    // which on a CPU drawn canvas under four workers is past the default wait
+    await expect(phone).toBeVisible({ timeout: 20_000 })
+    await expect(page.locator("#top canvas")).toHaveCount(0)
+    const run = await page.locator("#top").evaluate((el) => el.getBoundingClientRect().height - innerHeight)
+    await page.evaluate((y) => window.scrollTo({ top: y, behavior: "instant" }), run * 0.8)
+    const alarm = phone.locator('img[src="/hero/alarm.webp"]')
+    await expect.poll(() => alarm.evaluate((el) => Number(getComputedStyle(el).opacity)), PAINT).toBeGreaterThan(0.95)
+    await expect(phone.locator("figure")).toBeInViewport(PAINT)
+  })
+}
 
 test("the install command is shown in full and has its own copy button", async ({ page }) => {
   await page.goto("/")
