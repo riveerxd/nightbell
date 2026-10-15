@@ -75,7 +75,8 @@ export function Limits() {
               15
             </p>
             <p className="max-w-[15rem] pb-2 text-lg leading-snug lg:mt-6 lg:pb-0">
-              minutes, the shortest interval Android gives a background check. Strict mode goes lower.
+              {/* the dot matrix figure is hidden from screen readers, so the number is said here */}
+              <span className="sr-only">15 </span>minutes, the shortest interval Android gives a background check. Strict mode goes lower.
             </p>
           </div>
           <dl className="grid content-start gap-x-12 gap-y-8 sm:grid-cols-2">

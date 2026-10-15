@@ -594,3 +594,13 @@ test("asking for text/markdown gets the Markdown at the page's own URL, and a br
   const missing = await request.get("/this-does-not-exist", { headers: { Accept: "text/markdown" } })
   expect(missing.status()).toBe(404)
 })
+
+test("screen readers hear the background floor's number, and the marquee once", async ({ page }) => {
+  await page.goto("/")
+  await expect(page.locator("p", { hasText: "minutes, the shortest interval" })).toContainText("15 minutes")
+  // the sr-only list says "No icon proxy"; the marquee's own pills must be hidden
+  const exposed = await page.evaluate(
+    () => [...document.querySelectorAll("span")].filter((s) => s.textContent === "icon proxy" && !s.closest('[aria-hidden="true"]')).length
+  )
+  expect(exposed).toBe(0)
+})

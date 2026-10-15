@@ -145,7 +145,7 @@ export function How() {
             </p>
           </BlurFade>
           <BlurFade inView delay={0.1} className="min-w-0">
-            <div className="relative flex flex-col gap-3 overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_12%,black_88%,transparent)]">
+            <div aria-hidden className="relative flex flex-col gap-3 overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_12%,black_88%,transparent)]">
               {[false, true].map((reverse) => (
                 <Marquee key={String(reverse)} reverse={reverse} pauseOnHover className="[--duration:38s] [--gap:0.75rem] p-0">
                   {(reverse ? [...ABSENT].reverse() : ABSENT).map((a) => (
