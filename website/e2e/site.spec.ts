@@ -75,8 +75,12 @@ test("download buttons point at the counted redirect, and it hands over the APK"
   const hrefs = await page.$$eval("a", (as) => as.filter((a) => /download/i.test(a.textContent ?? "")).map((a) => a.getAttribute("href")))
   expect(hrefs.length).toBeGreaterThan(0)
   for (const h of hrefs) expect(["/download", "https://f-droid.org/en/packages/me.river.nightbell/"]).toContain(h)
-  const res = await page.request.get("/download")
-  expect(await res.text()).toContain("Nightbell-3.18.0-release.apk")
+  // nginx answers with a 302 to GitHub and `npx serve` with download.html, so
+  // the redirect is read rather than followed. Followed, the nginx run compared
+  // the APK's own bytes against its file name.
+  const res = await page.request.get("/download", { maxRedirects: 0 })
+  const target = res.status() === 302 ? res.headers()["location"] : await res.text()
+  expect(target).toContain("Nightbell-3.18.0-release.apk")
 })
 
 test("the hero alarm takes the screen on scroll and Acknowledge silences it", async ({ page }) => {
