@@ -6,7 +6,7 @@
     "prebuild": "node scripts/stars.mjs && node scripts/media.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/release-files.mjs",
     "dev": "next dev",
     "build": "next build",
-    "postbuild": "node scripts/csp.mjs && node scripts/precompress.mjs",
+    "postbuild": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/markdown.mjs && node scripts/csp.mjs && node scripts/precompress.mjs",
     "start": "next start",
     "lint": "eslint"
   },
@@ -44,6 +44,10 @@
     "@types/three": "^0.186.0",
     "eslint": "^9",
     "eslint-config-next": "16.4.0",
+    "hast-util-from-html": "^2.0.3",
+    "hast-util-to-mdast": "^10.1.2",
+    "mdast-util-gfm": "^3.1.0",
+    "mdast-util-to-markdown": "^2.1.2",
     "serve": "^14.2.6",
     "tailwindcss": "^4",
     "typescript": "^5"

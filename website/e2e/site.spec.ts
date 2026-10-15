@@ -526,3 +526,71 @@ test("structured data carries every entity the old site published, and parses", 
     for (const t of types) expect(found, `${t} on ${path}`).toContain(t)
   }
 })
+
+// The Markdown copies are written from the built HTML by scripts/markdown.mjs.
+// What can go wrong is a page losing its copy, a copy losing the page's words to
+// a layout change, or chrome leaking into it, so that is what these read.
+test("every page links a Markdown copy that carries its words and none of its chrome", async ({ request }) => {
+  for (const route of ROUTES) {
+    const html = await (await request.get(route)).text()
+    const href = html.match(/<link rel="alternate" type="text\/markdown" href="([^"]+)"/)?.[1]
+    expect(href, `alternate link on ${route}`).toBeTruthy()
+    const res = await request.get(new URL(href!).pathname)
+    expect(res.status(), href).toBe(200)
+    expect(res.headers()["content-type"], href).toContain("text/markdown")
+    const md = await res.text()
+    const canonical = route === "/" ? "https://nightbell.app" : `https://nightbell.app${route}`
+    expect(md.startsWith(`<!-- ${canonical} -->\n`), `${href} names its page first`).toBe(true)
+    const h1 = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/)![1].replace(/<[^>]+>/g, "").replace(/&#x27;/g, "'").replace(/&amp;/g, "&")
+    expect(md, `${href} has the page's h1`).toContain(`# ${h1}`)
+    // one comment, the canonical; React's <!-- --> separators are stripped
+    expect(md.match(/<!--/g)?.length, `stray comments in ${href}`).toBe(1)
+    for (const leak of ["<script", "class=", "](/", "Switch colour theme", "Built and operated by one person"]) expect(md.includes(leak), `${leak} in ${href}`).toBe(false)
+  }
+})
+
+test("the error page and the download redirect offer no Markdown copy", async ({ request }) => {
+  for (const path of ["/this-does-not-exist"]) {
+    const html = await (await request.get(path)).text()
+    expect(html.includes('type="text/markdown"'), path).toBe(false)
+  }
+  const download = await request.get("/download", { maxRedirects: 0 })
+  expect((await download.text()).includes('type="text/markdown"')).toBe(false)
+})
+
+test("llms.txt lists every page's Markdown copy, and every link in it resolves", async ({ request }) => {
+  const res = await request.get("/llms.txt")
+  expect(res.status()).toBe(200)
+  expect(res.headers()["content-type"]).toContain("text/plain")
+  const body = await res.text()
+  expect(body.startsWith("# Nightbell\n\n> ")).toBe(true)
+  for (const route of ROUTES) expect(body, route).toContain(`(https://nightbell.app${route === "/" ? "/index" : route}.md)`)
+  for (const [, url] of body.matchAll(/\]\((https:\/\/nightbell\.app[^)]+)\)/g)) {
+    const r = await request.get(new URL(url).pathname)
+    expect(r.status(), url).toBe(200)
+  }
+})
+
+// Content negotiation is nginx's job, and `npx serve` does not do it. Run the
+// suite against deploy/scripts/local-nginx.mjs, or production, to cover it.
+test("asking for text/markdown gets the Markdown at the page's own URL, and a browser still gets HTML", async ({ request }) => {
+  test.skip(!process.env.E2E_BASE_URL, "npx serve has no content negotiation; run against nginx")
+  for (const route of ROUTES) {
+    const copy = await (await request.get(route === "/" ? "/index.md" : `${route}.md`)).text()
+    const md = await request.get(route, { headers: { Accept: "text/markdown, text/html;q=0.9" } })
+    expect(md.status(), route).toBe(200)
+    expect(md.headers()["content-type"], route).toBe("text/markdown; charset=utf-8")
+    expect(md.headers()["vary"], route).toContain("Accept")
+    const canonical = route === "/" ? "https://nightbell.app/" : `https://nightbell.app${route}`
+    expect(md.headers()["link"], route).toBe(`<${canonical}>; rel="canonical"`)
+    expect(await md.text(), route).toBe(copy)
+    const page = await request.get(route, { headers: { Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" } })
+    expect(page.headers()["content-type"], route).toContain("text/html")
+    expect(page.headers()["vary"], route).toContain("Accept")
+  }
+  // a file is a file whatever the client asks for
+  const robots = await request.get("/robots.txt", { headers: { Accept: "text/markdown" } })
+  expect(await robots.text()).toContain("Sitemap: https://nightbell.app/sitemap.xml")
+  const missing = await request.get("/this-does-not-exist", { headers: { Accept: "text/markdown" } })
+  expect(missing.status()).toBe(404)
+})

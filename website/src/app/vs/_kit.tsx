@@ -98,8 +98,9 @@ export function CompareTable({
     <BlurFade inView delay={0.08}>
       {/* On a phone the table became a sideways scroll that opened on the other
           product's column; each question is a short stack instead, Nightbell's
-          answer first. */}
-      <dl className="mt-10 grid gap-8 sm:hidden">
+          answer first. The table below says the same, so the Markdown copy
+          keeps only that. */}
+      <dl data-md="skip" className="mt-10 grid gap-8 sm:hidden">
         {rows.map((r) => (
           <div key={r[0]} className="border-border border-t pt-5">
             <dt className="text-muted-foreground font-mono text-[11px] tracking-[0.12em] uppercase">{r[0]}</dt>

@@ -33,7 +33,8 @@ export function pageMeta({
   return {
     title: { absolute: title },
     description,
-    alternates: { canonical: path },
+    // The same page as Markdown, written beside the HTML by scripts/markdown.mjs.
+    alternates: { canonical: path, types: { "text/markdown": path === "/" ? "/index.md" : `${path}.md` } },
     openGraph: {
       type: "website",
       siteName: "Nightbell",

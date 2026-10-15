@@ -441,7 +441,12 @@ export function Checks() {
           }
         />
 
-        <div className="mt-14 hidden gap-10 lg:grid lg:grid-cols-[minmax(0,4fr)_minmax(0,8fr)] xl:gap-14">
+        {/*
+          The desktop tabs and the phone list below carry the same words, and both
+          are in the markup whichever one CSS shows. data-md="skip" keeps the tabs
+          out of the Markdown copy (scripts/markdown.mjs), which reads the list.
+        */}
+        <div data-md="skip" className="mt-14 hidden gap-10 lg:grid lg:grid-cols-[minmax(0,4fr)_minmax(0,8fr)] xl:gap-14">
           <div role="tablist" aria-orientation="vertical" aria-label="Kinds of check" onKeyDown={onKey} className="flex h-[29rem] flex-col">
             {KINDS.map((kind, i) => {
               const on = i === active
@@ -501,7 +506,7 @@ export function Checks() {
               <h3 className="display mt-2 text-[clamp(2.4rem,9vw,4rem)]">{kind.name}</h3>
               <p className="text-muted-foreground mt-4 text-lg leading-relaxed">{kind.body}</p>
               {kind.chips?.map((c, i) => <Chips key={i} items={c} lit={kind.lit} className={i ? "mt-2" : "mt-6"} />)}
-              <div className="mt-8">
+              <div data-md="skip" className="mt-8">
                 {/* every kind on a phone is the app's own screen with the demo in front of it */}
                 {SHOTS[kind.id] ? (
                   <Stage {...SHOTS[kind.id]}>{kind.demo}</Stage>

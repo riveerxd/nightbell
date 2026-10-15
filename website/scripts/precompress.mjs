@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url"
 import { constants, gzipSync } from "node:zlib"
 
 const out = fileURLToPath(new URL("../out/", import.meta.url))
-const TEXT = /\.(html|js|css|txt|json|svg|xml|webmanifest|vtt|ico)$/
+const TEXT = /\.(html|md|js|css|txt|json|svg|xml|webmanifest|vtt|ico)$/
 
 let files = 0
 let before = 0

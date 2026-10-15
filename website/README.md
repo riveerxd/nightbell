@@ -63,6 +63,12 @@ export PATH=$HOME/.nvm/versions/node/v22.18.0/bin:$PATH
 npm run dev                 # http://localhost:3000
 npm run build               # static output in out/
 npx serve out -l 4173       # what the e2e suite runs against
+
+# The same build behind the production nginx config, in Docker. serve has no
+# Accept negotiation for the Markdown copies, so that test only runs here.
+node deploy/scripts/local-nginx.mjs
+E2E_BASE_URL=http://localhost:4180 npx playwright test --project=desktop-chrome
+node deploy/scripts/local-nginx.mjs --stop
 # four workers, set in the config: headless Chromium renders the hero's WebGL
 # on the CPU, and eleven at once starved each other into timeouts
 npx playwright test --project=desktop-chrome --project=laptop-chrome \
