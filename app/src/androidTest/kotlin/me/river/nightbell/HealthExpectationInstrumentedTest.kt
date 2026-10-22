@@ -25,8 +25,10 @@ import me.river.nightbell.NightbellTestSupport.captureDeviceScreenshot
 import me.river.nightbell.NightbellTestSupport.captureScreenshot
 import me.river.nightbell.data.Nightbell
 import me.river.nightbell.domain.AlertPolicy
+import me.river.nightbell.domain.AuthProblem
 import me.river.nightbell.domain.GlobalSettings
 import me.river.nightbell.domain.Health
+import me.river.nightbell.domain.HealthAuth
 import me.river.nightbell.domain.HealthStatus
 import me.river.nightbell.domain.Monitor
 import me.river.nightbell.domain.MonitorKind
@@ -263,6 +265,28 @@ class HealthExpectationInstrumentedTest {
         composeRule.waitForIdle()
         scrollTo("health-expect-db")
         composeRule.captureScreenshot("expected-10-undone")
+    }
+
+    /**
+     * Reported from real use: a monitor whose sign-in had once ended kept saying
+     * "Not checking" over a history of checks that had passed since, because
+     * nothing ever cleared the problem a failed sign-in wrote.
+     */
+    @Test
+    fun aCheckThatReachesTheServiceEndsAnOldSignInProblem() {
+        runBlocking {
+            graph.store.updateRuntime("staging") {
+                it.copy(report = it.report.copy(auth = HealthAuth(problem = AuthProblem.SESSION_ENDED, detail = "invalid_grant", since = 1L)))
+            }
+        }
+        serve(db = "down")
+        assertFalse(check()!!.ok)
+        assertEquals(AuthProblem.NONE, runtime().report.auth.problem)
+
+        openDetail()
+        composeRule.onNodeWithTag("health-verdict-word").assertTextEquals("Down")
+        composeRule.onNodeWithTag("health-expect-db").assertExists()
+        composeRule.captureScreenshot("expected-11-sign-in-cleared")
     }
 
     private fun stepUntil(what: String, budgetFrames: Int = 300, condition: () -> Boolean) {

@@ -24,6 +24,7 @@ import me.river.nightbell.domain.GitHubEvent
 import me.river.nightbell.domain.GitHubEvents
 import me.river.nightbell.domain.GitHubState
 import me.river.nightbell.domain.GlobalSettings
+import me.river.nightbell.domain.AuthProblem
 import me.river.nightbell.domain.Health
 import me.river.nightbell.domain.HealthExpectation
 import me.river.nightbell.domain.HealthFormat
@@ -1016,6 +1017,11 @@ class CheckEngine(
             }
         } ?: { runtime: MonitorRuntime -> runtime }
 
+        // A check that reached a verdict through a sign-in ends any sign-in
+        // trouble, and the notice about it goes too.
+        val signedIn = healthOutcome?.let { SignInReminder.afterVerdict(before.report.auth, it.auth, monitor.health.signIn) }
+        if (signedIn != null && before.report.auth.problem != AuthProblem.NONE) alerts.cancelSignInNeeded(monitor.id)
+
         // NonCancellable, and this is load-bearing.
         //
         // Every alert side effect above — notifyDown, notifyRecovery, cancel,
@@ -1047,6 +1053,7 @@ class CheckEngine(
                         mutedUntil = before.mutedUntil,
                         health = if (!monitor.runs) Health.PAUSED else after.health,
                         expectedParts = expectedAfter ?: before.expectedParts,
+                        report = signedIn?.let { auth -> after.report.copy(auth = auth) } ?: after.report,
                     )
                     .withUrgentState(urgentOutcome.state)
                     .let(urgentMutation)

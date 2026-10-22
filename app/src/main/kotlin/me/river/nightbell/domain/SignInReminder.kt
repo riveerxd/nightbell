@@ -27,6 +27,27 @@ object SignInReminder {
             lastNotifiedAt = if (notified) nowMs else before.lastNotifiedAt,
         )
 
+    /**
+     * The auth state after a check that reached a verdict, or null to leave it.
+     *
+     * [granted] is what the broker handed over with a token. A monitor that
+     * signs in with headers or not at all has no token to show, and reaching a
+     * verdict is the proof that nothing is wrong with its sign-in, which matters
+     * after the sign-in method was changed away from one that had ended. A
+     * provider that was down hands over nothing either, and says nothing about
+     * whether the session is good, so that leaves the state alone.
+     *
+     * Missing in 3.18.0: [signedIn] existed and nothing called it, so a monitor
+     * that had once lost its sign-in said "Not checking" for ever, over a
+     * history of checks that had passed since.
+     */
+    fun afterVerdict(before: HealthAuth, granted: HealthAuth?, signIn: HealthSignIn): HealthAuth? = when {
+        granted != null -> signedIn(before, granted)
+        signIn == HealthSignIn.NONE || signIn == HealthSignIn.HEADERS ->
+            if (before.problem != AuthProblem.NONE) signedIn(before, HealthAuth()) else null
+        else -> null
+    }
+
     /** The auth state after a check that signed in. The trouble, if any, is over. */
     fun signedIn(before: HealthAuth, granted: HealthAuth): HealthAuth =
         granted.copy(problem = AuthProblem.NONE, detail = "", since = 0L, lastNotifiedAt = 0L)

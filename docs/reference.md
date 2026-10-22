@@ -236,6 +236,11 @@ What each sign-in outcome claims:
 A refused password or client secret is tried once per change and never on a
 schedule, so it cannot trip a provider's brute force lockout.
 
+Any check that reaches the service through a sign-in ends the sign-in trouble:
+the card stops saying "Not checking" and the notification about it is taken
+down. A provider that could not be reached leaves it as it was, since that says
+nothing about whether the session is still good.
+
 ## Alerting
 
 Every monitor either inherits the global alert policy or overrides it:
