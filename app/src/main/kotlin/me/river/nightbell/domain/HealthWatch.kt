@@ -251,4 +251,15 @@ data class HealthState(
     val version: String = "",
     val environment: String = "",
     val auth: HealthAuth = HealthAuth(),
+    /**
+     * The verdict the report itself gave, before any part the user marked as
+     * expected was taken out of it. Null when no report was read.
+     */
+    val verdict: HealthStatus? = null,
+    /**
+     * Set when the verdict is Nightbell's rather than the document's: an
+     * unknown status word or a stale report. No part explains such a verdict,
+     * so marking parts as expected never lifts it.
+     */
+    val override: String = "",
 )

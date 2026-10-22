@@ -138,6 +138,7 @@ fun DetailScreen(
     var showAllChecks by remember { mutableStateOf(false) }
     /** Repository monitors show activity; this is the way back to the poll list. */
     var showRawChecks by remember { mutableStateOf(false) }
+    var openPart by rememberSaveable { mutableStateOf<String?>(null) }
     val entrance = rememberEntranceLog()
     val context = LocalContext.current
 
@@ -257,7 +258,11 @@ fun DetailScreen(
 
         item(key = "hero") {
             StaggeredEntrance(index = 0, key = "hero-${monitor.id}", log = entrance) {
-                HeroCard(monitor, runtime, health, current.checking, current.streak, accent, accentEnd, now)
+                if (monitor.kind == MonitorKind.HEALTH_ENDPOINT) {
+                    HealthVerdictCard(monitor, runtime, health, current.checking, now)
+                } else {
+                    HeroCard(monitor, runtime, health, current.checking, current.streak, accent, accentEnd, now)
+                }
             }
         }
 
@@ -331,11 +336,11 @@ fun DetailScreen(
         if (monitor.kind == MonitorKind.HEALTH_ENDPOINT) {
             item(key = "report") {
                 StaggeredEntrance(index = 2, key = "report-${monitor.id}", log = entrance) {
-                    HealthReportCard(
-                        monitor = monitor,
-                        report = runtime.report,
-                        nowMs = now,
-                        accent = accent,
+                    HealthPartsSections(
+                        runtime = runtime,
+                        onOpen = { openPart = it },
+                        onExpect = { viewModel.expectPart(it.id, it.displayName) },
+                        onUnexpect = { viewModel.unexpectPart(it.id, it.displayName) },
                     )
                 }
             }
@@ -357,7 +362,21 @@ fun DetailScreen(
         // No response-time chart for a repository. It plots the round trip to
         // api.github.com, which is not the thing being watched, and 3.2.0 removed
         // exactly that from the dashboard card while leaving it standing here.
-        if (monitor.kind != MonitorKind.GITHUB_REPO && runtime.samples.isNotEmpty()) {
+        if (monitor.kind == MonitorKind.HEALTH_ENDPOINT && runtime.samples.isNotEmpty()) {
+            item(key = "checks") {
+                StaggeredEntrance(index = 2, key = "checks-${monitor.id}", log = entrance) {
+                    HealthChecksCard(monitor, runtime.samples)
+                }
+            }
+        }
+
+        if (monitor.kind == MonitorKind.HEALTH_ENDPOINT) {
+            item(key = "sign-in") {
+                HealthSignInCard(monitor, runtime.report, now)
+            }
+        }
+
+        if (monitor.kind != MonitorKind.GITHUB_REPO && monitor.kind != MonitorKind.HEALTH_ENDPOINT && runtime.samples.isNotEmpty()) {
             item(key = "chart") {
                 StaggeredEntrance(index = 2, key = "chart-${monitor.id}", log = entrance) {
                     GlassCard {
@@ -551,6 +570,26 @@ fun DetailScreen(
             )
         }
     }
+
+    // Looked up again on every frame, so a check that lands while the sheet is
+    // open updates it, and a part that left the report closes it.
+    val sheetPart = openPart?.let { id -> runtime.report.components.firstOrNull { it.id == id } }
+    if (monitor.kind == MonitorKind.HEALTH_ENDPOINT && sheetPart != null) {
+        HealthPartSheet(
+            part = sheetPart,
+            expected = isExpected(runtime, sheetPart),
+            nowMs = now,
+            onDismiss = { openPart = null },
+            onExpect = {
+                openPart = null
+                viewModel.expectPart(sheetPart.id, sheetPart.displayName)
+            },
+            onUnexpect = {
+                openPart = null
+                viewModel.unexpectPart(sheetPart.id, sheetPart.displayName)
+            },
+        )
+    }
 }
 
 @Composable
@@ -616,8 +655,12 @@ private fun HeroCard(
                                 runtime.lastCheckedAt <= 0 -> "Not checked yet"
                                 // A health report's degraded is the service's own word,
                                 // not a reading over a budget: name the part it blamed.
+                                // Green over a report that has a part down needs saying why.
+                                monitor.kind == MonitorKind.HEALTH_ENDPOINT && runtime.expectedParts.isNotEmpty() &&
+                                    HealthFormat.summary(runtime.report, runtime.expectedParts).endsWith("expected") ->
+                                    HealthFormat.summary(runtime.report, runtime.expectedParts)
                                 health == Health.DEGRADED && monitor.kind == MonitorKind.HEALTH_ENDPOINT ->
-                                    HealthFormat.summary(runtime.report).ifBlank { runtime.lastReading }
+                                    HealthFormat.summary(runtime.report, runtime.expectedParts).ifBlank { runtime.lastReading }
                                         .ifBlank { "Reported degraded" }
                                 // DEGRADED is a pass, so lastMessage is empty — spell
                                 // out why the card is amber rather than green.

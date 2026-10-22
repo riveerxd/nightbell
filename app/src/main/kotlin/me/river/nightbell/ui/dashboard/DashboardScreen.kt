@@ -1725,7 +1725,7 @@ private fun MonitorRowCard(
         // grey, because colour is for the service and this is about Nightbell.
         val notChecking = reportKind && runtime.report.auth.problem != AuthProblem.NONE
         val partsLine = if (reportKind && runtime.ok(monitor.enabled)) {
-            HealthFormat.summary(runtime.report).ifBlank { null }
+            HealthFormat.summary(runtime.report, runtime.expectedParts).ifBlank { null }
         } else {
             null
         }

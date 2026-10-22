@@ -5,7 +5,6 @@ import android.content.pm.ActivityInfo
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
-import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -14,7 +13,9 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
 import kotlinx.coroutines.runBlocking
+import me.river.nightbell.NightbellTestSupport.captureDeviceScreenshot
 import me.river.nightbell.NightbellTestSupport.captureScreenshot
+import androidx.test.espresso.Espresso
 import me.river.nightbell.data.Nightbell
 import me.river.nightbell.domain.AuthProblem
 import me.river.nightbell.domain.GlobalSettings
@@ -29,7 +30,6 @@ import me.river.nightbell.domain.MonitorKind
 import me.river.nightbell.domain.MonitorRuntime
 import me.river.nightbell.domain.ThemeChoice
 import org.junit.After
-import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -109,8 +109,9 @@ class HealthComponentsInstrumentedTest {
     fun oneDegradedPart() {
         val (health, state) = report(HealthPayloads.ASPNET_DEGRADED)
         seedAndOpen("One degraded", health, state)
-        // The hero names the part the service blamed, not a latency budget it never had.
-        composeRule.onNodeWithText("payments degraded · 1 of 2 OK").assertExists()
+        // The verdict names the part the service blamed, not a latency budget it never had.
+        composeRule.onNodeWithTag("health-verdict-reason")
+            .assertTextEquals("payments: 3 card payments failed in the last 5 minutes")
         showReport()
         composeRule.captureScreenshot("health-detail-02-one-degraded")
     }
@@ -119,31 +120,52 @@ class HealthComponentsInstrumentedTest {
     fun threeMixedWithRulesAndLog() {
         val (health, state) = report(HealthPayloads.FULL)
         seedAndOpen("Payments API", health, state, message = "Card payments are failing")
+        composeRule.onNodeWithTag("health-verdict-reason").assertTextEquals("Card payments are failing")
+        composeRule.onNodeWithTag("health-parts-summary").assertTextEquals("1 down · 1 degraded · 1 up")
         showReport()
-        composeRule.onNodeWithTag("health-parts-summary").assertTextEquals("1 down, 1 degraded, 1 up")
-        // Only the worst part starts open. The degraded one waits for a tap, so a
-        // bad night is one part's reasons and not every part's at once.
+        // Both failing parts are rows with their action on them, worst first; the
+        // rules and log stay off the list until a part is opened.
+        composeRule.onNodeWithTag("health-expect-payments").assertExists()
+        composeRule.onNodeWithTag("health-expect-email-queue").assertExists()
+        composeRule.onNodeWithTag("health-rule-failed-payments").assertDoesNotExist()
+        composeRule.captureScreenshot("health-detail-03-three-mixed")
+
+        composeRule.onNodeWithTag("health-part-payments").performClick()
+        composeRule.waitForIdle()
         composeRule.onNodeWithTag("health-rule-failed-payments").assertExists()
         composeRule.onNodeWithTag("health-rule-queue-depth").assertDoesNotExist()
         // The log shows time and message; the data pairs are behind a tap.
         composeRule.onNodeWithText("Gateway declined payment").assertExists()
         composeRule.onNodeWithText("code=card_declined_by_issuer", substring = true).assertDoesNotExist()
-        composeRule.captureScreenshot("health-detail-03-three-mixed")
-
-        composeRule.onNodeWithTag("detail-list").performScrollToNode(hasTestTag("health-log-details-payments"))
+        composeRule.captureDeviceScreenshot("health-detail-04-sheet")
+        composeRule.onNodeWithTag("health-sheet").performScrollToNode(hasTestTag("health-log-details-payments"))
         composeRule.onNodeWithTag("health-log-details-payments").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithText("code=card_declined_by_issuer", substring = true).assertExists()
-        composeRule.captureScreenshot("health-detail-04-log-details")
+        composeRule.captureDeviceScreenshot("health-detail-05-log-details")
 
-        composeRule.onNodeWithTag("health-part-payments").performClick()
-        composeRule.onNodeWithTag("detail-list").performScrollToNode(hasTestTag("health-part-email-queue"))
+        Espresso.pressBack()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("health-sheet").assertDoesNotExist()
         composeRule.onNodeWithTag("health-part-email-queue").performClick()
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("health-rule-failed-payments").assertDoesNotExist()
         composeRule.onNodeWithTag("health-rule-queue-depth").assertExists()
-        showReport()
-        composeRule.captureScreenshot("health-detail-05-expanded")
+        composeRule.onNodeWithTag("health-rule-failed-payments").assertDoesNotExist()
+        composeRule.captureDeviceScreenshot("health-detail-06-degraded-sheet")
+    }
+
+    @Test
+    fun aHealthyPartOpensFromItsChip() {
+        val (health, state) = report(HealthPayloads.FULL)
+        seedAndOpen("Chips", health, state, message = "Card payments are failing")
+        val up = state.components.first { it.status == me.river.nightbell.domain.HealthStatus.UP }
+        composeRule.onNodeWithTag("detail-list").performScrollToNode(hasTestTag("health-healthy"))
+        composeRule.onNodeWithTag("health-part-${up.id}").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("health-sheet").assertExists()
+        // Nothing to mark on a part that is up.
+        composeRule.onNodeWithTag("health-sheet-expect").assertDoesNotExist()
+        composeRule.captureDeviceScreenshot("health-detail-07-healthy-sheet")
     }
 
     @Test
@@ -152,8 +174,15 @@ class HealthComponentsInstrumentedTest {
         seedAndOpen("Sixty four", health, state)
         showReport()
         // The section header prints its title in capitals.
-        composeRule.onNodeWithText("Showing 50 of 64 parts", ignoreCase = true).assertExists()
-        composeRule.captureScreenshot("health-detail-06-capped")
+        composeRule.onNodeWithText("Showing 50 of 64 parts").assertExists()
+        // A dozen names, then the rest behind one more chip.
+        composeRule.onNodeWithTag("health-part-part-12").assertExists()
+        composeRule.onNodeWithTag("health-part-part-13").assertDoesNotExist()
+        composeRule.captureScreenshot("health-detail-08-capped")
+        composeRule.onNodeWithTag("health-healthy-more").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("detail-list").performScrollToNode(hasTestTag("health-part-part-50"))
+        composeRule.captureScreenshot("health-detail-08b-all")
     }
 
     @Test
@@ -164,7 +193,7 @@ class HealthComponentsInstrumentedTest {
         seedAndOpen("Disagrees", health, state)
         showReport()
         composeRule.onNodeWithTag("health-disagreement").assertExists()
-        composeRule.captureScreenshot("health-detail-07-disagreement")
+        composeRule.captureScreenshot("health-detail-09-disagreement")
     }
 
     @Test
@@ -176,11 +205,13 @@ class HealthComponentsInstrumentedTest {
             state,
             HealthWatch(signIn = HealthSignIn.SSO, issuer = "https://sso.example.com/realms/main", clientId = "admin"),
         )
-        // Said in the hero as well as in the report card, never as a last response time.
-        assertEquals(2, composeRule.onAllNodesWithText("Not checking · Sign in needed").fetchSemanticsNodes().size)
-        showReport()
+        // Said in grey in the verdict, never as a last response time or a colour.
+        composeRule.onNodeWithTag("health-verdict-word").assertTextEquals("Not checking")
+        composeRule.onNodeWithTag("health-verdict-reason").assertTextEquals("Sign in needed: the sign-in has ended")
+        composeRule.onNodeWithTag("health-report").assertDoesNotExist()
+        composeRule.onNodeWithTag("detail-list").performScrollToNode(hasTestTag("health-sign-in-card"))
         composeRule.onNodeWithTag("health-not-checking").assertExists()
-        composeRule.captureScreenshot("health-detail-08-not-checking")
+        composeRule.captureScreenshot("health-detail-10-not-checking")
     }
 
     @Test
@@ -190,7 +221,7 @@ class HealthComponentsInstrumentedTest {
         scenario!!.onActivity { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
         composeRule.waitForIdle()
         showReport()
-        composeRule.captureScreenshot("health-detail-09-landscape")
+        composeRule.captureScreenshot("health-detail-11-landscape")
         scenario!!.onActivity { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT }
         composeRule.waitForIdle()
     }

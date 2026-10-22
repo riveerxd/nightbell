@@ -25,6 +25,9 @@ import me.river.nightbell.domain.GitHubEvents
 import me.river.nightbell.domain.GitHubState
 import me.river.nightbell.domain.GlobalSettings
 import me.river.nightbell.domain.Health
+import me.river.nightbell.domain.HealthExpectation
+import me.river.nightbell.domain.HealthFormat
+import me.river.nightbell.domain.HealthStatus
 import me.river.nightbell.domain.Monitor
 import me.river.nightbell.domain.OpenMetrics
 import me.river.nightbell.domain.MonitorKind
@@ -530,6 +533,7 @@ class CheckEngine(
         store.markChecking(monitorId, true)
         var githubOutcome: GitHubChecker.Outcome? = null
         var healthOutcome: HealthChecker.Outcome? = null
+        var expectedAfter: Map<String, HealthStatus>? = null
         val healthChecker = health
         val coldLoad = monitor.kind == MonitorKind.WEBSITE_ELEMENT &&
             (!settings.dataSaver || DataSaver.coldDue(coldLoadedAt[monitorId], nowMs()))
@@ -555,7 +559,12 @@ class CheckEngine(
                 // verdict: which sign-in trouble, and whether it was announced.
                 val outcome = healthChecker.check(monitor, before.certPin)
                 healthOutcome = outcome
-                outcome.result
+                // Before anything reads the verdict, so the confirmation probe,
+                // every alert track and the webhooks all judge the same thing.
+                outcome.result?.let { HealthExpectation.apply(it, before.expectedParts) }?.let {
+                    expectedAfter = it.expected
+                    it.result
+                }
             } else {
                 withCertificateExpiry(
                     monitor,
@@ -1037,6 +1046,7 @@ class CheckEngine(
                         },
                         mutedUntil = before.mutedUntil,
                         health = if (!monitor.runs) Health.PAUSED else after.health,
+                        expectedParts = expectedAfter ?: before.expectedParts,
                     )
                     .withUrgentState(urgentOutcome.state)
                     .let(urgentMutation)
@@ -2127,6 +2137,86 @@ class CheckEngine(
             }
         }
         onStateChanged?.invoke()
+    }
+
+    /**
+     * Marks one part of a health monitor's last report as expected, at the
+     * status it has now. See [HealthExpectation].
+     *
+     * The verdict is worked out again from the stored report rather than by
+     * checking, so the card turns the moment the user taps. When that leaves
+     * the monitor up, the outage is closed here, quietly: the alerting flags
+     * are cleared and the notifications taken down, because otherwise the next
+     * check would post "back up" about a service nobody fixed.
+     */
+    suspend fun expectPart(monitorId: String, partId: String) {
+        locks.getOrPut(monitorId) { Mutex() }.withLock {
+            val runtime = store.currentSnapshot().runtimes[monitorId] ?: return
+            val part = runtime.report.components.firstOrNull { it.id == partId } ?: return
+            if (part.status == HealthStatus.UP) return
+            val expected = runtime.expectedParts + (partId to part.status)
+            val effective = HealthExpectation.verdict(runtime.report, expected)
+            withContext(NonCancellable) {
+                store.updateRuntime(monitorId) { it.settledFor(expected, effective) }
+                if (effective != null && effective != HealthStatus.DOWN) {
+                    alerts.cancel(monitorId)
+                    alerts.cancelUrgent(monitorId)
+                }
+                if (effective == HealthStatus.UP) alerts.cancelDegraded(monitorId)
+            }
+            Diag.log(LogEvent.HEALTH_PART_EXPECTED, LogField.monitor(monitorId), LogField.of("status", part.status))
+        }
+        onStateChanged?.invoke()
+    }
+
+    /**
+     * Takes the expectation off again. Nothing is posted here: the next check
+     * pages through the failure threshold like any other failure.
+     */
+    suspend fun unexpectPart(monitorId: String, partId: String) {
+        locks.getOrPut(monitorId) { Mutex() }.withLock {
+            val runtime = store.currentSnapshot().runtimes[monitorId] ?: return
+            if (partId !in runtime.expectedParts) return
+            val expected = runtime.expectedParts - partId
+            val effective = HealthExpectation.verdict(runtime.report, expected)
+            withContext(NonCancellable) {
+                store.updateRuntime(monitorId) {
+                    val down = effective == HealthStatus.DOWN && it.health != Health.DOWN
+                    it.copy(
+                        expectedParts = expected,
+                        health = it.health.takeIf { h -> h == Health.PAUSED } ?: effective?.asHealth() ?: it.health,
+                        lastMessage = if (down) {
+                            HealthFormat.downMessage("", it.report.components.filter { p -> !HealthExpectation.covers(expected, p) })
+                        } else {
+                            it.lastMessage
+                        },
+                    )
+                }
+            }
+            Diag.log(LogEvent.HEALTH_PART_UNEXPECTED, LogField.monitor(monitorId))
+        }
+        onStateChanged?.invoke()
+    }
+
+    private fun MonitorRuntime.settledFor(
+        expected: Map<String, HealthStatus>,
+        effective: HealthStatus?,
+    ): MonitorRuntime {
+        val marked = copy(expectedParts = expected)
+        if (effective == null || effective == HealthStatus.DOWN) return marked
+        return marked.copy(
+            health = if (health == Health.PAUSED) Health.PAUSED else effective.asHealth(),
+            lastMessage = "",
+            alerting = false,
+            consecutiveFailures = 0,
+            degradedAlerting = degradedAlerting && effective == HealthStatus.DEGRADED,
+        ).withUrgentState(UrgentAlerts.State())
+    }
+
+    private fun HealthStatus.asHealth(): Health = when (this) {
+        HealthStatus.UP -> Health.UP
+        HealthStatus.DEGRADED -> Health.DEGRADED
+        HealthStatus.DOWN -> Health.DOWN
     }
 
     suspend fun unmute(monitorId: String) {

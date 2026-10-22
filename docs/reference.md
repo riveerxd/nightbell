@@ -182,6 +182,31 @@ The report is replaced by every check that read one and cleared by one that did
 not. At most 50 parts, 20 rules and 50 log entries a part, and 200 of each
 across the report, are kept, because the runtime is rewritten on every check.
 
+**The detail screen** puts the verdict on top in one word with the reason
+under it and the parts counted in a strip, then sorts the parts into three
+cards. "Needs you" holds the failing parts, worst first. "Expected, not paging"
+holds the ones marked below. "Healthy" holds the rest as names only, a dozen
+before "Show all". A part's rules and log open in a sheet
+from its row. The response time chart is replaced by the last 24 checks as a
+strip, because whether a report passed is the question, not how long it took.
+
+**Expected parts.** A part that is not up can be marked as expected with **Mark
+expected** on its row or in its sheet, for a staging service that is red on
+purpose, and the toast that confirms it carries an Undo. While
+that part keeps the status it had when marked, it is left out of the verdict:
+the monitor goes by the parts that are left, the card says "1 of 2 OK · 1
+expected", and nothing pages. The first report that shows the part with any
+other status, up included, drops the mark, so the next outage pages as usual.
+Only the status is compared, never the message, because a staging message
+carrying a latency would otherwise count as a change on every check. The
+verdict is only lowered when the parts explain it: a stale report, an unknown
+status word, or a report that is down while no part says worse than degraded
+stays down. A part missing from one report keeps its mark. Marking a part that
+leaves the monitor up closes the outage quietly, with no recovery
+notification, and **Page me again** lets the next check page through the
+failure threshold. The marks live with the monitor's state (`expectedParts`) and come
+along in a backup.
+
 With **Treat as down if the report is older than** set, `checkedAt` is compared
 with the response's own `Date` header, so the phone's clock cannot make a fresh
 report look stale. A negative age is clamped to zero: Kestrel stamps `Date`
@@ -1372,6 +1397,8 @@ the table below has not been recounted row by row since it was first written.
 | `WidgetInstrumentedTest` | 34 | RemoteViews **inflation**, ordering, every theme/density, custom colours at three opacities, the settings cog, config persistence and id remapping, the planner's heights against the views that get drawn |
 | `WidgetConfigUiTest` | 2 | the widget's own settings screen, driven: the monitor count on Auto, pinned to a number, and back |
 | `ScreenshotTest` | 3 | drives every screen and writes PNGs |
+| `HealthTriageTest` | 5 | the detail screen's three groups, their order, the tally, the line under a green verdict |
+| `HealthExpectationTest` | 15 | expected parts: lifted, kept across a new message, dropped on any status change, the part still down beside it named, staleness and unknown words not lifted, the card line |
 | `HealthFormatTest` | 41 | the health report format: the ASP.NET outputs, aliases, unknown words, the marker, size, timestamps, staleness, caps, conditions and the log |
 | `HealthEndpointCheckTest` | 9 | real sockets: headers sent, 503 with a report, the size limit, staleness by the server's clock, a vault sign-in replacing a typed header |
 | `HealthEndToEndTest` | 6 | broker, checker and a fake provider together: one refresh on a 401, token refused, 403, signed out sends nothing, provider down, basic |
@@ -1380,7 +1407,8 @@ the table below has not been recounted row by row since it was first written.
 | `JwtPeekTest`, `SignInReminderTest`, `HealthValidationTest` | 12 | pasted tokens, the once-a-day notice, what setup refuses |
 | `MonitorKindDecodingTest`, `StoreCorruptionTest` | 9 | a kind from a newer build and an unreadable store, neither costing every monitor |
 | `HealthEndpointSetupInstrumentedTest` | 6 | setup driven against a local server: no sign-in needed, needs a sign-in, a fixed key, typing alone is enough, a login page instead of a report, a changed address |
-| `HealthComponentsInstrumentedTest` | 7 | the report card with none, one, three, 64 parts, a disagreement, not checking, rotation |
+| `HealthExpectationInstrumentedTest` | 4 | marking a part as expected through the detail screen against a local server: the page goes, a still-down check stays quiet, another part and the next outage page, Page me again, from the sheet and undone from the toast, rotation |
+| `HealthComponentsInstrumentedTest` | 8 | the detail screen with none, one, three, 64 parts, a part's sheet and a healthy one's, a disagreement, not checking, rotation |
 | `CredentialVaultInstrumentedTest` | 3 | AndroidKeyStore round trip, a lost key reading as signed out, pruning |
 | `SsoSignInInstrumentedTest` | 4 | browser sign-in through a fake web app and provider: code caught and exchanged once, refusal, offline access refused, a moved address signing in through the new web app |
 

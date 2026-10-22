@@ -243,7 +243,7 @@ object HealthFormat {
     }
 
     /** The document's own message, else the worst part's, else the bare fact. */
-    private fun downMessage(documentMessage: String, components: List<HealthComponent>): String {
+    internal fun downMessage(documentMessage: String, components: List<HealthComponent>): String {
         if (documentMessage.isNotBlank()) return documentMessage
         val worst = components.firstOrNull { it.status == HealthStatus.DOWN }
             ?: return "Reported down"
@@ -411,7 +411,7 @@ object HealthFormat {
                 },
                 detail = troubles.joinToString("\n"),
                 degraded = reading.verdict == HealthStatus.DEGRADED,
-                health = reading.state,
+                health = reading.state.copy(verdict = reading.verdict, override = reading.override),
                 at = at,
             )
         }
@@ -502,13 +502,20 @@ object HealthFormat {
      * "Payments degraded · 2 of 3 OK" names the part to look at, "3 parts OK"
      * says there was something to read and all of it was fine.
      */
-    fun summary(state: HealthState): String {
+    fun summary(state: HealthState, expected: Map<String, HealthStatus> = emptyMap()): String {
         val parts = state.components
         if (parts.isEmpty()) return ""
         val ok = parts.count { it.status == HealthStatus.UP }
         val total = maxOf(state.componentsTotal, parts.size)
-        val worst = parts.filter { it.status != HealthStatus.UP }.maxByOrNull { it.status.rank }
-            ?: return if (total == 1) "1 part OK" else "$total parts OK"
-        return "${worst.displayName} ${worst.status.label.lowercase()} · $ok of $total OK"
+        val waived = parts.count { HealthExpectation.covers(expected, it) }
+        val tail = if (waived > 0) " · $waived expected" else ""
+        val worst = parts
+            .filter { it.status != HealthStatus.UP && !HealthExpectation.covers(expected, it) }
+            .maxByOrNull { it.status.rank }
+        if (worst == null) {
+            if (waived > 0) return "$ok of $total OK$tail"
+            return if (total == 1) "1 part OK" else "$total parts OK"
+        }
+        return "${worst.displayName} ${worst.status.label.lowercase()} · $ok of $total OK$tail"
     }
 }

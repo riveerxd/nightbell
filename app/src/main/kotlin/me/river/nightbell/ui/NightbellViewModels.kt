@@ -2117,6 +2117,29 @@ class DetailViewModel(
     }
 
     /**
+     * One part of a health report stops paging while it keeps its status. See
+     * HealthExpectation. The toast carries the way back, because the tap that
+     * marks a part is one row away from the tap that opens it.
+     */
+    fun expectPart(partId: String, name: String) {
+        viewModelScope.launch {
+            graph.engine.expectPart(monitorId, partId)
+            toast = ToastMessage.undoable("$name marked expected. A change pages you.") {
+                viewModelScope.launch { graph.engine.unexpectPart(monitorId, partId) }
+            }
+        }
+    }
+
+    fun unexpectPart(partId: String, name: String) {
+        viewModelScope.launch {
+            graph.engine.unexpectPart(monitorId, partId)
+            toast = ToastMessage.undoable("$name pages you again if it is still failing.") {
+                viewModelScope.launch { graph.engine.expectPart(monitorId, partId) }
+            }
+        }
+    }
+
+    /**
      * "I have read this repository's news."
      *
      * Takes down what is on screen and records when, and deliberately does not

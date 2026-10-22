@@ -200,6 +200,11 @@ enum class LogEvent(
     AUTH_SIGN_IN_NEEDED("auth.sign_in_needed", LogArea.HTTP, LogLevel.WARN),
     AUTH_DISCOVERY("auth.discovery", LogArea.HTTP),
     VAULT_UNREADABLE("vault.unreadable", LogArea.STORE, LogLevel.ERROR),
+
+    // A part marked as expected stops paging, so "why did it not page me" needs
+    // the moment it was marked. The part's id is the service's word and stays out.
+    HEALTH_PART_EXPECTED("health.part.expected", LogArea.ALERT),
+    HEALTH_PART_UNEXPECTED("health.part.unexpected", LogArea.ALERT),
     ;
 }
 

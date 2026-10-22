@@ -1011,6 +1011,13 @@ data class MonitorRuntime(
      * Not called `health`, which is this monitor's [Health] verdict above.
      */
     val report: HealthState = HealthState(),
+    /**
+     * Parts of [report] the user marked as expected, by id, with the status
+     * each had when marked. See [HealthExpectation]. Here rather than on the
+     * monitor because every check may drop one, and a check writing to the
+     * monitor's settings would race the edit screen.
+     */
+    val expectedParts: Map<String, HealthStatus> = emptyMap(),
 
     // ---- degraded track -----------------------------------------------------
     /**
