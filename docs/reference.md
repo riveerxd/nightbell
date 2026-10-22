@@ -1370,7 +1370,7 @@ keytool -genkeypair -v -keystore keystore/nightbell-release.jks -alias nightbell
 
 ## Testing
 
-**1237 JVM + 567 on-device = 1804 automated tests.** Counted from the source;
+**1260 JVM + 573 on-device = 1833 automated tests.** Counted from the source;
 the table below has not been recounted row by row since it was first written.
 
 | Suite | Count | Covers |

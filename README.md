@@ -12,7 +12,7 @@
   <img src="https://img.shields.io/badge/targetSdk-36-3a3f4b?style=flat-square" alt="targetSdk 36" />
   <a href="https://f-droid.org/en/packages/me.river.nightbell/"><img src="https://img.shields.io/f-droid/v/me.river.nightbell?style=flat-square&logo=fdroid&logoColor=white&color=1976D2&label=F-Droid" alt="Version on F-Droid" /></a>
   <a href="../../releases/latest"><img src="https://img.shields.io/github/v/release/riveerxd/nightbell?style=flat-square&color=2F6BFF&label=release" alt="Latest release" /></a>
-  <img src="https://img.shields.io/badge/tests-1237%20JVM%20+%20567%20on--device-2FD98A?style=flat-square" alt="Tests" />
+  <img src="https://img.shields.io/badge/tests-1260%20JVM%20+%20573%20on--device-2FD98A?style=flat-square" alt="Tests" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/licence-Apache%202.0-3a3f4b?style=flat-square" alt="Apache 2.0" /></a>
 </p>
 
@@ -355,7 +355,7 @@ Needs JDK 17 and an Android SDK with API 36. `local.properties` wants
 ```bash
 ./gradlew :app:assembleDebug          # debuggable
 ./gradlew :app:assembleRelease        # minified, needs keystore/keystore.properties
-./gradlew :app:testDebugUnitTest      # 1237 JVM tests
+./gradlew :app:testDebugUnitTest      # 1260 JVM tests
 ```
 
 Release builds are signed from `keystore/keystore.properties`, which is
@@ -363,15 +363,15 @@ gitignored along with the key itself. Without it the release task still builds,
 just unsigned.
 
 <details>
-<summary><b>Tests: 1237 JVM + 567 on-device</b></summary>
+<summary><b>Tests: 1260 JVM + 573 on-device</b></summary>
 
 <br/>
 
-1237 JVM tests cover the pure logic: the alert state machines, escalation,
+1260 JVM tests cover the pure logic: the alert state machines, escalation,
 quiet-hours arithmetic, assertions, the latency baseline, backup round-trips, and
 the widget's column arithmetic, which decides whether a monitor is visible at all
 and can otherwise only be exercised by dragging a widget around a home screen.
-567 instrumented tests cover the parts that need a real Android: notifications,
+573 instrumented tests cover the parts that need a real Android: notifications,
 channels, the foreground service, the WebView element checker, widgets, the
 launcher icon's transparency, and a suite that drives a genuine
 connection-refused outage all the way to a red page on screen.
