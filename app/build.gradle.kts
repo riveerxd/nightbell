@@ -586,8 +586,14 @@ android {
         // checking", never an outage. A store this build cannot read is kept rather
         // than written over, because a kind from a newer build used to read as an
         // empty store and the next write erased every monitor.
-        versionCode = 47
-        versionName = "3.18.0"
+        //
+        // 3.19.0 lets a health report's failing part be marked as expected: it
+        // stays out of the verdict while it keeps that status, and any change to
+        // it pages again. The detail screen for this kind groups the parts by what
+        // they need. A check that gets through now ends an old sign-in problem,
+        // which 3.18.0 never cleared.
+        versionCode = 48
+        versionName = "3.19.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

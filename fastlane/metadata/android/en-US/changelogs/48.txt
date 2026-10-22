@@ -1,0 +1,5 @@
+A health endpoint monitor can now be told that a part is failing on purpose. Mark it as expected, a staging database for example, and Nightbell stops paging about it while it keeps that status. The first change to it pages you again. The monitor's screen is rebuilt around this: what needs you, what you marked as expected and what is healthy, each in its own group.
+
+Mark expected sits on the failing part's row, and in the sheet that opens when you tap the part, which now holds its rules and log. Marking comes with an undo, and Page me again takes it back later. For these monitors the last 24 checks replace the response time chart.
+
+A health monitor whose sign-in had once ended kept saying "Not checking" after you signed in again, even while its checks passed. The next check that gets through now clears it, along with the reminder notification.
