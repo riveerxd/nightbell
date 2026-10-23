@@ -20,14 +20,14 @@ export const REPO = {
 };
 
 export const RELEASE = {
-  version: '3.18.0',
-  tag: 'v3.18.0',
-  apkName: 'Nightbell-3.18.0-release.apk',
+  version: '3.19.0',
+  tag: 'v3.19.0',
+  apkName: 'Nightbell-3.19.0-release.apk',
   apkUrl:
-    'https://github.com/riveerxd/nightbell/releases/download/v3.18.0/Nightbell-3.18.0-release.apk',
-  apkBytes: 2699560,
-  apkSha256: '9ad2ee741f1b1350079c0f092a64173308ca07a12fe00a1452c1328b0a5215ff',
-  versionCode: 47,
+    'https://github.com/riveerxd/nightbell/releases/download/v3.19.0/Nightbell-3.19.0-release.apk',
+  apkBytes: 2782204,
+  apkSha256: 'c519cf471d2d015544970ccb4fe58ef06e6c3848dc71df7bd79b57205f9871cf',
+  versionCode: 48,
   minSdk: 26,
   minAndroid: '8.0',
   targetSdk: 36,

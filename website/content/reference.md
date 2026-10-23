@@ -1,5 +1,5 @@
 
-This page describes Nightbell 3.18.0. Settings is split into four tabs, Alerts,
+This page describes Nightbell 3.19.0. Settings is split into four tabs, Alerts,
 Checks, Look and About, and a path such as "Settings, Checks, Checker health"
 names the tab and then the card.
 
@@ -327,7 +327,7 @@ not the service's health:
 
 | Situation | Outcome | Pages |
 | --- | --- | --- |
-| Not signed in, session ended, password or secret refused, vault unreadable | No verdict. The card says "Not checking · Sign in needed" in neutral grey, and a notification on "Monitors that can't sign in" is posted when it starts and then once a day | No |
+| Not signed in, session ended, password or secret refused, vault unreadable | No verdict. The monitor says "Not checking" in neutral grey with the sign-in problem under it, and a notification on "Monitors that can't sign in" is posted when it starts and then once a day | No |
 | Provider unreachable or answering 5xx | Down, "Sign-in server unreachable": if Nightbell cannot sign in, neither can your users | Yes |
 | Fresh token, API answers 401 after one forced refresh and retry | Down, "Signed in, but the API refused the token" | Yes |
 | Fresh token, API answers 403 | Down, "Access refused (403)", with a hint about a missing role | Yes |
@@ -335,28 +335,56 @@ not the service's health:
 A refused password or client secret is tried once per change and never on a
 schedule, so it cannot trip a provider's brute force lockout.
 
+Any check that reaches the service through a sign-in ends the sign-in trouble:
+"Not checking" goes and the notification about it is taken down. A provider
+that could not be reached leaves it as it was, since that says nothing about
+whether the session is still good. Before 3.19.0 nothing cleared it, so a
+monitor that had once lost its sign-in kept saying "Not checking" after you
+signed in again.
+
 #### Testing it and reading the report
 
 **Test** in setup shows the verdict and one line for each part that is not up.
-It is not the full report. After you save, the monitor screen carries a card
-with all of it:
+It is not the full report. After you save, the monitor's screen has all of it:
 
-- A line naming the service, version and environment the report gave, and when
-  it was reported.
-- **Components**, or "Showing 50 of 64 parts" when the report had more than are
-  kept. With more than one part, a bar split by status and a line such as
-  "1 down, 1 degraded, 1 up", or "All 3 up".
-- One row per part, worst first and then in the service's own order. Only the
-  worst part starts open, and only when it is not up: its message, since when it
-  has been in that state ("Down since 13:58"), how long its own check took, its rules with the
-  observed value against each, and its log. The others open with a tap.
-  Opening every failing part at once turned one bad night into a wall of rules
-  with the part names lost in it.
+- The verdict in one word, the reason under it, and the parts counted in a
+  strip with a line such as "1 down · 1 degraded · 10 up". Under that, the
+  service, version and environment the report gave and when it was reported, or
+  "Showing 50 of 64 parts" when the report had more than are kept.
+- **Needs you**: the failing parts, worst first and then in the service's own
+  order, each with its message and a **Mark expected** button on the row.
+- **Expected, not paging**: the parts you marked, in grey, each with **Page me
+  again**. See below.
+- **Healthy**: the parts that are up, as names. Past a dozen the rest wait
+  behind "Show all".
+- Tap any part and a sheet opens with its message, since when it has been in
+  that state, how long its own check took, its rules with the observed value
+  against each, and its log. Expanding rows in place turned one bad night into
+  a wall of rules with the part names lost in it.
+- The last 24 checks as a strip of passes and failures with the median time, in
+  place of the response time chart.
 - For a monitor that signs in, the provider, client, account, how long the
-  session lasts and when it was last refreshed. When the sign-in has ended the
-  card says "Not checking · Sign in needed", that nothing is sent to the
-  endpoint until you sign in again from Edit, and that this says nothing about
-  whether the service is up.
+  session lasts and when it was last refreshed, below the parts.
+
+#### A part that is red on purpose
+
+A staging service is often down on purpose, and paging about it on every check
+teaches you to ignore the pager. **Mark expected** on a failing part leaves it out
+of the verdict while it keeps the status it had when you marked it: the monitor
+goes by the parts that are left, the card says "1 of 2 OK · 1 expected", and
+nothing pages. The first report that shows the part with any other status, up
+included, drops the mark, so the next outage pages like any other. Marking comes
+with an undo, and **Page me again** takes it back later; the next check then
+pages through the failure threshold as usual.
+
+Only the status is compared, never the message, because a staging message that
+carries a latency would otherwise count as a change on every check. The verdict
+is only lowered when the parts explain it: a stale report, an unknown status
+word, or a report that says down while no part says worse than degraded stays
+down whatever you have marked. A part missing from one report keeps its mark.
+Marking a part that leaves the monitor up closes the outage on the phone without
+a recovery notification. Webhook targets are not told; one that saw the outage
+gets its recovery on the next check. Marks come along in a backup.
 
 ### Assertions and element expectations
 
