@@ -1,4 +1,8 @@
 import { expect, test, type Page } from "@playwright/test"
+// The release the site hands out, read from the block every release edits, so a
+// version bump cannot leave these assertions describing the one before. 3.19.0
+// shipped with three of them still saying 3.18.0.
+import { RELEASE } from "../src/lib/site"
 
 const ROUTES = ["/", "/faq", "/docs", "/docs/health-format", "/android-background-limits", "/vs/uptimerobot", "/vs/uptime-kuma"]
 
@@ -80,7 +84,7 @@ test("download buttons point at the counted redirect, and it hands over the APK"
   // the APK's own bytes against its file name.
   const res = await page.request.get("/download", { maxRedirects: 0 })
   const target = res.status() === 302 ? res.headers()["location"] : await res.text()
-  expect(target).toContain("Nightbell-3.18.0-release.apk")
+  expect(target).toContain(RELEASE.apkName)
 })
 
 test("the hero alarm takes the screen on scroll and Acknowledge silences it", async ({ page }) => {
@@ -145,7 +149,7 @@ test("copy buttons copy the digest", async ({ page, context, browserName }) => {
   await first.click()
   await expect(page.locator("#install").getByText("Copied")).toBeVisible()
   const text = await page.evaluate(() => navigator.clipboard.readText())
-  expect(text).toBe("9ad2ee741f1b1350079c0f092a64173308ca07a12fe00a1452c1328b0a5215ff")
+  expect(text).toBe(RELEASE.apkSha256)
 })
 
 test("the theme toggle switches to light and survives a reload", async ({ page }) => {
@@ -360,7 +364,7 @@ for (const [fault, inject] of Object.entries(FAULTS)) {
 test("the install command is shown in full and has its own copy button", async ({ page }) => {
   await page.goto("/")
   const cmd = page.locator("#install pre")
-  await expect(cmd).toContainText("adb install -r Nightbell-3.18.0-release.apk")
+  await expect(cmd).toContainText(`adb install -r ${RELEASE.apkName}`)
   await expect(cmd.locator("xpath=ancestor::div[1]").getByRole("button", { name: "Copy" })).toBeVisible()
 })
 
