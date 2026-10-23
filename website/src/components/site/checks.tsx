@@ -239,8 +239,9 @@ function Stage({ src, w = 1080, h = 2400, children, tilt = 1 }: { src: string; w
 const PARTS = [
   { name: "Email queue", status: "degraded", note: "340 waiting, usually under 50" },
   { name: "Database", status: "up", note: "12 ms" },
+  { name: "Sandbox gateway", status: "expected", note: "Down on purpose. Pages again if that changes" },
 ] as const
-const TONE = { up: "text-up", degraded: "text-degraded", down: "text-down" } as const
+const TONE = { up: "text-up", degraded: "text-degraded", down: "text-down", expected: "text-muted-foreground" } as const
 const LOG = [
   ["13:58:00", "error", "Gateway declined payment"],
   ["14:01:40", "warn", "Retry queue above 100"],
@@ -257,6 +258,8 @@ function HealthDemo() {
           <span className="bg-down-fill flex-1 rounded-full" />
           <span className="bg-degraded-fill flex-1 rounded-full" />
           <span className="bg-up-fill flex-1 rounded-full" />
+          {/* grey, as in the app: a part marked expected is the user's call, not the service's health */}
+          <span className="bg-muted-foreground/40 flex-1 rounded-full" />
         </div>
         <p className="mt-2 font-mono text-[12px]">
           <span className="text-down">1 down</span>
@@ -264,6 +267,7 @@ function HealthDemo() {
           <span className="text-degraded">1 degraded</span>
           <span className="text-muted-foreground">, </span>
           <span className="text-up">1 up</span>
+          <span className="text-muted-foreground">, 1 expected</span>
         </p>
       </div>
 
@@ -401,7 +405,7 @@ const KINDS: Kind[] = [
     id: "health",
     name: "Health endpoint",
     cost: "your rules",
-    body: "Reads a report your service writes about itself. The verdict pages; each part brings the rule that decided it, what it measured and what it saw. New in 3.18.0.",
+    body: "Reads a report your service writes about itself. The verdict pages; each part brings the rule that decided it, what it measured and what it saw. A part that is down on purpose can be marked expected, and pages again when it changes.",
     chips: [["up", "degraded", "down"], ["none", "headers", "basic", "single sign-on"]],
     demo: <HealthDemo />,
   },
