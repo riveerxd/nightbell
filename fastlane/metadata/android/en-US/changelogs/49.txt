@@ -1,0 +1,3 @@
+Nightbell can now watch a host as well as a service. A ping monitor sends ICMP echo to an IPv4 or IPv6 address or a name, no root needed, and reports latency and packet loss. A TCP port monitor connects to one port and hangs up, for databases, SSH or a VPN endpoint. Put both on one host and its screen tells you whether the network or the service is the problem.
+
+Any monitor can now wait for several passing checks before it calls an outage over, so a flapping host stops paging, clearing and paging again. Ping and port monitors also list their recent outages and how long each lasted.

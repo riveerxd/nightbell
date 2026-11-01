@@ -592,8 +592,13 @@ android {
         // it pages again. The detail screen for this kind groups the parts by what
         // they need. A check that gets through now ends an old sign-in problem,
         // which 3.18.0 never cleared.
-        versionCode = 48
-        versionName = "3.19.0"
+        //
+        // 3.20.0 adds ping and TCP port monitors, without root, over IPv4 and
+        // IPv6, with an outage list and a card that reads checks on one host
+        // together. Every monitor can now ask for several passing checks before
+        // an outage is called over.
+        versionCode = 49
+        versionName = "3.20.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
