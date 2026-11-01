@@ -301,6 +301,13 @@ data class WebhookFacts(
      * fields, so a receiver parsing the JSON sees the same shape as before.
      */
     val reported: Boolean = false,
+    /**
+     * A ping monitor's packet loss on this check, or -1 for every other kind.
+     * Like [reported], it changes the words and not the payload's fields: a ping
+     * that loses one reply in three is not slow, and calling it slow sends
+     * whoever reads the channel to look at the wrong thing.
+     */
+    val lossPercent: Int = -1,
 )
 
 /**

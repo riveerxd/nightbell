@@ -63,6 +63,9 @@ object Reachability {
      */
     fun neverReachedAnything(kind: FailureKind): Boolean = when (kind) {
         FailureKind.DNS, FailureKind.CONNECT, FailureKind.TIMEOUT -> true
+        // Not one echo came back, which a dead phone network produces as well as
+        // a dead host does.
+        FailureKind.NO_REPLY -> true
         // Usually a transport failure on the way to the provider, which a dead
         // phone network produces just as well. A provider answering 5xx spends
         // one probe that then vouches for the network, and pages as it should.

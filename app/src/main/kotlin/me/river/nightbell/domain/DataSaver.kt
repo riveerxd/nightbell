@@ -28,6 +28,15 @@ object DataSaver {
     private const val DAY_MS = 24L * 60 * 60 * 1000
     private const val MONTH_DAYS = 30L
 
+    /**
+     * One echo request and its reply over IPv6, headers included: 40 + 8 + 16
+     * each way. IPv4 is smaller, and the larger figure is the safe one to show.
+     */
+    internal const val ICMP_ROUND_TRIP_BYTES = 128L
+
+    /** SYN, SYN-ACK, ACK, then FIN and RST both ways, at IPv6 header sizes. */
+    internal const val TCP_HANDSHAKE_BYTES = 480L
+
     fun coldDue(lastColdAt: Long?, nowMs: Long): Boolean =
         lastColdAt == null || nowMs - lastColdAt >= COLD_LOAD_EVERY_MS || nowMs < lastColdAt
 
@@ -118,6 +127,16 @@ object DataSaver {
         val checks = MONTH_DAYS * DAY_MS / (monitor.intervalMinutes.coerceAtLeast(1) * 60_000L)
         val full = runtime.bytesFull.takeIf { it > 0L }
         val saver = runtime.bytesSaver.takeIf { it > 0L }
+        // A ping or a bare connection is a few hundred bytes the platform may not
+        // even attribute to this app, so waiting for a measurement could leave
+        // Settings saying "measuring" for ever. The packets are known; count them.
+        if (monitor.kind.isNetwork) {
+            val each = full ?: saver ?: when (monitor.kind) {
+                MonitorKind.PING -> monitor.network.packets.coerceAtLeast(1) * ICMP_ROUND_TRIP_BYTES
+                else -> TCP_HANDSHAKE_BYTES
+            }
+            return checks * each to checks * each
+        }
         val expensiveRuns = when {
             monitor.kind == MonitorKind.WEBSITE_ELEMENT -> minOf(checks, MONTH_DAYS)
             monitor.kind == MonitorKind.GITHUB_REPO && monitor.github.trackDownloads ->

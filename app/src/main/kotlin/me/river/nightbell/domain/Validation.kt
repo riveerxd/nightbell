@@ -12,7 +12,7 @@ object Validation {
         NAME, URL, METHOD, HEADERS, BODY, STATUS, ASSERTION, JSON_PATH,
         INTERVAL, TIMEOUT, ELEMENT, ELEMENT_TEXT, LATENCY_SLO, URGENT, PROXY,
         REPO, GITHUB, TOKEN, TLS, METRIC, LABELS, PROMQL, ALERTS,
-        SIGN_IN, STALE,
+        SIGN_IN, STALE, HOST, PORT, PACKETS,
     }
 
     /** Past this many watched elements the settle loop is worth warning about. */
@@ -101,6 +101,7 @@ object Validation {
      * be left.
      */
     fun report(monitor: Monitor): Report {
+        if (monitor.kind.isNetwork) return reportNetwork(monitor)
         val notes = mutableListOf<Note>()
         val url = UrlInput.completed(monitor.url)
 
@@ -482,6 +483,65 @@ object Validation {
     }
 
     /** The cadence rules, shared by every kind including GitHub. */
+    /**
+     * A ping or port monitor has a host, maybe a port, and a cadence. Nothing
+     * about URLs, statuses, bodies, certificates or proxies applies, and running
+     * those checks against an empty URL is what would otherwise block saving.
+     */
+    private fun reportNetwork(monitor: Monitor): Report {
+        val notes = mutableListOf<Note>()
+        if (monitor.name.length > 48) {
+            notes += Note(Field.NAME, Severity.WARNING, "Long names get truncated on the dashboard")
+        }
+        hostNote(monitor.network.host)?.let { notes += it }
+        if (monitor.kind == MonitorKind.TCP_PORT && monitor.network.port !in 1..65535) {
+            notes += Note(
+                Field.PORT, Severity.ERROR,
+                if (monitor.network.port == 0) "A port is required" else "Ports run from 1 to 65535",
+            )
+        }
+        if (monitor.kind == MonitorKind.PING && monitor.network.packets !in 1..NETWORK_MAX_PACKETS) {
+            notes += Note(Field.PACKETS, Severity.ERROR, "Send 1 to $NETWORK_MAX_PACKETS packets per check")
+        }
+        val family = monitor.network.family
+        val literal = NetworkTarget.literalFamily(monitor.network.host)
+        if (literal != null && family != IpFamily.ANY && family != literal) {
+            notes += Note(
+                Field.HOST, Severity.HINT,
+                "${literal.label} address, so the ${family.label} choice does not apply",
+            )
+        }
+        if (monitor.intervalMinutes in 1 until 15) {
+            notes += Note(
+                Field.INTERVAL, Severity.HINT,
+                "Android may batch background work; sub-15-minute checks are best-effort",
+            )
+        }
+        return Report(notes + cadenceNotes(monitor))
+    }
+
+    /** What is wrong with a typed host, or null when it is a usable address or name. */
+    fun hostNote(raw: String): Note? {
+        val host = NetworkTarget.parse(raw).host
+        if (host.isEmpty()) return Note(Field.HOST, Severity.ERROR, "An IP address or host name is required")
+        if (host.contains(' ')) return Note(Field.HOST, Severity.ERROR, "A host can't contain spaces")
+        if (NetworkTarget.literalFamily(host) != null) return null
+        if (host.contains(':')) return Note(Field.HOST, Severity.ERROR, "That isn't a valid IPv6 address")
+        if (host.all { it.isDigit() || it == '.' }) {
+            return Note(Field.HOST, Severity.ERROR, "That isn't a valid IPv4 address")
+        }
+        if (!NetworkTarget.isHostName(host)) return Note(Field.HOST, Severity.ERROR, "That isn't a valid host name")
+        val lower = host.lowercase().removeSuffix(".")
+        if (lower.endsWith(".onion") || lower.endsWith(".i2p")) {
+            // Reachable only through a proxy, and neither of these kinds can go
+            // through one. Saying so now beats a "can't resolve" every interval.
+            return Note(Field.HOST, Severity.ERROR, "Hidden services can only be reached through a proxy, which ping and port checks don't use")
+        }
+        return null
+    }
+
+    const val NETWORK_MAX_PACKETS = 10
+
     private fun cadenceNotes(monitor: Monitor): List<Note> {
         val notes = mutableListOf<Note>()
         if (monitor.intervalMinutes < 1) {

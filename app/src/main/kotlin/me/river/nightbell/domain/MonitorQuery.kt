@@ -142,7 +142,7 @@ object MonitorQuery {
         if (needle.isEmpty()) return true
         val monitor = card.monitor
         if (monitor.displayName.lowercase().contains(needle)) return true
-        if (monitor.url.lowercase().contains(needle)) return true
+        if (monitor.address.lowercase().contains(needle)) return true
         if (monitor.kind.label.lowercase().contains(needle)) return true
         return monitor.targets.any { it.displayLabel.lowercase().contains(needle) }
     }

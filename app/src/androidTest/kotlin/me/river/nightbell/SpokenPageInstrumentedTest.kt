@@ -166,6 +166,9 @@ class SpokenPageInstrumentedTest {
         openAlerts()
         scrollToCard()
         composeRule.onNodeWithContentDescription("Spoken alerts").assertIsDisplayed()
+        // To the line itself, not just the header: the card can land with only its
+        // header on screen, which it did once the alert editor above it grew a row.
+        scrollTo("speak-count")
         composeRule.onNodeWithTag("speak-count").assertIsDisplayed()
         composeRule.onNodeWithText(
             "No monitor speaks yet. Each one has its own switch under its " +

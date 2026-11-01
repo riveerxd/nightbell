@@ -75,7 +75,7 @@ class AlertCenter(private val context: Context) {
             append(result.failureKind.headline)
             if (result.advice.isNotBlank()) append("\n").append(result.advice)
             if (result.detail.isNotBlank()) append("\n\n").append(result.detail.take(320))
-            append("\n\n").append(monitor.url)
+            append("\n\n").append(monitor.address)
         }
 
         val notification = baseBuilder(channelId, monitor, silent)
@@ -154,7 +154,7 @@ class AlertCenter(private val context: Context) {
                     buildString {
                         append("Recovered after a failure.")
                         if (result.latencyMs > 0) append("\nResponded in ${result.latencyMs} ms.")
-                        append("\n\n").append(monitor.url)
+                        append("\n\n").append(monitor.address)
                     },
                 ),
             )
@@ -214,7 +214,7 @@ class AlertCenter(private val context: Context) {
                         append(monitor.urgentRepeatMinutes.coerceAtLeast(1))
                         append(" min until you acknowledge it.")
                         if (repeatCount > 0) append("\nReminder #$repeatCount.")
-                        append("\n\n").append(monitor.url)
+                        append("\n\n").append(monitor.address)
                     },
                 ),
             )
@@ -293,7 +293,7 @@ class AlertCenter(private val context: Context) {
         val content = UrgentPageContent(
             monitorName = monitor.displayName,
             headline = if (otherPending > 0) "$headline · +$otherPending more down" else headline,
-            url = monitor.url,
+            url = monitor.address,
             downFor = formatDownFor(downForMs),
             failedChecks = 0,
             reminderNumber = (pageCount - 1).coerceAtLeast(0),
@@ -338,7 +338,7 @@ class AlertCenter(private val context: Context) {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             putExtra(UrgentAlertActivity.EXTRA_MONITOR_ID, monitor.id)
             putExtra(UrgentAlertActivity.EXTRA_MONITOR_NAME, monitor.displayName)
-            putExtra(UrgentAlertActivity.EXTRA_URL, monitor.url)
+            putExtra(UrgentAlertActivity.EXTRA_URL, monitor.address)
             putExtra(UrgentAlertActivity.EXTRA_REPEAT_MINUTES, monitor.urgentRepeatMinutes)
         }
         return PendingIntent.getActivity(
@@ -439,6 +439,35 @@ class AlertCenter(private val context: Context) {
         repeat: Boolean,
     ) {
         val channelId = channelFor(policy, Severity.DEGRADED, silent)
+        val losing = result.ping?.partial == true
+        if (result.degraded && losing) {
+            // Some echoes came back and some did not. Not slow, and not the
+            // service's own word either: the path to the host is dropping packets.
+            val notification = baseBuilder(channelId, monitor, silent)
+                .setSmallIcon(R.drawable.ic_stat_alert)
+                .setContentTitle(
+                    if (repeat) "${monitor.displayName} is still losing packets" else "${monitor.displayName} is losing packets",
+                )
+                .setContentText(result.message)
+                .setStyle(NotificationCompat.BigTextStyle().bigText("${result.message}\n\n${monitor.address}"))
+                .setColor(DEGRADED_COLOR)
+                .setColorized(true)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setCategory(NotificationCompat.CATEGORY_STATUS)
+                .addAction(
+                    R.drawable.ic_stat_refresh,
+                    "Re-check now",
+                    AlertActionReceiver.pendingIntent(context, AlertActionReceiver.ACTION_RECHECK, monitor.id),
+                )
+                .addAction(
+                    R.drawable.ic_stat_mute,
+                    "Mute 1h",
+                    AlertActionReceiver.pendingIntent(context, AlertActionReceiver.ACTION_MUTE_1H, monitor.id),
+                )
+                .build()
+            post(monitor.id.degradedNotificationId(), notification)
+            return
+        }
         if (result.degraded) {
             // The service said so itself. "Slow" and a latency budget would be
             // explaining a reading nobody took.
@@ -449,7 +478,7 @@ class AlertCenter(private val context: Context) {
                     if (repeat) "${monitor.displayName} still reports degraded" else "${monitor.displayName} reports degraded",
                 )
                 .setContentText(lines.firstOrNull() ?: "The service says it is working, worse than it should")
-                .setStyle(partList(result) ?: NotificationCompat.BigTextStyle().bigText(monitor.url))
+                .setStyle(partList(result) ?: NotificationCompat.BigTextStyle().bigText(monitor.address))
                 .setColor(DEGRADED_COLOR)
                 .setColorized(true)
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -483,7 +512,7 @@ class AlertCenter(private val context: Context) {
                     buildString {
                         append("The check succeeded but took ${result.latencyMs} ms, ")
                         append("over the ${sloMs} ms latency budget.")
-                        append("\n\n").append(monitor.url)
+                        append("\n\n").append(monitor.address)
                     },
                 ),
             )
@@ -516,17 +545,19 @@ class AlertCenter(private val context: Context) {
         val notification = baseBuilder(channelId, monitor, silent)
             .setSmallIcon(R.drawable.ic_stat_ok)
             .setContentTitle(
-                if (monitor.kind == MonitorKind.HEALTH_ENDPOINT) {
-                    "${monitor.displayName} is no longer degraded"
-                } else {
-                    "${monitor.displayName} is fast again"
+                when (monitor.kind) {
+                    MonitorKind.HEALTH_ENDPOINT -> "${monitor.displayName} is no longer degraded"
+                    // Amber here was either loss or a slow reply, and the
+                    // notification cannot know which one is ending. Both end in
+                    // every echo answered inside the budget, which this says.
+                    MonitorKind.PING -> "${monitor.displayName} is answering normally again"
+                    else -> "${monitor.displayName} is fast again"
                 },
             )
             .setContentText(
-                if (monitor.kind == MonitorKind.HEALTH_ENDPOINT) {
-                    result.message
-                } else {
-                    "${result.latencyMs} ms, back under the $sloMs ms budget"
+                when (monitor.kind) {
+                    MonitorKind.HEALTH_ENDPOINT, MonitorKind.PING -> result.message
+                    else -> "${result.latencyMs} ms, back under the $sloMs ms budget"
                 },
             )
             .setColor(UP_COLOR)
@@ -585,7 +616,7 @@ class AlertCenter(private val context: Context) {
                             append(". Renew it before then or the site stops answering.")
                         }
                         if (issuer.isNotBlank()) append("\n\nIssued by $issuer")
-                        append("\n\n").append(monitor.url)
+                        append("\n\n").append(monitor.address)
                     },
                 ),
             )

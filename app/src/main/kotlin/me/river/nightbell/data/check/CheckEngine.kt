@@ -159,6 +159,13 @@ class CheckEngine(
     var health: HealthChecker? = null
 
     /**
+     * Pings and port checks. A var with a working default rather than a
+     * constructor argument, so the tests that build an engine do not all have to
+     * learn about it; the ones about these kinds swap in fakes.
+     */
+    var network: NetworkChecker = NetworkChecker()
+
+    /**
      * Told that something was queued, so the graph can start a flush without
      * the check pass waiting on somebody else's server to answer.
      */
@@ -205,6 +212,7 @@ class CheckEngine(
         // baseline or announce anything. Which is exactly what "Test now" means.
         MonitorKind.GITHUB_REPO -> githubDryRun(monitor)
         MonitorKind.HEALTH_ENDPOINT -> healthDryRun(monitor, certPin)
+        MonitorKind.PING, MonitorKind.TCP_PORT -> network.check(monitor)
         else -> http.check(monitor, certPin)
     }
 
@@ -787,8 +795,13 @@ class CheckEngine(
                 masterEnabled = settings.masterAlertsEnabled,
                 nowMs = result.at,
                 minuteOfDay = minute,
+                consecutiveSuccesses = after.consecutiveSuccesses,
             )
         }
+        // Passing again, but not for long enough to call the outage over. Every
+        // track below treats it as still down: the notice stays, the page stays,
+        // and nothing says "recovered" until the threshold is met.
+        val recovering = decision.suppression == AlertDecider.Suppression.RECOVERY_PENDING
 
         Diag.log(
             LogEvent.ALERT_DECIDED,
@@ -833,7 +846,7 @@ class CheckEngine(
         val alertingNow = when (decision.kind) {
             AlertDecider.Kind.DOWN, AlertDecider.Kind.REPEAT -> true
             AlertDecider.Kind.RECOVERY -> false
-            else -> if (result.ok) false else before.alerting
+            else -> if (recovering) true else if (result.ok) false else before.alerting
         }
         // Clear the stale "down" notification — unless we just replaced it with a
         // recovery notification, which reuses the same id and would be wiped out.
@@ -842,7 +855,7 @@ class CheckEngine(
         // can be stale, which is exactly how a down notification outlives the
         // outage it describes. Healthy and no recovery posted ⇒ nothing should
         // be showing, so cancel and don't reason about how it got there.
-        if (result.ok && decision.kind != AlertDecider.Kind.RECOVERY) {
+        if (result.ok && decision.kind != AlertDecider.Kind.RECOVERY && !recovering) {
             alerts.cancel(monitor.id)
         }
 
@@ -911,7 +924,10 @@ class CheckEngine(
         // arguing with a decision it was told about. Pinned monitors keep their
         // alerts, because a pinned self-signed certificate still expires and
         // someone still has to go and regenerate it.
-        val certLevel = if (settings.certAlertsEnabled && monitor.tlsTrust != TlsTrust.ANY) {
+        // Never for a ping or port monitor: neither makes a handshake, and a date
+        // left in the runtime by an https monitor that was edited into one would
+        // otherwise keep warning about a certificate nothing checks any more.
+        val certLevel = if (settings.certAlertsEnabled && monitor.tlsTrust != TlsTrust.ANY && !monitor.kind.isNetwork) {
             CertificateWatch.level(
                 expiresAt = after.certExpiresAt,
                 nowMs = result.at,
@@ -992,13 +1008,20 @@ class CheckEngine(
         }
 
         // ---- urgent track ----------------------------------------------------
-        val urgentOutcome = UrgentAlerts.evaluate(
-            previous = before.urgentState,
-            eligible = urgentEligible(monitor, policy, settings, after, muted, minute),
-            down = !result.ok,
-            nowMs = result.at,
-            repeatMinutes = monitor.urgentRepeatMinutes,
-        )
+        // Held exactly as it stands while recovering: not cleared, because the
+        // outage is not over, and not repeated, because a page saying "still
+        // down" off a check that passed would be the app contradicting itself.
+        val urgentOutcome = if (recovering) {
+            UrgentAlerts.Outcome(UrgentAlerts.Action.NONE, before.urgentState)
+        } else {
+            UrgentAlerts.evaluate(
+                previous = before.urgentState,
+                eligible = urgentEligible(monitor, policy, settings, after, muted, minute),
+                down = !result.ok,
+                nowMs = result.at,
+                repeatMinutes = monitor.urgentRepeatMinutes,
+            )
+        }
         val urgentMutation =
             applyUrgent(monitor, urgentOutcome, result, policy, after, settings.urgentRespectsRingerMode)
 
@@ -1071,6 +1094,7 @@ class CheckEngine(
                 consecutiveFailures = after.consecutiveFailures,
                 degraded = degraded,
                 at = result.at,
+                consecutiveSuccesses = after.consecutiveSuccesses,
             ),
             phone = WebhookRouting.Phone(
                 policy = policy,
@@ -1155,7 +1179,7 @@ class CheckEngine(
         event = WebhookEvent.DOWN,
         monitorId = monitor.id,
         monitorName = monitor.displayName,
-        monitorUrl = withoutUserInfo(monitor.url.trim()),
+        monitorUrl = withoutUserInfo(monitor.address.trim()),
         monitorKind = monitor.kind.label,
         reason = if (result.ok) "" else result.failureKind.headline,
         message = Secrets.scrub(result.message, settings.githubToken),
@@ -1169,6 +1193,7 @@ class CheckEngine(
         // Degraded by its own report, or a health monitor whose report is fine
         // again: the words for slowness would be explaining a reading nobody took.
         reported = result.degraded || (monitor.kind == MonitorKind.HEALTH_ENDPOINT && result.ok),
+        lossPercent = if (monitor.kind == MonitorKind.PING) result.ping?.lossPercent ?: -1 else -1,
     )
 
     private fun withoutUserInfo(url: String): String {
@@ -1671,6 +1696,10 @@ class CheckEngine(
             val runtime = snapshot.runtimes[monitor.id] ?: continue
             if (!monitor.urgent || !runtime.urgentState.nagging) continue
             val policy = if (monitor.useGlobalAlerts) snapshot.settings.defaultAlert else monitor.alert
+            // Passing again and counting towards the all-clear. The check that
+            // finishes the count clears the page; this tick would clear it early,
+            // because it reads the health, and the health is already up.
+            if (AlertDecider.recovering(runtime, policy)) continue
             val muted = runtime.mutedUntil > now
             val outcome = UrgentAlerts.evaluate(
                 previous = runtime.urgentState,
@@ -1850,7 +1879,7 @@ class CheckEngine(
                         event = WebhookEvent.ACKNOWLEDGED,
                         monitorId = monitor.id,
                         monitorName = monitor.displayName,
-                        monitorUrl = withoutUserInfo(monitor.url.trim()),
+                        monitorUrl = withoutUserInfo(monitor.address.trim()),
                         monitorKind = monitor.kind.label,
                         message = runtime.lastMessage,
                         at = nowMs(),

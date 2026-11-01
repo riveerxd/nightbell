@@ -270,7 +270,11 @@ fun SetupScreen(
                             // question of how this app reaches the target, and the
                             // later steps carry a readout of the answer so that a
                             // test run from them is still never run blind.
-                            if (step == 1) {
+                            // Neither applies to a ping or a port check: no proxy can
+                            // carry ICMP, and nothing makes a handshake to judge.
+                            if (draft.kind.isNetwork) {
+                                Unit
+                            } else if (step == 1) {
                                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                                     ProxyRoutingSection(viewModel, draft, report, accent)
                                     CertificateTrustSection(viewModel, draft, report, accent)
@@ -447,6 +451,8 @@ private fun canLeaveStep(step: Int, draft: Monitor, report: Validation.Report): 
         report.of(Validation.Field.HEADERS)?.severity != Validation.Severity.ERROR &&
         report.of(Validation.Field.REPO)?.severity != Validation.Severity.ERROR &&
         report.of(Validation.Field.TOKEN)?.severity != Validation.Severity.ERROR &&
+        report.of(Validation.Field.HOST)?.severity != Validation.Severity.ERROR &&
+        report.of(Validation.Field.PORT)?.severity != Validation.Severity.ERROR &&
         (draft.kind != MonitorKind.WEBSITE_ELEMENT || draft.element?.isCaptured == true)
     2 -> report.of(Validation.Field.ASSERTION)?.severity != Validation.Severity.ERROR &&
         report.of(Validation.Field.JSON_PATH)?.severity != Validation.Severity.ERROR &&
@@ -455,7 +461,8 @@ private fun canLeaveStep(step: Int, draft: Monitor, report: Validation.Report): 
         report.of(Validation.Field.LABELS)?.severity != Validation.Severity.ERROR &&
         report.of(Validation.Field.PROMQL)?.severity != Validation.Severity.ERROR &&
         report.of(Validation.Field.ALERTS)?.severity != Validation.Severity.ERROR &&
-        report.of(Validation.Field.ELEMENT_TEXT)?.severity != Validation.Severity.ERROR
+        report.of(Validation.Field.ELEMENT_TEXT)?.severity != Validation.Severity.ERROR &&
+        report.of(Validation.Field.PACKETS)?.severity != Validation.Severity.ERROR
     else -> report.isValid
 }
 
@@ -738,7 +745,7 @@ private fun StepTarget(
         value = draft.name,
         onValueChange = { value -> viewModel.update { it.copy(name = value) } },
         label = "Name",
-        placeholder = "My API, marketing site, …",
+        placeholder = if (draft.kind.isNetwork) "Edge router, primary database, …" else "My API, marketing site, …",
         note = report.of(Validation.Field.NAME),
         leadingIcon = NightbellIcons.Sparkle,
         accent = accent,
@@ -749,6 +756,8 @@ private fun StepTarget(
         PrometheusTargetCard(viewModel, draft, report, accent)
     } else if (draft.kind == MonitorKind.HEALTH_ENDPOINT) {
         HealthTargetCard(viewModel, draft, report, accent)
+    } else if (draft.kind.isNetwork) {
+        NetworkTargetCard(viewModel, draft, report, accent)
     } else {
         GlassField(
             value = draft.url,
@@ -1160,6 +1169,11 @@ private fun StepExpectations(
         return
     }
 
+    if (draft.kind.isNetwork) {
+        NetworkExpectationCard(viewModel, draft, report, accent)
+        return
+    }
+
     if (draft.kind == MonitorKind.WEBSITE_ELEMENT) {
         val elements = draft.targets
         if (elements.isEmpty()) {
@@ -1471,7 +1485,7 @@ private fun SummaryLine(label: String, value: String) {
  * setting the user was never shown.
  */
 private fun showsCertificate(draft: Monitor): Boolean {
-    if (draft.kind == MonitorKind.GITHUB_REPO) return false
+    if (draft.kind == MonitorKind.GITHUB_REPO || draft.kind.isNetwork) return false
     val url = draft.url.trim()
     return url.startsWith("https://", ignoreCase = true) ||
         (url.startsWith("http://", ignoreCase = true) && draft.followRedirects)
@@ -1804,7 +1818,9 @@ private fun StepSchedule(
         accent = accent,
     )
     StepperRow(
-        title = "Timeout",
+        // For a ping it is how long each reply is waited for, and the name says
+        // so: three packets at fifteen seconds is not a fifteen second check.
+        title = if (draft.kind == MonitorKind.PING) "Reply timeout" else "Timeout",
         value = draft.timeoutSeconds,
         onValueChange = { v -> viewModel.update { it.copy(timeoutSeconds = v) } },
         range = 1..120,
@@ -1813,7 +1829,7 @@ private fun StepSchedule(
         accent = accent,
         note = report.of(Validation.Field.TIMEOUT),
     )
-    if (draft.kind != MonitorKind.WEBSITE_ELEMENT && draft.kind != MonitorKind.GITHUB_REPO) {
+    if (draft.kind != MonitorKind.WEBSITE_ELEMENT && draft.kind != MonitorKind.GITHUB_REPO && !draft.kind.isNetwork) {
         ToggleRow(
             title = "Follow redirects",
             subtitle = if (draft.followRedirects) "3xx responses are followed" else "3xx is reported as-is",
@@ -2066,7 +2082,12 @@ private fun TestResultCard(result: CheckResult, accent: Color) {
             if (result.statusCode > 0) {
                 MicroTag("HTTP ${result.statusCode}", color = accent)
             }
-            MicroTag(formatLatency(result.latencyMs), color = NightbellColors.TextSecondary, icon = NightbellIcons.Gauge)
+            MicroTag(
+                result.ping?.takeIf { it.answered }?.let { me.river.nightbell.domain.PingReading.formatUs(it.avgUs) }
+                    ?: formatLatency(result.latencyMs),
+                color = NightbellColors.TextSecondary,
+                icon = NightbellIcons.Gauge,
+            )
             if (result.elementText.isNotBlank()) {
                 MicroTag("element text", color = NightbellColors.Violet, icon = NightbellIcons.Target)
             }

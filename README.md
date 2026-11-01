@@ -12,7 +12,7 @@
   <img src="https://img.shields.io/badge/targetSdk-36-3a3f4b?style=flat-square" alt="targetSdk 36" />
   <a href="https://f-droid.org/en/packages/me.river.nightbell/"><img src="https://img.shields.io/f-droid/v/me.river.nightbell?style=flat-square&logo=fdroid&logoColor=white&color=1976D2&label=F-Droid" alt="Version on F-Droid" /></a>
   <a href="../../releases/latest"><img src="https://img.shields.io/github/v/release/riveerxd/nightbell?style=flat-square&color=2F6BFF&label=release" alt="Latest release" /></a>
-  <img src="https://img.shields.io/badge/tests-1260%20JVM%20+%20573%20on--device-2FD98A?style=flat-square" alt="Tests" />
+  <img src="https://img.shields.io/badge/tests-1323%20JVM%20+%20586%20on--device-2FD98A?style=flat-square" alt="Tests" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/licence-Apache%202.0-3a3f4b?style=flat-square" alt="Apache 2.0" /></a>
 </p>
 
@@ -40,8 +40,8 @@
 </div>
 
 Point it at anything that answers over HTTP, at one element on a rendered web
-page, at a Prometheus server, at your service's own health report, or at a
-GitHub repository, and it watches it, charts it, and gets loud when it breaks. **No server, no
+page, at a Prometheus server, at your service's own health report, at a
+GitHub repository, or at a bare host by ping or TCP port, and it watches it, charts it, and gets loud when it breaks. **No server, no
 account, no middleman.** The phone in your pocket does the checking, and the only
 host it contacts that you did not choose is a connectivity probe you can change or
 switch off.
@@ -80,6 +80,8 @@ wakes the screen if the phone is locked.
 | **Prometheus** | Reads an exporter's metrics, a PromQL query, or an Alertmanager's firing alerts. |
 | **Health endpoint** | Reads a report your service writes about itself: which part is in trouble, the rule that decided it, and what it saw. Signs in the way your own clients do, single sign-on included. |
 | **GitHub repository** | Polls one repository and reports what changed about it: stars, issues, releases, pull requests and comments. |
+| **Ping** | ICMP echo to an IPv4 or IPv6 host, without root. Latency, packet loss, and down when nothing answers. |
+| **TCP port** | Connects to one port and hangs up. For databases, SSH, VPN endpoints, anything with no HTTP to ask. |
 
 Page-element monitors watch any number of nodes per page and resolve them all
 against one page load, so watching six costs about what watching one costs. The
@@ -242,7 +244,7 @@ and a certificate expiring next Tuesday never gets reported as an outage tonight
 
 ```mermaid
 flowchart LR
-    M["Monitors<br/>HTTP · request · page element · Prometheus · health report · repository"] --> E["CheckEngine"]
+    M["Monitors<br/>HTTP · request · page element · Prometheus · health report · repository · ping · TCP port"] --> E["CheckEngine"]
     E -->|folds each result| DB[("State<br/>one JSON doc")]
     E --> A1["Down and recovery"]
     E --> A2["Degraded on latency"]
@@ -355,7 +357,7 @@ Needs JDK 17 and an Android SDK with API 36. `local.properties` wants
 ```bash
 ./gradlew :app:assembleDebug          # debuggable
 ./gradlew :app:assembleRelease        # minified, needs keystore/keystore.properties
-./gradlew :app:testDebugUnitTest      # 1260 JVM tests
+./gradlew :app:testDebugUnitTest      # 1323 JVM tests
 ```
 
 Release builds are signed from `keystore/keystore.properties`, which is
@@ -363,15 +365,15 @@ gitignored along with the key itself. Without it the release task still builds,
 just unsigned.
 
 <details>
-<summary><b>Tests: 1260 JVM + 573 on-device</b></summary>
+<summary><b>Tests: 1323 JVM + 586 on-device</b></summary>
 
 <br/>
 
-1260 JVM tests cover the pure logic: the alert state machines, escalation,
+1323 JVM tests cover the pure logic: the alert state machines, escalation,
 quiet-hours arithmetic, assertions, the latency baseline, backup round-trips, and
 the widget's column arithmetic, which decides whether a monitor is visible at all
 and can otherwise only be exercised by dragging a widget around a home screen.
-573 instrumented tests cover the parts that need a real Android: notifications,
+586 instrumented tests cover the parts that need a real Android: notifications,
 channels, the foreground service, the WebView element checker, widgets, the
 launcher icon's transparency, and a suite that drives a genuine
 connection-refused outage all the way to a red page on screen.

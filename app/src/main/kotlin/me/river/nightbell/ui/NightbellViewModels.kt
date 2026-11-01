@@ -18,11 +18,14 @@ import me.river.nightbell.data.NightbellStore
 import me.river.nightbell.data.transfer.BackupCodec
 import me.river.nightbell.data.transfer.BackupError
 import me.river.nightbell.data.transfer.toImportableSnapshot
+import me.river.nightbell.domain.NetworkTarget
+import me.river.nightbell.domain.NetworkWatch
 import me.river.nightbell.domain.AlertPolicy
 import me.river.nightbell.domain.AssertionMode
 import me.river.nightbell.domain.BrowserState
 import me.river.nightbell.domain.CheckResult
 import me.river.nightbell.domain.CheckerHealth
+import me.river.nightbell.domain.Health
 import me.river.nightbell.domain.CheckerLimit
 import me.river.nightbell.domain.ElementTarget
 import me.river.nightbell.data.alerts.PageSpeaker
@@ -1172,6 +1175,16 @@ class SetupViewModel(
                     draft = template.apply(draft)
                     step = 1
                 }
+                // "Add a check on this host", from a monitor's detail screen. Opens
+                // on the kind question rather than past it, since which other
+                // check is the whole of what is being asked; a likely answer is
+                // picked so one tap on Continue is enough for the common case.
+                MonitorTemplates.sameHostSource(templateId)?.let { sourceId ->
+                    snapshot.monitors.firstOrNull { it.id == sourceId }?.let { source ->
+                        draft = MonitorTemplates.sameHost(draft, source)
+                        step = 1
+                    }
+                }
             }
             // After both branches, so an edited monitor, a template and a blank
             // draft all get the field seeded from whatever the draft ended up
@@ -1608,6 +1621,33 @@ class SetupViewModel(
                 body = "",
             ).withTargets(emptyList())
 
+            // The URL stays in the draft, so stepping back to a request kind finds
+            // it where it was; `save` drops it for these two. What carries over is
+            // the host, and for a port check the port the URL's scheme implies,
+            // because "is 443 open on the box behind this site" is the usual
+            // reason to come here from a URL.
+            MonitorKind.PING, MonitorKind.TCP_PORT -> {
+                val fromUrl = NetworkTarget.parse(draft.url)
+                val impliedPort = fromUrl.port ?: when {
+                    draft.url.startsWith("https://", ignoreCase = true) -> 443
+                    draft.url.startsWith("http://", ignoreCase = true) -> 80
+                    else -> null
+                }
+                draft.copy(
+                    kind = kind,
+                    assertion = BodyAssertion(),
+                    body = "",
+                    network = draft.network.copy(
+                        host = draft.network.host.ifBlank { fromUrl.host },
+                        port = if (kind == MonitorKind.TCP_PORT && draft.network.port == 0) {
+                            impliedPort ?: 0
+                        } else {
+                            draft.network.port
+                        },
+                    ),
+                ).withTargets(emptyList())
+            }
+
             MonitorKind.UNSUPPORTED -> draft
         }
         thresholdInput = PrometheusWatch.formatValue(draft.prometheus.threshold)
@@ -1967,8 +2007,41 @@ class SetupViewModel(
     var saving by mutableStateOf(false)
         private set
 
+    // ---- ping and port ---------------------------------------------------------
+
+    fun setHost(value: String) {
+        update { it.copy(network = it.network.copy(host = value.trim())) }
+    }
+
+    /**
+     * Keep the host part of whatever is in the field, and for a port check take
+     * a port that came with it. On leaving the field, never while typing: while
+     * "db.lan:54" is half typed, moving the 54 into the port box would be the
+     * field fighting the person typing into it.
+     */
+    fun tidyHost() {
+        val parsed = NetworkTarget.parse(draft.network.host)
+        val port = if (draft.kind == MonitorKind.TCP_PORT && parsed.port != null && parsed.port in 1..65535) {
+            parsed.port
+        } else {
+            draft.network.port
+        }
+        if (parsed.host == draft.network.host && port == draft.network.port) return
+        update { it.copy(network = it.network.copy(host = parsed.host, port = port)) }
+    }
+
+    fun setPort(value: String) {
+        val digits = value.filter(Char::isDigit).take(5)
+        update { it.copy(network = it.network.copy(port = digits.toIntOrNull() ?: 0)) }
+    }
+
+    fun updateNetwork(transform: (NetworkWatch) -> NetworkWatch) {
+        update { it.copy(network = transform(it.network)) }
+    }
+
     fun save() {
         if (saving) return
+        if (draft.kind.isNetwork) tidyHost()
         completeUrlScheme()
         val validation = report
         if (!validation.isValid) return
@@ -1978,7 +2051,23 @@ class SetupViewModel(
                 url = draft.url.trim(),
                 name = draft.name.trim(),
                 headers = draft.headers.filterNot { it.isBlank },
-            ).migrated
+            ).migrated.let { monitor ->
+                if (!monitor.kind.isNetwork) return@let monitor
+                // Nothing of a request kind survives into a ping or port monitor.
+                // A URL left behind would be read by the group icon and the
+                // favicon as this monitor's site, and a proxy or trust mode left
+                // behind would be a setting with no control on screen to undo it.
+                monitor.copy(
+                    url = "",
+                    useProxy = false,
+                    proxyHost = "",
+                    proxyPort = 0,
+                    tlsTrust = me.river.nightbell.domain.TlsTrust.SYSTEM,
+                    watchCertificate = false,
+                    headers = emptyList(),
+                    network = monitor.network.copy(host = monitor.network.cleanHost),
+                )
+            }
             graph.store.upsert(clean)
             val snapshot = graph.store.currentSnapshot()
             graph.scheduler.schedule(clean, snapshot.settings)
@@ -2030,6 +2119,20 @@ class DetailViewModel(
                 emptyList()
             } else {
                 snap.settings.webhooks.filter { it.enabled && it.scope.covers(monitorId, snap.groups) }
+            }
+        }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Every other monitor on this one's host, with its health, for the same-host
+     * card. Live, so a sibling going down while this screen is open shows here.
+     */
+    val sameHost: StateFlow<List<Pair<Monitor, Health>>> = graph.store.snapshot
+        .map { snap ->
+            val self = snap.monitors.firstOrNull { it.id == monitorId } ?: return@map emptyList()
+            me.river.nightbell.domain.SameHost.siblings(self, snap.monitors).map { other ->
+                other to if (!other.runs) Health.PAUSED else (snap.runtimes[other.id]?.health ?: Health.UNKNOWN)
             }
         }
         .distinctUntilChanged()

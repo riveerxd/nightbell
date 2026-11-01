@@ -30,6 +30,8 @@ object WebhookRouting {
         /** Up but over the latency budget. False when no budget applies. */
         val degraded: Boolean,
         val at: Long,
+        /** Passing streak including this check, for [AlertPolicy.recoveryThreshold]. */
+        val consecutiveSuccesses: Int = Int.MAX_VALUE,
     )
 
     data class Outcome(
@@ -97,7 +99,11 @@ object WebhookRouting {
                 masterEnabled = master,
                 nowMs = check.at,
                 minuteOfDay = phone.minuteOfDay,
+                consecutiveSuccesses = check.consecutiveSuccesses,
             )
+            // The channel's outage runs as long as the phone's does, start time
+            // included, so the "down for" in the recovery is the whole of it.
+            val recovering = down.suppression == AlertDecider.Suppression.RECOVERY_PENDING
             val slow = AlertDecider.decideDegraded(
                 wasDegradedAlerting = before.degradedAlerting,
                 ok = check.ok,
@@ -110,6 +116,7 @@ object WebhookRouting {
             )
 
             val failingSince = when {
+                recovering -> before.failingSinceAt
                 check.ok -> 0L
                 before.failingSinceAt > 0L -> before.failingSinceAt
                 else -> check.at
@@ -144,7 +151,7 @@ object WebhookRouting {
             val alertingNow = when (down.kind) {
                 AlertDecider.Kind.DOWN, AlertDecider.Kind.REPEAT -> true
                 AlertDecider.Kind.RECOVERY -> false
-                else -> if (check.ok) false else before.alerting
+                else -> if (recovering) true else if (check.ok) false else before.alerting
             }
             val degradedNow = when (slow.kind) {
                 AlertDecider.Kind.DEGRADED, AlertDecider.Kind.DEGRADED_REPEAT -> true

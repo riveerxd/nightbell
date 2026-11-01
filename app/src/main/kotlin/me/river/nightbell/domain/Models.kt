@@ -59,6 +59,25 @@ enum class MonitorKind {
     HEALTH_ENDPOINT,
 
     /**
+     * ICMP echo to one host. Says whether the host answers at all, how fast, and
+     * how many replies were lost. Issue 21.
+     *
+     * No root: Android opens unprivileged ICMP datagram sockets to every app, and
+     * the kernel fills in the identifier and checksum. See
+     * [me.river.nightbell.data.check.NetworkChecker].
+     */
+    @SerialName("ping")
+    PING,
+
+    /**
+     * Opens a TCP connection to one port and closes it again. No protocol is
+     * spoken, so it answers "is something listening" for a database, an SSH
+     * daemon or a VPN endpoint that has no HTTP to ask.
+     */
+    @SerialName("tcp_port")
+    TCP_PORT,
+
+    /**
      * A kind this build does not know, read from a store a newer build wrote.
      *
      * Never offered, never checked. It exists so that meeting one costs that
@@ -80,6 +99,8 @@ enum class MonitorKind {
             GITHUB_REPO -> "GitHub repo"
             PROMETHEUS -> "Prometheus"
             HEALTH_ENDPOINT -> "Health endpoint"
+            PING -> "Ping"
+            TCP_PORT -> "TCP port"
             UNSUPPORTED -> "Made by a newer Nightbell"
         }
 
@@ -91,11 +112,16 @@ enum class MonitorKind {
             GITHUB_REPO -> "Stars, issues, comments and releases on one repository."
             PROMETHEUS -> "Scrape metrics, run PromQL, or watch Alertmanager."
             HEALTH_ENDPOINT -> "Read what a service says about each of its parts."
+            PING -> "ICMP echo to an IPv4 or IPv6 host. Latency and packet loss."
+            TCP_PORT -> "Connect to one port and hang up. No HTTP needed."
             UNSUPPORTED -> "Update Nightbell to check this monitor."
         }
 
     /** Whether setup can offer this kind for a new monitor. */
     val offered: Boolean get() = this != UNSUPPORTED
+
+    /** Reaches a host directly rather than fetching a URL. See [NetworkWatch]. */
+    val isNetwork: Boolean get() = this == PING || this == TCP_PORT
 }
 
 @Serializable
@@ -510,6 +536,16 @@ data class AlertPolicy(
     /** Consecutive failures required before shouting. Kills flaky-network noise. */
     val failureThreshold: Int = 1,
     /**
+     * Consecutive passing checks before an outage is called over.
+     *
+     * The other half of [failureThreshold], asked for in issue 21: a host that
+     * flaps answers one ping in three, and calling it recovered on the first one
+     * posts "back up" and then pages again half a minute later. One is the old
+     * behaviour exactly. While it counts, the outage stands: the down notice
+     * stays up, an urgent page keeps going, and no channel hears "recovered".
+     */
+    val recoveryThreshold: Int = 1,
+    /**
      * Confirm a failure with checks [QuickRetry.GAP_MS] apart rather than waiting
      * for the schedule to produce the rest of [failureThreshold].
      *
@@ -571,6 +607,7 @@ data class AlertPolicy(
             if (vibrate) add(vibrationStyle.label)
             if (repeatEnabled) add("repeat ${repeatEveryMinutes}m")
             if (failureThreshold > 1) add("after $failureThreshold fails")
+            if (recoveryThreshold > 1) add("clears after $recoveryThreshold passes")
             if (alertOnDegraded) add("degraded alerts")
         }.joinToString(" · ")
 }
@@ -621,6 +658,11 @@ data class Monitor(
      * Ignored by every other kind, and defaulted so older stores still decode.
      */
     val health: HealthWatch = HealthWatch(),
+    /**
+     * What a [MonitorKind.PING] or [MonitorKind.TCP_PORT] monitor reaches.
+     * Ignored by every other kind, and defaulted so older stores still decode.
+     */
+    val network: NetworkWatch = NetworkWatch(),
     val timeoutSeconds: Int = 15,
     val intervalMinutes: Int = 15,
     /**
@@ -747,11 +789,27 @@ data class Monitor(
         }
 
     val prettyHost: String
-        get() = url
+        get() = address
             .removePrefix("https://")
             .removePrefix("http://")
             .removeSuffix("/")
             .ifBlank { "new monitor" }
+
+    /**
+     * Where this monitor points, written for a person: the URL, or for a ping or
+     * port monitor the host, with the port when there is one.
+     *
+     * Read wherever the URL used to be shown or sent: the detail header, the
+     * notification body, the webhook payload. Those kinds keep [url] empty, and a
+     * notification ending in a blank line was the first thing a ping monitor
+     * would otherwise have shown.
+     */
+    val address: String
+        get() = when (kind) {
+            MonitorKind.PING -> NetworkTarget.display(network.cleanHost, null)
+            MonitorKind.TCP_PORT -> NetworkTarget.display(network.cleanHost, network.port.takeIf { it > 0 })
+            else -> url
+        }
 
     /** Every captured element this monitor watches, oldest store format included. */
     val targets: List<ElementTarget>
@@ -936,6 +994,8 @@ data class Sample(
      * [GitHubActivity] treats those as "nothing known", not as a change.
      */
     val repo: RepoFacts? = null,
+    /** Echo replies, for a [MonitorKind.PING] monitor only. Null everywhere else. */
+    val ping: PingReading? = null,
 )
 
 @Serializable
@@ -1251,6 +1311,13 @@ enum class FailureKind {
     /** A health document was read and its verdict is down. */
     REPORTED_DOWN,
 
+    /**
+     * Every echo request went unanswered. Separate from [TIMEOUT] because the
+     * likeliest reason is not a slow host: plenty of firewalls drop ICMP on
+     * purpose, and the hint has to say that.
+     */
+    NO_REPLY,
+
     /** Something answered, and it was not the Nightbell health format. */
     NOT_HEALTH_FORMAT,
 
@@ -1276,6 +1343,7 @@ enum class FailureKind {
             RENDER -> "Page did not render"
             METRIC -> "Reported a problem"
             REPORTED_DOWN -> "Reported down"
+            NO_REPLY -> "No reply"
             NOT_HEALTH_FORMAT -> "Not a health endpoint"
             SIGN_IN_SERVER -> "Sign-in server unreachable"
             TOKEN_REFUSED -> "Signed in, but the API refused the token"
@@ -1297,6 +1365,7 @@ enum class FailureKind {
             RENDER -> "The page failed to load in the embedded browser."
             METRIC -> "The endpoint answered. What it reported is the problem."
             REPORTED_DOWN -> "The service answered and says it is down. The parts below say where."
+            NO_REPLY -> "The host may be down, or ICMP is filtered on the way. A TCP port check on the same host tells the two apart."
             NOT_HEALTH_FORMAT -> "A deploy may have replaced the endpoint, or the URL points at the web app."
             SIGN_IN_SERVER -> "If Nightbell cannot reach the provider, neither can the service's users."
             TOKEN_REFUSED -> "Real users' tokens would be refused the same way. The account may lack a role."
@@ -1368,6 +1437,8 @@ data class CheckResult(
      * parts to show. Null on every other kind, which leaves the runtime's alone.
      */
     val health: HealthState? = null,
+    /** Echo replies, for a [MonitorKind.PING] check. Null on every other kind. */
+    val ping: PingReading? = null,
     val at: Long = 0L,
 ) {
     /** The next step to show, specific where the check had one. */

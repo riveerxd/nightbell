@@ -184,6 +184,19 @@ object NightbellIcons {
         "Radar",
         "M12 20.6 A8.6 8.6 0 1 0 3.4 12 M12 16.8 A4.8 4.8 0 1 0 7.2 12 M12 12 L18.2 5.8",
     )
+    /** A point with its echo going out both ways. The ping kind. */
+    val Echo = stroke(
+        "Echo",
+        "M12 11.9 L12 12.1 M8.4 8.4 A5.1 5.1 0 0 0 8.4 15.6 M15.6 8.4 A5.1 5.1 0 0 1 15.6 15.6 " +
+            "M5.4 5.4 A9.33 9.33 0 0 0 5.4 18.6 M18.6 5.4 A9.33 9.33 0 0 1 18.6 18.6",
+    )
+
+    /** Two prongs and a cable. The TCP port kind: something you plug into. */
+    val Plug = stroke(
+        "Plug",
+        "M9.4 3.4 L9.4 7.6 M14.6 3.4 L14.6 7.6 M6.6 7.6 L17.4 7.6 L17.4 11.2 " +
+            "C17.4 14.3 15 16.6 12 16.6 C9 16.6 6.6 14.3 6.6 11.2 Z M12 16.6 L12 20.8",
+    )
     val Link = stroke(
         "Link",
         "M10.4 13.6 A4.2 4.2 0 0 0 16.3 13.9 L18.7 11.5 A4.2 4.2 0 0 0 12.8 5.6 L11.4 7 " +

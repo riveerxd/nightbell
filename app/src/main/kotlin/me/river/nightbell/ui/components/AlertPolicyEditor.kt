@@ -292,20 +292,46 @@ fun AlertPolicyEditor(
                     color = NightbellColors.TextTertiary,
                     modifier = Modifier.padding(start = 2.dp, bottom = 8.dp),
                 )
-                // Only while there is something to retry. At one failure the first
-                // failed check already alerts, and a switch that changes nothing
-                // is a control somebody has to try in order to understand.
+                StepperRow(
+                    title = "Passes before all-clear",
+                    value = policy.recoveryThreshold,
+                    onValueChange = { onChange(policy.copy(recoveryThreshold = it)) },
+                    range = 1..10,
+                    icon = NightbellIcons.Check,
+                    accent = accent,
+                    modifier = Modifier.testTag("policy-recovery-threshold"),
+                )
+                Text(
+                    text = if (policy.recoveryThreshold == 1) {
+                        "The first passing check ends the outage."
+                    } else {
+                        "Stays down until ${policy.recoveryThreshold} checks pass in a row, so a host " +
+                            "that flaps does not page, clear and page again."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = NightbellColors.TextTertiary,
+                    modifier = Modifier.padding(start = 2.dp, bottom = 8.dp),
+                )
+                // Only while there is something to retry. At one failure and one
+                // pass every check already decides, and a switch that changes
+                // nothing is a control somebody has to try in order to understand.
                 AnimatedVisibility(
-                    visible = policy.failureThreshold > 1,
+                    visible = policy.failureThreshold > 1 || policy.recoveryThreshold > 1,
                     enter = fadeIn() + expandVertically(),
                     exit = fadeOut() + shrinkVertically(),
                 ) {
                     val retries = policy.failureThreshold - 1
                     ToggleRow(
                         title = "Retry right away",
-                        subtitle = if (policy.quickRetry) {
+                        subtitle = if (policy.quickRetry && retries == 0) {
+                            "Re-checks every ${QuickRetry.GAP_MS / 1000}s once it answers again, so the " +
+                                "all-clear comes about ${quickRetryLead(policy.recoveryThreshold - 1)} " +
+                                "after the first good check"
+                        } else if (policy.quickRetry) {
                             "Re-checks every ${QuickRetry.GAP_MS / 1000}s after a failure, so it " +
                                 "alerts about ${quickRetryLead(retries)} after the first failed check"
+                        } else if (retries == 0) {
+                            "Waits for the next scheduled check each time it answers again"
                         } else {
                             "Waits for the next scheduled check each time, " +
                                 if (retries == 1) "so one extra interval" else "so $retries extra intervals"

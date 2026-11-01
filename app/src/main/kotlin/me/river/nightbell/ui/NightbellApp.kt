@@ -355,6 +355,12 @@ private fun NightbellNavHost(
                 onEdit = { navController.navigate(Routes.setupEdit(it)) },
                 onToast = onToast,
                 onOpenWebhook = { navController.navigate(Routes.webhook(it)) },
+                onOpenMonitor = { navController.navigate(Routes.detail(it)) },
+                onAddOnHost = {
+                    navController.navigate(
+                        Routes.setupNew(me.river.nightbell.domain.MonitorTemplates.sameHostId(it)),
+                    )
+                },
             )
         }
 

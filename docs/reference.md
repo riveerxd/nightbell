@@ -16,6 +16,8 @@ watch it, chart it, and shout when it breaks.
 | **Prometheus** | Reads a metrics endpoint, a PromQL query or an Alertmanager. Three sources, one kind. See below. |
 | **Health endpoint** | Reads a service's own report of itself in the health report format: a verdict, each part, the rules that decided it and the evidence. Signs in the way the service's own clients do, including single sign-on. See below. |
 | **GitHub repository** | Watches a repository over the public API: stars, issues, pull requests, comments, releases and how often the release files are downloaded. See below. |
+| **Ping** | ICMP echo to an IPv4 or IPv6 address or a host name: whether it answers, the fastest, average and slowest reply, and packet loss. No root. See below. |
+| **TCP port** | Opens a connection to one port and closes it again, nothing sent. Reports whether something is listening and how long the handshake took. See below. |
 
 ### A GitHub repository
 
@@ -241,6 +243,49 @@ the card stops saying "Not checking" and the notification about it is taken
 down. A provider that could not be reached leaves it as it was, since that says
 nothing about whether the session is still good.
 
+### Ping and TCP port
+
+Asked for in issue 21: network reachability next to service health, so an
+outage can be placed. Both take an IPv4 or IPv6 literal or a host name. Pasting
+`host:port`, `[2001:db8::1]:443` or a whole URL into the host field works; the
+host is kept, and for a port check the port moves to its own field when the
+field is left. A name can be pinned to IPv4 or IPv6 with the address family
+chips, which is how a dual-stack host gets watched over each family separately.
+A literal is always checked over its own family.
+
+**Ping** sends 1 to 10 echo requests one second apart (3 by default), each
+waiting up to the reply timeout. Every reply back is up. Some lost is degraded:
+amber, with its own "losing packets" notification on the degraded track if that
+track is on. All lost is down, as "No reply", whose hint says the thing worth
+knowing: ICMP is often filtered, and a port check on the same host tells the
+two apart. The round trips are kept in microseconds, because a host on the
+same network answers in a fraction of a millisecond.
+
+It uses the unprivileged ICMP datagram socket Linux opens to every group in
+`net.ipv4.ping_group_range`, which Android sets to every app. The kernel fills
+the identifier and checksum and hands the socket only its own replies; replies
+are matched by sequence number and a per-check marker in the payload. There is
+no fallback to `/system/bin/ping`: without root it opens the same socket from
+the same SELinux domain. If a phone refuses the socket, the check says so as a
+configuration problem rather than calling the host down.
+
+**TCP port** connects with the timeout and hangs up. Refused, timed out and
+no route are told apart in the message.
+
+Neither goes through the SOCKS proxy. No proxy carries ICMP, and a port check
+through one measures the proxy. Setup does not offer routing or certificate
+trust for these kinds, and saving one clears those settings.
+
+The detail screen adds, for both: an **Outages** card read from the stored
+checks (last answered, last failed, each outage with its start, length and
+first reason, and the total), and a **This host** card listing every other
+monitor on the same host with its state. When a ping and a service check share
+a host, the card reads them together: ping up and port down is the service,
+ping down and port up is ICMP being filtered, both down is the host or the route.
+**Add a check on this host** opens setup on the same host with the
+complementary kind picked. The card also appears on any other kind's screen
+once something shares its host. A ping also gets an **Echo replies** card.
+
 ## Alerting
 
 Every monitor either inherits the global alert policy or overrides it:
@@ -251,8 +296,16 @@ Every monitor either inherits the global alert policy or overrides it:
 - **Haptics**: six named patterns, Tick, Double pulse, Long buzz, Heartbeat,
   S·O·S, Escalating. Tapping a style plays it immediately so you can feel it
   before you trust it.
-- **Escalation**: failure threshold (ignore blips), cooldown between alerts,
-  optional repeat-while-down nagging.
+- **Escalation**: failure threshold (ignore blips), passes before the all-clear,
+  cooldown between alerts, optional repeat-while-down nagging.
+- **Passes before all-clear**, 1 by default, which is the old behaviour. Above
+  one, an outage stands until that many checks pass in a row: the down notice
+  stays up, an urgent page is held (neither repeated nor cleared), and webhooks
+  hear "recovered" at the same moment the phone does, with the whole outage's
+  length. The card says "Answering again · 1 of 3 good checks before the
+  all-clear". Retry right away confirms these the same way it confirms failures,
+  30 s apart. The card's colour is still the latest check, as it already was
+  while a failure threshold was counting.
 - **Retry right away**, on by default and shown only when the threshold is above
   one. The failures that confirm an outage are checked 30 s apart inside the same
   background run instead of one schedule period apart, so a threshold of three
@@ -1370,7 +1423,7 @@ keytool -genkeypair -v -keystore keystore/nightbell-release.jks -alias nightbell
 
 ## Testing
 
-**1260 JVM + 573 on-device = 1833 automated tests.** Counted from the source;
+**1323 JVM + 586 on-device = 1909 automated tests.** Counted from the source;
 the table below has not been recounted row by row since it was first written.
 
 | Suite | Count | Covers |

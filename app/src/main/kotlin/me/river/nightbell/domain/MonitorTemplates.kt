@@ -128,4 +128,41 @@ object MonitorTemplates {
     )
 
     fun byId(id: String): Template? = all.firstOrNull { it.id == id }
+
+    private const val SAME_HOST = "host:"
+
+    /** The template id for "another check on this monitor's host". */
+    fun sameHostId(monitorId: String): String = SAME_HOST + monitorId
+
+    /** The monitor a same-host id points at, or null for any other id. */
+    fun sameHostSource(templateId: String?): String? =
+        templateId?.takeIf { it.startsWith(SAME_HOST) }?.removePrefix(SAME_HOST)?.ifBlank { null }
+
+    /**
+     * A draft aimed at [source]'s host.
+     *
+     * The kind picked is the one the issue's own table pairs with the source: a
+     * ping wants a port check beside it and anything else wants a ping, which is
+     * the pair that tells a filtered network from a dead service. A URL is carried
+     * as its origin, so choosing a request kind instead starts from the same site.
+     */
+    fun sameHost(draft: Monitor, source: Monitor): Monitor {
+        val host = NetworkTarget.hostOf(source)
+        val origin = if (source.kind.isNetwork || source.url.isBlank()) {
+            ""
+        } else {
+            val scheme = source.url.substringBefore("://", "")
+            val authority = source.url.substringAfter("://").substringBefore('/').substringBefore('?')
+                .substringBefore('#').substringAfterLast('@')
+            if (scheme.isBlank()) "" else "$scheme://$authority"
+        }
+        return draft.copy(
+            kind = if (source.kind == MonitorKind.PING) MonitorKind.TCP_PORT else MonitorKind.PING,
+            url = origin,
+            network = NetworkWatch(
+                host = host,
+                family = source.network.family.takeIf { source.kind.isNetwork } ?: IpFamily.ANY,
+            ),
+        )
+    }
 }

@@ -101,6 +101,7 @@ import me.river.nightbell.ui.components.rememberEntranceLog
 import me.river.nightbell.ui.components.StatusOrb
 import me.river.nightbell.ui.components.UptimeRing
 import me.river.nightbell.ui.components.formatLatency
+import me.river.nightbell.domain.PingReading
 import me.river.nightbell.ui.components.formatRelative
 import me.river.nightbell.ui.components.formatSpan
 import me.river.nightbell.ui.components.HoldToConfirmButton
@@ -129,8 +130,11 @@ fun DetailScreen(
     onEdit: (String) -> Unit,
     onToast: (ToastMessage) -> Unit,
     onOpenWebhook: (String) -> Unit = {},
+    onOpenMonitor: (String) -> Unit = {},
+    onAddOnHost: (String) -> Unit = {},
 ) {
     val viewModel = rememberDetailViewModel(monitorId)
+    val sameHost by viewModel.sameHost.collectAsStateWithLifecycle()
     val webhooks by viewModel.webhooks.collectAsStateWithLifecycle()
     val card by viewModel.card.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
@@ -225,7 +229,7 @@ fun DetailScreen(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = monitor.url,
+                        text = monitor.address,
                         style = MaterialTheme.typography.bodySmall,
                         color = NightbellColors.TextTertiary,
                         maxLines = 1,
@@ -376,6 +380,14 @@ fun DetailScreen(
             }
         }
 
+        if (monitor.kind == MonitorKind.PING && runtime.samples.any { it.ping != null }) {
+            item(key = "ping") {
+                StaggeredEntrance(index = 2, key = "ping-${monitor.id}", log = entrance) {
+                    PingCard(runtime.samples, accentEnd)
+                }
+            }
+        }
+
         if (monitor.kind != MonitorKind.GITHUB_REPO && monitor.kind != MonitorKind.HEALTH_ENDPOINT && runtime.samples.isNotEmpty()) {
             item(key = "chart") {
                 StaggeredEntrance(index = 2, key = "chart-${monitor.id}", log = entrance) {
@@ -386,6 +398,9 @@ fun DetailScreen(
                         // 28 over" count disagree the moment the depth changed.
                         val plotted = runtime.samples.takeLast(40)
                         val budget = monitor.sloMs(settings)
+                        // In a ping's own microseconds, or the tiles say "1 ms"
+                        // right under an echo card that says 0.16.
+                        val pingFigures = pingAverageAndP95(runtime.samples)
                         LatencyBars(
                             samples = plotted,
                             modifier = Modifier.fillMaxWidth().height(112.dp),
@@ -399,13 +414,13 @@ fun DetailScreen(
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             MetricTile(
                                 label = "Average",
-                                value = formatLatency(runtime.averageLatencyMs),
+                                value = pingFigures?.first ?: formatLatency(runtime.averageLatencyMs),
                                 accent = accentEnd,
                                 modifier = Modifier.weight(1f),
                             )
                             MetricTile(
                                 label = "p95",
-                                value = formatLatency(runtime.p95LatencyMs),
+                                value = pingFigures?.second ?: formatLatency(runtime.p95LatencyMs),
                                 accent = NightbellColors.Violet,
                                 modifier = Modifier.weight(1f),
                             )
@@ -421,7 +436,37 @@ fun DetailScreen(
             }
         }
 
-        if (runtime.certExpiresAt > 0L) {
+        // A ping or port monitor's history is mostly a question of when it was
+        // down and for how long, which the check list below answers one row at
+        // a time and this answers at a glance.
+        if (monitor.kind.isNetwork && runtime.samples.isNotEmpty()) {
+            item(key = "outages") {
+                StaggeredEntrance(index = 3, key = "outages-${monitor.id}", log = entrance) {
+                    OutagesCard(runtime.samples, now, accent)
+                }
+            }
+        }
+
+        // Always for a ping or port monitor, since checking a host two ways is
+        // what those kinds are for. For any other kind only once something else
+        // shares its host, so a website with nothing beside it is not offered a
+        // card about a feature it never asked about.
+        if (monitor.kind != MonitorKind.UNSUPPORTED && (monitor.kind.isNetwork || sameHost.isNotEmpty())) {
+            item(key = "same-host") {
+                StaggeredEntrance(index = 3, key = "same-host-${monitor.id}", log = entrance) {
+                    SameHostCard(
+                        monitor = monitor,
+                        health = health,
+                        siblings = sameHost,
+                        accent = accent,
+                        onOpen = onOpenMonitor,
+                        onAdd = { onAddOnHost(monitor.id) },
+                    )
+                }
+            }
+        }
+
+        if (runtime.certExpiresAt > 0L && !monitor.kind.isNetwork) {
             item(key = "cert") {
                 StaggeredEntrance(index = 3, key = "cert-${monitor.id}", log = entrance) {
                     CertificateCard(monitor, runtime, now, viewModel::repinCertificate)
@@ -647,6 +692,8 @@ private fun HeroCard(
                         "Not checking · Sign in needed"
                     } else if (runtime.lastAlerts.isNotEmpty()) {
                         runtime.alertsFiringLine
+                    } else if (streak?.recovering == true) {
+                        "Answering again · ${streak.line}"
                     } else if (streak != null && runtime.lastMessage.isNotBlank()) {
                         "${runtime.lastMessage} · ${streak.line}"
                     } else {
@@ -659,6 +706,11 @@ private fun HeroCard(
                                 monitor.kind == MonitorKind.HEALTH_ENDPOINT && runtime.expectedParts.isNotEmpty() &&
                                     HealthFormat.summary(runtime.report, runtime.expectedParts).endsWith("expected") ->
                                     HealthFormat.summary(runtime.report, runtime.expectedParts)
+                                // "3 of 3 replies, 0.28 ms average", "Port 22 open,
+                                // connected in 4 ms": the check's own sentence says
+                                // more than a bare latency, and for an amber ping it
+                                // is the loss that made it amber.
+                                monitor.kind.isNetwork && runtime.lastReading.isNotBlank() -> runtime.lastReading
                                 health == Health.DEGRADED && monitor.kind == MonitorKind.HEALTH_ENDPOINT ->
                                     HealthFormat.summary(runtime.report, runtime.expectedParts).ifBlank { runtime.lastReading }
                                         .ifBlank { "Reported degraded" }
@@ -1342,6 +1394,17 @@ private fun ConfigCard(
             if (monitor.headers.isNotEmpty()) {
                 ConfigRow("Headers", monitor.headers.joinToString(", ") { it.name })
             }
+        } else if (monitor.kind.isNetwork) {
+            ConfigRow("Host", monitor.network.cleanHost)
+            if (monitor.kind == MonitorKind.TCP_PORT) ConfigRow("Port", monitor.network.port.toString())
+            if (monitor.kind == MonitorKind.PING) {
+                ConfigRow("Packets", "${monitor.network.packets} per check, one second apart")
+            }
+            ConfigRow(
+                "Address family",
+                me.river.nightbell.domain.NetworkTarget.literalFamily(monitor.network.cleanHost)?.label
+                    ?: monitor.network.family.label,
+            )
         } else if (monitor.kind != MonitorKind.WEBSITE_ELEMENT) {
             ConfigRow("Method", monitor.method.name)
             ConfigRow("Expected status", monitor.status.summary)
@@ -1373,12 +1436,15 @@ private fun ConfigCard(
             }
         }
         ConfigRow("Interval", "every ${monitor.intervalMinutes} min")
-        ConfigRow("Timeout", "${monitor.timeoutSeconds}s")
+        ConfigRow(
+            if (monitor.kind == MonitorKind.PING) "Reply timeout" else "Timeout",
+            "${monitor.timeoutSeconds}s",
+        )
         // Only when it has been changed. The TLS certificate card says more, and
         // says it better, but it only appears once a certificate has been seen, so
         // a monitor that has never got past the handshake would otherwise show
         // nothing anywhere about the setting that is failing it.
-        if (monitor.kind != MonitorKind.GITHUB_REPO && monitor.tlsTrust != TlsTrust.SYSTEM) {
+        if (monitor.kind != MonitorKind.GITHUB_REPO && !monitor.kind.isNetwork && monitor.tlsTrust != TlsTrust.SYSTEM) {
             ConfigRow("Certificate", monitor.tlsTrust.label)
         }
         if (monitor.kind != MonitorKind.GITHUB_REPO) {
@@ -1487,14 +1553,20 @@ private fun EventRow(sample: Sample) {
         )
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
+            val ping = sample.ping
             Text(
-                text = if (sample.ok) {
-                    "Healthy${if (sample.code > 0) " · ${sample.code}" else ""}"
-                } else {
-                    sample.note.ifBlank { "Failed" }
+                text = when {
+                    !sample.ok -> sample.note.ifBlank { "Failed" }
+                    ping != null && ping.lost > 0 -> "${ping.repliesLine}, ${ping.lossPercent}% lost"
+                    ping != null -> ping.repliesLine
+                    else -> "Healthy${if (sample.code > 0) " · ${sample.code}" else ""}"
                 },
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (sample.ok) NightbellColors.TextSecondary else NightbellColors.Rose,
+                color = when {
+                    !sample.ok -> NightbellColors.Rose
+                    ping != null && ping.lost > 0 -> NightbellColors.Amber
+                    else -> NightbellColors.TextSecondary
+                },
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -1506,7 +1578,9 @@ private fun EventRow(sample: Sample) {
         }
         Spacer(Modifier.width(10.dp))
         Text(
-            text = formatLatency(sample.latencyMs),
+            // A ping's own figure, since a LAN reply in 0.3 ms is not "1 ms".
+            text = sample.ping?.takeIf { it.answered }?.let { PingReading.formatUs(it.avgUs) }
+                ?: formatLatency(sample.latencyMs),
             // Tabular figures, because this is a column of numbers rather than a
             // number in a sentence: twenty-four of these stack up the right edge
             // of the history and proportional digits make the column ragged for
@@ -2056,4 +2130,12 @@ private fun GitHubHealthCard(
             )
         }
     }
+}
+
+/** Average and p95 of the answered pings' round trips, formatted, or null with none to read. */
+private fun pingAverageAndP95(samples: List<Sample>): Pair<String, String>? {
+    val us = samples.mapNotNull { it.ping?.takeIf { p -> p.answered }?.avgUs }.sorted()
+    if (us.isEmpty()) return null
+    val p95 = us[(kotlin.math.ceil(us.size * 0.95).toInt() - 1).coerceIn(0, us.lastIndex)]
+    return PingReading.formatUs(us.sum() / us.size) to PingReading.formatUs(p95)
 }

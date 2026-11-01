@@ -41,8 +41,12 @@ object QuickRetry {
      */
     const val BUDGET_MS = 7 * 60_000L
 
-    /** Where a failing monitor stands against its threshold. */
-    data class Streak(val failed: Int, val needed: Int) {
+    /**
+     * Where a monitor stands against a threshold: a failing one counting towards
+     * its alert, or, when [recovering], a passing one counting towards its
+     * all-clear. [failed] is the count either way.
+     */
+    data class Streak(val failed: Int, val needed: Int, val recovering: Boolean = false) {
         /**
          * The clause the card and the detail screen add to the failure message.
          *
@@ -52,7 +56,12 @@ object QuickRetry {
          * the card describing work that was not happening. The count is always
          * true.
          */
-        val line: String get() = "$failed of $needed failures before it alerts"
+        val line: String
+            get() = if (recovering) {
+                "$failed of $needed good checks before the all-clear"
+            } else {
+                "$failed of $needed failures before it alerts"
+            }
     }
 
     /**
@@ -71,6 +80,13 @@ object QuickRetry {
         silenced: Boolean,
     ): Streak? {
         if (silenced || !monitor.enabled || !policy.enabled || !policy.alertOnDown) return null
+        if (AlertDecider.recovering(runtime, policy)) {
+            return Streak(
+                failed = runtime.consecutiveSuccesses,
+                needed = policy.recoveryThreshold.coerceAtLeast(1),
+                recovering = true,
+            )
+        }
         val needed = policy.failureThreshold.coerceAtLeast(1)
         val failed = runtime.consecutiveFailures
         if (needed <= 1 || failed <= 0 || failed >= needed || runtime.alerting) return null
@@ -112,9 +128,12 @@ object QuickRetry {
     ): Boolean {
         if (!policy.quickRetry) return false
         if (monitor.kind == MonitorKind.GITHUB_REPO) return false
-        if (streak(monitor, policy, runtime, silenced) == null) return false
+        val streak = streak(monitor, policy, runtime, silenced) ?: return false
         val last = runtime.samples.lastOrNull() ?: return false
-        return !last.ok && last.at == runtime.lastCheckedAt
+        // A recovery is confirmed the same way an outage is: the passes come
+        // thirty seconds apart rather than a schedule apart, so a threshold of
+        // three clears in a minute, not in three intervals.
+        return last.ok == streak.recovering && last.at == runtime.lastCheckedAt
     }
 
     /** Whether the confirming check is due now. */

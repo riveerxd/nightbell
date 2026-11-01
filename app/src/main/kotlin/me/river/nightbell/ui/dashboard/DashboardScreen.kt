@@ -171,6 +171,8 @@ fun kindIcon(kind: MonitorKind) = when (kind) {
     MonitorKind.GITHUB_REPO -> NightbellIcons.Repo
     MonitorKind.PROMETHEUS -> NightbellIcons.Gauge
     MonitorKind.HEALTH_ENDPOINT -> NightbellIcons.Activity
+    MonitorKind.PING -> NightbellIcons.Echo
+    MonitorKind.TCP_PORT -> NightbellIcons.Plug
     MonitorKind.UNSUPPORTED -> NightbellIcons.Info
 }
 
@@ -1628,7 +1630,10 @@ private fun MonitorRowCard(
             }
             if (runtime.lastLatencyMs > 0) {
                 MicroTag(
-                    text = formatLatency(runtime.lastLatencyMs),
+                    // A ping's own precision: a LAN reply is 0.3 ms, not 1 ms.
+                    text = runtime.samples.lastOrNull()?.ping?.takeIf { it.answered }
+                        ?.let { me.river.nightbell.domain.PingReading.formatUs(it.avgUs) }
+                        ?: formatLatency(runtime.lastLatencyMs),
                     color = if (health == Health.DEGRADED) NightbellColors.Amber else NightbellColors.TextSecondary,
                     icon = NightbellIcons.Gauge,
                 )
@@ -1729,13 +1734,22 @@ private fun MonitorRowCard(
         } else {
             null
         }
-        val reading = notChecking || partsLine != null || (
+        // Answering again after an outage, and still counting towards the
+        // all-clear. Without a line the card is mint while the down notice is
+        // still in the shade, which reads as the two disagreeing.
+        val recovering = card.streak?.recovering == true
+        // A ping that lost some of its replies: amber, and the loss is why.
+        val losing = monitor.kind == MonitorKind.PING &&
+            runtime.health == Health.DEGRADED &&
+            runtime.lastReading.isNotBlank() &&
+            runtime.samples.lastOrNull()?.ping?.partial == true
+        val reading = notChecking || partsLine != null || losing || (
             monitor.kind == MonitorKind.PROMETHEUS &&
                 runtime.ok(monitor.enabled) &&
                 runtime.lastReading.isNotBlank()
             )
         AnimatedVisibility(
-            visible = reading || (!runtime.ok(monitor.enabled) && runtime.lastMessage.isNotBlank()),
+            visible = reading || recovering || (!runtime.ok(monitor.enabled) && runtime.lastMessage.isNotBlank()),
             enter = fadeIn(),
             exit = fadeOut(),
         ) {
@@ -1744,7 +1758,9 @@ private fun MonitorRowCard(
             // carries the health, in the colour that means health.
             val tone = when {
                 notChecking -> NightbellColors.TextTertiary
+                losing -> NightbellColors.Amber
                 reading -> accent
+                recovering -> NightbellColors.Mint
                 muted -> NightbellColors.Amber
                 else -> NightbellColors.Rose
             }
@@ -1771,7 +1787,9 @@ private fun MonitorRowCard(
                         when {
                             notChecking -> NightbellIcons.Shield
                             partsLine != null -> NightbellIcons.Layers
+                            losing -> NightbellIcons.Echo
                             reading -> NightbellIcons.Gauge
+                            recovering -> NightbellIcons.Refresh
                             muted -> NightbellIcons.BellOff
                             else -> NightbellIcons.Warning
                         },
@@ -1830,6 +1848,7 @@ private fun MonitorRowCard(
                                 notChecking -> "Not checking · Sign in needed"
                                 partsLine != null -> partsLine
                                 reading -> runtime.lastReading
+                                recovering -> "Answering again · ${card.streak?.line}"
                                 muted -> "${runtime.lastMessage} · muted, no alerts"
                                 card.streak != null -> "${runtime.lastMessage} · ${card.streak.line}"
                                 else -> runtime.lastMessage
@@ -1900,8 +1919,14 @@ private fun MonitorRowCard(
                         text = monitor.prometheus.source.label,
                         color = NightbellColors.TextTertiary,
                     )
+                } else if (monitor.kind == MonitorKind.PING) {
+                    MicroTag(
+                        text = "${monitor.network.packets} ${if (monitor.network.packets == 1) "packet" else "packets"}",
+                        color = NightbellColors.TextTertiary,
+                    )
                 } else if (monitor.kind != MonitorKind.WEBSITE_ELEMENT &&
-                    monitor.kind != MonitorKind.GITHUB_REPO
+                    monitor.kind != MonitorKind.GITHUB_REPO &&
+                    monitor.kind != MonitorKind.TCP_PORT
                 ) {
                     MicroTag(text = monitor.method.name, color = NightbellColors.TextTertiary)
                 }

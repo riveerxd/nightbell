@@ -31,6 +31,12 @@ object AlertDecider {
         DEGRADED_ALERTS_OFF,
         DEGRADED_RECOVERY_ALERTS_OFF,
         BELOW_THRESHOLD,
+
+        /**
+         * Passing again, and not yet for [AlertPolicy.recoveryThreshold] checks
+         * in a row. The outage still stands: the caller keeps it alerting.
+         */
+        RECOVERY_PENDING,
         COOLDOWN,
         QUIET_HOURS,
         NO_TRANSITION,
@@ -46,6 +52,7 @@ object AlertDecider {
                 DEGRADED_ALERTS_OFF -> "Latency alerts are off for this monitor"
                 DEGRADED_RECOVERY_ALERTS_OFF -> "Latency all-clears are off for this monitor"
                 BELOW_THRESHOLD -> "Waiting for the failure threshold"
+                RECOVERY_PENDING -> "Waiting for enough passing checks to call it recovered"
                 COOLDOWN -> "Inside the alert cooldown window"
                 QUIET_HOURS -> "Quiet hours are active"
                 NO_TRANSITION -> "Nothing changed"
@@ -68,6 +75,9 @@ object AlertDecider {
      * @param wasAlerting whether this monitor was already in an alerting state
      * @param ok outcome of the check that just finished
      * @param consecutiveFailures failure streak *including* the check that just finished
+     * @param consecutiveSuccesses passing streak *including* the check that just
+     *   finished. Defaults to "plenty", which is how every caller that predates
+     *   [AlertPolicy.recoveryThreshold] behaved.
      * @param lastAlertAt epoch millis of the last alert we raised (0 = never)
      * @param nowMs current epoch millis
      * @param minuteOfDay local wall-clock minute, 0..1439, used for quiet hours
@@ -81,6 +91,7 @@ object AlertDecider {
         masterEnabled: Boolean,
         nowMs: Long,
         minuteOfDay: Int,
+        consecutiveSuccesses: Int = Int.MAX_VALUE,
     ): Decision {
         if (!masterEnabled) return Decision.none(Suppression.MASTER_MUTED)
         if (!policy.enabled) return Decision.none(Suppression.POLICY_DISABLED)
@@ -90,6 +101,12 @@ object AlertDecider {
 
         if (ok) {
             if (!wasAlerting) return Decision.none(Suppression.NO_TRANSITION)
+            // Ahead of the recovery switch: with all-clears turned off the outage
+            // still has to be over before the down notice comes down, and over
+            // means the same number of passes either way.
+            if (consecutiveSuccesses < policy.recoveryThreshold.coerceAtLeast(1)) {
+                return Decision.none(Suppression.RECOVERY_PENDING)
+            }
             if (!policy.alertOnRecovery) return Decision.none(Suppression.RECOVERY_ALERTS_OFF)
             // Recovery is good news: never nag-blocked by cooldown, but stays
             // quiet during quiet hours unless the user opted into bypass.
@@ -177,6 +194,16 @@ object AlertDecider {
         return Decision(Kind.DEGRADED_REPEAT, forceSilent = quiet)
     }
 
+    /**
+     * Whether a monitor is passing again but still inside its outage, read off
+     * the stored runtime. For the paths that have no fresh decision to look at:
+     * the urgent tick and the card.
+     */
+    fun recovering(runtime: MonitorRuntime, policy: AlertPolicy): Boolean =
+        runtime.alerting &&
+            runtime.health != Health.DOWN &&
+            runtime.consecutiveSuccesses in 1 until policy.recoveryThreshold.coerceAtLeast(1)
+
     /** Handles windows that wrap past midnight, e.g. 22:00 → 07:00. */
     fun inQuietHours(minuteOfDay: Int, startMinute: Int, endMinute: Int): Boolean {
         if (startMinute == endMinute) return false
@@ -217,6 +244,7 @@ object AlertDecider {
             code = result.statusCode,
             note = if (result.ok) "" else result.message,
             repo = result.repo,
+            ping = result.ping,
         )
         val history = (previous.samples + sample).takeLast(historyDepth.coerceAtLeast(1))
         val failures = if (result.ok) 0 else previous.consecutiveFailures + 1
