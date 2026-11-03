@@ -448,7 +448,7 @@ test("every kind of check is reachable, and switching kinds moves nothing", asyn
   test.skip(info.project.name.includes("firefox"), "layout-shift entries are a Chromium API")
   await page.goto("/")
   const tabs = page.locator("#watch [role=tab]")
-  await expect(tabs).toHaveText([/Status check/, /Request and response/, /Page element/, /GitHub repository/, /Prometheus/, /Health endpoint/])
+  await expect(tabs).toHaveText([/Status check/, /Request and response/, /Page element/, /GitHub repository/, /Prometheus/, /Health endpoint/, /Ping/, /TCP port/])
   const panel = page.locator("#watch [role=tabpanel]")
   await panel.scrollIntoViewIfNeeded()
   const before = await panel.boundingBox()
@@ -462,7 +462,7 @@ test("every kind of check is reachable, and switching kinds moves nothing", asyn
         setTimeout(() => resolve(total), 4000)
       })
   )
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 8; i++) {
     await tabs.nth(i).click()
     await expect(tabs.nth(i)).toHaveAttribute("aria-selected", "true")
     expect((await panel.boundingBox())!.height).toBe(before!.height)

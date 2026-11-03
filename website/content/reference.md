@@ -1,5 +1,5 @@
 
-This page describes Nightbell 3.19.0. Settings is split into four tabs, Alerts,
+This page describes Nightbell 3.20.0. Settings is split into four tabs, Alerts,
 Checks, Look and About, and a path such as "Settings, Checks, Checker health"
 names the tab and then the card.
 
@@ -13,6 +13,8 @@ names the tab and then the card.
 | **Prometheus** | Reads a metrics endpoint, a PromQL query or an Alertmanager. Three sources, one kind. See below. |
 | **Health endpoint** | Reads a service's own report of itself in the health report format: a verdict, each part, the rules that decided it and the evidence. Signs in the way the service's own clients do, including single sign-on. See below. |
 | **GitHub repo** | Watches a repository over the public API: stars, issues, pull requests, comments, releases and how often the release files are downloaded. See below. |
+| **Ping** | ICMP echo to an IPv4 or IPv6 address or a host name: whether it answers, the fastest, average and slowest reply, and packet loss. No root. See below. |
+| **TCP port** | Opens a connection to one port and closes it again, nothing sent. Reports whether something is listening and how long the handshake took. See below. |
 
 ### Setting up a monitor
 
@@ -386,6 +388,47 @@ Marking a part that leaves the monitor up closes the outage on the phone without
 a recovery notification. Webhook targets are not told; one that saw the outage
 gets its recovery on the next check. Marks come along in a backup.
 
+### Ping and TCP port
+
+Network reachability next to service health, so an outage can be placed. Both
+take an IPv4 or IPv6 address or a host name. Pasting `host:port`,
+`[2001:db8::1]:443` or a whole URL into the host field works; the host is kept,
+and for a port check the port moves to its own field when you leave the field.
+A name can be pinned to IPv4 or IPv6 with the address family chips, which is
+how a dual-stack host gets watched over each family separately. An address is
+always checked over its own family.
+
+**Ping** sends 1 to 10 echo requests one second apart (3 by default), each
+waiting up to the reply timeout. Every reply back is up. Some lost is degraded:
+amber, with its own "losing packets" notification if "Notify when it goes slow"
+is on. All lost is down, as "No reply", and the hint under it says the thing
+worth knowing: ICMP is often filtered, and a port check on the same host tells
+the two apart.
+Round trips are kept in microseconds, because a host on the same network
+answers in a fraction of a millisecond.
+
+It needs no root. Android lets every app open the kernel's unprivileged ICMP
+socket, and the kernel hands that socket only its own replies. There is no
+fallback to the system `ping` binary, which without root opens the same socket.
+If a phone refuses the socket, the check says so as a configuration problem
+rather than calling the host down.
+
+**TCP port** connects with the timeout and hangs up. Refused, timed out and no
+route each get their own message.
+
+Neither goes through the SOCKS proxy. No proxy carries ICMP, and a port check
+through one measures the proxy. Setup does not offer routing or certificate
+trust for these kinds.
+
+The monitor screen adds an **Outages** card read from the stored checks: last
+answered, last failed, and each outage with its start, length and first reason.
+A **This host** card lists every other monitor on the same host with its state,
+and when a ping and a service check share a host it reads them together: ping up
+and a port down is the service, ping down and a port up is ICMP being filtered,
+both down is the host or the route to it. **Add a check on this host** opens
+setup on the same host with the other kind picked. A ping also gets an **Echo
+replies** card with the fastest, average and slowest reply of the last check.
+
 ### Assertions and element expectations
 
 **Response-body assertions:** contains, does not contain, exactly equals,
@@ -568,7 +611,8 @@ alert policy) or overrides it:
 | Sound | Notification tone | Silent, Notification tone, Alarm tone, Ringtone |
 | Haptics | Double pulse | Tick, Double pulse, Long buzz, Heartbeat, S · O · S, Escalating |
 | Failures before alerting | 1 | 1 to 10 |
-| Retry right away | on | shown only when failures before alerting is above 1 |
+| Passes before all-clear | 1 | 1 to 10 |
+| Retry right away | on | shown only when either of the two above is above 1 |
 | Cooldown | 10 min | 0 to 240 |
 | Keep reminding me (repeat while down) | off, every 30 min | 5 to 720 |
 | Quiet hours ("Silence overnight") | off, 22:00 to 07:00 | wraps past midnight |
@@ -578,6 +622,12 @@ Tapping a haptic style plays it immediately so you can feel it before you trust
 it, and **Send a test alert** posts one. The master switch is **All alerts**, the
 first card under Settings, Alerts. If notifications are blocked for the app, a
 banner above the tabs says so and opens the right system screen.
+
+Passes before all-clear is how many checks in a row must pass before an outage
+is over. Until then the down notification stays up, an urgent alarm is held
+rather than cleared, and webhooks hear the recovery at the same moment the phone
+does. The card says "Answering again · 1 of 3 good checks before the
+all-clear". With Retry right away on, those checks run 30 s apart.
 
 Down and slow notifications carry **Re-check now** and **Mute 1h**. Mute is 1 hour
 everywhere except a repository monitor, where it is 24 hours.

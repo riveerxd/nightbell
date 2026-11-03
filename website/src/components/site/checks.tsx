@@ -212,6 +212,63 @@ function PrometheusDemo() {
   )
 }
 
+/*
+  One host read two ways, which is the point of having both kinds: the echo
+  replies on one side, the ports on the other, and the sentence the app's This
+  host card prints when they disagree. TEST-NET address, not a real server.
+*/
+const ECHO = [15.3, 16.0, 16.7]
+const PORTS = [
+  { port: 22, what: "SSH", ok: true, note: "connected in 18 ms" },
+  { port: 443, what: "HTTPS", ok: true, note: "connected in 17 ms" },
+  { port: 5432, what: "Postgres", ok: false, note: "connection refused" },
+] as const
+
+function PingDemo() {
+  return (
+    <div className="font-mono text-[13px]">
+      <p className="text-muted-foreground">ping 192.0.2.10</p>
+      <ol className="mt-3 grid gap-1" aria-label="Echo replies">
+        {ECHO.map((ms, i) => (
+          <li key={i} className="flex gap-4">
+            <span className="text-muted-foreground">seq {i + 1}</span>
+            <span>{ms.toFixed(1)} ms</span>
+          </li>
+        ))}
+      </ol>
+      <p className="mt-4 flex items-baseline gap-3">
+        <span>3 of 3 replies, none lost</span>
+        <span className="text-up ml-auto text-[11px] font-semibold tracking-[0.14em] uppercase">up</span>
+      </p>
+      <p className="text-muted-foreground mt-1">fastest 15.3, average 16.0, slowest 16.7</p>
+    </div>
+  )
+}
+
+function PortDemo() {
+  return (
+    <div>
+      <ul className="grid gap-2">
+        {PORTS.map((p) => (
+          <li key={p.port} className="border-border border-l-2 pl-4 font-mono text-[13px]">
+            <span className="flex items-baseline gap-3">
+              <span>192.0.2.10:{p.port}</span>
+              <span className="text-muted-foreground">{p.what}</span>
+              <span className={cn("ml-auto text-[11px] font-semibold tracking-[0.14em] uppercase", p.ok ? "text-up" : "text-down")}>
+                {p.ok ? "up" : "down"}
+              </span>
+            </span>
+            <span className="text-muted-foreground block">{p.note}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-5 text-[14px] leading-relaxed text-pretty">
+        The host answers ping, but port 5432 is down. The network is fine; look at the service.
+      </p>
+    </div>
+  )
+}
+
 /* A real screen with the demo floating in front of it, a hand's width closer. */
 function Stage({ src, w = 1080, h = 2400, children, tilt = 1 }: { src: string; w?: number; h?: number; children: ReactNode; tilt?: number }) {
   return (
@@ -409,6 +466,22 @@ const KINDS: Kind[] = [
     chips: [["up", "degraded", "down"], ["none", "headers", "basic", "single sign-on"]],
     demo: <HealthDemo />,
   },
+  {
+    id: "ping",
+    name: "Ping",
+    cost: "the host",
+    body: "ICMP echo to an IPv4 or IPv6 address or a name, with no root. Some replies lost is degraded, none back is down, and it reports the fastest, average and slowest reply.",
+    chips: [["1 to 10 packets", "IPv4", "IPv6", "either"]],
+    demo: <PingDemo />,
+  },
+  {
+    id: "port",
+    name: "TCP port",
+    cost: "one port",
+    body: "Connects to one port and hangs up, nothing sent. Refused, timed out and no route each say so. Next to a ping on the same host, the app says whether the network or the service is down.",
+    chips: [["22 SSH", "443 HTTPS", "3306 MySQL", "5432 Postgres", "any port"]],
+    demo: <PortDemo />,
+  },
 ]
 
 /*
@@ -440,7 +513,7 @@ export function Checks() {
           tone="up"
           title={
             <>
-              Six kinds of check. <Serif>Pick the cheapest one that would catch the outage.</Serif>
+              Eight kinds of check. <Serif>Pick the cheapest one that would catch the outage.</Serif>
             </>
           }
         />

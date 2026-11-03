@@ -32,6 +32,8 @@ export const softwareApplication = {
     "Health endpoint monitors that read a JSON health report and judge each part of it",
     "Prometheus monitors that read a metrics endpoint, a PromQL query or an Alertmanager",
     "GitHub repository monitors for stars, issues, pull requests, comments, releases and downloads",
+    "Ping monitors over IPv4 or IPv6 with latency and packet loss, no root needed",
+    "TCP port monitors that connect and hang up, for databases, SSH or VPN endpoints",
     "Webhooks to Slack, Teams, Discord, Google Chat, ntfy, Gotify, Telegram or any URL",
     "Full-screen urgent alert with a looping alarm until acknowledged",
     "Latency budgets with a separate degraded alert track",
