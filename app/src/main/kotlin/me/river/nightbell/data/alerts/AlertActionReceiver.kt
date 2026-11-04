@@ -70,6 +70,7 @@ class AlertActionReceiver : BroadcastReceiver() {
             ACTION_MUTE_24H -> {
                 graph.engine.mute(monitorId, MUTE_24H_MS)
                 graph.alerts.cancelGitHub(monitorId)
+                graph.alerts.cancelMail(monitorId)
             }
 
             // "I have read this." Takes down everything the repository has on
@@ -78,6 +79,7 @@ class AlertActionReceiver : BroadcastReceiver() {
             // the news, and rolling them back would announce all of it again.
             ACTION_MARK_SEEN -> {
                 graph.alerts.cancelGitHub(monitorId)
+                graph.alerts.cancelMail(monitorId)
                 graph.store.updateRuntime(monitorId) {
                     it.copy(github = it.github.copy(seenAt = System.currentTimeMillis()))
                 }

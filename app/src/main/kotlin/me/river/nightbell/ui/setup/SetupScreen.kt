@@ -274,6 +274,11 @@ fun SetupScreen(
                             // carry ICMP, and nothing makes a handshake to judge.
                             if (draft.kind.isNetwork) {
                                 Unit
+                            } else if (draft.kind == MonitorKind.MAILBOX) {
+                                // No routing: IMAP goes straight out. The certificate
+                                // rule does apply, a self-signed Dovecot being the
+                                // ordinary case for a home server.
+                                if (step == 1) CertificateTrustSection(viewModel, draft, report, accent)
                             } else if (step == 1) {
                                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                                     ProxyRoutingSection(viewModel, draft, report, accent)
@@ -453,6 +458,10 @@ private fun canLeaveStep(step: Int, draft: Monitor, report: Validation.Report): 
         report.of(Validation.Field.TOKEN)?.severity != Validation.Severity.ERROR &&
         report.of(Validation.Field.HOST)?.severity != Validation.Severity.ERROR &&
         report.of(Validation.Field.PORT)?.severity != Validation.Severity.ERROR &&
+        report.of(Validation.Field.MAIL_USER)?.severity != Validation.Severity.ERROR &&
+        report.of(Validation.Field.MAIL_PASSWORD)?.severity != Validation.Severity.ERROR &&
+        report.of(Validation.Field.MAIL_FOLDER)?.severity != Validation.Severity.ERROR &&
+        report.of(Validation.Field.WEBMAIL)?.severity != Validation.Severity.ERROR &&
         (draft.kind != MonitorKind.WEBSITE_ELEMENT || draft.element?.isCaptured == true)
     2 -> report.of(Validation.Field.ASSERTION)?.severity != Validation.Severity.ERROR &&
         report.of(Validation.Field.JSON_PATH)?.severity != Validation.Severity.ERROR &&
@@ -745,7 +754,11 @@ private fun StepTarget(
         value = draft.name,
         onValueChange = { value -> viewModel.update { it.copy(name = value) } },
         label = "Name",
-        placeholder = if (draft.kind.isNetwork) "Edge router, primary database, …" else "My API, marketing site, …",
+        placeholder = when {
+            draft.kind.isNetwork -> "Edge router, primary database, …"
+            draft.kind == MonitorKind.MAILBOX -> "Work inbox, server alerts, …"
+            else -> "My API, marketing site, …"
+        },
         note = report.of(Validation.Field.NAME),
         leadingIcon = NightbellIcons.Sparkle,
         accent = accent,
@@ -758,6 +771,8 @@ private fun StepTarget(
         HealthTargetCard(viewModel, draft, report, accent)
     } else if (draft.kind.isNetwork) {
         NetworkTargetCard(viewModel, draft, report, accent)
+    } else if (draft.kind == MonitorKind.MAILBOX) {
+        MailTargetCard(viewModel, draft, report, accent)
     } else {
         GlassField(
             value = draft.url,
@@ -1174,6 +1189,11 @@ private fun StepExpectations(
         return
     }
 
+    if (draft.kind == MonitorKind.MAILBOX) {
+        MailExpectationCard(viewModel, draft, report, accent)
+        return
+    }
+
     if (draft.kind == MonitorKind.WEBSITE_ELEMENT) {
         val elements = draft.targets
         if (elements.isEmpty()) {
@@ -1486,6 +1506,7 @@ private fun SummaryLine(label: String, value: String) {
  */
 private fun showsCertificate(draft: Monitor): Boolean {
     if (draft.kind == MonitorKind.GITHUB_REPO || draft.kind.isNetwork) return false
+    if (draft.kind == MonitorKind.MAILBOX) return true
     val url = draft.url.trim()
     return url.startsWith("https://", ignoreCase = true) ||
         (url.startsWith("http://", ignoreCase = true) && draft.followRedirects)
@@ -1829,7 +1850,9 @@ private fun StepSchedule(
         accent = accent,
         note = report.of(Validation.Field.TIMEOUT),
     )
-    if (draft.kind != MonitorKind.WEBSITE_ELEMENT && draft.kind != MonitorKind.GITHUB_REPO && !draft.kind.isNetwork) {
+    if (draft.kind != MonitorKind.WEBSITE_ELEMENT && draft.kind != MonitorKind.GITHUB_REPO &&
+        !draft.kind.isNetwork && draft.kind != MonitorKind.MAILBOX
+    ) {
         ToggleRow(
             title = "Follow redirects",
             subtitle = if (draft.followRedirects) "3xx responses are followed" else "3xx is reported as-is",

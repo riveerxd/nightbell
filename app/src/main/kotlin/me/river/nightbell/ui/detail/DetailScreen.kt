@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.Intent
+import androidx.core.net.toUri
 import android.net.Uri
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -377,6 +378,24 @@ fun DetailScreen(
         if (monitor.kind == MonitorKind.HEALTH_ENDPOINT) {
             item(key = "sign-in") {
                 HealthSignInCard(monitor, runtime.report, now)
+            }
+        }
+
+        if (monitor.kind == MonitorKind.MAILBOX) {
+            item(key = "mailbox") {
+                StaggeredEntrance(index = 2, key = "mailbox-${monitor.id}", log = entrance) {
+                    MailboxCard(
+                        monitor = monitor,
+                        state = runtime.mail,
+                        nowMs = now,
+                        accent = accent,
+                        onOpenWebmail = { url ->
+                            val intent = Intent(Intent.ACTION_VIEW, url.toUri())
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            runCatching { context.startActivity(intent) }
+                        },
+                    )
+                }
             }
         }
 
@@ -710,7 +729,8 @@ private fun HeroCard(
                                 // connected in 4 ms": the check's own sentence says
                                 // more than a bare latency, and for an amber ping it
                                 // is the loss that made it amber.
-                                monitor.kind.isNetwork && runtime.lastReading.isNotBlank() -> runtime.lastReading
+                                (monitor.kind.isNetwork || monitor.kind == MonitorKind.MAILBOX) &&
+                                    runtime.lastReading.isNotBlank() -> runtime.lastReading
                                 health == Health.DEGRADED && monitor.kind == MonitorKind.HEALTH_ENDPOINT ->
                                     HealthFormat.summary(runtime.report, runtime.expectedParts).ifBlank { runtime.lastReading }
                                         .ifBlank { "Reported degraded" }
@@ -1394,6 +1414,20 @@ private fun ConfigCard(
             if (monitor.headers.isNotEmpty()) {
                 ConfigRow("Headers", monitor.headers.joinToString(", ") { it.name })
             }
+        } else if (monitor.kind == MonitorKind.MAILBOX) {
+            val mail = monitor.mail
+            ConfigRow("Server", "${mail.cleanHost}:${mail.effectivePort} · ${mail.security.label}")
+            ConfigRow("User", mail.username)
+            ConfigRow("Folder", mail.cleanFolder)
+            ConfigRow(
+                "Announces",
+                listOfNotNull(
+                    "every message".takeIf { mail.notifyAll },
+                    mail.fromTerms.takeIf { it.isNotEmpty() }?.let { "alerts from ${it.joinToString(", ")}" },
+                    mail.subjectTerms.takeIf { it.isNotEmpty() }?.let { "alerts on ${it.joinToString(", ")}" },
+                ).joinToString(" · ").ifEmpty { "nothing" },
+            )
+            if (mail.skipRead) ConfigRow("Already read", "not announced")
         } else if (monitor.kind.isNetwork) {
             ConfigRow("Host", monitor.network.cleanHost)
             if (monitor.kind == MonitorKind.TCP_PORT) ConfigRow("Port", monitor.network.port.toString())

@@ -113,6 +113,22 @@ internal object TlsTrustConfig {
         return session
     }
 
+    /**
+     * The same three modes for a raw socket, which IMAP needs and OkHttp does not
+     * provide. Under [TlsTrust.SYSTEM] the platform factory is returned with no
+     * session, and the caller has to check the host name itself: a bare
+     * `SSLSocket` validates the chain and never the name.
+     */
+    fun rawSocketFactory(trust: TlsTrust, pin: String): Pair<SSLSocketFactory, Session?> {
+        if (trust == TlsTrust.SYSTEM) return (SSLSocketFactory.getDefault() as SSLSocketFactory) to null
+        val session = Session()
+        val manager = when {
+            trust == TlsTrust.PINNED && pin.isNotBlank() -> PinnedTo(pin, session)
+            else -> AcceptAny(session)
+        }
+        return socketFactory(manager) to session
+    }
+
     /** The `sha256/…` pin for a certificate, or empty when there is none to read. */
     fun pinOf(certificate: X509Certificate?): String =
         certificate?.let { CertificatePinner.pin(it) } ?: ""

@@ -46,6 +46,9 @@ import me.river.nightbell.domain.SpokenPage
 import me.river.nightbell.domain.StatusExpectation
 import me.river.nightbell.domain.StatusMode
 import me.river.nightbell.domain.HttpMethod
+import me.river.nightbell.domain.MailEvent
+import me.river.nightbell.domain.MailEvents
+import me.river.nightbell.domain.MailState
 import java.util.Calendar
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.cancellation.CancellationException
@@ -166,6 +169,13 @@ class CheckEngine(
     var network: NetworkChecker = NetworkChecker()
 
     /**
+     * Mailbox monitors. Null leaves the kind unchecked, which is what the tests
+     * that never meet one want. Set by the graph, which owns the vault it reads
+     * the password from.
+     */
+    var mail: MailChecker? = null
+
+    /**
      * Told that something was queued, so the graph can start a flush without
      * the check pass waiting on somebody else's server to answer.
      */
@@ -213,7 +223,37 @@ class CheckEngine(
         MonitorKind.GITHUB_REPO -> githubDryRun(monitor)
         MonitorKind.HEALTH_ENDPOINT -> healthDryRun(monitor, certPin)
         MonitorKind.PING, MonitorKind.TCP_PORT -> network.check(monitor)
+        MonitorKind.MAILBOX -> mailDryRun(monitor, certPin)
         else -> http.check(monitor, certPin)
+    }
+
+    /** The folders a mailbox's server offers, for setup's picker. Null when the kind is not wired. */
+    suspend fun mailFolders(monitor: Monitor): MailChecker.Outcome? {
+        val pin = store.currentSnapshot().runtimes[monitor.id]?.certPin.orEmpty()
+        return mail?.folders(monitor, pin)
+    }
+
+    /**
+     * "Test" on a mailbox. Against a blank state, so it signs in and reads the
+     * counters without fetching or announcing anything, and deliberate, so a
+     * password refused before is tried again: that is what a person pressing
+     * Test after fixing it is asking for.
+     */
+    private suspend fun mailDryRun(monitor: Monitor, certPin: String): CheckResult {
+        val checker = mail ?: return CheckResult(
+            ok = false,
+            latencyMs = 0,
+            failureKind = FailureKind.BAD_CONFIG,
+            message = "Mailbox checks are not available in this build",
+            at = nowMs(),
+        )
+        return checker.check(monitor, MailState(), certPin, deliberate = true).result ?: CheckResult(
+            ok = false,
+            latencyMs = 0,
+            failureKind = FailureKind.MAIL_LOGIN,
+            message = "Not signed in",
+            at = nowMs(),
+        )
     }
 
     /**
@@ -541,6 +581,8 @@ class CheckEngine(
         )
         store.markChecking(monitorId, true)
         var githubOutcome: GitHubChecker.Outcome? = null
+        var mailOutcome: MailChecker.Outcome? = null
+        val mailChecker = mail
         var healthOutcome: HealthChecker.Outcome? = null
         var expectedAfter: Map<String, HealthStatus>? = null
         val healthChecker = health
@@ -561,6 +603,14 @@ class CheckEngine(
                 // re-check has asked to look now, whatever the ladder says.
                 val outcome = github.poll(monitor, before.github, force = force)
                 githubOutcome = outcome
+                outcome.result
+            } else if (monitor.kind == MonitorKind.MAILBOX && mailChecker != null) {
+                // Here rather than `dryRun` for the same reason as GitHub: what
+                // arrived is not part of the verdict. Never deliberate, even when
+                // forced: `force` is also the urgent track re-checking stale
+                // evidence, and a refused password must not be retried by that.
+                val outcome = mailChecker.check(monitor, before.mail, before.certPin, deliberate = false)
+                mailOutcome = outcome
                 outcome.result
             } else if (monitor.kind == MonitorKind.HEALTH_ENDPOINT && healthChecker != null) {
                 // Through the broker rather than `dryRun`, because a check that
@@ -1040,6 +1090,10 @@ class CheckEngine(
             }
         } ?: { runtime: MonitorRuntime -> runtime }
 
+        // ---- mail track ------------------------------------------------------
+        val mailMutation = mailOutcome?.let { applyMail(monitor, it, before, policy, settings, muted, minute) }
+            ?: { runtime: MonitorRuntime -> runtime }
+
         // A check that reached a verdict through a sign-in ends any sign-in
         // trouble, and the notice about it goes too.
         val signedIn = healthOutcome?.let { SignInReminder.afterVerdict(before.report.auth, it.auth, monitor.health.signIn) }
@@ -1082,6 +1136,7 @@ class CheckEngine(
                     .let(urgentMutation)
                     .let(certMutation)
                     .let(githubMutation)
+                    .let(mailMutation)
                     .let(metered)
             }
         }
@@ -1388,6 +1443,58 @@ class CheckEngine(
         evaluation.events.forEach { onEvent(it, allowed) }
         val state = evaluation.state
         return { runtime -> runtime.copy(github = state) }
+    }
+
+    // ---- mail track ------------------------------------------------------------
+
+    /**
+     * Turns one look at a folder into notifications, and returns the state to keep.
+     *
+     * The same switches as repository news: master, the monitor's alert switch,
+     * mute, and quiet hours making it silent rather than dropping it. A message
+     * that matched a page term goes on the alert channel with the monitor's
+     * sound; the rest is news. Neither bypasses Do Not Disturb, because a message
+     * is not an outage and this is not the urgent track.
+     *
+     * The state advances whether or not anything is said, for the reason
+     * [applyGitHub] gives: a mute is not a queue.
+     */
+    private fun applyMail(
+        monitor: Monitor,
+        outcome: MailChecker.Outcome,
+        before: MonitorRuntime,
+        policy: AlertPolicy,
+        settings: GlobalSettings,
+        muted: Boolean,
+        minute: Int,
+    ): (MonitorRuntime) -> MonitorRuntime {
+        val snapshot = outcome.snapshot ?: return { it }
+        val evaluation = MailEvents.evaluate(monitor.mail, before.mail, snapshot, nowMs())
+        val quiet = policy.quietHoursEnabled &&
+            AlertDecider.inQuietHours(minute, policy.quietStartMinute, policy.quietEndMinute)
+        val allowed = !muted && settings.masterAlertsEnabled && policy.enabled
+        if (allowed) {
+            evaluation.events.forEach { event ->
+                val matched = event is MailEvent.Arrived && event.message.matched
+                Diag.log(
+                    LogEvent.ALERT_POSTED,
+                    LogField.monitor(monitor.id),
+                    LogField.tag("track", "mail"),
+                    LogField.of("matched", matched),
+                    LogField.of("silent", quiet),
+                )
+                alerts.notifyMail(monitor, event, policy, silent = quiet)
+            }
+        } else if (evaluation.events.isNotEmpty()) {
+            Diag.log(
+                LogEvent.ALERT_SUPPRESSED,
+                LogField.monitor(monitor.id),
+                LogField.tag("track", "mail"),
+                LogField.count("events", evaluation.events.size),
+            )
+        }
+        val state = evaluation.state
+        return { runtime -> runtime.copy(mail = state) }
     }
 
     // ---- nightbell's own updates ---------------------------------------------

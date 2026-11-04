@@ -78,6 +78,7 @@ object Reachability {
         FailureKind.RENDER,
         FailureKind.METRIC,
         FailureKind.REPORTED_DOWN,
+        FailureKind.MAIL_LOGIN,
         FailureKind.NOT_HEALTH_FORMAT,
         FailureKind.TOKEN_REFUSED,
         FailureKind.BAD_CONFIG,

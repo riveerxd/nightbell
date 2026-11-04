@@ -11,6 +11,8 @@ import me.river.nightbell.data.auth.CredentialVault
 import me.river.nightbell.data.auth.DataStoreVaultStorage
 import me.river.nightbell.data.auth.KeystoreCipher
 import me.river.nightbell.data.auth.TokenBroker
+import me.river.nightbell.data.check.MailChecker
+import me.river.nightbell.data.check.VaultMailCredentials
 import me.river.nightbell.data.check.CheckEngine
 import me.river.nightbell.data.check.HealthChecker
 import me.river.nightbell.data.check.ElementChecker
@@ -119,10 +121,17 @@ object Nightbell {
         /** Health monitors' sign-in secrets, outside the snapshot. See [CredentialVault]. */
         val vault = CredentialVault(DataStoreVaultStorage(context), KeystoreCipher())
         val broker = TokenBroker(vault, http.provider)
+
+        /** Mailbox passwords, in the same vault. Setup writes through it. */
+        val mailCredentials = VaultMailCredentials(vault)
+
+        /** Finds a mailbox's server for setup. A var so a device test can hand it fakes. */
+        var mailDiscoverer = me.river.nightbell.data.check.MailDiscoverer()
         init {
             engine.health = HealthChecker(broker, fetch = { monitor, pin, authorization ->
                 http.check(monitor, pin, authorization = authorization)
             })
+            engine.mail = MailChecker(mailCredentials)
             // Once the store has been read, so an entry is only ever dropped
             // against the real list of monitors and never against the empty
             // defaults the store starts on.

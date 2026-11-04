@@ -1032,7 +1032,13 @@ class SetupViewModel(
     /** There is unsaved work worth asking about before throwing it away. */
     val isDirty: Boolean get() = baseline?.let { it != draft } == true
 
-    val report: Validation.Report get() = Validation.report(draft)
+    val report: Validation.Report
+        get() {
+            val base = Validation.report(draft)
+            if (draft.kind != MonitorKind.MAILBOX) return base
+            val password = Validation.mailPasswordNote(mailPasswordInput, mailPasswordHeld) ?: return base
+            return Validation.Report(base.notes + password)
+        }
 
     /** Always the list, never the legacy single field. */
     val elements: List<ElementTarget> get() = draft.targets
@@ -1053,6 +1059,93 @@ class SetupViewModel(
      * point and reading it throws.
      */
     var thresholdInput by mutableStateOf("")
+        private set
+
+    /**
+     * The mailbox password as typed. Never on the draft: it goes to the vault on
+     * Test or Save and nowhere else. Declared above [init] for the reason
+     * [thresholdInput] gives.
+     */
+    var mailPasswordInput by mutableStateOf("")
+
+    /** Mailbox fields that have been left once, so an empty one may say so. */
+    var mailTouched by mutableStateOf(emptySet<String>())
+        private set
+
+    fun touchMail(field: String) {
+        mailTouched = mailTouched + field
+    }
+
+    var discoveringMail by mutableStateOf(false)
+        private set
+
+    /** What "Find the server" found, in a sentence, or why nothing. */
+    var mailDiscoveryNote by mutableStateOf<String?>(null)
+        private set
+
+    /**
+     * Looks the server up from the address and the webmail address, fills the
+     * form with what answered, and runs Test when a password is there to test
+     * with. Nothing is signed in to during the search itself.
+     */
+    fun discoverMailServer() {
+        if (discoveringMail) return
+        val address = draft.mail.username.trim()
+        val webmail = draft.mail.webmailUrl.trim()
+        discoveringMail = true
+        mailDiscoveryNote = null
+        viewModelScope.launch {
+            try {
+                val found = graph.mailDiscoverer.discover(address, webmail)
+                val probe = found.probe
+                if (probe == null) {
+                    mailDiscoveryNote = "Nothing answered IMAP for this address. Ask the provider for the IMAP " +
+                        "server, or type it below."
+                    return@launch
+                }
+                val c = probe.candidate
+                updateMail {
+                    it.copy(
+                        host = c.host,
+                        port = if (c.port == c.security.defaultPort) 0 else c.port,
+                        security = c.security,
+                        username = if (c.username.isNotBlank()) {
+                            me.river.nightbell.domain.MailDiscovery.username(c.username, address)
+                        } else {
+                            it.username
+                        },
+                    )
+                }
+                if (probe.trusted) update { it.copy(tlsTrust = me.river.nightbell.domain.TlsTrust.SYSTEM) }
+                mailDiscoveryNote = buildString {
+                    append("Found ${c.host}, ${c.security.label} ${c.port}, ${c.source.reason}.")
+                    if (found.renamedFrom.isNotEmpty()) {
+                        append(" ${found.renamedFrom} answers too, but its certificate is for ${c.host}, so that is used.")
+                    }
+                    if (!probe.trusted) {
+                        append(" Its certificate is not one this phone trusts. If it is your own server, pick Pinned key below.")
+                    }
+                }
+                if (mailPasswordInput.isNotEmpty() || mailPasswordHeld) runTest()
+            } finally {
+                discoveringMail = false
+            }
+        }
+    }
+
+    /** What the server listed, or null before anybody asked. */
+    var mailFolders by mutableStateOf<List<String>?>(null)
+        private set
+
+    var loadingMailFolders by mutableStateOf(false)
+        private set
+
+    /** Why the list could not be had, in words. */
+    var mailFoldersNote by mutableStateOf<String?>(null)
+        private set
+
+    /** The vault holds a password for this monitor, so the field may stay empty. */
+    var mailPasswordHeld by mutableStateOf(false)
         private set
 
     /**
@@ -1196,7 +1289,103 @@ class SetupViewModel(
             if (draft.health.redirectUri.isNotBlank()) providerOrigin = signInOrigin()
             loading = false
             if (draft.kind == MonitorKind.HEALTH_ENDPOINT) refreshSignInStatus()
+            if (draft.kind == MonitorKind.MAILBOX) refreshMailPassword()
         }
+    }
+
+    // ---- mailbox --------------------------------------------------------------
+
+    fun updateMail(transform: (me.river.nightbell.domain.MailWatch) -> me.river.nightbell.domain.MailWatch) {
+        val before = draft.mail
+        update { it.copy(mail = transform(it.mail)) }
+        val after = draft.mail
+        // A list from one account is not the folders of another.
+        if (before.cleanHost != after.cleanHost || before.username != after.username ||
+            before.effectivePort != after.effectivePort || before.security != after.security
+        ) {
+            mailFolders = null
+            mailFoldersNote = null
+        }
+    }
+
+    /**
+     * The address, and with it the provider when it is one the presets know.
+     * Only fills the server while it is empty or still a preset's, so a host
+     * somebody typed is never replaced by a guess.
+     */
+    fun setMailUser(value: String) {
+        updateMail { watch ->
+            val preset = me.river.nightbell.domain.MailPreset.forAddress(value)
+            val hostIsPresets = watch.host.isBlank() ||
+                me.river.nightbell.domain.MailPreset.entries.any { it.host.isNotEmpty() && it.host == watch.host }
+            if (preset != me.river.nightbell.domain.MailPreset.OTHER && hostIsPresets) {
+                watch.copy(username = value, preset = preset, host = preset.host, security = me.river.nightbell.domain.MailSecurity.TLS, port = 0)
+            } else {
+                watch.copy(username = value)
+            }
+        }
+    }
+
+    fun applyMailPreset(preset: me.river.nightbell.domain.MailPreset) {
+        updateMail { watch ->
+            if (preset == me.river.nightbell.domain.MailPreset.OTHER) {
+                watch.copy(preset = preset, host = if (watch.preset == preset) watch.host else "")
+            } else {
+                watch.copy(preset = preset, host = preset.host, security = me.river.nightbell.domain.MailSecurity.TLS, port = 0)
+            }
+        }
+    }
+
+    fun setMailPort(value: String) {
+        val digits = value.filter(Char::isDigit).take(5)
+        updateMail { it.copy(port = digits.toIntOrNull() ?: 0) }
+    }
+
+    fun setMailPassword(value: String) {
+        mailPasswordInput = value
+        testResult = null
+    }
+
+    private fun refreshMailPassword() {
+        val id = draft.id
+        viewModelScope.launch {
+            mailPasswordHeld = graph.mailCredentials.password(id) is me.river.nightbell.data.check.MailChecker.Stored.Password
+        }
+    }
+
+    /**
+     * Signs in and asks the server for its folders. Stores a typed password
+     * first, the same as Test, because this signs in with it.
+     */
+    fun loadMailFolders() {
+        if (loadingMailFolders) return
+        loadingMailFolders = true
+        mailFoldersNote = null
+        viewModelScope.launch {
+            try {
+                storeMailPassword()
+                val outcome = graph.engine.mailFolders(draft)
+                val folders = outcome?.folders
+                if (folders != null) {
+                    mailFolders = folders
+                    if (folders.isEmpty()) mailFoldersNote = "The server listed no folders. Type the name instead."
+                } else {
+                    val result = outcome?.result
+                    mailFoldersNote = listOfNotNull(result?.message, result?.advice?.takeIf { it.isNotBlank() })
+                        .joinToString(". ").ifBlank { "Could not reach the server" }
+                }
+            } finally {
+                loadingMailFolders = false
+            }
+        }
+    }
+
+    /** A typed password goes to the vault before anything signs in with it. */
+    private suspend fun storeMailPassword() {
+        if (draft.kind != MonitorKind.MAILBOX || mailPasswordInput.isEmpty()) return
+        graph.mailCredentials.save(draft.id, mailPasswordInput)
+        mailPasswordInput = ""
+        mailPasswordHeld = true
     }
 
     // ---- health endpoint ------------------------------------------------------
@@ -1517,6 +1706,11 @@ class SetupViewModel(
             val id = draft.id
             graph.appScope.launch { runCatchingCancellable { graph.broker.signOut(id) } }
         }
+        // A password typed into a mailbox that was never saved goes with it.
+        if (!isEditing && !saved && draft.kind == MonitorKind.MAILBOX) {
+            val id = draft.id
+            graph.appScope.launch { runCatchingCancellable { graph.vault.delete(id) } }
+        }
         super.onCleared()
     }
 
@@ -1647,6 +1841,16 @@ class SetupViewModel(
                     ),
                 ).withTargets(emptyList())
             }
+
+            MonitorKind.MAILBOX -> draft.copy(
+                kind = kind,
+                assertion = BodyAssertion(),
+                body = "",
+                // A sign-in every check. Five minutes keeps a self-hosted box's
+                // auth log readable and is still faster than most people look.
+                intervalMinutes = maxOf(draft.intervalMinutes, MIN_MAIL_INTERVAL),
+                timeoutSeconds = maxOf(draft.timeoutSeconds, 20),
+            ).withTargets(emptyList())
 
             MonitorKind.UNSUPPORTED -> draft
         }
@@ -1989,6 +2193,7 @@ class SetupViewModel(
         testing = true
         viewModelScope.launch {
             try {
+                storeMailPassword()
                 testResult = graph.engine.dryRun(draft)
             } finally {
                 testing = false
@@ -2052,6 +2257,24 @@ class SetupViewModel(
                 name = draft.name.trim(),
                 headers = draft.headers.filterNot { it.isBlank },
             ).migrated.let { monitor ->
+                if (monitor.kind == MonitorKind.MAILBOX) {
+                    // Like ping and port, nothing of a request survives. The
+                    // certificate rule does, because IMAP over TLS has one.
+                    return@let monitor.copy(
+                        url = "",
+                        useProxy = false,
+                        proxyHost = "",
+                        proxyPort = 0,
+                        watchCertificate = false,
+                        headers = emptyList(),
+                        mail = monitor.mail.copy(
+                            host = monitor.mail.cleanHost,
+                            username = monitor.mail.username.trim(),
+                            folder = monitor.mail.cleanFolder,
+                            webmailUrl = monitor.mail.webmailUrl.trim(),
+                        ),
+                    )
+                }
                 if (!monitor.kind.isNetwork) return@let monitor
                 // Nothing of a request kind survives into a ping or port monitor.
                 // A URL left behind would be read by the group icon and the
@@ -2068,6 +2291,7 @@ class SetupViewModel(
                     network = monitor.network.copy(host = monitor.network.cleanHost),
                 )
             }
+            storeMailPassword()
             graph.store.upsert(clean)
             val snapshot = graph.store.currentSnapshot()
             graph.scheduler.schedule(clean, snapshot.settings)
@@ -2086,6 +2310,9 @@ class SetupViewModel(
 
         /** Below this, an unauthenticated device runs out of GitHub budget. */
         const val MIN_GITHUB_INTERVAL = 15
+
+        /** See [setKind]: a mailbox signs in on every check. */
+        const val MIN_MAIL_INTERVAL = 5
     }
 }
 

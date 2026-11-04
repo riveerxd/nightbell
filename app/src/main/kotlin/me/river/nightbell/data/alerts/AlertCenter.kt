@@ -28,6 +28,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import me.river.nightbell.domain.AlertPolicy
+import me.river.nightbell.domain.MailEvent
 import me.river.nightbell.domain.AuthProblem
 import me.river.nightbell.domain.AppUpdate
 import me.river.nightbell.domain.CertificateWatch
@@ -916,6 +917,94 @@ class AlertCenter(private val context: Context) {
         -> Severity.NEWS
     }
 
+    // ---- new mail -------------------------------------------------------------
+
+    /**
+     * One message, or several folded into one row, from a watched mailbox.
+     *
+     * Tagged per monitor with an id per uid, so three messages are three rows
+     * and Mark seen clears them all. The tap opens the webmail when the monitor
+     * has one, which is the point of having it: the Roundcube a message is
+     * read in. Without one it opens the monitor.
+     */
+    fun notifyMail(
+        monitor: Monitor,
+        event: MailEvent,
+        policy: AlertPolicy,
+        silent: Boolean,
+    ): Boolean {
+        val matched = event is MailEvent.Arrived && event.message.matched
+        val channelId = channelFor(policy, if (matched) Severity.MAIL_ALERT else Severity.MAIL, silent)
+        val webmail = monitor.mail.webmailUrl.trim().takeIf { it.startsWith("https://") || it.startsWith("http://") }
+        val (title, body, expanded) = when (event) {
+            is MailEvent.Arrived -> Triple(
+                event.message.from,
+                event.message.subjectOrPlaceholder,
+                buildString {
+                    append(event.message.subjectOrPlaceholder)
+                    if (event.message.fromAddress.isNotBlank() && event.message.fromName.isNotBlank()) {
+                        append("\n\n").append(event.message.fromAddress)
+                    }
+                    append("\n").append(monitor.displayName)
+                    if (!event.folder.equals("INBOX", ignoreCase = true)) append(" · ").append(event.folder)
+                },
+            )
+            is MailEvent.Several -> Triple(
+                "${event.count} new messages",
+                event.newest?.let { "Newest from ${it.from}: ${it.subjectOrPlaceholder}" } ?: monitor.displayName,
+                buildString {
+                    event.newest?.let { append("Newest from ${it.from}: ${it.subjectOrPlaceholder}\n\n") }
+                    append(monitor.displayName)
+                    if (!event.folder.equals("INBOX", ignoreCase = true)) append(" · ").append(event.folder)
+                },
+            )
+        }
+        val tap = if (webmail != null) openLinkIntent(webmail, monitor.id + ".mail." + event.key) else openMonitorIntent(monitor.id)
+        val builder = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(R.drawable.ic_stat_brand)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setSubText(if (matched) "Matched an alert term" else null)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(expanded))
+            .setColor(NEWS_COLOR)
+            .setPriority(if (matched) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)
+            .setCategory(NotificationCompat.CATEGORY_EMAIL)
+            .setContentIntent(tap)
+            .setAutoCancel(true)
+            .setSilent(silent)
+            .setShowWhen(true)
+            .setWhen(
+                (event as? MailEvent.Arrived)?.message?.receivedAt?.takeIf { it > 0L } ?: System.currentTimeMillis(),
+            )
+            .setGroup("$NOTIFICATION_GROUP.mail.${monitor.id}")
+        if (webmail != null) {
+            builder.addAction(R.drawable.ic_stat_brand, "Open webmail", openLinkIntent(webmail, monitor.id + ".webmail"))
+        }
+        builder
+            .addAction(
+                R.drawable.ic_stat_ok,
+                "Mark seen",
+                AlertActionReceiver.pendingIntent(context, AlertActionReceiver.ACTION_MARK_SEEN, monitor.id),
+            )
+            .addAction(
+                R.drawable.ic_stat_mute,
+                "Mute 24h",
+                AlertActionReceiver.pendingIntent(context, AlertActionReceiver.ACTION_MUTE_24H, monitor.id),
+            )
+        return post(mailTag(monitor.id), event.key.mailEventId(), builder.build())
+    }
+
+    /** Clears every new-mail row a monitor has on screen. Enumerates, like [cancelGitHub]. */
+    fun cancelMail(monitorId: String) {
+        val tag = mailTag(monitorId)
+        val active = runCatching {
+            manager.activeNotifications.filter { it.tag == tag }.map { it.id }
+        }.getOrDefault(emptyList())
+        active.forEach { compat.cancel(tag, it) }
+    }
+
+    fun mailTag(monitorId: String): String = MAIL_TAG_PREFIX + monitorId
+
     // ---- Nightbell's own updates --------------------------------------------
 
     /**
@@ -1056,6 +1145,7 @@ class AlertCenter(private val context: Context) {
         cancelDegraded(monitorId)
         cancelUrgent(monitorId)
         cancelGitHub(monitorId)
+        cancelMail(monitorId)
     }
 
     /**
@@ -1182,6 +1272,21 @@ class AlertCenter(private val context: Context) {
          * exactly as before and nothing here revisits that.
          */
         COMMENTS,
+
+        /**
+         * New mail in a watched mailbox. Its own family rather than [NEWS],
+         * because an inbox is busier than any repository and turning it down
+         * must not also silence releases and Nightbell's own update notice.
+         */
+        MAIL,
+
+        /**
+         * A new message that matched one of the monitor's alert terms: the
+         * server alert, the customer who always means trouble. High importance
+         * and the monitor's own sound, but no Do Not Disturb bypass, which stays
+         * the urgent track's alone.
+         */
+        MAIL_ALERT,
     }
 
     private fun ensureGroups() {
@@ -1202,6 +1307,9 @@ class AlertCenter(private val context: Context) {
         )
         manager.createNotificationChannelGroup(
             NotificationChannelGroup(GROUP_COMMENTS, "Repository comments"),
+        )
+        manager.createNotificationChannelGroup(
+            NotificationChannelGroup(GROUP_MAIL, "Mail"),
         )
         manager.createNotificationChannelGroup(
             NotificationChannelGroup(GROUP_URGENT, "Urgent"),
@@ -1343,6 +1451,8 @@ class AlertCenter(private val context: Context) {
             Severity.CERT -> "nightbell.cert."
             Severity.NEWS -> "nightbell.news."
             Severity.COMMENTS -> "nightbell.comments."
+            Severity.MAIL -> "nightbell.mail."
+            Severity.MAIL_ALERT -> "nightbell.mailalert."
         }
         val id = buildString {
             append(prefix)
@@ -1367,6 +1477,7 @@ class AlertCenter(private val context: Context) {
             // degraded alert. Importance freezes when the channel is created, so
             // that would only ever be repairable with a second channel id.
             severity == Severity.COMMENTS -> NotificationManager.IMPORTANCE_DEFAULT
+            severity == Severity.MAIL -> NotificationManager.IMPORTANCE_DEFAULT
             sound == SoundChoice.SILENT && !vibrateOn -> NotificationManager.IMPORTANCE_DEFAULT
             else -> NotificationManager.IMPORTANCE_HIGH
         }
@@ -1379,6 +1490,8 @@ class AlertCenter(private val context: Context) {
                     Severity.CERT -> "Certificate · "
                     Severity.NEWS -> "News · "
                     Severity.COMMENTS -> "Comments · "
+                    Severity.MAIL -> "Mail · "
+                    Severity.MAIL_ALERT -> "Mail alert · "
                 },
             )
             append(sound.label)
@@ -1393,6 +1506,7 @@ class AlertCenter(private val context: Context) {
                 Severity.CERT -> GROUP_CERT
                 Severity.NEWS -> GROUP_NEWS
                 Severity.COMMENTS -> GROUP_COMMENTS
+                Severity.MAIL, Severity.MAIL_ALERT -> GROUP_MAIL
             }
             description = when (severity) {
                 Severity.DOWN -> "Raised when a monitor starts failing (${sound.label.lowercase()})."
@@ -1404,6 +1518,9 @@ class AlertCenter(private val context: Context) {
                     "their own."
                 Severity.COMMENTS -> "New comments on issues and pull requests in watched " +
                     "repositories, including issues that are already closed."
+                Severity.MAIL -> "New messages in watched mailboxes."
+                Severity.MAIL_ALERT -> "New messages that matched a mailbox monitor's alert senders " +
+                    "or subjects (${sound.label.lowercase()})."
             }
             enableVibration(vibrateOn)
             if (vibrateOn) vibrationPattern = style.pattern
@@ -1412,7 +1529,7 @@ class AlertCenter(private val context: Context) {
                 Severity.DOWN -> DOWN_COLOR
                 Severity.DEGRADED, Severity.CERT -> DEGRADED_COLOR
                 Severity.RECOVERY -> UP_COLOR
-                Severity.NEWS, Severity.COMMENTS -> NEWS_COLOR
+                Severity.NEWS, Severity.COMMENTS, Severity.MAIL, Severity.MAIL_ALERT -> NEWS_COLOR
             }
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             setShowBadge(true)
@@ -1548,6 +1665,7 @@ class AlertCenter(private val context: Context) {
         private val certDateFormat = SimpleDateFormat("d MMM yyyy", Locale.getDefault())
         private const val GROUP_NEWS = "nightbell.group.news"
         private const val GROUP_COMMENTS = "nightbell.group.comments"
+        private const val GROUP_MAIL = "nightbell.group.mail"
         private const val GROUP_URGENT = "nightbell.group.urgent"
         private const val GROUP_HEALTH = "nightbell.group.health"
         private const val NOTIFICATION_GROUP = "nightbell.alerts"
@@ -1580,6 +1698,9 @@ class AlertCenter(private val context: Context) {
         /** Repository news is tagged per monitor. See [notifyGitHub]. */
         const val GITHUB_TAG_PREFIX = "nightbell.github."
 
+        /** New mail is tagged per monitor, like repository news. See [notifyMail]. */
+        const val MAIL_TAG_PREFIX = "nightbell.mail."
+
         const val PREVIEW_NOTIFICATION_ID = 424242
 
         /** The three alert id spaces below, taken together. */
@@ -1611,6 +1732,9 @@ internal fun String.certNotificationId(): Int = 400_000 + (hashCode() and 0x7FFF
  * only has to separate two events belonging to the same repository.
  */
 internal fun String.githubEventId(): Int = 500_000 + (hashCode() and 0x7FFF)
+
+/** New mail, tagged by monitor like repository news, in a space of its own. */
+internal fun String.mailEventId(): Int = 700_000 + (hashCode() and 0x7FFF)
 
 /** Outside every alert space, so the stray sweep never cancels a sign-in notice. */
 internal fun String.signInNotificationId(): Int = 600_000 + (hashCode() and 0x7FFF)

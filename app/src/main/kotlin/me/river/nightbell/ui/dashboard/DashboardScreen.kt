@@ -99,6 +99,7 @@ import me.river.nightbell.domain.Monitor
 import me.river.nightbell.domain.MonitorCard
 import me.river.nightbell.domain.AuthProblem
 import me.river.nightbell.domain.HealthFormat
+import me.river.nightbell.domain.MailLine
 import me.river.nightbell.domain.MonitorKind
 import me.river.nightbell.domain.MonitorQuery
 import me.river.nightbell.domain.MonitorRuntime
@@ -173,6 +174,7 @@ fun kindIcon(kind: MonitorKind) = when (kind) {
     MonitorKind.HEALTH_ENDPOINT -> NightbellIcons.Activity
     MonitorKind.PING -> NightbellIcons.Echo
     MonitorKind.TCP_PORT -> NightbellIcons.Plug
+    MonitorKind.MAILBOX -> NightbellIcons.Mail
     MonitorKind.UNSUPPORTED -> NightbellIcons.Info
 }
 
@@ -1743,7 +1745,13 @@ private fun MonitorRowCard(
             runtime.health == Health.DEGRADED &&
             runtime.lastReading.isNotBlank() &&
             runtime.samples.lastOrNull()?.ping?.partial == true
-        val reading = notChecking || partsLine != null || losing || (
+        // A mailbox's unread count, the reason most people open the card at all.
+        val mailLine = if (monitor.kind == MonitorKind.MAILBOX && runtime.ok(monitor.enabled)) {
+            MailLine.of(runtime.mail)
+        } else {
+            null
+        }
+        val reading = notChecking || partsLine != null || losing || mailLine != null || (
             monitor.kind == MonitorKind.PROMETHEUS &&
                 runtime.ok(monitor.enabled) &&
                 runtime.lastReading.isNotBlank()
@@ -1787,6 +1795,7 @@ private fun MonitorRowCard(
                         when {
                             notChecking -> NightbellIcons.Shield
                             partsLine != null -> NightbellIcons.Layers
+                            mailLine != null -> NightbellIcons.Mail
                             losing -> NightbellIcons.Echo
                             reading -> NightbellIcons.Gauge
                             recovering -> NightbellIcons.Refresh
@@ -1847,6 +1856,7 @@ private fun MonitorRowCard(
                             text = when {
                                 notChecking -> "Not checking · Sign in needed"
                                 partsLine != null -> partsLine
+                                mailLine != null -> mailLine
                                 reading -> runtime.lastReading
                                 recovering -> "Answering again · ${card.streak?.line}"
                                 muted -> "${runtime.lastMessage} · muted, no alerts"
@@ -1924,6 +1934,8 @@ private fun MonitorRowCard(
                         text = "${monitor.network.packets} ${if (monitor.network.packets == 1) "packet" else "packets"}",
                         color = NightbellColors.TextTertiary,
                     )
+                } else if (monitor.kind == MonitorKind.MAILBOX) {
+                    MicroTag(text = "IMAP", color = NightbellColors.TextTertiary)
                 } else if (monitor.kind != MonitorKind.WEBSITE_ELEMENT &&
                     monitor.kind != MonitorKind.GITHUB_REPO &&
                     monitor.kind != MonitorKind.TCP_PORT

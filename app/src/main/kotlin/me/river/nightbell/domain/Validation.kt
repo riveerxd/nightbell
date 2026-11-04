@@ -13,6 +13,7 @@ object Validation {
         INTERVAL, TIMEOUT, ELEMENT, ELEMENT_TEXT, LATENCY_SLO, URGENT, PROXY,
         REPO, GITHUB, TOKEN, TLS, METRIC, LABELS, PROMQL, ALERTS,
         SIGN_IN, STALE, HOST, PORT, PACKETS,
+        MAIL_USER, MAIL_PASSWORD, MAIL_FOLDER, MAIL_TERMS, WEBMAIL,
     }
 
     /** Past this many watched elements the settle loop is worth warning about. */
@@ -102,6 +103,7 @@ object Validation {
      */
     fun report(monitor: Monitor): Report {
         if (monitor.kind.isNetwork) return reportNetwork(monitor)
+        if (monitor.kind == MonitorKind.MAILBOX) return reportMail(monitor)
         val notes = mutableListOf<Note>()
         val url = UrlInput.completed(monitor.url)
 
@@ -541,6 +543,66 @@ object Validation {
     }
 
     const val NETWORK_MAX_PACKETS = 10
+
+    /**
+     * A mailbox has a server, an account and a folder. The password is not on
+     * the monitor, so whether one is held is the setup screen's to add: see
+     * [mailPasswordNote].
+     */
+    private fun reportMail(monitor: Monitor): Report {
+        val notes = mutableListOf<Note>()
+        val watch = monitor.mail
+        if (monitor.name.length > 48) {
+            notes += Note(Field.NAME, Severity.WARNING, "Long names get truncated on the dashboard")
+        }
+        val host = watch.cleanHost
+        val hostNote = when {
+            host.isEmpty() -> Note(Field.HOST, Severity.ERROR, "The mail server is required")
+            host.contains(' ') -> Note(Field.HOST, Severity.ERROR, "A host can't contain spaces")
+            NetworkTarget.literalFamily(host) == null && !NetworkTarget.isHostName(host) ->
+                Note(Field.HOST, Severity.ERROR, "That isn't a valid host name")
+            host.lowercase().endsWith(".onion") ->
+                Note(Field.HOST, Severity.ERROR, "Mailbox checks don't go through a proxy, so a hidden service can't be reached")
+            else -> null
+        }
+        hostNote?.let { notes += it }
+        if (watch.port !in 0..65535) notes += Note(Field.PORT, Severity.ERROR, "Ports run from 1 to 65535")
+        if (watch.security == MailSecurity.TLS && watch.port == 143) {
+            notes += Note(Field.PORT, Severity.WARNING, "143 is the STARTTLS port. TLS is usually 993")
+        }
+        if (watch.security == MailSecurity.STARTTLS && watch.port == 993) {
+            notes += Note(Field.PORT, Severity.WARNING, "993 is TLS from the start, not STARTTLS")
+        }
+        if (watch.username.isBlank()) {
+            notes += Note(Field.MAIL_USER, Severity.ERROR, "The user name is required, usually the whole address")
+        } else {
+            MailPreset.unsupported(watch.username)?.let { notes += Note(Field.MAIL_USER, Severity.ERROR, it) }
+        }
+        if (watch.cleanFolder.any { it == '\r' || it == '\n' }) {
+            notes += Note(Field.MAIL_FOLDER, Severity.ERROR, "A folder name can't contain a line break")
+        }
+        if (!watch.announces) {
+            notes += Note(
+                Field.MAIL_TERMS, Severity.WARNING,
+                "Nothing will be announced. Turn on every message, or add a sender or subject to alert on",
+            )
+        }
+        val webmail = watch.webmailUrl.trim()
+        if (webmail.isNotEmpty() && !webmail.startsWith("https://") && !webmail.startsWith("http://")) {
+            notes += Note(Field.WEBMAIL, Severity.ERROR, "Start with https://")
+        }
+        if (monitor.intervalMinutes in 1 until 5) {
+            notes += Note(
+                Field.INTERVAL, Severity.HINT,
+                "Every check signs in. Under 5 minutes fills the server's log and can trip its brute-force guard",
+            )
+        }
+        return Report(notes + cadenceNotes(monitor))
+    }
+
+    /** No password typed and none held: the one thing [reportMail] cannot see. */
+    fun mailPasswordNote(typed: String, held: Boolean): Note? =
+        if (typed.isEmpty() && !held) Note(Field.MAIL_PASSWORD, Severity.ERROR, "The password is required") else null
 
     private fun cadenceNotes(monitor: Monitor): List<Note> {
         val notes = mutableListOf<Note>()

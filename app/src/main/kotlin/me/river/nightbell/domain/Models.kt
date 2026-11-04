@@ -78,6 +78,18 @@ enum class MonitorKind {
     TCP_PORT,
 
     /**
+     * Signs in to one IMAP folder and says what arrived. Asked for to watch a
+     * Roundcube inbox, which a page monitor cannot do: Roundcube's session dies
+     * after ten minutes and its inbox is drawn by script. This reads the server
+     * Roundcube itself reads from. See [MailWatch].
+     *
+     * Two answers from one check, like [GITHUB_REPO]: whether the mail server is
+     * up is the verdict, and what arrived is news.
+     */
+    @SerialName("mailbox")
+    MAILBOX,
+
+    /**
      * A kind this build does not know, read from a store a newer build wrote.
      *
      * Never offered, never checked. It exists so that meeting one costs that
@@ -101,6 +113,7 @@ enum class MonitorKind {
             HEALTH_ENDPOINT -> "Health endpoint"
             PING -> "Ping"
             TCP_PORT -> "TCP port"
+            MAILBOX -> "Mailbox"
             UNSUPPORTED -> "Made by a newer Nightbell"
         }
 
@@ -114,6 +127,7 @@ enum class MonitorKind {
             HEALTH_ENDPOINT -> "Read what a service says about each of its parts."
             PING -> "ICMP echo to an IPv4 or IPv6 host. Latency and packet loss."
             TCP_PORT -> "Connect to one port and hang up. No HTTP needed."
+            MAILBOX -> "New mail in an IMAP inbox. Alert on the senders that matter."
             UNSUPPORTED -> "Update Nightbell to check this monitor."
         }
 
@@ -663,6 +677,11 @@ data class Monitor(
      * Ignored by every other kind, and defaulted so older stores still decode.
      */
     val network: NetworkWatch = NetworkWatch(),
+    /**
+     * What a [MonitorKind.MAILBOX] monitor signs in to. Ignored by every other
+     * kind, and defaulted so older stores still decode. The password is not here.
+     */
+    val mail: MailWatch = MailWatch(),
     val timeoutSeconds: Int = 15,
     val intervalMinutes: Int = 15,
     /**
@@ -775,6 +794,8 @@ data class Monitor(
             // isn't.
             if (kind == MonitorKind.GITHUB_REPO && github.repository.isSet) {
                 github.slug
+            } else if (kind == MonitorKind.MAILBOX && mail.username.isNotBlank()) {
+                mail.username.trim()
             } else if (kind == MonitorKind.PROMETHEUS &&
                 prometheus.source == PrometheusSource.METRICS &&
                 prometheus.metricName.isNotBlank()
@@ -808,6 +829,7 @@ data class Monitor(
         get() = when (kind) {
             MonitorKind.PING -> NetworkTarget.display(network.cleanHost, null)
             MonitorKind.TCP_PORT -> NetworkTarget.display(network.cleanHost, network.port.takeIf { it > 0 })
+            MonitorKind.MAILBOX -> mail.display
             else -> url
         }
 
@@ -1065,6 +1087,9 @@ data class MonitorRuntime(
      * announce the first one's issues and then go permanently quiet.
      */
     val github: GitHubState = GitHubState(),
+
+    /** Where a [MonitorKind.MAILBOX] monitor left its folder. See [MailState]. */
+    val mail: MailState = MailState(),
 
     /**
      * What a [MonitorKind.HEALTH_ENDPOINT] monitor last read, and its sign-in.
@@ -1326,6 +1351,9 @@ enum class FailureKind {
 
     /** Nightbell held a fresh token and the API refused it anyway. */
     TOKEN_REFUSED,
+
+    /** The mail server answered and refused the user name or password. */
+    MAIL_LOGIN,
     BAD_CONFIG,
     UNKNOWN,
     ;
@@ -1347,6 +1375,7 @@ enum class FailureKind {
             NOT_HEALTH_FORMAT -> "Not a health endpoint"
             SIGN_IN_SERVER -> "Sign-in server unreachable"
             TOKEN_REFUSED -> "Signed in, but the API refused the token"
+            MAIL_LOGIN -> "Sign-in refused"
             BAD_CONFIG -> "Monitor misconfigured"
             UNKNOWN -> "Check failed"
         }
@@ -1369,6 +1398,7 @@ enum class FailureKind {
             NOT_HEALTH_FORMAT -> "A deploy may have replaced the endpoint, or the URL points at the web app."
             SIGN_IN_SERVER -> "If Nightbell cannot reach the provider, neither can the service's users."
             TOKEN_REFUSED -> "Real users' tokens would be refused the same way. The account may lack a role."
+            MAIL_LOGIN -> "Check the user name and password. Gmail, iCloud, Yahoo and Fastmail need an app password. Not tried again until the password is edited."
             BAD_CONFIG -> "Fix the monitor's URL or assertion and try again."
             UNKNOWN -> "See the technical detail below."
         }
