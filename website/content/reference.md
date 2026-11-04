@@ -1,5 +1,5 @@
 
-This page describes Nightbell 3.20.0. Settings is split into four tabs, Alerts,
+This page describes Nightbell 3.21.0. Settings is split into four tabs, Alerts,
 Checks, Look and About, and a path such as "Settings, Checks, Checker health"
 names the tab and then the card.
 
@@ -15,6 +15,7 @@ names the tab and then the card.
 | **GitHub repo** | Watches a repository over the public API: stars, issues, pull requests, comments, releases and how often the release files are downloaded. See below. |
 | **Ping** | ICMP echo to an IPv4 or IPv6 address or a host name: whether it answers, the fastest, average and slowest reply, and packet loss. No root. See below. |
 | **TCP port** | Opens a connection to one port and closes it again, nothing sent. Reports whether something is listening and how long the handshake took. See below. |
+| **Mailbox** | Signs in to one IMAP folder and says what arrived: a notification per new message, a louder one for senders or subjects you name. The mail server being unreachable or refusing the password is an outage like any other. See below. |
 
 ### Setting up a monitor
 
@@ -599,6 +600,98 @@ hours (or "past 3h", "1 check" while there is less history), and **Check now**,
 - **Posts to** lists every webhook this monitor's events go to, each a link back
   to that webhook's settings.
 - **Hold to delete this monitor** is at the bottom.
+
+### Mailbox
+
+Asked for to watch a Roundcube inbox, which the page element kind cannot do:
+Roundcube's session ends after ten minutes by default, its inbox list is drawn
+by script after the page loads, and its unread counter is an empty element when
+nothing is unread. Roundcube reads an IMAP server, and so does this kind, so it
+works with whatever is behind the webmail and needs nothing changed on it.
+
+Anything that takes a user name and password over IMAP works: Dovecot,
+Stalwart, Courier, Cyrus, the usual hosting panels, Seznam, GMX, Zoho, and with
+an app password Gmail, iCloud, Yahoo and Fastmail. Picking one of those as the
+provider, or typing an address at one of their domains, fills the server in and
+says which password it wants. Three cannot be done, and setup says so when the
+address is typed: Outlook, Hotmail and Microsoft 365 accept only a Microsoft
+sign-in over IMAP, and Proton and Tuta offer no IMAP to a phone.
+
+**Find the server.** With Other picked, typing the address (and the webmail
+address, if there is one) is enough: the button looks the server up and fills
+the server, port and security in, then runs Test if a password is there. In
+order of evidence it reads the domain's Mozilla autoconfig file over HTTPS
+(only a real XML file counts; a site answering every path with its home page
+does not), the `_imaps._tcp` and `_imap._tcp` SRV records, the MX record, and
+then the webmail's own host and the usual `imap.` and `mail.` names on both
+domains. Every candidate is only connected to and greeted, with its
+certificate looked at: no password is sent to any of them. A host that answers
+under a name its certificate is not for is replaced by the names the
+certificate gives, which is the webmail-on-the-same-box case: Roundcube on
+`rc.example.eu` in front of a server whose certificate says `mx1.example.eu`.
+The winner is the one this phone trusts for its own name, then TLS over
+STARTTLS, then the order above. DNS records are read with Android's resolver,
+which takes such queries from Android 10; older phones skip that step. The
+search gives up after 15 seconds.
+
+The folder is typed, or picked: **Pick from the server** signs in with what
+the form holds and lists the server's folders as chips, INBOX first, leaving out
+the parents a server marks as not openable. Past 24 the rest are typed. Changing
+the server, account, port or security drops the list, since it belonged to the
+old account.
+
+TLS on 993, or STARTTLS on 143. There is no plain IMAP: the check signs in every
+time, so it would send the password in clear every interval. A server that does
+not offer STARTTLS fails before anything is sent. The certificate rule is the
+same as for HTTP monitors, so a self-signed home server works under pinned key
+or any certificate, and under system CAs the host name is checked as well as
+the chain. Expiry is read on every check and goes through the certificate track.
+No SOCKS routing.
+
+One check: connect, sign in (AUTHENTICATE PLAIN when offered, LOGIN otherwise,
+with a literal for a password a quoted string cannot carry), `STATUS` for the
+message count, unread count, `UIDNEXT` and `UIDVALIDITY`, and log out. Only when
+`UIDNEXT` moved since the last check does it open the folder with `EXAMINE`,
+which is read only, and fetch the envelopes of the newest 20 arrivals. Bodies
+are never fetched and nothing is ever marked read. Folder names go out in
+modified UTF-7 and subjects and names are decoded, so `Doručená pošta` and a
+subject in any charset both work.
+
+New mail is judged by uid, not by the unread count, so a message read on a
+laptop before the check still counts as having arrived, and an old one marked
+unread again does not. The first check notes where the folder is and announces
+nothing, and so does a check that finds the server has renumbered the folder.
+
+| Setting | What it does |
+| --- | --- |
+| Every new message | A notification per message on the Mail channel. Five or more at once arrive as one, with the count. |
+| Alert when the sender or subject has | Comma separated, any case. A match posts on the Mail alert channel with the monitor's sound, and is announced even with every new message off. |
+| Skip messages already read | On by default. A message already flagged read when the check found it is listed but not announced. |
+| Webmail address | Where a tap on the notification goes, and an Open webmail button on the detail screen. |
+
+New-mail notifications honour the master switch, the monitor's alert switch,
+mute and quiet hours (silent then, not dropped), like repository news. None of
+them bypasses Do Not Disturb. The folder moves on while muted, so nothing is
+replayed when the mute ends.
+
+Up is "signed in and read the folder", and the response time is the whole
+conversation. A server that cannot be reached, a TLS failure or a refused
+password is down and goes through the down track. A refused password is tried
+once: the vault records it, and scheduled checks stop signing in until the
+password is edited, because a server with a brute force guard bans the phone's
+address after a few failures. Test in setup tries it again on purpose. A server
+that says the sign-in is unavailable right now is not counted as a refusal.
+
+The password is in the credential vault, as for a health monitor's sign-in:
+encrypted on the phone, never in the store, a backup, the diagnostic log or a
+webhook. A restored backup therefore asks for it again.
+
+The detail screen adds an **Inbox** card: unread, total, the last arrival, and
+the ten newest messages that arrived since the monitor started watching, with
+the ones that matched an alert term marked.
+
+Not done: IMAP IDLE for instant delivery, OAuth, and webhooks for new mail. An
+outage of the mail server does reach webhooks, through the ordinary down track.
 
 ## Alerting
 

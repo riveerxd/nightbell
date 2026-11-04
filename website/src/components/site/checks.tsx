@@ -269,6 +269,41 @@ function PortDemo() {
   )
 }
 
+/*
+  What arrived since the last check, the way the monitor's Inbox card lists it.
+  The row that matched an alert term is marked in the chrome colour, not rose:
+  a message is news, and rose means something is down.
+*/
+const MAIL = [
+  { from: "Monitor", subject: "web-3 is DOWN", alert: true, seen: false },
+  { from: "Ann Novák", subject: "Invoice for October", alert: false, seen: false },
+  { from: "Bob", subject: "Lunch on Friday?", alert: false, seen: true },
+] as const
+
+function MailDemo() {
+  return (
+    <div>
+      <p className="text-muted-foreground font-mono text-[13px]">info@example.com on mx1.example.eu</p>
+      <ul className="mt-3 grid gap-2">
+        {MAIL.map((m) => (
+          <li key={m.subject} className="border-border border-l-2 pl-4 text-[13px]">
+            <span className="flex items-baseline gap-3">
+              <span className="font-semibold">{m.from}</span>
+              <span className={cn("ml-auto font-mono text-[11px] font-semibold tracking-[0.14em] uppercase", m.alert ? "text-brand" : "text-muted-foreground")}>
+                {m.alert ? "alert" : m.seen ? "read already" : "new"}
+              </span>
+            </span>
+            <span className="text-muted-foreground block">{m.subject}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-5 text-[14px] leading-relaxed text-pretty">
+        Two notifications, one of them loud. The message read on the laptop first is listed and not announced.
+      </p>
+    </div>
+  )
+}
+
 /* A real screen with the demo floating in front of it, a hand's width closer. */
 function Stage({ src, w = 1080, h = 2400, children, tilt = 1 }: { src: string; w?: number; h?: number; children: ReactNode; tilt?: number }) {
   return (
@@ -482,6 +517,14 @@ const KINDS: Kind[] = [
     chips: [["22 SSH", "443 HTTPS", "3306 MySQL", "5432 Postgres", "any port"]],
     demo: <PortDemo />,
   },
+  {
+    id: "mailbox",
+    name: "Mailbox",
+    cost: "what arrived",
+    body: "Signs in to an IMAP folder and tells you what arrived, louder for the senders or subjects you name. Setup finds the server from the address and lists the folders to pick from. Nothing is ever marked read, and a mail server that stops answering is an outage.",
+    chips: [["TLS", "STARTTLS"], ["every message", "sender has", "subject has", "skip read"]],
+    demo: <MailDemo />,
+  },
 ]
 
 /*
@@ -513,7 +556,7 @@ export function Checks() {
           tone="up"
           title={
             <>
-              Eight kinds of check. <Serif>Pick the cheapest one that would catch the outage.</Serif>
+              Nine kinds of check. <Serif>Pick the cheapest one that would catch the outage.</Serif>
             </>
           }
         />

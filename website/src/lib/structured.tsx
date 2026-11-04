@@ -34,6 +34,7 @@ export const softwareApplication = {
     "GitHub repository monitors for stars, issues, pull requests, comments, releases and downloads",
     "Ping monitors over IPv4 or IPv6 with latency and packet loss, no root needed",
     "TCP port monitors that connect and hang up, for databases, SSH or VPN endpoints",
+    "Mailbox monitors over IMAP that announce new mail, louder for the senders or subjects you name",
     "Webhooks to Slack, Teams, Discord, Google Chat, ntfy, Gotify, Telegram or any URL",
     "Full-screen urgent alert with a looping alarm until acknowledged",
     "Latency budgets with a separate degraded alert track",
