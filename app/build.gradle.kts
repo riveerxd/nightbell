@@ -597,8 +597,14 @@ android {
         // IPv6, with an outage list and a card that reads checks on one host
         // together. Every monitor can now ask for several passing checks before
         // an outage is called over.
-        versionCode = 49
-        versionName = "3.20.0"
+        //
+        // 3.21.0 adds the Mailbox kind: IMAP over TLS or STARTTLS, a notification
+        // per new message and a louder one for senders or subjects that matter.
+        // The server is found from the address's DNS and the webmail's host, and
+        // the folder can be picked from the server's own list. The password lives
+        // in the vault and a refused one is not tried again until it is edited.
+        versionCode = 50
+        versionName = "3.21.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

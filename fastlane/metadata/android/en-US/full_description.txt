@@ -1,16 +1,26 @@
-Point Nightbell at anything that answers over HTTP, or at one element on a
-rendered web page, and it watches it, charts it, and gets loud when it
-breaks.
+Point Nightbell at a URL, one element on a rendered web page, a Prometheus
+server, your service's own health report, a GitHub repository, a host by
+ping or TCP port, or an IMAP mailbox, and it watches it, charts it, and
+gets loud when it breaks.
 
 There is no server and no account. The phone in your pocket does the
 checking, and your API tokens and target URLs never leave the device.
 
-Three kinds of monitor:
+Nine kinds of monitor:
 - Status check: hit a URL, assert on the status code.
 - Request and response: pick the method, set headers and a body, assert
   on what comes back (contains, equals, regex, or a JSON field by path).
 - Page element: load the real page in an embedded browser and watch DOM
   nodes you picked by tapping them.
+- Prometheus: read a metrics endpoint, run a PromQL query, or watch
+  Alertmanager.
+- Health endpoint: read the report a service writes about itself, part by
+  part.
+- GitHub repository: stars, issues, pull requests, comments, releases and
+  downloads.
+- Ping: ICMP echo over IPv4 or IPv6, no root.
+- TCP port: connect to one port and hang up.
+- Mailbox: new mail in an IMAP folder, louder for the senders that matter.
 
 Urgent alerts arrive as a full-screen red page with a looping alarm that
 keeps going until you acknowledge it, and it wakes the screen even if the
