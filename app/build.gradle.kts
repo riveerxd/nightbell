@@ -603,8 +603,13 @@ android {
         // The server is found from the address's DNS and the webmail's host, and
         // the folder can be picked from the server's own list. The password lives
         // in the vault and a refused one is not tried again until it is edited.
-        versionCode = 50
-        versionName = "3.21.0"
+        //
+        // 3.22.0 adds the UDP port kind: a real request per service (DNS, NTP,
+        // STUN, SNMP, SIP, QUIC, Source, Bedrock or a custom payload), a few
+        // tries a second apart, a refusal read as a closed port, and a silent
+        // mode for ports that never answer, which pings the host instead.
+        versionCode = 51
+        versionName = "3.22.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

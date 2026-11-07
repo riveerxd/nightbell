@@ -1,12 +1,12 @@
 Point Nightbell at a URL, one element on a rendered web page, a Prometheus
 server, your service's own health report, a GitHub repository, a host by
-ping or TCP port, or an IMAP mailbox, and it watches it, charts it, and
-gets loud when it breaks.
+ping, TCP or UDP port, or an IMAP mailbox, and it watches it, charts it,
+and gets loud when it breaks.
 
 There is no server and no account. The phone in your pocket does the
 checking, and your API tokens and target URLs never leave the device.
 
-Nine kinds of monitor:
+Ten kinds of monitor:
 - Status check: hit a URL, assert on the status code.
 - Request and response: pick the method, set headers and a body, assert
   on what comes back (contains, equals, regex, or a JSON field by path).
@@ -20,6 +20,8 @@ Nine kinds of monitor:
   downloads.
 - Ping: ICMP echo over IPv4 or IPv6, no root.
 - TCP port: connect to one port and hang up.
+- UDP port: send a real DNS, NTP, SNMP or game server query, or your own
+  bytes, and check the reply.
 - Mailbox: new mail in an IMAP folder, louder for the senders that matter.
 
 Urgent alerts arrive as a full-screen red page with a looping alarm that

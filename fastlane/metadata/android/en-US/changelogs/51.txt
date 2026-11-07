@@ -1,0 +1,3 @@
+Nightbell can now watch UDP services: DNS, NTP, STUN, SNMP, SIP, HTTP/3 and game servers, or any port with a payload you write. It sends a real request and checks the reply, so a DNS server that answers with an error is caught too.
+
+For WireGuard and other ports that never reply, silent mode waits for the host to refuse the port and pings it to make sure it's there.
