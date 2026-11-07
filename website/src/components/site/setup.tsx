@@ -12,8 +12,8 @@ import { SectionHeading, Serif } from "./section"
 const STEPS = [
   {
     title: "What to watch",
-    body: "Status check, request and response, page element, GitHub repository, Prometheus, health endpoint, ping, TCP port or mailbox. This is the only choice that changes the rest of the wizard.",
-    keys: ["status check", "request and response", "page element", "GitHub repository", "Prometheus", "health endpoint", "ping", "TCP port", "mailbox"],
+    body: "Status check, request and response, page element, GitHub repository, Prometheus, health endpoint, ping, TCP port, UDP port or mailbox. This is the only choice that changes the rest of the wizard.",
+    keys: ["status check", "request and response", "page element", "GitHub repository", "Prometheus", "health endpoint", "ping", "TCP port", "UDP port", "mailbox"],
     alt: "Step one of the new-monitor wizard: the kinds of check listed as rows, Status check selected with a tick, then Request and response, Page element, GitHub repo and Prometheus.",
   },
   {

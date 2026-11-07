@@ -1,5 +1,5 @@
 
-This page describes Nightbell 3.21.0. Settings is split into four tabs, Alerts,
+This page describes Nightbell 3.22.0. Settings is split into four tabs, Alerts,
 Checks, Look and About, and a path such as "Settings, Checks, Checker health"
 names the tab and then the card.
 
@@ -15,6 +15,7 @@ names the tab and then the card.
 | **GitHub repo** | Watches a repository over the public API: stars, issues, pull requests, comments, releases and how often the release files are downloaded. See below. |
 | **Ping** | ICMP echo to an IPv4 or IPv6 address or a host name: whether it answers, the fastest, average and slowest reply, and packet loss. No root. See below. |
 | **TCP port** | Opens a connection to one port and closes it again, nothing sent. Reports whether something is listening and how long the handshake took. See below. |
+| **UDP port** | Sends one datagram and reads the reply. Most probes speak the service's own protocol, so up means the service answered, not just that nothing refused. See below. |
 | **Mailbox** | Signs in to one IMAP folder and says what arrived: a notification per new message, a louder one for senders or subjects you name. The mail server being unreachable or refusing the password is an outage like any other. See below. |
 
 ### Setting up a monitor
@@ -429,6 +430,43 @@ and a port down is the service, ping down and a port up is ICMP being filtered,
 both down is the host or the route to it. **Add a check on this host** opens
 setup on the same host with the other kind picked. A ping also gets an **Echo
 replies** card with the fastest, average and slowest reply of the last check.
+
+### UDP port
+
+UDP has no handshake, so a datagram can come back three ways:
+
+| What comes back | Verdict |
+| --- | --- |
+| A reply the probe accepts | Up, or degraded by the probe's own reading |
+| ICMP port unreachable | Down, "Port closed" |
+| Nothing after every try | Down, "No reply", except in silent mode |
+
+Each check makes 1 to 5 tries (3 by default), at least a second apart because
+the kernel sends at most one refusal a second, and stops at the first good
+reply or the first refusal. Each try waits up to the reply timeout. A late
+reply to an earlier try does not count.
+
+| Probe | Port | Up when |
+| --- | --- | --- |
+| DNS | 53 | NOERROR or NXDOMAIN for the name and type set. SERVFAIL is degraded, REFUSED is down |
+| NTP | 123 | A server reply that knows the time. The offset against the phone is shown, and judged when an allowed offset is set |
+| STUN | 3478 | A binding success, with the public address the server saw |
+| SNMP | 161 | A v2c GetResponse for the OID, sysUpTime by default. The community stays in the credential vault |
+| SIP | 5060 | Any SIP status line to an OPTIONS request |
+| HTTP/3 | 443 | A QUIC version negotiation packet |
+| Source game | 27015 | An A2S_INFO reply |
+| Bedrock | 19132 | A RakNet pong |
+| Custom | any | Any reply, or one that starts with, contains or matches what you set. The payload is text with escapes, or hex |
+| Silent | any | No refusal, and the host answers one ping |
+
+Silent mode is for services that never answer a stranger: WireGuard, OpenVPN
+with tls-crypt, syslog, StatsD. Its up is weaker than any other kind's and says
+so: "Not refused, host answers ping". It cannot see a service that is hung but
+still holds the port.
+
+Port chips in setup pick the matching probe too. Like the other host kinds it
+never goes through the SOCKS proxy. When a TCP and a UDP check on the same port
+disagree, the This host card says so first.
 
 ### Assertions and element expectations
 

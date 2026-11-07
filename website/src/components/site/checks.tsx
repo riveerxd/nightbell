@@ -270,6 +270,40 @@ function PortDemo() {
 }
 
 /*
+  Three UDP checks on one host, worded the way the app words them. The silent
+  row is the one that needs the note: its up is weaker, and the app says so.
+*/
+const DATAGRAMS = [
+  { port: 53, what: "DNS", up: true, note: "NOERROR, 1 answer, 0.41 ms" },
+  { port: 123, what: "NTP", up: true, note: "Stratum 2, offset +3 ms, 18.2 ms" },
+  { port: 51820, what: "WireGuard", up: true, note: "Not refused, host answers ping" },
+] as const
+
+function UdpDemo() {
+  return (
+    <div>
+      <ul className="grid gap-2">
+        {DATAGRAMS.map((d) => (
+          <li key={d.port} className="border-border border-l-2 pl-4 font-mono text-[13px]">
+            <span className="flex items-baseline gap-3">
+              <span>192.0.2.10:{d.port}/udp</span>
+              <span className="text-muted-foreground">{d.what}</span>
+              <span className={cn("ml-auto text-[11px] font-semibold tracking-[0.14em] uppercase", d.up ? "text-up" : "text-down")}>
+                {d.up ? "up" : "down"}
+              </span>
+            </span>
+            <span className="text-muted-foreground block">{d.note}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-5 text-[14px] leading-relaxed text-pretty">
+        WireGuard never answers a stranger, so silent mode only knows the port was not refused and the host is there.
+      </p>
+    </div>
+  )
+}
+
+/*
   What arrived since the last check, the way the monitor's Inbox card lists it.
   The row that matched an alert term is marked in the chrome colour, not rose:
   a message is news, and rose means something is down.
@@ -518,6 +552,14 @@ const KINDS: Kind[] = [
     demo: <PortDemo />,
   },
   {
+    id: "udp",
+    name: "UDP port",
+    cost: "one datagram",
+    body: "Sends the service a real request and checks the reply: a DNS answer, the time from NTP, an SNMP value. A closed port is down at once. Services that never reply get silent mode, which waits for a refusal and pings the host.",
+    chips: [["DNS", "NTP", "STUN", "SNMP", "SIP", "HTTP/3", "game servers", "your own bytes", "silent"]],
+    demo: <UdpDemo />,
+  },
+  {
     id: "mailbox",
     name: "Mailbox",
     cost: "what arrived",
@@ -556,7 +598,7 @@ export function Checks() {
           tone="up"
           title={
             <>
-              Nine kinds of check. <Serif>Pick the cheapest one that would catch the outage.</Serif>
+              Ten kinds of check. <Serif>Pick the cheapest one that would catch the outage.</Serif>
             </>
           }
         />
