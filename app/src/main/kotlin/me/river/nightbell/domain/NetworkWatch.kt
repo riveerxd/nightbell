@@ -231,7 +231,7 @@ object NetworkTarget {
      * would be a network request to draw a screen.
      */
     fun hostOf(monitor: Monitor): String = when (monitor.kind) {
-        MonitorKind.PING, MonitorKind.TCP_PORT -> monitor.network.cleanHost
+        MonitorKind.PING, MonitorKind.TCP_PORT, MonitorKind.UDP_PORT -> monitor.network.cleanHost
         MonitorKind.MAILBOX -> monitor.mail.cleanHost
         MonitorKind.GITHUB_REPO, MonitorKind.UNSUPPORTED -> ""
         else -> parse(monitor.url).host

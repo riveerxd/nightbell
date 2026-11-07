@@ -174,6 +174,7 @@ fun kindIcon(kind: MonitorKind) = when (kind) {
     MonitorKind.HEALTH_ENDPOINT -> NightbellIcons.Activity
     MonitorKind.PING -> NightbellIcons.Echo
     MonitorKind.TCP_PORT -> NightbellIcons.Plug
+    MonitorKind.UDP_PORT -> NightbellIcons.Datagram
     MonitorKind.MAILBOX -> NightbellIcons.Mail
     MonitorKind.UNSUPPORTED -> NightbellIcons.Info
 }
@@ -1751,7 +1752,13 @@ private fun MonitorRowCard(
         } else {
             null
         }
-        val reading = notChecking || partsLine != null || losing || mailLine != null || (
+        // A UDP probe's readout: the stratum, the players, what the DNS server
+        // returned. The reason most people open the card, as with a mailbox.
+        val udpLine = monitor.kind == MonitorKind.UDP_PORT &&
+            runtime.ok(monitor.enabled) &&
+            runtime.lastReading.isNotBlank()
+        val udpAmber = udpLine && runtime.health == Health.DEGRADED
+        val reading = notChecking || partsLine != null || losing || mailLine != null || udpLine || (
             monitor.kind == MonitorKind.PROMETHEUS &&
                 runtime.ok(monitor.enabled) &&
                 runtime.lastReading.isNotBlank()
@@ -1766,7 +1773,7 @@ private fun MonitorRowCard(
             // carries the health, in the colour that means health.
             val tone = when {
                 notChecking -> NightbellColors.TextTertiary
-                losing -> NightbellColors.Amber
+                losing || udpAmber -> NightbellColors.Amber
                 reading -> accent
                 recovering -> NightbellColors.Mint
                 muted -> NightbellColors.Amber
@@ -1797,6 +1804,7 @@ private fun MonitorRowCard(
                             partsLine != null -> NightbellIcons.Layers
                             mailLine != null -> NightbellIcons.Mail
                             losing -> NightbellIcons.Echo
+                            udpLine -> NightbellIcons.Datagram
                             reading -> NightbellIcons.Gauge
                             recovering -> NightbellIcons.Refresh
                             muted -> NightbellIcons.BellOff
@@ -1936,6 +1944,8 @@ private fun MonitorRowCard(
                     )
                 } else if (monitor.kind == MonitorKind.MAILBOX) {
                     MicroTag(text = "IMAP", color = NightbellColors.TextTertiary)
+                } else if (monitor.kind == MonitorKind.UDP_PORT) {
+                    MicroTag(text = monitor.udp.probe.label, color = NightbellColors.TextTertiary)
                 } else if (monitor.kind != MonitorKind.WEBSITE_ELEMENT &&
                     monitor.kind != MonitorKind.GITHUB_REPO &&
                     monitor.kind != MonitorKind.TCP_PORT

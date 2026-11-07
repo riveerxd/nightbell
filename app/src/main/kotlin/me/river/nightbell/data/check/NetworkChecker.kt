@@ -8,6 +8,7 @@ import me.river.nightbell.domain.MonitorKind
 import me.river.nightbell.domain.NetworkTarget
 import me.river.nightbell.domain.NetworkWatch
 import me.river.nightbell.domain.PingReading
+import me.river.nightbell.domain.UdpProbe
 import java.io.IOException
 import java.net.ConnectException
 import java.net.Inet4Address
@@ -22,8 +23,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
 
 /**
- * Checks for the two kinds that reach a host rather than fetch a URL:
- * [MonitorKind.PING] and [MonitorKind.TCP_PORT].
+ * Checks for the kinds that reach a host rather than fetch a URL:
+ * [MonitorKind.PING], [MonitorKind.TCP_PORT] and [MonitorKind.UDP_PORT], the
+ * last handed to [UdpChecker] once the name is resolved.
  *
  * No HTTP client, no TLS, no proxy. ICMP cannot be carried by SOCKS at all, and a
  * port check through a proxy measures the proxy, so both go straight out of the
@@ -39,6 +41,9 @@ class NetworkChecker(
     private val pinger: Pinger = Pinger.System,
     private val connector: Connector = Connector.System,
     private val nowMs: () -> Long = System::currentTimeMillis,
+    private val udp: UdpChecker = UdpChecker(nowMs = nowMs),
+    /** An SNMP probe's community, by monitor id. The vault on a phone, a lambda in a test. */
+    private val community: suspend (String) -> String = { "" },
 ) {
 
     /** Name to address. Throws [UnknownHostException] when there is none of the family asked for. */
@@ -92,12 +97,29 @@ class NetworkChecker(
         }
     }
 
-    suspend fun check(monitor: Monitor): CheckResult = runInterruptible(Dispatchers.IO) {
-        when (monitor.kind) {
-            MonitorKind.PING -> ping(monitor)
-            MonitorKind.TCP_PORT -> tcp(monitor)
-            else -> failed(FailureKind.BAD_CONFIG, "Not a ping or port monitor")
+    suspend fun check(monitor: Monitor): CheckResult {
+        val secret = if (monitor.kind == MonitorKind.UDP_PORT && monitor.udp.probe == UdpProbe.SNMP) {
+            community(monitor.id)
+        } else {
+            ""
         }
+        return runInterruptible(Dispatchers.IO) {
+            when (monitor.kind) {
+                MonitorKind.PING -> ping(monitor)
+                MonitorKind.TCP_PORT -> tcp(monitor)
+                MonitorKind.UDP_PORT -> udp(monitor, secret)
+                else -> failed(FailureKind.BAD_CONFIG, "Not a ping or port monitor")
+            }
+        }
+    }
+
+    private fun udp(monitor: Monitor, community: String): CheckResult {
+        val watch = monitor.network
+        if (watch.port !in 1..65535) {
+            return failed(FailureKind.BAD_CONFIG, "No port set", "Pick a port between 1 and 65535.")
+        }
+        val address = resolve(watch) ?: return dnsFailure(watch)
+        return udp.check(monitor, address, describe(watch, address, watch.port), describe(watch, address), community, pinger)
     }
 
     private fun ping(monitor: Monitor): CheckResult {

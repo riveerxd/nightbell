@@ -58,12 +58,13 @@ object WebhookPayload {
             WebhookEvent.STILL_DOWN -> "$name is still down"
             WebhookEvent.RECOVERED -> "$name is back up"
             WebhookEvent.DEGRADED -> when {
+                facts.udp && facts.reported -> "$name is degraded"
                 facts.lossPercent > 0 -> "$name is losing packets"
                 facts.reported -> "$name reports degraded"
                 else -> "$name is slow"
             }
             WebhookEvent.DEGRADED_RECOVERED -> when {
-                facts.lossPercent >= 0 -> "$name is answering normally again"
+                facts.udp || facts.lossPercent >= 0 -> "$name is answering normally again"
                 facts.reported -> "$name is no longer degraded"
                 else -> "$name is back to normal speed"
             }
@@ -101,7 +102,9 @@ object WebhookPayload {
                 append("Answered in $latency.")
             }
             WebhookEvent.DEGRADED ->
-                if (facts.lossPercent > 0) {
+                if (facts.udp && facts.reported) {
+                    facts.message
+                } else if (facts.lossPercent > 0) {
                     facts.message.ifBlank { "${facts.lossPercent}% of echo requests went unanswered." }
                 } else if (facts.reported) {
                     facts.detail.lineSequence().firstOrNull { it.isNotBlank() } ?: "The service says it is working, worse than it should."
@@ -111,7 +114,9 @@ object WebhookPayload {
                     "Answered in $latency."
                 }
             WebhookEvent.DEGRADED_RECOVERED ->
-                if (facts.lossPercent >= 0) {
+                if (facts.udp) {
+                    facts.message.ifBlank { "Answered in $latency." }
+                } else if (facts.lossPercent >= 0) {
                     facts.message.ifBlank { "Every echo request answered." }
                 } else if (facts.reported) {
                     "The service reports itself working normally again."

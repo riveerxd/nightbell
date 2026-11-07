@@ -12,7 +12,7 @@ object Validation {
         NAME, URL, METHOD, HEADERS, BODY, STATUS, ASSERTION, JSON_PATH,
         INTERVAL, TIMEOUT, ELEMENT, ELEMENT_TEXT, LATENCY_SLO, URGENT, PROXY,
         REPO, GITHUB, TOKEN, TLS, METRIC, LABELS, PROMQL, ALERTS,
-        SIGN_IN, STALE, HOST, PORT, PACKETS,
+        SIGN_IN, STALE, HOST, PORT, PACKETS, ATTEMPTS, PAYLOAD, REPLY, DNS_NAME, OID, COMMUNITY,
         MAIL_USER, MAIL_PASSWORD, MAIL_FOLDER, MAIL_TERMS, WEBMAIL,
     }
 
@@ -496,7 +496,9 @@ object Validation {
             notes += Note(Field.NAME, Severity.WARNING, "Long names get truncated on the dashboard")
         }
         hostNote(monitor.network.host)?.let { notes += it }
-        if (monitor.kind == MonitorKind.TCP_PORT && monitor.network.port !in 1..65535) {
+        if (monitor.kind == MonitorKind.UDP_PORT) notes += udpNotes(monitor)
+        val needsPort = monitor.kind == MonitorKind.TCP_PORT || monitor.kind == MonitorKind.UDP_PORT
+        if (needsPort && monitor.network.port !in 1..65535) {
             notes += Note(
                 Field.PORT, Severity.ERROR,
                 if (monitor.network.port == 0) "A port is required" else "Ports run from 1 to 65535",
@@ -520,6 +522,62 @@ object Validation {
             )
         }
         return Report(notes + cadenceNotes(monitor))
+    }
+
+    /** What a UDP monitor's probe needs to be sendable and its reply judgeable. */
+    fun udpNotes(monitor: Monitor): List<Note> {
+        val udp = monitor.udp
+        val notes = mutableListOf<Note>()
+        if (udp.attempts !in 1..UdpWatch.MAX_ATTEMPTS) {
+            notes += Note(Field.ATTEMPTS, Severity.ERROR, "Try 1 to ${UdpWatch.MAX_ATTEMPTS} times per check")
+        } else if (udp.attempts * monitor.timeoutSeconds > UdpWatch.MAX_WAIT_SECONDS) {
+            notes += Note(
+                Field.TIMEOUT, Severity.ERROR,
+                "${udp.attempts} tries of ${monitor.timeoutSeconds}s is over a minute. Lower one of them",
+            )
+        }
+        when (udp.probe) {
+            UdpProbe.CUSTOM, UdpProbe.SILENT -> {
+                when (val parsed = UdpPayload.parse(udp.payload, udp.payloadFormat)) {
+                    is UdpPayload.Parsed.Invalid -> notes += Note(Field.PAYLOAD, Severity.ERROR, parsed.message)
+                    is UdpPayload.Parsed.Bytes -> when {
+                        udp.probe == UdpProbe.CUSTOM && parsed.value.isEmpty() ->
+                            notes += Note(Field.PAYLOAD, Severity.ERROR, "Say what to send")
+                        parsed.value.size > 1400 ->
+                            notes += Note(Field.PAYLOAD, Severity.WARNING, "Over 1400 bytes may be fragmented or dropped")
+                    }
+                }
+                if (udp.probe == UdpProbe.CUSTOM && udp.expect != ReplyMatch.ANY) {
+                    when {
+                        udp.expectValue.isEmpty() -> notes += Note(Field.REPLY, Severity.ERROR, "Say what the reply should hold")
+                        UdpPayload.matches(ByteArray(0), udp.expect, udp.expectValue) == null ->
+                            notes += Note(
+                                Field.REPLY, Severity.ERROR,
+                                if (udp.expect == ReplyMatch.REGEX) "Not a valid regex" else "Can't read that as ${udp.expect.label.lowercase()}",
+                            )
+                    }
+                }
+            }
+            UdpProbe.DNS -> {
+                val name = udp.dnsName.trim()
+                if (name.isEmpty()) {
+                    notes += Note(Field.DNS_NAME, Severity.ERROR, "Say which name to ask for")
+                } else if (name != "." && !NetworkTarget.isHostName(name)) {
+                    notes += Note(Field.DNS_NAME, Severity.ERROR, "Not a valid name")
+                }
+            }
+            UdpProbe.SNMP -> if (!UdpWatch.isOid(udp.snmpOid)) {
+                notes += Note(Field.OID, Severity.ERROR, "An OID is numbers and dots, like 1.3.6.1.2.1.1.3.0")
+            }
+            else -> Unit
+        }
+        if (udp.unknownProbe.isNotEmpty()) {
+            notes += Note(
+                Field.PAYLOAD, Severity.WARNING,
+                "Made with the ${udp.unknownProbe} probe from a newer Nightbell. Update to check it that way",
+            )
+        }
+        return notes
     }
 
     /** What is wrong with a typed host, or null when it is a usable address or name. */
@@ -599,6 +657,10 @@ object Validation {
         }
         return Report(notes + cadenceNotes(monitor))
     }
+
+    /** The same for an SNMP probe's community, which [udpNotes] cannot see either. */
+    fun snmpCommunityNote(typed: String, held: Boolean): Note? =
+        if (typed.isEmpty() && !held) Note(Field.COMMUNITY, Severity.ERROR, "The community is required") else null
 
     /** No password typed and none held: the one thing [reportMail] cannot see. */
     fun mailPasswordNote(typed: String, held: Boolean): Note? =

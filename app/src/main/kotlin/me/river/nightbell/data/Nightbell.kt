@@ -132,6 +132,11 @@ object Nightbell {
                 http.check(monitor, pin, authorization = authorization)
             })
             engine.mail = MailChecker(mailCredentials)
+            // An SNMP community is a credential, so it lives in the vault, in its
+            // own field: a password saved for another kind is never sent as one.
+            engine.network = me.river.nightbell.data.check.NetworkChecker(
+                community = { id -> mailCredentials.community(id) },
+            )
             // Once the store has been read, so an entry is only ever dropped
             // against the real list of monitors and never against the empty
             // defaults the store starts on.

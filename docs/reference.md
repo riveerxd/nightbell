@@ -18,6 +18,7 @@ watch it, chart it, and shout when it breaks.
 | **GitHub repository** | Watches a repository over the public API: stars, issues, pull requests, comments, releases and how often the release files are downloaded. See below. |
 | **Ping** | ICMP echo to an IPv4 or IPv6 address or a host name: whether it answers, the fastest, average and slowest reply, and packet loss. No root. See below. |
 | **TCP port** | Opens a connection to one port and closes it again, nothing sent. Reports whether something is listening and how long the handshake took. See below. |
+| **UDP port** | Sends one datagram and reads the reply. Most probes speak the service's own protocol, so up means the service answered, not just that nothing refused. See below. |
 | **Mailbox** | Signs in to one IMAP folder and says what arrived: a notification per new message, a louder one for senders or subjects you name. The mail server being unreachable or refusing the password is an outage like any other. See below. |
 
 ### A GitHub repository
@@ -286,6 +287,60 @@ ping down and port up is ICMP being filtered, both down is the host or the route
 **Add a check on this host** opens setup on the same host with the
 complementary kind picked. The card also appears on any other kind's screen
 once something shares its host. A ping also gets an **Echo replies** card.
+
+### UDP port
+
+Issue 21 again: a TCP check called UDP-only services down. UDP has no
+handshake, so a datagram can come back three ways and only one proves the
+service is alive:
+
+| What comes back | Verdict |
+| --- | --- |
+| A reply the probe accepts | Up, or degraded by the probe's own reading |
+| ICMP port unreachable | Down, "Port closed". The host answered, so the phone's network works |
+| Nothing after every try | Down, "No reply", except in silent mode |
+
+The refusal only reaches a socket that has called `connect`, so every check
+connects first. The kernel sends at most one refusal a second to one
+destination by default, so tries go out at least a second apart. Each check
+makes 1 to 5 tries (3 by default) and stops at the first good reply or the
+first refusal; each try waits up to the reply timeout, and tries times timeout
+may not pass a minute. A late reply to an earlier try is told apart by the
+random id each probe carries and does not count.
+
+The probes, and what each needs to call it up:
+
+| Probe | Port | Up when |
+| --- | --- | --- |
+| DNS | 53 | NOERROR or NXDOMAIN for the name and type set. SERVFAIL is degraded, REFUSED is down. An optional expected answer makes a mismatch degraded |
+| NTP | 123 | A server reply that knows the time. Stratum 16 or leap indicator 3 is down, a kiss-o'-death is degraded. The clock offset against the phone is shown, and judged only when an allowed offset is set |
+| STUN | 3478 | A binding success. Shows the public address the server saw |
+| SNMP | 161 | A v2c GetResponse for the OID (sysUpTime by default) with error status 0. The community is kept in the credential vault, never in a backup. A wrong community gets no answer from most agents and shows as no reply |
+| SIP | 5060 | Any SIP status line to an OPTIONS request, 401 and 405 included |
+| HTTP/3 | 443 | A QUIC version negotiation packet, sent back to a 1200 byte packet with a reserved version |
+| Source game | 27015 | An A2S_INFO reply, after answering the server's challenge once |
+| Bedrock | 19132 | A RakNet unconnected pong |
+| Custom | any | Any reply, or one that starts with, contains, matches a regex or starts with the hex bytes set. The payload is text with `\r \n \t \0 \xNN` escapes, or hex |
+| Silent | any | No refusal, and the host answers one ICMP echo |
+
+Silent mode is for services that never answer a stranger: WireGuard, OpenVPN
+with tls-crypt, syslog, StatsD. Silence also means a host that is gone, so it
+pings the host in the same check, and with no refusal and no echo it reports
+down, saying it cannot tell. Its up is weaker than any other kind's and is
+worded that way: "Not refused, host answers ping". It cannot see a service that
+is hung but still holding the port.
+
+The port shortcut chips in setup pick the matching probe as well, WireGuard and
+OpenVPN picking silent. Picking a probe fills its default port only when the
+port is empty or still the previous probe's default.
+
+Like the other host kinds it never goes through the SOCKS proxy: SOCKS5 UDP
+relay is rarely implemented by the proxies people run, and a check through one
+measures the proxy. The detail screen adds a readout card with the probe's own
+facts (stratum, players, addresses, the reply bytes for a custom probe), plus
+the Outages and This host cards. When a TCP and a UDP check on the same port
+disagree, This host says so first: "53/tcp accepts connections but 53/udp does
+not answer. The service may only be listening on TCP."
 
 ### Mailbox
 

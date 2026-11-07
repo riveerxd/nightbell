@@ -308,6 +308,12 @@ data class WebhookFacts(
      * whoever reads the channel to look at the wrong thing.
      */
     val lossPercent: Int = -1,
+    /**
+     * A UDP monitor. Its amber is a probe's own reason as often as a slow
+     * reply, the clock offset or a SERVFAIL, and the check's message already
+     * says which, so the words use it. Words only, like [lossPercent].
+     */
+    val udp: Boolean = false,
 )
 
 /**

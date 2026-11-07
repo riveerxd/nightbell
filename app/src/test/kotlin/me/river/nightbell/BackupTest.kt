@@ -22,6 +22,7 @@ import me.river.nightbell.domain.HealthComponent
 import me.river.nightbell.domain.HealthState
 import me.river.nightbell.domain.MonitorKind
 import kotlinx.serialization.json.Json
+import me.river.nightbell.domain.UdpFact
 import org.junit.Test
 
 /**
@@ -185,6 +186,7 @@ class BackupTest {
                         lastCode = 200,
                         lastMessage = "OK",
                         lastDetail = "detail",
+                        lastUdpFacts = listOf(UdpFact("Public address", "203.0.113.7:51000")),
                         consecutiveSuccesses = 12,
                     ),
                 ),
@@ -199,6 +201,7 @@ class BackupTest {
         assertEquals(0, runtime.lastCode)
         assertEquals("", runtime.lastMessage)
         assertEquals("", runtime.lastDetail)
+        assertTrue("the old phone's readout came along", runtime.lastUdpFacts.isEmpty())
         assertEquals(0, runtime.consecutiveSuccesses)
     }
 

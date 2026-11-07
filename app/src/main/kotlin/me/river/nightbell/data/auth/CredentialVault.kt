@@ -37,6 +37,13 @@ data class VaultEntry(
     /** 0 when the provider did not say, which for an offline token usually means never. */
     val refreshExpiresAt: Long = 0L,
     val password: String = "",
+    /**
+     * A UDP monitor's SNMP community, in a field of its own. In [password] it
+     * was read by whatever kind the monitor was saved as at check time, so an
+     * IMAP or health password typed into an edit that was then abandoned went
+     * out in clear as the community.
+     */
+    val community: String = "",
     val clientSecret: String = "",
     /**
      * Fingerprint of a password or client secret the provider has refused.
@@ -58,7 +65,7 @@ data class VaultEntry(
     val hasTokens: Boolean get() = accessToken.isNotBlank() || refreshToken.isNotBlank()
 
     /** Every value here that would be a leak in a log line. */
-    val secrets: List<String> get() = listOf(accessToken, refreshToken, password, clientSecret)
+    val secrets: List<String> get() = listOf(accessToken, refreshToken, password, community, clientSecret)
 
     fun withoutTokens(): VaultEntry = copy(
         accessToken = "",

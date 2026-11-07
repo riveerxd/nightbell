@@ -441,13 +441,21 @@ class AlertCenter(private val context: Context) {
     ) {
         val channelId = channelFor(policy, Severity.DEGRADED, silent)
         val losing = result.ping?.partial == true
-        if (result.degraded && losing) {
+        // A UDP probe's own reason, the clock offset or a SERVFAIL, is the
+        // whole message. The packet-loss shape fits it: title, the reason, where.
+        val udpReason = result.udp != null
+        if (result.degraded && (losing || udpReason)) {
             // Some echoes came back and some did not. Not slow, and not the
             // service's own word either: the path to the host is dropping packets.
             val notification = baseBuilder(channelId, monitor, silent)
                 .setSmallIcon(R.drawable.ic_stat_alert)
                 .setContentTitle(
-                    if (repeat) "${monitor.displayName} is still losing packets" else "${monitor.displayName} is losing packets",
+                    when {
+                        udpReason && repeat -> "${monitor.displayName} is still degraded"
+                        udpReason -> "${monitor.displayName} is degraded"
+                        repeat -> "${monitor.displayName} is still losing packets"
+                        else -> "${monitor.displayName} is losing packets"
+                    },
                 )
                 .setContentText(result.message)
                 .setStyle(NotificationCompat.BigTextStyle().bigText("${result.message}\n\n${monitor.address}"))
@@ -551,13 +559,13 @@ class AlertCenter(private val context: Context) {
                     // Amber here was either loss or a slow reply, and the
                     // notification cannot know which one is ending. Both end in
                     // every echo answered inside the budget, which this says.
-                    MonitorKind.PING -> "${monitor.displayName} is answering normally again"
+                    MonitorKind.PING, MonitorKind.UDP_PORT -> "${monitor.displayName} is answering normally again"
                     else -> "${monitor.displayName} is fast again"
                 },
             )
             .setContentText(
                 when (monitor.kind) {
-                    MonitorKind.HEALTH_ENDPOINT, MonitorKind.PING -> result.message
+                    MonitorKind.HEALTH_ENDPOINT, MonitorKind.PING, MonitorKind.UDP_PORT -> result.message
                     else -> "${result.latencyMs} ms, back under the $sloMs ms budget"
                 },
             )

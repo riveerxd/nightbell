@@ -222,7 +222,7 @@ class CheckEngine(
         // baseline or announce anything. Which is exactly what "Test now" means.
         MonitorKind.GITHUB_REPO -> githubDryRun(monitor)
         MonitorKind.HEALTH_ENDPOINT -> healthDryRun(monitor, certPin)
-        MonitorKind.PING, MonitorKind.TCP_PORT -> network.check(monitor)
+        MonitorKind.PING, MonitorKind.TCP_PORT, MonitorKind.UDP_PORT -> network.check(monitor)
         MonitorKind.MAILBOX -> mailDryRun(monitor, certPin)
         else -> http.check(monitor, certPin)
     }
@@ -1249,6 +1249,7 @@ class CheckEngine(
         // again: the words for slowness would be explaining a reading nobody took.
         reported = result.degraded || (monitor.kind == MonitorKind.HEALTH_ENDPOINT && result.ok),
         lossPercent = if (monitor.kind == MonitorKind.PING) result.ping?.lossPercent ?: -1 else -1,
+        udp = monitor.kind == MonitorKind.UDP_PORT,
     )
 
     private fun withoutUserInfo(url: String): String {

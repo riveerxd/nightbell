@@ -1841,7 +1841,11 @@ private fun StepSchedule(
     StepperRow(
         // For a ping it is how long each reply is waited for, and the name says
         // so: three packets at fifteen seconds is not a fifteen second check.
-        title = if (draft.kind == MonitorKind.PING) "Reply timeout" else "Timeout",
+        title = when (draft.kind) {
+            MonitorKind.PING -> "Reply timeout"
+            MonitorKind.UDP_PORT -> "Reply timeout, per try"
+            else -> "Timeout"
+        },
         value = draft.timeoutSeconds,
         onValueChange = { v -> viewModel.update { it.copy(timeoutSeconds = v) } },
         range = 1..120,

@@ -407,6 +407,14 @@ fun DetailScreen(
             }
         }
 
+        if (monitor.kind == MonitorKind.UDP_PORT && runtime.lastUdpFacts.isNotEmpty()) {
+            item(key = "udp") {
+                StaggeredEntrance(index = 2, key = "udp-${monitor.id}", log = entrance) {
+                    UdpReadoutCard(monitor, runtime, accentEnd)
+                }
+            }
+        }
+
         if (monitor.kind != MonitorKind.GITHUB_REPO && monitor.kind != MonitorKind.HEALTH_ENDPOINT && runtime.samples.isNotEmpty()) {
             item(key = "chart") {
                 StaggeredEntrance(index = 2, key = "chart-${monitor.id}", log = entrance) {
@@ -1431,6 +1439,34 @@ private fun ConfigCard(
         } else if (monitor.kind.isNetwork) {
             ConfigRow("Host", monitor.network.cleanHost)
             if (monitor.kind == MonitorKind.TCP_PORT) ConfigRow("Port", monitor.network.port.toString())
+            if (monitor.kind == MonitorKind.UDP_PORT) {
+                val udp = monitor.udp
+                ConfigRow("Port", "${monitor.network.port}/udp")
+                ConfigRow("Probe", udp.probe.label)
+                when (udp.probe) {
+                    me.river.nightbell.domain.UdpProbe.DNS -> {
+                        ConfigRow("Asks for", "${udp.dnsName} ${udp.dnsType.name}")
+                        if (udp.dnsExpected.isNotBlank()) ConfigRow("Expects", udp.dnsExpected)
+                    }
+                    me.river.nightbell.domain.UdpProbe.NTP -> ConfigRow(
+                        "Clock offset",
+                        if (udp.ntpMaxOffsetMs > 0) "degraded past ${udp.ntpMaxOffsetMs} ms" else "shown, not judged",
+                    )
+                    me.river.nightbell.domain.UdpProbe.SNMP -> {
+                        ConfigRow("OID", udp.snmpOid)
+                        ConfigRow("Community", "saved, never shown")
+                    }
+                    me.river.nightbell.domain.UdpProbe.CUSTOM -> {
+                        ConfigRow("Sends", "${udp.payloadFormat.label} · ${udp.payload.take(40)}")
+                        ConfigRow(
+                            "Reply",
+                            if (udp.expect == me.river.nightbell.domain.ReplyMatch.ANY) "any" else "${udp.expect.label.lowercase()} ${udp.expectValue}",
+                        )
+                    }
+                    else -> Unit
+                }
+                ConfigRow("Tries", "${udp.attempts} per check, a second apart")
+            }
             if (monitor.kind == MonitorKind.PING) {
                 ConfigRow("Packets", "${monitor.network.packets} per check, one second apart")
             }
@@ -1471,7 +1507,11 @@ private fun ConfigCard(
         }
         ConfigRow("Interval", "every ${monitor.intervalMinutes} min")
         ConfigRow(
-            if (monitor.kind == MonitorKind.PING) "Reply timeout" else "Timeout",
+            when (monitor.kind) {
+                MonitorKind.PING -> "Reply timeout"
+                MonitorKind.UDP_PORT -> "Reply timeout, per try"
+                else -> "Timeout"
+            },
             "${monitor.timeoutSeconds}s",
         )
         // Only when it has been changed. The TLS certificate card says more, and

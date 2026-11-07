@@ -48,14 +48,16 @@ internal fun NetworkTargetCard(
     accent: Color,
 ) {
     val tcp = draft.kind == MonitorKind.TCP_PORT
+    val udp = draft.kind == MonitorKind.UDP_PORT
+    val port = tcp || udp
     GlassField(
         value = draft.network.host,
         onValueChange = viewModel::setHost,
         onBlur = { viewModel.tidyHost() },
         label = "Host",
-        placeholder = if (tcp) "db.example.com or 192.0.2.10" else "192.0.2.10, 2001:db8::1 or a name",
+        placeholder = if (port) "db.example.com or 192.0.2.10" else "192.0.2.10, 2001:db8::1 or a name",
         note = report.of(Validation.Field.HOST),
-        helper = if (tcp) {
+        helper = if (port) {
             "Pasting host:port or a URL works too."
         } else {
             "An IPv4 or IPv6 address, or a name to look up."
@@ -95,24 +97,25 @@ internal fun NetworkTargetCard(
             )
         }
     }
-    if (tcp) {
+    if (port) {
         GlassField(
             value = if (draft.network.port > 0) draft.network.port.toString() else "",
             onValueChange = viewModel::setPort,
             label = "Port",
-            placeholder = "443",
+            placeholder = if (udp) draft.udp.probe.defaultPort.takeIf { it > 0 }?.toString() ?: "53" else "443",
             note = report.of(Validation.Field.PORT),
-            leadingIcon = NightbellIcons.Plug,
+            leadingIcon = if (udp) NightbellIcons.Datagram else NightbellIcons.Plug,
             accent = accent,
             keyboardType = KeyboardType.Number,
             holdErrorUntilBlur = true,
             modifier = Modifier.testTag("network-port"),
         )
+        val chips = if (udp) commonUdpPorts else commonPorts
         ChipSelector(
-            options = commonPorts,
-            selected = commonPorts.firstOrNull { it.first == draft.network.port } ?: (0 to ""),
-            onSelect = { (port, _) -> viewModel.setPort(port.toString()) },
-            label = { (port, name) -> "$port $name" },
+            options = chips,
+            selected = chips.firstOrNull { it.first == draft.network.port } ?: (0 to ""),
+            onSelect = { (number, _) -> if (udp) viewModel.pickUdpPort(number) else viewModel.setPort(number.toString()) },
+            label = { (number, name) -> "$number $name" },
             accent = accent,
         )
     }
@@ -130,7 +133,9 @@ internal fun NetworkExpectationCard(
     report: Validation.Report,
     accent: Color,
 ) {
-    if (draft.kind == MonitorKind.PING) {
+    if (draft.kind == MonitorKind.UDP_PORT) {
+        UdpExpectationCard(viewModel, draft, report, accent)
+    } else if (draft.kind == MonitorKind.PING) {
         SectionHeader("Echo requests", icon = NightbellIcons.Echo, accent = accent)
         StepperRow(
             title = "Packets per check",

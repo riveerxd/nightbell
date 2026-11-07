@@ -41,7 +41,7 @@
 
 Point it at anything that answers over HTTP, at one element on a rendered web
 page, at a Prometheus server, at your service's own health report, at a
-GitHub repository, at a bare host by ping or TCP port, or at an IMAP inbox, and it watches it, charts it, and gets loud when it breaks. **No server, no
+GitHub repository, at a bare host by ping, TCP or UDP port, or at an IMAP inbox, and it watches it, charts it, and gets loud when it breaks. **No server, no
 account, no middleman.** The phone in your pocket does the checking, and the only
 host it contacts that you did not choose is a connectivity probe you can change or
 switch off.
@@ -82,6 +82,7 @@ wakes the screen if the phone is locked.
 | **GitHub repository** | Polls one repository and reports what changed about it: stars, issues, releases, pull requests and comments. |
 | **Ping** | ICMP echo to an IPv4 or IPv6 host, without root. Latency, packet loss, and down when nothing answers. |
 | **TCP port** | Connects to one port and hangs up. For databases, SSH, VPN endpoints, anything with no HTTP to ask. |
+| **UDP port** | Sends one datagram in the service's own protocol and checks the reply: DNS, NTP, STUN, SNMP, SIP, HTTP/3, game servers, or your own bytes. A silent mode for WireGuard and the rest that never answer. |
 | **Mailbox** | Signs in to an IMAP inbox and tells you what arrived, louder for the senders or subjects you name. Works with Roundcube's server, Gmail and most others. |
 
 Page-element monitors watch any number of nodes per page and resolve them all
@@ -245,7 +246,7 @@ and a certificate expiring next Tuesday never gets reported as an outage tonight
 
 ```mermaid
 flowchart LR
-    M["Monitors<br/>HTTP · request · page element · Prometheus · health report · repository · ping · TCP port · mailbox"] --> E["CheckEngine"]
+    M["Monitors<br/>HTTP · request · page element · Prometheus · health report · repository · ping · TCP port · UDP port · mailbox"] --> E["CheckEngine"]
     E -->|folds each result| DB[("State<br/>one JSON doc")]
     E --> A1["Down and recovery"]
     E --> A2["Degraded on latency"]

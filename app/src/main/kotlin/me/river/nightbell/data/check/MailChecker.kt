@@ -485,8 +485,36 @@ class VaultMailCredentials(
         vault.write(monitorId, entry.copy(refusedFingerprint = me.river.nightbell.data.auth.CredentialVault.fingerprint(password)))
     }
 
-    /** A new password, from setup. Replaces the entry, which drops any refusal with it. */
+    /**
+     * A new password, from setup, which drops any refusal with it. The rest of
+     * the entry stays: setup stores a password before Save, so an edit that is
+     * then abandoned must not take the saved monitor's community or tokens.
+     */
     suspend fun save(monitorId: String, password: String) {
-        vault.write(monitorId, me.river.nightbell.data.auth.VaultEntry(password = password))
+        vault.write(monitorId, vault.entry(monitorId).copy(password = password, refusedFingerprint = ""))
+    }
+
+    /**
+     * Drops the password alone. The entry also carries a health monitor's
+     * tokens, so a monitor moved to that kind keeps them.
+     */
+    suspend fun clear(monitorId: String) {
+        val entry = vault.entry(monitorId)
+        if (entry.password.isEmpty()) return
+        vault.write(monitorId, entry.copy(password = "", refusedFingerprint = ""))
+    }
+
+    /** An SNMP probe's community, empty when none was saved as one. */
+    suspend fun community(monitorId: String): String = vault.entry(monitorId).community
+
+    /** Kept beside whatever else the entry holds, and never in [VaultEntry.password]. */
+    suspend fun saveCommunity(monitorId: String, community: String) {
+        vault.write(monitorId, vault.entry(monitorId).copy(community = community))
+    }
+
+    suspend fun clearCommunity(monitorId: String) {
+        val entry = vault.entry(monitorId)
+        if (entry.community.isEmpty()) return
+        vault.write(monitorId, entry.copy(community = ""))
     }
 }

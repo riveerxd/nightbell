@@ -55,6 +55,8 @@ import me.river.nightbell.domain.GitHubRepo
 import me.river.nightbell.domain.GitHubState
 import me.river.nightbell.domain.GitHubWatch
 import me.river.nightbell.domain.MonitorKind
+import me.river.nightbell.domain.UdpProbe
+import me.river.nightbell.domain.UdpWatch
 import me.river.nightbell.domain.Secrets
 import me.river.nightbell.domain.UpdateState
 import me.river.nightbell.domain.ProxyRoute
@@ -1035,6 +1037,10 @@ class SetupViewModel(
     val report: Validation.Report
         get() {
             val base = Validation.report(draft)
+            if (usesSnmpCommunity) {
+                val community = Validation.snmpCommunityNote(mailPasswordInput, mailPasswordHeld) ?: return base
+                return Validation.Report(base.notes + community)
+            }
             if (draft.kind != MonitorKind.MAILBOX) return base
             val password = Validation.mailPasswordNote(mailPasswordInput, mailPasswordHeld) ?: return base
             return Validation.Report(base.notes + password)
@@ -1147,6 +1153,12 @@ class SetupViewModel(
     /** The vault holds a password for this monitor, so the field may stay empty. */
     var mailPasswordHeld by mutableStateOf(false)
         private set
+
+    /**
+     * The secret the saved monitor had, so saving it as another kind can drop
+     * the one it no longer uses.
+     */
+    private var heldSecret = Secret.NONE
 
     /**
      * Release file types the last poll of this repository actually saw.
@@ -1289,7 +1301,8 @@ class SetupViewModel(
             if (draft.health.redirectUri.isNotBlank()) providerOrigin = signInOrigin()
             loading = false
             if (draft.kind == MonitorKind.HEALTH_ENDPOINT) refreshSignInStatus()
-            if (draft.kind == MonitorKind.MAILBOX) refreshMailPassword()
+            if (editingId != null) heldSecret = secretOf(draft)
+            if (secretOf(draft) != Secret.NONE) refreshMailPassword()
         }
     }
 
@@ -1348,8 +1361,18 @@ class SetupViewModel(
 
     private fun refreshMailPassword() {
         val id = draft.id
+        val secret = secretOf(draft)
+        if (secret == Secret.NONE) {
+            mailPasswordHeld = false
+            return
+        }
         viewModelScope.launch {
-            mailPasswordHeld = graph.mailCredentials.password(id) is me.river.nightbell.data.check.MailChecker.Stored.Password
+            val held = when (secret) {
+                Secret.SNMP -> graph.mailCredentials.community(id).isNotEmpty()
+                else -> graph.mailCredentials.password(id) is me.river.nightbell.data.check.MailChecker.Stored.Password
+            }
+            // The draft may have changed kind while the vault was read.
+            if (secretOf(draft) == secret) mailPasswordHeld = held
         }
     }
 
@@ -1380,12 +1403,42 @@ class SetupViewModel(
         }
     }
 
+    /**
+     * An SNMP probe's community rides the mailbox password's field and state:
+     * both are one secret per monitor, typed once, never shown again. In the
+     * vault they are kept apart.
+     */
+    val usesSnmpCommunity: Boolean
+        get() = draft.kind == MonitorKind.UDP_PORT && draft.udp.probe == UdpProbe.SNMP
+
+    private enum class Secret { NONE, MAIL, SNMP }
+
+    private fun secretOf(monitor: Monitor): Secret = when {
+        monitor.kind == MonitorKind.MAILBOX -> Secret.MAIL
+        monitor.kind == MonitorKind.UDP_PORT && monitor.udp.probe == UdpProbe.SNMP -> Secret.SNMP
+        else -> Secret.NONE
+    }
+
+    /** After an edit that may have changed which secret the draft needs. */
+    private fun followSecret(before: Secret) {
+        val now = secretOf(draft)
+        if (now == before) return
+        mailPasswordInput = ""
+        mailPasswordHeld = false
+        refreshMailPassword()
+    }
+
     /** A typed password goes to the vault before anything signs in with it. */
     private suspend fun storeMailPassword() {
-        if (draft.kind != MonitorKind.MAILBOX || mailPasswordInput.isEmpty()) return
-        graph.mailCredentials.save(draft.id, mailPasswordInput)
+        if ((draft.kind != MonitorKind.MAILBOX && !usesSnmpCommunity) || mailPasswordInput.isEmpty()) return
+        if (usesSnmpCommunity) {
+            graph.mailCredentials.saveCommunity(draft.id, mailPasswordInput)
+        } else {
+            graph.mailCredentials.save(draft.id, mailPasswordInput)
+        }
         mailPasswordInput = ""
         mailPasswordHeld = true
+        heldSecret = secretOf(draft)
     }
 
     // ---- health endpoint ------------------------------------------------------
@@ -1706,8 +1759,8 @@ class SetupViewModel(
             val id = draft.id
             graph.appScope.launch { runCatchingCancellable { graph.broker.signOut(id) } }
         }
-        // A password typed into a mailbox that was never saved goes with it.
-        if (!isEditing && !saved && draft.kind == MonitorKind.MAILBOX) {
+        // A password or community typed into a draft that was never saved goes with it.
+        if (!isEditing && !saved && (secretOf(draft) != Secret.NONE || heldSecret != Secret.NONE)) {
             val id = draft.id
             graph.appScope.launch { runCatchingCancellable { graph.vault.delete(id) } }
         }
@@ -1767,6 +1820,7 @@ class SetupViewModel(
             ?: if (urlSchemeAdded) UrlInput.completionNote(draft.url) else null
 
     fun setKind(kind: MonitorKind) {
+        val secretBefore = secretOf(draft)
         draft = when (kind) {
             MonitorKind.HTTP_STATUS -> draft.copy(
                 kind = kind,
@@ -1820,7 +1874,7 @@ class SetupViewModel(
             // the host, and for a port check the port the URL's scheme implies,
             // because "is 443 open on the box behind this site" is the usual
             // reason to come here from a URL.
-            MonitorKind.PING, MonitorKind.TCP_PORT -> {
+            MonitorKind.PING, MonitorKind.TCP_PORT, MonitorKind.UDP_PORT -> {
                 val fromUrl = NetworkTarget.parse(draft.url)
                 val impliedPort = fromUrl.port ?: when {
                     draft.url.startsWith("https://", ignoreCase = true) -> 443
@@ -1833,12 +1887,21 @@ class SetupViewModel(
                     body = "",
                     network = draft.network.copy(
                         host = draft.network.host.ifBlank { fromUrl.host },
-                        port = if (kind == MonitorKind.TCP_PORT && draft.network.port == 0) {
-                            impliedPort ?: 0
-                        } else {
-                            draft.network.port
+                        port = when {
+                            kind == MonitorKind.TCP_PORT && draft.network.port == 0 -> impliedPort ?: 0
+                            // A port already set is kept; an empty one takes the
+                            // probe's, so a fresh UDP monitor starts on DNS's 53.
+                            kind == MonitorKind.UDP_PORT && draft.network.port == 0 -> draft.udp.probe.defaultPort
+                            else -> draft.network.port
                         },
                     ),
+                    // Coming over from a TCP check on 123 or 161, the probe that
+                    // port speaks is the likely one.
+                    udp = if (kind == MonitorKind.UDP_PORT && draft.network.port > 0) {
+                        UdpProbe.forPort(draft.network.port)?.let { draft.udp.copy(probe = it) } ?: draft.udp
+                    } else {
+                        draft.udp
+                    },
                 ).withTargets(emptyList())
             }
 
@@ -1855,6 +1918,7 @@ class SetupViewModel(
             MonitorKind.UNSUPPORTED -> draft
         }
         thresholdInput = PrometheusWatch.formatValue(draft.prometheus.threshold)
+        followSecret(secretBefore)
         testResult = null
     }
 
@@ -2226,7 +2290,8 @@ class SetupViewModel(
      */
     fun tidyHost() {
         val parsed = NetworkTarget.parse(draft.network.host)
-        val port = if (draft.kind == MonitorKind.TCP_PORT && parsed.port != null && parsed.port in 1..65535) {
+        val takesPort = draft.kind == MonitorKind.TCP_PORT || draft.kind == MonitorKind.UDP_PORT
+        val port = if (takesPort && parsed.port != null && parsed.port in 1..65535) {
             parsed.port
         } else {
             draft.network.port
@@ -2242,6 +2307,46 @@ class SetupViewModel(
 
     fun updateNetwork(transform: (NetworkWatch) -> NetworkWatch) {
         update { it.copy(network = transform(it.network)) }
+    }
+
+    fun updateUdp(transform: (UdpWatch) -> UdpWatch) {
+        val secretBefore = secretOf(draft)
+        update { it.copy(udp = transform(it.udp)) }
+        followSecret(secretBefore)
+        testResult = null
+    }
+
+    /**
+     * A probe brings its port, but only into an empty field or one still on the
+     * last probe's default. A port somebody typed is never overwritten.
+     */
+    fun setUdpProbe(probe: UdpProbe) {
+        val secretBefore = secretOf(draft)
+        val before = draft.udp.probe
+        val port = draft.network.port
+        val keep = port != 0 && port != before.defaultPort
+        update {
+            it.copy(
+                udp = it.udp.copy(probe = probe),
+                network = if (keep || probe.defaultPort == 0) it.network else it.network.copy(port = probe.defaultPort),
+            )
+        }
+        followSecret(secretBefore)
+        testResult = null
+    }
+
+    /** A port shortcut chip: the port, and the probe that port is spoken to with. */
+    fun pickUdpPort(port: Int) {
+        val secretBefore = secretOf(draft)
+        val probe = UdpProbe.forPort(port)
+        update {
+            it.copy(
+                network = it.network.copy(port = port),
+                udp = if (probe != null) it.udp.copy(probe = probe) else it.udp,
+            )
+        }
+        followSecret(secretBefore)
+        testResult = null
     }
 
     fun save() {
@@ -2291,7 +2396,16 @@ class SetupViewModel(
                     network = monitor.network.copy(host = monitor.network.cleanHost),
                 )
             }
+            val savedWith = heldSecret
             storeMailPassword()
+            // Saved as another kind: the secret it no longer uses goes. A
+            // health endpoint keeps the password field, its BASIC sign-in is
+            // stored there.
+            if (secretOf(clean) != Secret.SNMP) graph.mailCredentials.clearCommunity(clean.id)
+            if (savedWith == Secret.MAIL && clean.kind != MonitorKind.MAILBOX && clean.kind != MonitorKind.HEALTH_ENDPOINT) {
+                graph.mailCredentials.clear(clean.id)
+            }
+            heldSecret = secretOf(clean)
             graph.store.upsert(clean)
             val snapshot = graph.store.currentSnapshot()
             graph.scheduler.schedule(clean, snapshot.settings)

@@ -197,6 +197,16 @@ object NightbellIcons {
         "M9.4 3.4 L9.4 7.6 M14.6 3.4 L14.6 7.6 M6.6 7.6 L17.4 7.6 L17.4 11.2 " +
             "C17.4 14.3 15 16.6 12 16.6 C9 16.6 6.6 14.3 6.6 11.2 Z M12 16.6 L12 20.8",
     )
+    /**
+     * One arrow out and one back. The UDP port kind: a datagram sent, and the
+     * reply that is the only proof anything heard it.
+     */
+    val Datagram = stroke(
+        "Datagram",
+        "M3.6 8.4 L17.2 8.4 M13.6 4.8 L17.2 8.4 L13.6 12 " +
+            "M20.4 15.6 L6.8 15.6 M10.4 12 L6.8 15.6 L10.4 19.2",
+    )
+
     /** An envelope: the body, and the flap folding down to the middle. */
     val Mail = stroke(
         "Mail",

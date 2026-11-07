@@ -78,6 +78,15 @@ enum class MonitorKind {
     TCP_PORT,
 
     /**
+     * Sends one datagram to a port and reads what comes back. Issue 21 again:
+     * a TCP check reported UDP-only services down. UDP has no handshake, so up
+     * is only ever proved by a reply, and most probes speak the service's own
+     * protocol to get one. See [UdpWatch].
+     */
+    @SerialName("udp_port")
+    UDP_PORT,
+
+    /**
      * Signs in to one IMAP folder and says what arrived. Asked for to watch a
      * Roundcube inbox, which a page monitor cannot do: Roundcube's session dies
      * after ten minutes and its inbox is drawn by script. This reads the server
@@ -113,6 +122,7 @@ enum class MonitorKind {
             HEALTH_ENDPOINT -> "Health endpoint"
             PING -> "Ping"
             TCP_PORT -> "TCP port"
+            UDP_PORT -> "UDP port"
             MAILBOX -> "Mailbox"
             UNSUPPORTED -> "Made by a newer Nightbell"
         }
@@ -127,6 +137,7 @@ enum class MonitorKind {
             HEALTH_ENDPOINT -> "Read what a service says about each of its parts."
             PING -> "ICMP echo to an IPv4 or IPv6 host. Latency and packet loss."
             TCP_PORT -> "Connect to one port and hang up. No HTTP needed."
+            UDP_PORT -> "Send one datagram and check the reply. For DNS, NTP, game servers and more."
             MAILBOX -> "New mail in an IMAP inbox. Alert on the senders that matter."
             UNSUPPORTED -> "Update Nightbell to check this monitor."
         }
@@ -135,7 +146,7 @@ enum class MonitorKind {
     val offered: Boolean get() = this != UNSUPPORTED
 
     /** Reaches a host directly rather than fetching a URL. See [NetworkWatch]. */
-    val isNetwork: Boolean get() = this == PING || this == TCP_PORT
+    val isNetwork: Boolean get() = this == PING || this == TCP_PORT || this == UDP_PORT
 }
 
 @Serializable
@@ -678,6 +689,11 @@ data class Monitor(
      */
     val network: NetworkWatch = NetworkWatch(),
     /**
+     * What a [MonitorKind.UDP_PORT] monitor sends and expects. The host and port
+     * are in [network], shared with the other two host kinds.
+     */
+    val udp: UdpWatch = UdpWatch(),
+    /**
      * What a [MonitorKind.MAILBOX] monitor signs in to. Ignored by every other
      * kind, and defaulted so older stores still decode. The password is not here.
      */
@@ -829,6 +845,8 @@ data class Monitor(
         get() = when (kind) {
             MonitorKind.PING -> NetworkTarget.display(network.cleanHost, null)
             MonitorKind.TCP_PORT -> NetworkTarget.display(network.cleanHost, network.port.takeIf { it > 0 })
+            MonitorKind.UDP_PORT -> NetworkTarget.display(network.cleanHost, network.port.takeIf { it > 0 }) +
+                if (network.port > 0) "/udp" else ""
             MonitorKind.MAILBOX -> mail.display
             else -> url
         }
@@ -1018,6 +1036,8 @@ data class Sample(
     val repo: RepoFacts? = null,
     /** Echo replies, for a [MonitorKind.PING] monitor only. Null everywhere else. */
     val ping: PingReading? = null,
+    /** What a [MonitorKind.UDP_PORT] check got back. Null everywhere else. */
+    val udp: UdpReading? = null,
 )
 
 @Serializable
@@ -1062,6 +1082,12 @@ data class MonitorRuntime(
      */
     val lastAlertsTotal: Int = 0,
     val lastDetail: String = "",
+    /**
+     * A [MonitorKind.UDP_PORT] probe's readout from the newest check that got
+     * one: stratum, players, addresses. On the runtime rather than every sample,
+     * because sixty copies of it is store weight no screen reads.
+     */
+    val lastUdpFacts: List<UdpFact> = emptyList(),
     val consecutiveFailures: Int = 0,
     val consecutiveSuccesses: Int = 0,
     val lastAlertAt: Long = 0L,
@@ -1343,6 +1369,15 @@ enum class FailureKind {
      */
     NO_REPLY,
 
+    /**
+     * ICMP port unreachable came back for a UDP check. Not [CONNECT]: the host
+     * answered, so the phone's network works and this is the service.
+     */
+    PORT_CLOSED,
+
+    /** A UDP reply came back and was not the answer the probe needed. */
+    BAD_REPLY,
+
     /** Something answered, and it was not the Nightbell health format. */
     NOT_HEALTH_FORMAT,
 
@@ -1372,6 +1407,8 @@ enum class FailureKind {
             METRIC -> "Reported a problem"
             REPORTED_DOWN -> "Reported down"
             NO_REPLY -> "No reply"
+            PORT_CLOSED -> "Port closed"
+            BAD_REPLY -> "Wrong reply"
             NOT_HEALTH_FORMAT -> "Not a health endpoint"
             SIGN_IN_SERVER -> "Sign-in server unreachable"
             TOKEN_REFUSED -> "Signed in, but the API refused the token"
@@ -1395,6 +1432,8 @@ enum class FailureKind {
             METRIC -> "The endpoint answered. What it reported is the problem."
             REPORTED_DOWN -> "The service answered and says it is down. The parts below say where."
             NO_REPLY -> "The host may be down, or ICMP is filtered on the way. A TCP port check on the same host tells the two apart."
+            PORT_CLOSED -> "The host answered and nothing is listening on that port. Is the service running?"
+            BAD_REPLY -> "Something answered, but not what this probe needs. The readout below says what came back."
             NOT_HEALTH_FORMAT -> "A deploy may have replaced the endpoint, or the URL points at the web app."
             SIGN_IN_SERVER -> "If Nightbell cannot reach the provider, neither can the service's users."
             TOKEN_REFUSED -> "Real users' tokens would be refused the same way. The account may lack a role."
@@ -1469,6 +1508,10 @@ data class CheckResult(
     val health: HealthState? = null,
     /** Echo replies, for a [MonitorKind.PING] check. Null on every other kind. */
     val ping: PingReading? = null,
+    /** What a [MonitorKind.UDP_PORT] check got back. Null on every other kind. */
+    val udp: UdpReading? = null,
+    /** The probe's readout. Empty when no reply was read, which clears the runtime's. */
+    val udpFacts: List<UdpFact> = emptyList(),
     val at: Long = 0L,
 ) {
     /** The next step to show, specific where the check had one. */

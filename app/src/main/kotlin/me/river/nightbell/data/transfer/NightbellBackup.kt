@@ -261,6 +261,8 @@ private fun MonitorRuntime.forFreshInstall(paused: Boolean): MonitorRuntime = co
     // single sign-on monitor finds an empty vault and says it needs signing in.
     report = HealthState(),
     lastDetail = "",
+    // The old phone's readout: its STUN address is the old network's.
+    lastUdpFacts = emptyList(),
     consecutiveFailures = 0,
     consecutiveSuccesses = 0,
     lastAlertAt = 0L,

@@ -70,6 +70,10 @@ object Reachability {
         // phone network produces just as well. A provider answering 5xx spends
         // one probe that then vouches for the network, and pages as it should.
         FailureKind.SIGN_IN_SERVER -> true
+        // The host itself said nothing listens there, or something answered
+        // with the wrong thing. Either way the packets got there.
+        FailureKind.PORT_CLOSED,
+        FailureKind.BAD_REPLY,
         FailureKind.NONE,
         FailureKind.TLS,
         FailureKind.STATUS,

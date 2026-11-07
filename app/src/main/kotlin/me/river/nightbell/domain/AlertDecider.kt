@@ -245,6 +245,7 @@ object AlertDecider {
             note = if (result.ok) "" else result.message,
             repo = result.repo,
             ping = result.ping,
+            udp = result.udp,
         )
         val history = (previous.samples + sample).takeLast(historyDepth.coerceAtLeast(1))
         val failures = if (result.ok) 0 else previous.consecutiveFailures + 1
@@ -271,6 +272,10 @@ object AlertDecider {
             lastAlerts = result.alerts.take(ALERTS_KEPT),
             lastAlertsTotal = result.alerts.size,
             lastDetail = result.detail,
+            // Replaced by every check, like lastAlerts, so one that failed before
+            // a datagram went out (no DNS, no route, no community) clears it: a
+            // stratum from before the outage is not the stratum now.
+            lastUdpFacts = result.udpFacts,
             consecutiveFailures = failures,
             consecutiveSuccesses = successes,
             lastElementText = result.elementText.ifBlank { previous.lastElementText },

@@ -37,6 +37,9 @@ object DataSaver {
     /** SYN, SYN-ACK, ACK, then FIN and RST both ways, at IPv6 header sizes. */
     internal const val TCP_HANDSHAKE_BYTES = 480L
 
+    /** A small request and a reply of a few hundred bytes, headers both ways. */
+    internal const val UDP_EXCHANGE_BYTES = 640L
+
     fun coldDue(lastColdAt: Long?, nowMs: Long): Boolean =
         lastColdAt == null || nowMs - lastColdAt >= COLD_LOAD_EVERY_MS || nowMs < lastColdAt
 
@@ -133,6 +136,11 @@ object DataSaver {
         if (monitor.kind.isNetwork) {
             val each = full ?: saver ?: when (monitor.kind) {
                 MonitorKind.PING -> monitor.network.packets.coerceAtLeast(1) * ICMP_ROUND_TRIP_BYTES
+                // One try out and back is the common case; QUIC's padding is
+                // what the probe costs, not slack in the estimate.
+                MonitorKind.UDP_PORT -> UDP_EXCHANGE_BYTES +
+                    (if (monitor.udp.probe == UdpProbe.QUIC) 1200L else 0L) +
+                    (if (monitor.udp.probe == UdpProbe.SILENT) ICMP_ROUND_TRIP_BYTES else 0L)
                 else -> TCP_HANDSHAKE_BYTES
             }
             return checks * each to checks * each
