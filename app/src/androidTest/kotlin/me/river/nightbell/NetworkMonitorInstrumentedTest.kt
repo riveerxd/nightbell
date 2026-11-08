@@ -263,6 +263,40 @@ class NetworkMonitorInstrumentedTest {
         composeRule.captureScreenshot("net-13-tcp-detail-outages")
     }
 
+    /**
+     * Issue 21, 2026-11-08: TCP up and UDP refused on one host and port, both
+     * checked for real, and the note that the two disagree read off each one's
+     * own screen.
+     */
+    @Test
+    fun tcpUpAndUdpRefusedOnOnePortAreCalledOut() {
+        val port = openServer().localPort
+        runBlocking {
+            graph.store.upsert(
+                Monitor(id = "tcp", name = "Box tcp", kind = MonitorKind.TCP_PORT, network = NetworkWatch(host = "127.0.0.1", port = port), timeoutSeconds = 2),
+            )
+            graph.store.upsert(
+                Monitor(
+                    id = "udp", name = "Box udp", kind = MonitorKind.UDP_PORT,
+                    network = NetworkWatch(host = "127.0.0.1", port = port),
+                    udp = me.river.nightbell.domain.UdpWatch(), timeoutSeconds = 2,
+                ),
+            )
+        }
+        check("tcp")
+        check("udp")
+        assertEquals(Health.UP, runtime("tcp").health)
+        assertEquals(Health.DOWN, runtime("udp").health)
+
+        val line = "$port/tcp accepts connections but $port/udp does not answer. The service may only be listening on TCP."
+        launch()
+        composeRule.onNodeWithText("Box tcp").performClick()
+        composeRule.waitForIdle()
+        scrollDetailTo("same-host-card")
+        composeRule.onNodeWithText(line, substring = true).assertExists()
+        composeRule.captureScreenshot("net-23-tcp-udp-split-from-tcp")
+    }
+
     @Test
     fun twoChecksOnOneHostAreReadTogetherAndAThirdIsOneTapAway() {
         val closed = openServer().localPort.also { server?.close() }
