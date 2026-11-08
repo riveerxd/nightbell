@@ -608,8 +608,12 @@ android {
         // STUN, SNMP, SIP, QUIC, Source, Bedrock or a custom payload), a few
         // tries a second apart, a refusal read as a closed port, and a silent
         // mode for ports that never answer, which pings the host instead.
-        versionCode = 51
-        versionName = "3.22.0"
+        //
+        // 3.23.0 turns a shut group into a roster that names whatever is down or
+        // slow, and gives the strict monitoring notification its own settings:
+        // what it follows, how far back its line reaches and the figure at its end.
+        versionCode = 52
+        versionName = "3.23.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

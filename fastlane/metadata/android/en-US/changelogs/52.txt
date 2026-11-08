@@ -1,0 +1,5 @@
+Groups on the dashboard now say which monitor is the problem. A shut group lists whatever is down or slow, with how long or how slow, and counts the rest in one line, so you see the culprit without opening it. Opened, its monitors are rows inside the same card.
+
+The strict monitoring notification has its own settings under Checks, Live card. It can follow everything, one group or one monitor, cover the last 1, 6 or 24 hours, and end its line with the next check, uptime or latency. A preview shows the result, and every change is on the notification straight away. Following one monitor still mentions an outage anywhere else.
+
+On Samsung phones the countdown no longer runs into the notification's title. With checks paused, Settings now says why there is no notification and offers to resume.
