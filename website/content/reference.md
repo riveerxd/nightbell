@@ -600,8 +600,12 @@ with its history.
 **Groups.** A group is one card with one verdict, worst member first: "All 2
 operational", "1 of 2 is down" and so on. Pausing one member never decides it
 unless every member is paused, so a pause set last week cannot hide an outage.
-A group opens and shuts with a tap, and its members are still ordinary cards
-inside it. Grouping changes nothing about what is checked or announced. The
+Shut, a group names whichever member is down or slow next to how long or how
+slow ("Down 12m", "Slow, 3.1 s"), up to four of them, and counts the rest in one line ("2 up,
+1 paused"). Tapping a named member opens it. A tap on the header opens the group,
+and its members become rows inside the same card, each with its pause, check now
+and acknowledge buttons; holding a row selects it, and **Edit group** sits at the
+foot. Grouping changes nothing about what is checked or announced. The
 group's icon is picked from its members' site icons, an uploaded picture
 ("Upload a picture", which travels in the backup), or another site's icon.
 
@@ -1456,6 +1460,30 @@ is one bucket, a couple of per cent of the width, which on screen reads as a
 rendering artefact: the block is what makes a single failed check findable, and the
 band is what makes a long one measurable.
 
+### What the card follows
+
+Settings, Checks, **Live card** sets three things, and each one is on the
+notification as soon as it is tapped. A preview above the choices shows the title,
+the text and the line exactly as the notification will have them.
+
+- **Follows:** Everything, One group or One monitor. Following a group titles the
+  card with its name ("Servers · 1 of 3 is down"); following a monitor titles it
+  with that monitor's state. An outage outside what the card follows is still
+  written under the line ("Elsewhere: 1 more is down"), so following one monitor
+  cannot make the permanent notification look calm while another is down. A group
+  or monitor that is deleted, or a group left empty, falls back to everything.
+- **Window:** Auto (as far back as the stored checks go, up to a day), 1 h, 6 h or
+  24 h. A fixed window starts each monitor from its last verdict before the window,
+  so an outage that began earlier is red from the left edge.
+- **Label at the end:** Next check (the countdown), Uptime (share of checks in the
+  window that passed, rounded down, so 99.9% never reads 100%) or Latency (the
+  slowest reply right now).
+
+Below Android 16 there is no line, so the same choices change the notification's
+text. With checks paused, strict monitoring is not running and Settings says so
+next to a **Resume checks** button rather than leaving the preview to imply a
+notification that is not there.
+
 ### Three things it used to get wrong
 
 All three were reported from a device and none was visible from reading the code.
@@ -1914,7 +1942,7 @@ rather than reporting a missing element. Nothing is ever clicked on your behalf.
 | Tab | Cards |
 | --- | --- |
 | Alerts | All alerts, Check my connection first, Alert permissions, Default alert policy, Webhooks, Pause button, TLS certificates, Spoken alerts |
-| Checks | Background checks (Wi-Fi only, Data saver, default interval, timeout and history), Checker health, Strict cadence, Latency budget (with Discount my connection and the reference endpoint), SOCKS5 proxy, GitHub |
+| Checks | Background checks (Wi-Fi only, Data saver, default interval, timeout and history), Checker health, Strict cadence, Live card, Latency budget (with Discount my connection and the reference endpoint), SOCKS5 proxy, GitHub |
 | Look | Appearance (System, Dark or Light), Motion, Frosted glass, Site icons, Home-screen widgets |
 | About | Nightbell updates, Backup and transfer, Diagnostic log, Help, About |
 
