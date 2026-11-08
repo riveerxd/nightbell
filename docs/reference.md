@@ -1041,6 +1041,30 @@ is one bucket, a couple of per cent of the width, which on screen reads as a
 rendering artefact: the block is what makes a single failed check findable, and the
 band is what makes a long one measurable.
 
+### What the card follows
+
+Settings, Checks, **Live card** sets three things, and each one is on the
+notification as soon as it is tapped. A preview above the choices shows the title,
+the text and the line exactly as the notification will have them.
+
+- **Follows:** Everything, One group or One monitor. Following a group titles the
+  card with its name ("Servers · 1 of 3 is down"); following a monitor titles it
+  with that monitor's state. An outage outside what the card follows is still
+  written under the line ("Elsewhere: 1 more is down"), so following one monitor
+  cannot make the permanent notification look calm while another is down. A group
+  or monitor that is deleted, or a group left empty, falls back to everything.
+- **Window:** Auto (as far back as the stored checks go, up to a day), 1 h, 6 h or
+  24 h. A fixed window starts each monitor from its last verdict before the window,
+  so an outage that began earlier is red from the left edge.
+- **Label at the end:** Next check (the countdown), Uptime (share of checks in the
+  window that passed, rounded down, so 99.9% never reads 100%) or Latency (the
+  slowest reply right now).
+
+Below Android 16 there is no line, so the same choices change the notification's
+text. With checks paused, strict monitoring is not running and Settings says so
+next to a **Resume checks** button rather than leaving the preview to imply a
+notification that is not there.
+
 ### Three things it used to get wrong
 
 All three were reported from a device and none was visible from reading the code.

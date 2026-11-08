@@ -138,7 +138,8 @@ object LiveCard {
             .setProgressEndIcon(
                 IconCompat.createWithBitmap(
                     labelBitmap(
-                        label = timeline.countdownLabel,
+                        // The countdown unless Settings picked uptime or latency.
+                        label = timeline.endLabel,
                         ink = ContextCompat.getColor(context, R.color.live_label),
                     ),
                 ),
@@ -207,6 +208,23 @@ object LiveCard {
         builder.setColorized(false).setColor(Notification.COLOR_DEFAULT)
         return builder.build()
     }
+
+    /**
+     * Samsung's gate in front of the chip, and why nothing here goes around it.
+     *
+     * One UI ignores a plain promoted notification from an app not on its own Live
+     * notifications list. Measured on an S25 Ultra, One UI 9.0, API 37: the card
+     * carried PROMOTED_ONGOING with POST_PROMOTED_NOTIFICATIONS granted, and still
+     * no chip. One UI 8 had a developer switch to lift the list; 9.0 does not.
+     *
+     * This undocumented extra is the known way around it. It works, the chip
+     * appeared, and it was taken out again: it is One UI's lane for Gemini acting
+     * inside an app, so the chip and the card were labelled "Gemini Intelligence"
+     * with Nightbell nowhere on them, and no key overrides the label. A monitoring
+     * card attributed to another app is worse than no chip. Never sent; kept so a
+     * test can assert it stays that way.
+     */
+    const val SAMSUNG_AUTOMATION = "android.ongoingActivityNoti.automation"
 
     /**
      * Whether the system will actually promote [notification] — as opposed to

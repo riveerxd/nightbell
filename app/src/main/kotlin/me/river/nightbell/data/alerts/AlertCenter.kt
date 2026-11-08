@@ -1432,6 +1432,15 @@ class AlertCenter(private val context: Context) {
         // notification carries one style, and the platform draws no big text
         // alongside ProgressStyle.
         val live = timeline != null && LiveCard.apply(context, builder, timeline)
+        if (live) {
+            // One UI draws the countdown LiveCard turns on directly after the title,
+            // with no gap at all: "1 of 15 is down02:36", on an S25 Ultra. Nothing
+            // in the API positions or pads it, and a shorter title only moved the
+            // collision. An en space is whitespace TextView does not trim, so it
+            // survives as the gap; stock Android puts the countdown in the header
+            // row instead, where a trailing space shows as nothing.
+            builder.setContentTitle(title + TITLE_GAP)
+        }
         if (!live) {
             builder.setStyle(NotificationCompat.BigTextStyle().bigText(body))
         }
@@ -1688,6 +1697,9 @@ class AlertCenter(private val context: Context) {
          */
         const val URGENT_CHANNEL_V2 = "nightbell.urgent.v2"
         const val SERVICE_NOTIFICATION_ID = 4242
+
+        /** See [serviceNotification]: the room One UI does not leave before the countdown. */
+        private const val TITLE_GAP = "\u2002\u2002"
 
         /**
          * Deliberately next to the service id and far away from the monitor-alert

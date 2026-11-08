@@ -147,6 +147,7 @@ import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.river.nightbell.ui.permissions.pagerReadiness
+import me.river.nightbell.ui.theme.LocalNowMs
 import me.river.nightbell.ui.theme.NightbellRadii
 
 @Composable
@@ -260,6 +261,11 @@ fun SettingsScreen(
         ActivityResultContracts.StartActivityForResult(),
     ) { viewModel.refreshSpeech() }
     val speakingMonitors by viewModel.monitors.collectAsStateWithLifecycle()
+    val liveGroups by viewModel.groups.collectAsStateWithLifecycle()
+    val fleetPause by viewModel.pause.collectAsStateWithLifecycle()
+    // A pause that stops checks stops strict mode with it, notification and all.
+    // Read here so both cards that promise a notification can say why there is none.
+    val checksPaused = fleetPause.stopsChecks(LocalNowMs.current)
     // Null means untouched, so the stored sentence still shows on first open.
     var typedTemplate by rememberSaveable { mutableStateOf<String?>(null) }
     val monitorCount = speakingMonitors.size
@@ -972,8 +978,10 @@ fun SettingsScreen(
                         Spacer(Modifier.height(8.dp))
                         ToggleRow(
                             title = "Strict foreground monitoring",
-                            subtitle = if (settings.strictForegroundMonitoring) {
-                                "On — a permanent notification is showing"
+                            subtitle = if (settings.strictForegroundMonitoring && checksPaused) {
+                                "On, but checks are paused, so it is not running"
+                            } else if (settings.strictForegroundMonitoring) {
+                                "On, a permanent notification is showing"
                             } else {
                                 "Off — checks are best-effort, batched by Android"
                             },
@@ -1008,6 +1016,25 @@ fun SettingsScreen(
                             color = NightbellColors.TextTertiary,
                         )
                     }
+                }
+            }
+
+            item(key = "live-card") {
+                val liveRuntimes by viewModel.runtimes.collectAsStateWithLifecycle()
+                StaggeredEntrance(index = 2, key = "live-card", log = entrance) {
+                    LiveCardSettings(
+                        prefs = settings.liveCard,
+                        strict = settings.strictForegroundMonitoring,
+                        monitors = speakingMonitors,
+                        groups = liveGroups,
+                        runtimes = liveRuntimes,
+                        isOffline = viewModel::isOffline,
+                        checksPaused = checksPaused,
+                        onResume = viewModel::resumeChecks,
+                        onChange = { transform ->
+                            viewModel.update { it.copy(liveCard = transform(it.liveCard)) }
+                        },
+                    )
                 }
             }
 

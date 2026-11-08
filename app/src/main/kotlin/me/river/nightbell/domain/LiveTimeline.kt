@@ -99,6 +99,15 @@ object LiveTimeline {
          * be two independent claims about the same wait.
          */
         val nextCheckInMs: Long,
+        /** Which figure the right-hand end of the line carries. */
+        val label: LiveLabel = LiveLabel.NEXT_CHECK,
+        /**
+         * Share of the checks inside the window that passed, 0 to 100, across every
+         * monitor the line is about. Null with no checks to count.
+         */
+        val uptimePercent: Double? = null,
+        /** The slowest current reading among monitors that answered, or null. */
+        val slowestMs: Long? = null,
     ) {
         /**
          * The platform derives the line's length from its segments and takes no
@@ -160,6 +169,50 @@ object LiveTimeline {
                     else -> "${minutes / 60}h${minutes % 60}m"
                 }
             }
+
+        /**
+         * What is drawn at the end of the line: the countdown, the uptime or the
+         * latency, whichever was chosen in Settings.
+         *
+         * The same square slot as the countdown, so the same budget of about five
+         * characters. "n/a" rather than a dash when there is nothing to show,
+         * because a lone dash in a 20dp square reads as a rendering fault.
+         */
+        val endLabel: String
+            get() = when (label) {
+                LiveLabel.NEXT_CHECK -> countdownLabel
+                LiveLabel.UPTIME -> uptimePercent?.let(::shortPercent) ?: "n/a"
+                LiveLabel.LATENCY -> slowestMs?.let(::shortLatency) ?: "n/a"
+            }
+
+        /**
+         * The figure as a short phrase, for beside the line where "last 6h" already
+         * names the window: "next check in 4m", "83% up", "slowest 240 ms".
+         */
+        val labelPhrase: String
+            get() = when (label) {
+                LiveLabel.NEXT_CHECK ->
+                    if (nextCheckInMs <= 0L) "next check due now" else "next check in $countdownLabel"
+                LiveLabel.UPTIME -> uptimePercent?.let { "${shortPercent(it)} up" } ?: "no checks yet"
+                LiveLabel.LATENCY -> slowestMs?.let { "slowest ${spacedLatency(it)}" } ?: "no reply to time yet"
+            }
+
+        /**
+         * The same figure as a sentence, for the text of the notice.
+         *
+         * Below Android 16 there is no line to put [endLabel] on, so this is the
+         * only place the choice shows. Above it, it says in words what the end of
+         * the line says in five characters.
+         */
+        val labelSentence: String
+            get() = when (label) {
+                LiveLabel.NEXT_CHECK ->
+                    if (nextCheckInMs <= 0L) "Next check due now" else "Next check in $countdownLabel"
+                LiveLabel.UPTIME -> uptimePercent?.let { "Up ${shortPercent(it)} over the last $spanLabel" }
+                    ?: "No checks in the last $spanLabel"
+                LiveLabel.LATENCY -> slowestMs?.let { "Slowest reply ${spacedLatency(it)}" }
+                    ?: "No reply to time yet"
+            }
     }
 
     /**
@@ -175,9 +228,12 @@ object LiveTimeline {
         runtimes: Map<String, MonitorRuntime>,
         nowMs: Long,
         offline: Boolean = false,
+        window: LiveWindow = LiveWindow.AUTO,
+        label: LiveLabel = LiveLabel.NEXT_CHECK,
     ): Timeline? {
         val active = monitors.filter { it.enabled }
         if (active.isEmpty()) return null
+        if (window != LiveWindow.AUTO) return fixed(active, monitors, runtimes, nowMs, offline, window, label)
 
         // Only checks that have actually happened, and only ones the line can draw.
         // `at` is 0 on the placeholder runtime; a sample stamped in the future would
@@ -249,6 +305,68 @@ object LiveTimeline {
             perMonitor.map { it[i] }.maxByOrNull { rank(it) } ?: Tone.UNKNOWN
         }
 
+        return assemble(tones, active, monitors, runtimes, nowMs, offline, spanMs, label)
+    }
+
+    /**
+     * A window the user chose rather than one measured from the history.
+     *
+     * Two differences from [of]'s own window. The span is exactly what was asked
+     * for, so a fresh install on "24 h" draws mostly grey, which is true: nothing
+     * was checked yet. And each monitor's last verdict from *before* the window is
+     * carried into its first bucket, because on a one hour window a monitor checked
+     * every two hours would otherwise be unknown for most of the line while its
+     * state is perfectly well known.
+     */
+    private fun fixed(
+        active: List<Monitor>,
+        monitors: List<Monitor>,
+        runtimes: Map<String, MonitorRuntime>,
+        nowMs: Long,
+        offline: Boolean,
+        window: LiveWindow,
+        label: LiveLabel,
+    ): Timeline? {
+        val spanMs = window.ms
+        val windowStart = nowMs - spanMs
+        val bucketMs = (spanMs / BUCKETS).coerceAtLeast(1L)
+        var anything = false
+        val perMonitor = active.map { monitor ->
+            val own = MutableList(BUCKETS) { Tone.UNKNOWN }
+            val samples = runtimes[monitor.id]?.samples.orEmpty().filter { it.at in 1..nowMs }
+            samples.lastOrNull { it.at < windowStart }?.let { before ->
+                own[0] = if (before.ok) Tone.UP else Tone.DOWN
+                anything = true
+            }
+            samples.forEach { sample ->
+                if (sample.at < windowStart) return@forEach
+                val index = ((sample.at - windowStart) / bucketMs).toInt().coerceIn(0, BUCKETS - 1)
+                val tone = if (sample.ok) Tone.UP else Tone.DOWN
+                if (rank(tone) > rank(own[index])) own[index] = tone
+                anything = true
+            }
+            for (i in 1 until BUCKETS) {
+                if (own[i] == Tone.UNKNOWN) own[i] = own[i - 1]
+            }
+            own
+        }
+        if (!anything) return null
+        val tones = MutableList(BUCKETS) { i ->
+            perMonitor.map { it[i] }.maxByOrNull { rank(it) } ?: Tone.UNKNOWN
+        }
+        return assemble(tones, active, monitors, runtimes, nowMs, offline, spanMs, label)
+    }
+
+    private fun assemble(
+        tones: List<Tone>,
+        active: List<Monitor>,
+        monitors: List<Monitor>,
+        runtimes: Map<String, MonitorRuntime>,
+        nowMs: Long,
+        offline: Boolean,
+        spanMs: Long,
+        label: LiveLabel,
+    ): Timeline {
         val elapsed = capBands(coalesce(tones))
         val fleet = Summary.of(monitors, runtimes)
         val pacing = pacing(active, runtimes, nowMs)
@@ -262,7 +380,66 @@ object LiveTimeline {
             current = current(fleet, offline),
             chip = chip(fleet, offline),
             nextCheckInMs = pacing.waitMs,
+            label = label,
+            uptimePercent = uptime(active, runtimes, nowMs - spanMs, nowMs),
+            slowestMs = slowest(active, runtimes),
         )
+    }
+
+    /** Passing checks over all checks in the window, across [active]. */
+    private fun uptime(
+        active: List<Monitor>,
+        runtimes: Map<String, MonitorRuntime>,
+        fromMs: Long,
+        nowMs: Long,
+    ): Double? {
+        var total = 0
+        var passed = 0
+        active.forEach { monitor ->
+            runtimes[monitor.id]?.samples.orEmpty().forEach { sample ->
+                if (sample.at in fromMs..nowMs) {
+                    total++
+                    if (sample.ok) passed++
+                }
+            }
+        }
+        return if (total == 0) null else passed * 100.0 / total
+    }
+
+    /**
+     * The slowest last reading among monitors that are answering.
+     *
+     * A monitor that is down has no latency worth the name, its last reading is a
+     * timeout or zero, so it is left out rather than allowed to win.
+     */
+    private fun slowest(active: List<Monitor>, runtimes: Map<String, MonitorRuntime>): Long? =
+        active.mapNotNull { monitor ->
+            val runtime = runtimes[monitor.id] ?: return@mapNotNull null
+            runtime.lastLatencyMs.takeIf {
+                it > 0 && (runtime.health == Health.UP || runtime.health == Health.DEGRADED)
+            }
+        }.maxOrNull()
+
+    /**
+     * "100%", "99.4%", "87%". Floored, never rounded, so 99.96 reads 99.9 and not a
+     * clean record the history does not have.
+     */
+    internal fun shortPercent(value: Double): String = when {
+        value >= 100.0 -> "100%"
+        value >= 99.0 -> "${kotlin.math.floor(value * 10) / 10}%"
+        else -> "${kotlin.math.floor(value).toInt()}%"
+    }
+
+    /** "180 ms", "1.9 s": the sentence form of [shortLatency]. */
+    internal fun spacedLatency(ms: Long): String = when {
+        ms < 1_000 -> "$ms ms"
+        else -> String.format(java.util.Locale.ROOT, "%.1f s", ms / 1000.0)
+    }
+
+    /** "180ms", "1.9s": five characters at most, for the end of the line. */
+    internal fun shortLatency(ms: Long): String = when {
+        ms < 1_000 -> "${ms}ms"
+        else -> String.format(java.util.Locale.ROOT, "%.1fs", ms / 1000.0)
     }
 
     /**

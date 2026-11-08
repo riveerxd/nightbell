@@ -1621,6 +1621,8 @@ data class GlobalSettings(
      * Costs a persistent notification and real battery — see the README.
      */
     val strictForegroundMonitoring: Boolean = false,
+    /** What the strict monitoring notice draws: whose line, how far back, which figure. */
+    val liveCard: LiveCardPrefs = LiveCardPrefs(),
     /**
      * Fallback latency budget for monitors that don't set their own.
      * 2500 ms matches the behaviour shipped in 1.0.0; 0 disables DEGRADED.

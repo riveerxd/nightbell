@@ -11,12 +11,14 @@ import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.SystemClock
 import me.river.nightbell.data.Nightbell
 import me.river.nightbell.data.alerts.AlertCenter
 import me.river.nightbell.data.alerts.LiveCard
 import me.river.nightbell.data.alerts.UrgentAlarm
 import me.river.nightbell.domain.AlertPolicy
 import me.river.nightbell.domain.GlobalSettings
+import me.river.nightbell.domain.LiveNotice
 import me.river.nightbell.domain.LiveTimeline
 import me.river.nightbell.domain.Monitor
 import me.river.nightbell.domain.MonitorRuntime
@@ -33,6 +35,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Strict monitoring: a foreground service that keeps its own cadence instead of
@@ -69,6 +75,11 @@ class NightbellMonitorService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var loop: Job? = null
+    private var watcher: Job? = null
+
+    /** What the loop last decided the service is running for, for [watchLiveCard]. */
+    @Volatile
+    private var runningStrict = true
     private var started = false
 
     /**
@@ -127,10 +138,20 @@ class NightbellMonitorService : Service() {
         // ahead of this, which is fine in a warm process and a crash in a cold
         // one. `AlertCenter` needs nothing but a Context, so the placeholder
         // notification is always cheap; the real content lands on the next tick.
-        promoteImmediately()
+        //
+        // Only the first time. `sync` re-delivers this to a service that is already
+        // in the foreground, and `notifyStateChanged` sends it right after waking
+        // the loop, so the placeholder used to land *on top of* the redraw that
+        // wake had just produced. The loop then slept for up to a minute with the
+        // card reading "Starting…", which a tap in the live card settings did
+        // every time. Later starts wake the loop instead, so it draws the real thing.
+        if (!started) promoteImmediately()
 
         if (loop == null) {
             loop = scope.launch { runLoop() }
+            watcher = scope.launch { watchLiveCard() }
+        } else {
+            wake()
         }
         return START_STICKY
     }
@@ -155,6 +176,7 @@ class NightbellMonitorService : Service() {
             val nagging = snapshot.monitors.any { monitor ->
                 monitor.urgent && snapshot.runtimes[monitor.id]?.urgentState?.nagging == true
             }
+            runningStrict = strict
             if (!strict && !nagging) {
                 stopSelfSafely()
                 return
@@ -214,20 +236,26 @@ class NightbellMonitorService : Service() {
                 if (runtime != null && policy != null) {
                     val since = runtime.urgentSinceAt.takeIf { it > 0L } ?: System.currentTimeMillis()
                     val respectRinger = snapshot2.settings.urgentRespectsRingerMode
-                    promoteWith(
-                        graph.alerts.urgentPage(
-                            monitor = monitor,
-                            result = graph.engine.pageEvidence(runtime),
-                            policy = policy,
-                            downForMs = System.currentTimeMillis() - since,
-                            pageCount = runtime.urgentPageCount.coerceAtLeast(1),
-                            otherPending = others,
-                            respectRinger = respectRinger,
-                            // The loop below is making the noise; the channel must
-                            // not chime over it.
-                            silent = true,
-                        ),
+                    val page = graph.alerts.urgentPage(
+                        monitor = monitor,
+                        result = graph.engine.pageEvidence(runtime),
+                        policy = policy,
+                        downForMs = System.currentTimeMillis() - since,
+                        pageCount = runtime.urgentPageCount.coerceAtLeast(1),
+                        otherPending = others,
+                        respectRinger = respectRinger,
+                        // The loop below is making the noise; the channel must
+                        // not chime over it.
+                        silent = true,
                     )
+                    // Under the notice lock, and marked as paging before the lock
+                    // is let go: a live card redraw already waiting in it would
+                    // otherwise land on top of the red page and hide it until the
+                    // next pass.
+                    noticeLock.withLock {
+                        promoteWith(page)
+                        paging_ = true
+                    }
                     // Looping, because a channel's sound fires once per post and a
                     // five-minute gap between chimes is a reminder, not a pager.
                     // `start` re-reads the ringer every tick, so flipping the phone
@@ -237,7 +265,6 @@ class NightbellMonitorService : Service() {
                         vibrate = true,
                         respectRinger = respectRinger,
                     )
-                    paging_ = true
                     // Said after the siren is already looping, on purpose. The
                     // noise is the part that wakes someone; the sentence is the
                     // part that tells them what for, and it mutes the siren for
@@ -273,60 +300,94 @@ class NightbellMonitorService : Service() {
             // the speaker itself if it happens to be mid-sentence.
             Nightbell.install(applicationContext).speaker.release()
 
-            val latest = runCatchingCancellable { graph.store.currentSnapshot() }.getOrNull()
-            val fleet = latest?.let { Summary.of(it.monitors, it.runtimes) }
-            val offline = !graph.network.isOnline()
-            // The check history as a ride-card line, on the releases that can draw
-            // one. Built from the same snapshot as the verdict above it, or the bar
-            // and the headline could disagree by one check. Not built at all where
-            // nothing can render it — this loop runs every 15 to 60 seconds forever.
-            val timeline = latest?.takeIf { LiveCard.supported }?.let {
-                LiveTimeline.of(
-                    monitors = it.monitors,
-                    runtimes = it.runtimes,
-                    nowMs = System.currentTimeMillis(),
-                    offline = offline,
-                )
-            }
-            promote(
-                alerts = graph.alerts,
-                title = when {
-                    // Ahead of the fleet verdict: while offline that verdict is a
-                    // record of the past, and this notification is permanently on
-                    // screen claiming to describe the present.
-                    offline -> "Monitoring paused · offline"
-                    fleet == null -> "Strict monitoring"
-                    fleet.urgentPending > 0 -> "URGENT · ${fleet.urgentPending} unacknowledged"
-                    else -> "Strict monitoring · ${fleet.headline}"
-                },
-                body = buildString {
-                    if (offline) {
-                        append("No connection — checks resume automatically.")
-                    } else if (timeline != null && fleet != null && fleet.total > 0) {
-                        // With the line drawn, the paragraph explaining what strict
-                        // mode is has nowhere to go: ProgressStyle draws no big text,
-                        // so it was being clipped mid-sentence two lines in. What is
-                        // worth those two lines instead is what the bar covers —
-                        // there is no axis on it, so an outage a third of the way
-                        // along could be ten bad minutes or eight bad hours.
-                        append("${fleet.total} monitors · ${fleet.down} down · ${fleet.degraded} slow")
-                        append(" · last ${timeline.spanLabel}")
-                    } else if (strict) {
-                        append("Checking on schedule instead of waiting for Android to batch work.")
-                    } else {
-                        append("Keeping the urgent alert alive until it's acknowledged.")
-                    }
-                    if (timeline == null && fleet != null && fleet.total > 0) {
-                        append("\n${fleet.total} monitor(s) · ${fleet.down} down · ${fleet.degraded} slow")
-                    }
-                },
-                timeline = timeline,
-            )
+            renderNotice(strict)
 
             val delayMs = runCatchingCancellable { graph.engine.nextWakeDelayMs() }
                 .getOrDefault(CheckEngine_MIN_TICK)
             sleepUnlessWoken(delayMs)
         }
+    }
+
+    /**
+     * Posts the strict monitoring notice from the store as it is now.
+     *
+     * Words and line together, from the same function the Settings preview uses,
+     * so what the preview promises is what gets posted. Serialised, because the
+     * loop and [watchLiveCard] both call it and an older snapshot must not land
+     * on top of a newer one.
+     */
+    private suspend fun renderNotice(strict: Boolean, onlyOverTheNotice: Boolean = false) {
+        val graph = Nightbell.install(applicationContext)
+        noticeLock.withLock {
+            // Spaced, because NotificationManagerService drops an app's updates past
+            // about five a second ("Package enqueue rate is 5.6. Shedding" in the
+            // emulator's log) and the one dropped can be the last: three quick taps
+            // in Settings, each drawn by the watcher and again by the woken loop,
+            // left the card on the previous choice until the next tick. The
+            // snapshot is read after the wait, so the post that lands is the newest.
+            val wait = MIN_NOTICE_GAP_MS - (SystemClock.elapsedRealtime() - lastNoticeAt)
+            if (wait > 0) delay(wait)
+            // Asked again after the wait, for the watcher. In that time a page may
+            // have gone up, which this must not cover, or the service may have
+            // stopped, and a post now would put it back in the foreground.
+            if (onlyOverTheNotice && (!started || isPaging())) return@withLock
+            val latest = runCatchingCancellable { graph.store.currentSnapshot() }.getOrNull()
+            val offline = !graph.network.isOnline()
+            val notice = latest?.let {
+                LiveNotice.of(
+                    monitors = it.monitors,
+                    runtimes = it.runtimes,
+                    groups = it.groups,
+                    prefs = it.settings.liveCard,
+                    nowMs = System.currentTimeMillis(),
+                    offline = offline,
+                    lineSupported = LiveCard.supported,
+                    strict = strict,
+                )
+            }
+            promote(
+                alerts = graph.alerts,
+                title = notice?.title ?: "Strict monitoring",
+                body = notice?.body ?: "Checking on schedule instead of waiting for Android to batch work.",
+                timeline = notice?.line,
+            )
+            lastNoticeAt = SystemClock.elapsedRealtime()
+        }
+    }
+
+    private val noticeLock = Mutex()
+    private var lastNoticeAt = 0L
+
+    /**
+     * Redraws the notice the moment a live card choice changes, whatever the loop
+     * is doing.
+     *
+     * The loop only draws between check passes, and a pass that finds a failure
+     * stays to confirm it: retries 30 seconds apart for up to seven minutes. Waking
+     * it does nothing until that is over, so on a fleet with something failing a
+     * choice made in Settings could take minutes to appear. Seen on an emulator: a
+     * choice made right after a pass had found failures was still not drawn 15
+     * seconds later. This draws from the store
+     * directly, and leaves the urgent page alone: while one is up, it is the
+     * notification and the strict notice waits for it to end.
+     */
+    private suspend fun watchLiveCard() {
+        val graph = Nightbell.install(applicationContext)
+        graph.store.snapshot
+            // Only what the notice reads off a group. Opening or shutting one on
+            // the dashboard writes it too, and each of those used to repost.
+            .map { snap -> snap.settings.liveCard to snap.groups.map { Triple(it.id, it.displayTitle, it.memberIds) } }
+            .distinctUntilChanged()
+            // No drop(1) for "it is only the current value": a choice saved in the
+            // moment between the service starting and this subscribing arrives as
+            // that first value, and dropping it left the card on the old choice
+            // while the loop was busy confirming a failure. Drawing the current
+            // state once on start is harmless, and replaces "Starting…" sooner.
+            .collect {
+                if (started && !isPaging()) {
+                    runCatchingCancellable { renderNotice(strict = runningStrict, onlyOverTheNotice = true) }
+                }
+            }
     }
 
     /**
@@ -465,6 +526,15 @@ class NightbellMonitorService : Service() {
         runCatchingCancellable { Nightbell.install(applicationContext).engine.resetCheckerHealth("service stopping") }
         loop?.cancel()
         loop = null
+        // With the loop, or a quick restart before onDestroy launches a second
+        // watcher next to this one and every choice is drawn twice.
+        watcher?.cancel()
+        watcher = null
+        // Out of the foreground from here on, so the next start has to promote
+        // again. A start that lands before onDestroy keeps this instance, and with
+        // `started` still true it skipped startForeground, which Android punishes
+        // by killing the process.
+        started = false
         runCatchingCancellable { stopForeground(STOP_FOREGROUND_REMOVE) }
         stopSelf()
     }
@@ -514,6 +584,9 @@ class NightbellMonitorService : Service() {
             wakeSignal.trySend(Unit)
         }
         private const val CheckEngine_MIN_TICK = 15_000L
+
+        /** Four posts a second at most, under the platform's five. */
+        private const val MIN_NOTICE_GAP_MS = 250L
         const val ACTION_SYNC = "me.river.nightbell.action.SERVICE_SYNC"
 
         /**

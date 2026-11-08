@@ -2687,6 +2687,49 @@ class SettingsViewModel(private val graph: Nightbell.Graph) : ViewModel() {
         .map { it.monitors }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /**
+     * Runtimes for the live card preview alone. Collected inside that card, so a
+     * check result recomposes the preview and not the whole of Settings.
+     */
+    val runtimes: StateFlow<Map<String, me.river.nightbell.domain.MonitorRuntime>> = graph.store.snapshot
+        .map { it.runtimes }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /** The fleet pause, which stops strict mode along with the checks. */
+    val pause: StateFlow<me.river.nightbell.domain.PauseState> = graph.store.snapshot
+        .map { it.pause }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), graph.store.snapshot.value.pause)
+
+    /**
+     * Whether the live card preview should show the offline notice.
+     *
+     * Asked of the system each time, as the service asks it, rather than read off
+     * the callback mirror the dashboard uses. The mirror was seen reporting
+     * offline on a connected emulator while the service, asking directly, posted
+     * the online notice, and a preview that disagrees with the notification it
+     * previews is worse than none.
+     */
+    fun isOffline(): Boolean = !graph.network.isOnline()
+
+    /**
+     * Lifts a fleet pause from Settings, the same way the dashboard banner does.
+     *
+     * Here because a pause that stops checks also stops strict mode, and the strict
+     * and live card settings were the place someone went looking for the missing
+     * notification without any way to tell the pause was the reason.
+     */
+    fun resumeChecks() {
+        viewModelScope.launch { graph.engine.resumeAll() }
+    }
+
+    /** For the live card's "one group" choice. */
+    val groups: StateFlow<List<me.river.nightbell.domain.MonitorGroup>> = graph.store.snapshot
+        .map { it.groups }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     /** What the fleet costs a month with the data saver off and on, as measured so far. */
     val dataEstimate: StateFlow<me.river.nightbell.domain.DataSaver.Estimate?> = graph.store.snapshot
         .map { me.river.nightbell.domain.DataSaver.monthly(it.monitors, it.runtimes) }
