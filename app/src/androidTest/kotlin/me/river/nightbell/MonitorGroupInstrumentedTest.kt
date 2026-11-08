@@ -246,7 +246,7 @@ class MonitorGroupInstrumentedTest {
     }
 
     @Test
-    fun tappingAGroupOpensItAndShowsEveryMemberAsItsOwnCard() {
+    fun tappingAGroupOpensItAndShowsEveryMemberAsARow() {
         seed(groups = listOf(nightbellGroup()))
         launch()
         scrollTo("Nightbell")
@@ -261,6 +261,10 @@ class MonitorGroupInstrumentedTest {
         composeRule.onNodeWithText(site).assertIsDisplayed()
         scrollTo(repo)
         composeRule.onNodeWithText(repo).assertIsDisplayed()
+        // A row keeps the two controls a member card had, by name, so a screen
+        // reader can tell which monitor a pause button belongs to.
+        composeRule.onNodeWithContentDescription("Pause $site").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Check $repo now").assertIsDisplayed()
         composeRule.captureScreenshot("group-05-expanded")
 
         // And shut again, from the same target.
@@ -280,9 +284,14 @@ class MonitorGroupInstrumentedTest {
         scrollTo("Nightbell")
         composeRule.onNodeWithText("Nightbell").assertIsDisplayed()
         composeRule.onNodeWithText("1 of 2 is down").assertIsDisplayed()
+        // Shut, and it still says which one. The card used to stop at the count
+        // and the name took a tap, which was the complaint the redesign answers.
+        composeRule.onNodeWithText(repo).assertIsDisplayed()
         // Same word the fleet banner and a monitor card use, so a group is not a
         // third vocabulary for the same fact.
         composeRule.onNodeWithText("Down").assertIsDisplayed()
+        composeRule.onNodeWithText("1 up").assertIsDisplayed()
+        composeRule.onAllNodesWithTextCount(site, expected = 0)
         composeRule.captureScreenshot("group-06-one-down")
     }
 
@@ -292,6 +301,8 @@ class MonitorGroupInstrumentedTest {
         launch()
         scrollTo("Nightbell")
         composeRule.onNodeWithText("1 of 2 is slow").assertIsDisplayed()
+        composeRule.onNodeWithText(site).assertIsDisplayed()
+        composeRule.onNodeWithText("Slow, 3.1 s").assertIsDisplayed()
         composeRule.captureScreenshot("group-07-one-slow")
     }
 
@@ -312,14 +323,152 @@ class MonitorGroupInstrumentedTest {
         composeRule.captureScreenshot("group-08-paused-and-down")
     }
 
+    // ---- the roster ----------------------------------------------------------
+
+    @Test
+    fun tappingTheNamedProblemOnAShutGroupOpensThatMonitor() {
+        seed(repoHealth = Health.DOWN, groups = listOf(nightbellGroup()))
+        launch()
+        scrollTo(repo)
+        composeRule.onNodeWithText(repo).performClick()
+        composeRule.waitForIdle()
+
+        // The detail screen, and the group stayed shut: the tap was about the
+        // monitor, not about the group around it.
+        composeRule.onNodeWithContentDescription("Back").assertIsDisplayed()
+        assertTrue(storedGroups().single().collapsed)
+    }
+
+    @Test
+    fun holdingTheNamedProblemSelectsItLikeAnyOtherCard() {
+        seed(repoHealth = Health.DOWN, groups = listOf(nightbellGroup()))
+        launch()
+        scrollTo(repo)
+        composeRule.onNodeWithText(repo).performTouchInput { longClick() }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("1 selected").assertIsDisplayed()
+        composeRule.onNodeWithText("Remove from “Nightbell”").assertIsDisplayed()
+        composeRule.captureScreenshot("group-33-roster-selected-shut")
+    }
+
+    @Test
+    fun aMemberCanBePausedFromItsRow() {
+        seed(groups = listOf(nightbellGroup(collapsed = false)))
+        launch()
+        scrollTo(site)
+        composeRule.onNodeWithContentDescription("Pause $site").performClick()
+
+        awaitTrue(description = "the site monitor is paused") {
+            runBlocking {
+                Nightbell.require().store.currentSnapshot().monitors.first { it.id == "m-site" }.enabled.not()
+            }
+        }
+        composeRule.waitForIdle()
+        // The row says so in words and offers the way back.
+        composeRule.onNodeWithText("Paused").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Resume $site").assertIsDisplayed()
+        composeRule.captureScreenshot("group-34-roster-member-paused")
+    }
+
+    @Test
+    fun theEditControlIsAtTheFootOfAnOpenGroupAndNowhereElse() {
+        seed(groups = listOf(nightbellGroup()))
+        launch()
+        scrollTo("Nightbell")
+        composeRule.onAllNodesWithContentDescriptionCount("Edit group Nightbell", expected = 0)
+
+        openGroupIfCollapsed()
+        scrollTo("Edit group")
+        composeRule.onNodeWithContentDescription("Edit group Nightbell").assertIsDisplayed()
+    }
+
+    @Test
+    fun selectingInsideAnOpenGroupSwapsTheRowControlsForATick() {
+        seed(groups = listOf(nightbellGroup(collapsed = false)))
+        launch()
+        scrollTo(site)
+        composeRule.onNodeWithText(site).performTouchInput { longClick() }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("1 selected").assertIsDisplayed()
+
+        // No pause or check while picking rows: a real request one mis-tap away
+        // from the finger that is busy selecting.
+        composeRule.onAllNodesWithContentDescriptionCount("Pause $repo", expected = 0)
+        scrollTo(repo)
+        composeRule.onNodeWithText(repo).performClick()
+        composeRule.onNodeWithText("2 selected").assertIsDisplayed()
+        composeRule.captureScreenshot("group-35-roster-selecting-open")
+    }
+
+    /**
+     * The case the old card handled worst: a big group with trouble in it.
+     *
+     * Seven members, two down, one slow, one paused. Shut, all three problems are
+     * named and the rest is one counted line; open, every member is a row and the
+     * whole group fits on a phone screen, where it used to take three.
+     */
+    @Test
+    fun aBigGroupNamesEveryProblemShutAndFitsOnOneScreenOpen() {
+        val names = listOf("Router", "NAS", "Jellyfin", "Pi-hole", "WireGuard", "Home Assistant", "Backup")
+        // One monitor outside the group, so the fleet banner's sentence is about
+        // eight and the group's is about seven, and the two can be told apart.
+        val loose = Monitor(id = "m-other", name = other, kind = MonitorKind.HTTP_STATUS, url = "https://checkout.example.com", createdAt = now)
+        val members = names.mapIndexed { i, name ->
+            Monitor(
+                id = "h$i",
+                name = name,
+                kind = MonitorKind.HTTP_STATUS,
+                url = "https://${name.lowercase().replace(" ", "")}.home.lan",
+                createdAt = now,
+                enabled = name != "Backup",
+            )
+        }
+        val monitors = members + loose
+        val runtimes = mapOf("m-other" to runtime(Health.UP)) + names.indices.associate { i ->
+            "h$i" to when (names[i]) {
+                "NAS", "Pi-hole" -> runtime(Health.DOWN)
+                "Jellyfin" -> runtime(Health.DEGRADED)
+                else -> runtime(Health.UP)
+            }
+        }
+        runBlocking {
+            Nightbell.install(appContext).store.replaceAll(
+                NightbellSnapshot(
+                    monitors = monitors,
+                    runtimes = runtimes,
+                    groups = listOf(
+                        MonitorGroup(id = "g-home", title = "Homelab", memberIds = members.map { it.id }, collapsed = true),
+                    ),
+                    settings = GlobalSettings(motionIntensity = 0f, hasSeenPagerSetup = true, pagerSetupSilenced = true),
+                ),
+            )
+        }
+        launch()
+        scrollTo("Homelab")
+        composeRule.onNodeWithText("2 of 7 are down").assertIsDisplayed()
+        composeRule.onNodeWithText("NAS").assertIsDisplayed()
+        composeRule.onNodeWithText("Pi-hole").assertIsDisplayed()
+        composeRule.onNodeWithText("Jellyfin").assertIsDisplayed()
+        composeRule.onNodeWithText("3 up, 1 paused").assertIsDisplayed()
+        composeRule.onAllNodesWithTextCount("Router", expected = 0)
+        composeRule.captureScreenshot("group-36-roster-big-shut")
+
+        composeRule.onNodeWithText("Homelab").performClick()
+        awaitTrue(description = "the big group opened") { !storedGroups().single().collapsed }
+        composeRule.waitForIdle()
+        scrollTo("Edit group")
+        names.forEach { composeRule.onNodeWithText(it).assertIsDisplayed() }
+        composeRule.captureScreenshot("group-37-roster-big-open")
+    }
+
     // ---- editing -----------------------------------------------------------
 
     @Test
     fun theGroupCanBeRenamedFromItsOwnCard() {
         seed(groups = listOf(nightbellGroup()))
         launch()
-        scrollTo("Nightbell")
-        composeRule.onNodeWithContentDescription("Edit group Nightbell").performClick()
+        openEditor()
         composeRule.waitForIdle()
         composeRule.onNodeWithContentDescription("Edit group").assertIsDisplayed()
         // Both members are listed, each with a way out.
@@ -343,8 +492,7 @@ class MonitorGroupInstrumentedTest {
     fun removingAMemberInTheEditorLeavesTheMonitorAlone() {
         seed(groups = listOf(nightbellGroup()))
         launch()
-        scrollTo("Nightbell")
-        composeRule.onNodeWithContentDescription("Edit group Nightbell").performClick()
+        openEditor()
         composeRule.waitForIdle()
         composeRule.onNodeWithContentDescription("Remove $repo from the group").performClick()
         composeRule.waitForIdle()
@@ -372,8 +520,7 @@ class MonitorGroupInstrumentedTest {
     fun ungroupingKeepsEveryMonitor() {
         seed(groups = listOf(nightbellGroup()))
         launch()
-        scrollTo("Nightbell")
-        composeRule.onNodeWithContentDescription("Edit group Nightbell").performClick()
+        openEditor()
         composeRule.waitForIdle()
         composeRule.onNodeWithText("Ungroup").performClick()
         composeRule.waitForIdle()
@@ -983,9 +1130,15 @@ class MonitorGroupInstrumentedTest {
         composeRule.waitForIdle()
     }
 
-    /** Opens the editor on the seeded group. */
+    /**
+     * Opens the editor on the seeded group.
+     *
+     * The edit control lives at the foot of an open group, so the group is opened
+     * first, the same two taps a person makes.
+     */
     private fun openEditor() {
-        scrollTo("Nightbell")
+        openGroupIfCollapsed()
+        scrollTo("Edit group")
         composeRule.onNodeWithContentDescription("Edit group Nightbell").performClick()
         composeRule.waitForIdle()
     }
@@ -1024,6 +1177,21 @@ private fun androidx.compose.ui.test.junit4.ComposeTestRule.onAllNodesWithTextCo
     ).fetchSemanticsNodes().size
     if (found != expected) {
         throw AssertionError("Expected $expected node(s) with text \"$text\", found $found")
+    }
+}
+
+/** [onAllNodesWithTextCount], for a content description. */
+private fun androidx.compose.ui.test.junit4.ComposeTestRule.onAllNodesWithContentDescriptionCount(
+    description: String,
+    expected: Int,
+) {
+    waitForIdle()
+    val found = onAllNodes(
+        androidx.compose.ui.test.hasContentDescription(description),
+        useUnmergedTree = false,
+    ).fetchSemanticsNodes().size
+    if (found != expected) {
+        throw AssertionError("Expected $expected node(s) described \"$description\", found $found")
     }
 }
 

@@ -120,7 +120,9 @@ the repository, it was a question about both, and the dashboard used to answer i
 one row at a time with you doing the and-ing. A group says it directly: all 2
 operational, or 1 of 2 is down. The worst member decides it, and pausing one
 member never decides it unless every member is paused, because a pause you set
-last week must not be able to hide an outage.
+last week must not be able to hide an outage. A shut group names whichever
+member is down or slow and counts the rest in one line, so you know which one
+without opening it. Open, its members are rows inside the same card.
 
 <div align="center">
   <img src="docs/screens/create-monitor.png" width="880" alt="The new-monitor wizard: What to watch, Target, Expectations, Cadence and alerts" />

@@ -17,6 +17,7 @@ import me.river.nightbell.domain.MonitorGroup
 import me.river.nightbell.domain.MonitorKind
 import me.river.nightbell.ui.dashboard.DashboardScreen
 import me.river.nightbell.ui.theme.NightbellTheme
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -133,10 +134,11 @@ class DashboardCopyInstrumentedTest {
     /**
      * A group whose last member was deleted stays on the dashboard on purpose, so
      * it can be renamed or ungrouped. It used to say "Open it" to do that, and
-     * opening it is the one gesture that leads to neither.
+     * opening it is the one gesture that leads to neither. Since groups became a
+     * roster the route is the Edit group control, shown on the shut card too.
      */
     @Test
-    fun anEmptiedGroupPointsAtThePencil() {
+    fun anEmptiedGroupShowsTheWayToEditIt() {
         seed(
             monitor("a", "Alpha"),
             groups = listOf(
@@ -148,7 +150,11 @@ class DashboardCopyInstrumentedTest {
             composeRule.onAllNodesWithText("Storefront").fetchSemanticsNodes().isNotEmpty()
         }
 
-        composeRule.onNodeWithText("Tap the pencil", substring = true).assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Edit group Storefront").assertIsDisplayed()
+        assertTrue(composeRule.onAllNodesWithText("Open it", substring = true).fetchSemanticsNodes().isEmpty())
+        composeRule.onNodeWithContentDescription("Edit group Storefront").performClick()
+        composeRule.waitUntil(5_000) {
+            composeRule.onAllNodesWithText("Ungroup", substring = true).fetchSemanticsNodes().isNotEmpty()
+        }
     }
 }

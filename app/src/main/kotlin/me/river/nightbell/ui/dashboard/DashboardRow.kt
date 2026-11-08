@@ -11,11 +11,8 @@ import me.river.nightbell.domain.MonitorGroup
  * Groups make it two kinds of thing, and this says so in the type rather than in
  * a nullable field the renderer has to interpret.
  *
- * Members of an expanded group are *not* nested inside [Group]'s items, the
- * screen emits them as their own grid items straight after the group card. That
- * keeps a member a real `MonitorRowCard` with its own long-press, its own
- * re-check and its own drag handle, and keeps the grid virtualising a flat list
- * instead of measuring one enormous item.
+ * A group's members travel inside [Group] and are drawn as rows in its card,
+ * not as grid items of their own. GroupCard says what that traded away.
  */
 sealed interface DashboardRow {
 

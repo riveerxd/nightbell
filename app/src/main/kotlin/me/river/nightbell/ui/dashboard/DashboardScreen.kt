@@ -249,21 +249,10 @@ fun DashboardScreen(
 
     // ---- opening and closing a group --------------------------------------
     //
-    // A group's members are their own grid items, which is what keeps a grouped
-    // card draggable: `GridReorderState` finds drop targets by key in
-    // `layoutInfo`, so members folded into one container item would stop being
-    // reorderable. The cost is that expanding is an *insertion* into a lazy list,
-    // not a height animation on a container, so the movement has to come from
-    // `animateItem` rather than from `expandVertically`.
-    //
-    // Two halves, and the second is the one that does the work:
-    //
-    //  - members fade in and out as they arrive and leave, staggered so the
-    //    group unrolls from the top rather than flashing in all at once;
-    //  - **every** top-level row animates its placement, so the cards below a
-    //    group slide down to make room instead of teleporting. Without that half
-    //    the members fade in prettily while the rest of the list jumps, which
-    //    reads as a glitch rather than as an opening.
+    // A group's members are rows inside its own card, so opening one is a height
+    // change on that card (see GroupCard). What the screen still owns is the
+    // rest of the list: every top-level row animates its placement, so the cards
+    // below a group slide to make room instead of teleporting.
     val motion = LocalNightbellMotion.current
     val slide: FiniteAnimationSpec<IntOffset>? = if (motion.enabled) {
         spring(
@@ -276,35 +265,11 @@ fun DashboardScreen(
     } else {
         null
     }
-    val memberFadeOut: FiniteAnimationSpec<Float>? = if (motion.enabled) {
-        // Faster than the way in. Closing is a dismissal, the user has decided
-        // they are done with this group, and making them watch it leave at the
-        // speed it arrived is the wrong side of the trade.
-        tween(motion.scale(130))
-    } else {
-        null
-    }
-
-    /** Fade-in for the member at [index], delayed so the group unrolls. */
-    fun memberFadeIn(index: Int): FiniteAnimationSpec<Float>? = if (motion.enabled) {
-        tween(
-            durationMillis = motion.scale(190),
-            // Capped: a group of thirty would otherwise take over a second to
-            // finish arriving, and the last rows would land after the finger has
-            // moved on.
-            delayMillis = motion.scale(index.coerceAtMost(6) * 45),
-        )
-    } else {
-        null
-    }
-
     // One renderer for a monitor card, wherever it is drawn.
     //
-    // Groups made the list two kinds of row, and an expanded group's members are
-    // emitted as their own grid items, so this call site is reached from two
-    // places. A lambda rather than a private composable because it closes over
-    // eight things the screen already has in scope, every one of which would
-    // otherwise become a parameter.
+    // A lambda rather than a private composable because it closes over eight
+    // things the screen already has in scope, every one of which would otherwise
+    // become a parameter.
     //
     // `rank` is the row's place in the flat `visible` list, which is what the
     // nudge arrows move within. Looked up rather than counted, because a group
@@ -398,6 +363,27 @@ fun DashboardScreen(
                 onAcknowledge = { viewModel.acknowledgeUrgent(card.monitor.id) },
             )
         }
+    }
+
+    // What a member row inside a group card can do. The same view-model calls a
+    // monitor card makes, so a grouped monitor is not a lesser one.
+    val memberActions = remember(viewModel, onOpenMonitor, canReorder, rankOf) {
+        MemberActions(
+            onOpen = onOpenMonitor,
+            onLongPress = { id -> viewModel.toggleSelected(id) },
+            onCheck = { id -> viewModel.check(id) },
+            onSetEnabled = { id, enabled -> viewModel.setEnabled(id, enabled) },
+            onAcknowledge = { id -> viewModel.acknowledgeUrgent(id) },
+            moveBy = { id, by ->
+                val rank = rankOf[id]
+                when {
+                    !canReorder || rank == null -> null
+                    by < 0 && rank == 0 -> null
+                    by > 0 && rank == rankOf.size - 1 -> null
+                    else -> { { viewModel.nudge(id, by) } }
+                }
+            },
+        )
     }
 
     var panel by remember { mutableStateOf(DashboardPanel.NONE) }
@@ -571,7 +557,6 @@ fun DashboardScreen(
                                 is DashboardRow.Group -> {
                                     val rolled = row.rolled
                                     val group = rolled.group
-                                    val expanded = !group.collapsed
                                     item(
                                         key = "group-${group.id}",
                                         span = { GridItemSpan(maxLineSpan) },
@@ -588,7 +573,10 @@ fun DashboardScreen(
                                         ) {
                                             GroupCard(
                                                 rolled = rolled,
-                                                expanded = expanded,
+                                                expanded = !group.collapsed,
+                                                selecting = selecting,
+                                                selection = viewModel.selection,
+                                                offline = offline,
                                                 onToggle = {
                                                     viewModel.setGroupCollapsed(
                                                         group.id,
@@ -596,59 +584,8 @@ fun DashboardScreen(
                                                     )
                                                 },
                                                 onEdit = { viewModel.editGroup(group.id) },
+                                                actions = memberActions,
                                             )
-                                        }
-                                    }
-                                    if (expanded) {
-                                        if (rolled.members.isEmpty()) {
-                                            item(
-                                                key = "group-empty-${group.id}",
-                                                span = { GridItemSpan(maxLineSpan) },
-                                            ) {
-                                                GroupEmptyMembers(
-                                                    Modifier.animateItem(
-                                                        fadeInSpec = memberFadeIn(0),
-                                                        placementSpec = slide,
-                                                        fadeOutSpec = memberFadeOut,
-                                                    ),
-                                                )
-                                            }
-                                        }
-                                        // Full width even on a tablet: a member is
-                                        // read as part of the column above it, and
-                                        // two members side by side would break the
-                                        // rail that says so.
-                                        rolled.members.forEachIndexed { memberIndex, card ->
-                                            item(
-                                                key = card.monitor.id,
-                                                span = { GridItemSpan(maxLineSpan) },
-                                            ) {
-                                                GroupedMember(
-                                                    accent = accentFor(group.accent).first,
-                                                    modifier = Modifier.animateItem(
-                                                        fadeInSpec = memberFadeIn(memberIndex),
-                                                        placementSpec = slide,
-                                                        fadeOutSpec = memberFadeOut,
-                                                    ),
-                                                ) {
-                                                    monitorCard(
-                                                        card,
-                                                        rowIndex + 1 + memberIndex,
-                                                        Modifier,
-                                                        // Staggered only when the
-                                                        // screen itself is arriving.
-                                                        // A group the user has just
-                                                        // opened has already played
-                                                        // its own entrance, and its
-                                                        // members' arrival belongs to
-                                                        // `animateItem` above. Two
-                                                        // animations on one card
-                                                        // fight, and the slower one
-                                                        // wins.
-                                                        !entrance.hasPlayed("group-${group.id}"),
-                                                    )
-                                                }
-                                            }
                                         }
                                     }
                                 }
