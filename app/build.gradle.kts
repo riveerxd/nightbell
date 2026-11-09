@@ -612,8 +612,12 @@ android {
         // 3.23.0 turns a shut group into a roster that names whatever is down or
         // slow, and gives the strict monitoring notification its own settings:
         // what it follows, how far back its line reaches and the figure at its end.
-        versionCode = 52
-        versionName = "3.23.0"
+        //
+        // 3.24.0 lets basic auth go out with a password alone, for Uptime Kuma's
+        // API key, shows each try while a silent UDP test waits, and opens the
+        // locked-screen page with what the check saw instead of "Not responding".
+        versionCode = 53
+        versionName = "3.24.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

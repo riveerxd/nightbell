@@ -1,0 +1,5 @@
+Uptime Kuma can now wake you up. Point a Prometheus monitor at Kuma's /metrics with its API key as the password, no username needed, and any Kuma monitor going down becomes a loud alarm on your phone. Silent UDP checks, the kind WireGuard needs, now show each try and the time left while Test now waits.
+
+On a locked phone the full-screen alarm now shows what actually failed, how long it has been down, how many checks failed, the HTTP code and the latency. Before, it said Not responding every time.
+
+A check that failed on the value it read back, after the server had answered, now counts toward response time instead of reading as nothing answered. A new monitor no longer says no checks yet beside its first check, and p95 can no longer come out below the average.
