@@ -1,5 +1,8 @@
 package me.river.nightbell.ui.setup
 
+import me.river.nightbell.domain.UdpPlan
+import me.river.nightbell.domain.CheckProgress
+import androidx.compose.runtime.collectAsState
 import androidx.compose.animation.AnimatedContent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -295,6 +298,8 @@ fun SetupScreen(
                             if (step > 0) {
                                 TestPanel(
                                     testing = viewModel.testing,
+                                    udpPlan = if (draft.kind == MonitorKind.UDP_PORT) UdpPlan.of(draft) else null,
+                                    progress = viewModel.testProgress.collectAsState().value,
                                     result = viewModel.testResult,
                                     canTest = report.isValid,
                                     blockingMessage = report.blockingMessage,
@@ -2047,6 +2052,8 @@ private const val DEFAULT_SLO_MS = 2_500
 @Composable
 private fun TestPanel(
     testing: Boolean,
+    udpPlan: UdpPlan?,
+    progress: CheckProgress?,
     result: CheckResult?,
     canTest: Boolean,
     blockingMessage: String?,
@@ -2069,6 +2076,15 @@ private fun TestPanel(
                 style = MaterialTheme.typography.bodySmall,
                 color = NightbellColors.Amber,
             )
+        } else if (udpPlan != null && !testing) {
+            UdpTestDuration(udpPlan)
+        }
+        AnimatedVisibility(
+            visible = testing && udpPlan != null,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically(),
+        ) {
+            if (udpPlan != null) UdpTestProgress(udpPlan, progress, accent)
         }
         AnimatedVisibility(
             visible = result != null,
@@ -2958,7 +2974,8 @@ private fun PrometheusTargetCard(
     SectionHeader("Sign in", icon = NightbellIcons.Shield, accent = accent)
     Text(
         text = "Optional. Basic auth covers Grafana Cloud, Mimir and a Prometheus behind a " +
-            "reverse proxy. A bearer token or a tenant header goes below instead.",
+            "reverse proxy. An Uptime Kuma API key goes in the password with the username " +
+            "left blank. A bearer token or a tenant header goes below instead.",
         style = MaterialTheme.typography.bodySmall,
         color = NightbellColors.TextTertiary,
     )
@@ -2966,7 +2983,7 @@ private fun PrometheusTargetCard(
         value = watch.username,
         onValueChange = { value -> viewModel.updateWatch { it.copy(username = value) } },
         label = "Username",
-        placeholder = "Leave blank if the endpoint is open",
+        placeholder = "Blank if it only wants a key",
         leadingIcon = NightbellIcons.Eye,
         accent = accent,
         modifier = Modifier.testTag("prom-username"),

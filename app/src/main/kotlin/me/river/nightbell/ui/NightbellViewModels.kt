@@ -1,5 +1,9 @@
 package me.river.nightbell.ui
 
+import me.river.nightbell.domain.CheckProgress
+import me.river.nightbell.data.check.ProgressSink
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.withContext
 import me.river.nightbell.data.diag.Diag
 import me.river.nightbell.domain.LogEvent
 import me.river.nightbell.domain.LogField
@@ -975,6 +979,9 @@ class SetupViewModel(
 
     var testResult by mutableStateOf<CheckResult?>(null)
         private set
+
+    /** The stage a slow Test now has reached. A flow, because the checker writes it from its IO thread. */
+    val testProgress = MutableStateFlow<CheckProgress?>(null)
 
     var pickerOpen by mutableStateOf(false)
         private set
@@ -2258,9 +2265,12 @@ class SetupViewModel(
         viewModelScope.launch {
             try {
                 storeMailPassword()
-                testResult = graph.engine.dryRun(draft)
+                testResult = withContext(ProgressSink { testProgress.value = it }) {
+                    graph.engine.dryRun(draft)
+                }
             } finally {
                 testing = false
+                testProgress.value = null
             }
         }
     }

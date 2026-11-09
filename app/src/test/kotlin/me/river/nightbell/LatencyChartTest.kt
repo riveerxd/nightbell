@@ -1,6 +1,7 @@
 package me.river.nightbell
 
 import me.river.nightbell.domain.LatencyChart
+import me.river.nightbell.domain.MonitorRuntime
 import me.river.nightbell.domain.Sample
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -155,6 +156,37 @@ class LatencyChartTest {
         )
         assertEquals(2, LatencyChart.answered(mixed))
         assertEquals(1, LatencyChart.overBudget(mixed, sloMs = 2_500))
+    }
+
+    @Test
+    fun `a check that failed on what the server said still answered, and is measured`() {
+        // Found on the Uptime Kuma guide's capture: Kuma answered 200 in 87ms, the
+        // value it served failed the comparison, and the detail screen said
+        // "nothing answered to measure" with an average of "-". The server did
+        // answer. A status code on the sample is the proof, and a timeout or a
+        // failed handshake never has one.
+        val answeredBadly = Sample(at = 1L, ok = false, latencyMs = 87, code = 200)
+        val neverAnswered = Sample(at = 2L, ok = false, latencyMs = 7_540)
+        val list = listOf(answeredBadly, neverAnswered)
+        assertEquals(1, LatencyChart.answered(list))
+        // Failed is not slow: the alert track already reports it as down.
+        assertEquals(0, LatencyChart.overBudget(list, sloMs = 50))
+
+        val runtime = MonitorRuntime(samples = list + Sample(at = 3L, ok = true, latencyMs = 13, code = 200))
+        assertEquals(50L, runtime.averageLatencyMs)
+        assertEquals(13L, MonitorRuntime(samples = listOf(neverAnswered, Sample(at = 4L, ok = true, latencyMs = 13))).averageLatencyMs)
+    }
+
+    @Test
+    fun `p95 is never under the average`() {
+        // Seen on the Kuma guide's capture: two checks, 58 and 64 ms, read
+        // "average 61 ms, p95 58 ms". The index rounded down and picked the
+        // faster check. Nearest rank rounds up.
+        val two = MonitorRuntime(samples = listOf(Sample(at = 1, ok = true, latencyMs = 58), Sample(at = 2, ok = true, latencyMs = 64)))
+        assertEquals(64L, two.p95LatencyMs)
+        val twenty = MonitorRuntime(samples = (1..20).map { Sample(at = it.toLong(), ok = true, latencyMs = it * 10L) })
+        assertEquals(190L, twenty.p95LatencyMs)
+        assertEquals(10L, MonitorRuntime(samples = listOf(Sample(at = 1, ok = true, latencyMs = 10))).p95LatencyMs)
     }
 
     @Test

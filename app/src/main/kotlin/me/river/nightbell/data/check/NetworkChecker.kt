@@ -1,5 +1,7 @@
 package me.river.nightbell.data.check
 
+import me.river.nightbell.domain.CheckProgress
+import kotlinx.coroutines.currentCoroutineContext
 import me.river.nightbell.domain.CheckResult
 import me.river.nightbell.domain.FailureKind
 import me.river.nightbell.domain.IpFamily
@@ -103,23 +105,24 @@ class NetworkChecker(
         } else {
             ""
         }
+        val progress = currentCoroutineContext()[ProgressSink]?.report ?: {}
         return runInterruptible(Dispatchers.IO) {
             when (monitor.kind) {
                 MonitorKind.PING -> ping(monitor)
                 MonitorKind.TCP_PORT -> tcp(monitor)
-                MonitorKind.UDP_PORT -> udp(monitor, secret)
+                MonitorKind.UDP_PORT -> udp(monitor, secret, progress)
                 else -> failed(FailureKind.BAD_CONFIG, "Not a ping or port monitor")
             }
         }
     }
 
-    private fun udp(monitor: Monitor, community: String): CheckResult {
+    private fun udp(monitor: Monitor, community: String, progress: (CheckProgress) -> Unit): CheckResult {
         val watch = monitor.network
         if (watch.port !in 1..65535) {
             return failed(FailureKind.BAD_CONFIG, "No port set", "Pick a port between 1 and 65535.")
         }
         val address = resolve(watch) ?: return dnsFailure(watch)
-        return udp.check(monitor, address, describe(watch, address, watch.port), describe(watch, address), community, pinger)
+        return udp.check(monitor, address, describe(watch, address, watch.port), describe(watch, address), community, pinger, progress)
     }
 
     private fun ping(monitor: Monitor): CheckResult {

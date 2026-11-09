@@ -96,6 +96,18 @@ class UptimeWindowTest {
     }
 
     @Test
+    fun `a check that landed after the screen's last clock tick still counts`() {
+        // The screen's clock ticks every twenty seconds, so a monitor's first check
+        // is routinely stamped a few seconds after the "now" the screen holds. The
+        // ring then said "no checks yet" right beside a tile saying 1 check.
+        val justNow = Sample(at = now + 12_000, ok = false, latencyMs = 11, code = 200)
+        val window = runtime(justNow).uptimeWithin(now, UptimeWindows.DAY_MS)!!
+        assertEquals(1, window.checks)
+        assertEquals(0L, window.spanMs)
+        assertEquals("1 check", UptimeWindows.ringLabel(window))
+    }
+
+    @Test
     fun `the buffer-wide figure is left alone for the callers that want it`() {
         // uptimePercent still means "of everything retained" — the alert and
         // repair paths compare against it and must not shift under them.

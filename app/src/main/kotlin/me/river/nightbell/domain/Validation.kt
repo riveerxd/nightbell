@@ -400,9 +400,8 @@ object Validation {
             }
         }
 
-        if (watch.password.isNotBlank() && watch.username.isBlank()) {
-            notes += Note(Field.TOKEN, Severity.ERROR, "Basic auth needs a username as well")
-        }
+        // A password alone is allowed. Uptime Kuma's /metrics wants only an API
+        // key in that slot, and RFC 7617 permits the empty username it goes with.
         if (watch.hasBasicAuth && monitor.url.trim().startsWith("http://", ignoreCase = true) &&
             !ProxyRoute.isHiddenService(monitor.url)
         ) {

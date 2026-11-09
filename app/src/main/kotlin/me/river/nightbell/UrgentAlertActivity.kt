@@ -47,6 +47,8 @@ class UrgentAlertActivity : ComponentActivity() {
             url = intent?.getStringExtra(EXTRA_URL).orEmpty(),
             headline = intent?.getStringExtra(EXTRA_HEADLINE).orEmpty()
                 .ifBlank { "Not responding" },
+            statusCode = intent?.getIntExtra(EXTRA_STATUS_CODE, 0) ?: 0,
+            lastLatencyMs = intent?.getLongExtra(EXTRA_LATENCY_MS, 0L) ?: 0L,
             downForMs = intent?.getLongExtra(EXTRA_DOWN_FOR_MS, 0L) ?: 0L,
             failedChecks = intent?.getIntExtra(EXTRA_FAILED_CHECKS, 1) ?: 1,
             reminderNumber = intent?.getIntExtra(EXTRA_REMINDER, 0) ?: 0,
@@ -100,5 +102,7 @@ class UrgentAlertActivity : ComponentActivity() {
         const val EXTRA_FAILED_CHECKS = "failed_checks"
         const val EXTRA_REMINDER = "reminder"
         const val EXTRA_REPEAT_MINUTES = "repeat_minutes"
+        const val EXTRA_STATUS_CODE = "status_code"
+        const val EXTRA_LATENCY_MS = "latency_ms"
     }
 }

@@ -1400,7 +1400,12 @@ private fun ConfigCard(
             // Named, never shown. The password is the one thing on this screen
             // that must not be readable over somebody's shoulder, and "set" is
             // the whole of what the user came here to confirm.
-            if (watch.hasBasicAuth) ConfigRow("Sign in", "basic auth as ${watch.username}")
+            if (watch.hasBasicAuth) {
+                ConfigRow(
+                    "Sign in",
+                    if (watch.username.isBlank()) "basic auth, password only" else "basic auth as ${watch.username}",
+                )
+            }
             if (monitor.headers.isNotEmpty()) {
                 ConfigRow("Headers", monitor.headers.joinToString(", ") { it.name })
             }

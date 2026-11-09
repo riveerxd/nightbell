@@ -289,6 +289,7 @@ class AlertCenter(private val context: Context) {
          * channel must not also fire its own one-shot on top of it.
          */
         silent: Boolean = false,
+        failedChecks: Int = 1,
     ): Notification {
         val headline = result.message.ifBlank { result.failureKind.headline }
         val content = UrgentPageContent(
@@ -305,13 +306,13 @@ class AlertCenter(private val context: Context) {
             style = UrgentPageStyle.CALL_CUSTOM,
             channelId = urgentChannel(policy, respectRinger),
             content = content,
-            actions = urgentActions(monitor),
+            actions = urgentActions(monitor, urgentPageIntent(monitor, result, downForMs, failedChecks)),
             silent = silent,
         )
     }
 
     /** The page's three buttons, plus its locked-screen escalation. */
-    private fun urgentActions(monitor: Monitor) = UrgentPageActions(
+    private fun urgentActions(monitor: Monitor, page: Intent) = UrgentPageActions(
         acknowledge = AlertActionReceiver.pendingIntent(
             context,
             AlertActionReceiver.ACTION_ACK_URGENT,
@@ -331,17 +332,34 @@ class AlertCenter(private val context: Context) {
         // Only takes the screen while the device is locked; unlocked, the heads-up
         // above is what arrives. Null when the permission is not granted so the
         // notification is never rejected for carrying an intent it may not use.
-        fullScreen = if (canUseFullScreenIntent()) fullScreenPageIntent(monitor) else null,
+        fullScreen = if (canUseFullScreenIntent()) fullScreenPageIntent(monitor, page) else null,
     )
 
-    private fun fullScreenPageIntent(monitor: Monitor): PendingIntent {
-        val intent = Intent(context, UrgentAlertActivity::class.java).apply {
+    /**
+     * What the full-screen page is opened with. The page renders from these
+     * extras alone, because it can be started into a cold process at 3am and
+     * must not wait on the store.
+     *
+     * Until 3.24.0 only the name, address and repeat went in, so every page that
+     * took a locked screen read "Not responding", one failed check, HTTP none
+     * and no latency, whatever the check had actually seen. A Kuma monitor down
+     * on a value read back in 61 ms with a 200 looked like a dead server.
+     */
+    internal fun urgentPageIntent(monitor: Monitor, result: CheckResult, downForMs: Long, failedChecks: Int): Intent =
+        Intent(context, UrgentAlertActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             putExtra(UrgentAlertActivity.EXTRA_MONITOR_ID, monitor.id)
             putExtra(UrgentAlertActivity.EXTRA_MONITOR_NAME, monitor.displayName)
             putExtra(UrgentAlertActivity.EXTRA_URL, monitor.address)
             putExtra(UrgentAlertActivity.EXTRA_REPEAT_MINUTES, monitor.urgentRepeatMinutes)
+            putExtra(UrgentAlertActivity.EXTRA_HEADLINE, result.message.ifBlank { result.failureKind.headline })
+            putExtra(UrgentAlertActivity.EXTRA_DOWN_FOR_MS, downForMs)
+            putExtra(UrgentAlertActivity.EXTRA_FAILED_CHECKS, failedChecks.coerceAtLeast(1))
+            putExtra(UrgentAlertActivity.EXTRA_STATUS_CODE, result.statusCode)
+            putExtra(UrgentAlertActivity.EXTRA_LATENCY_MS, result.latencyMs)
         }
+
+    private fun fullScreenPageIntent(monitor: Monitor, intent: Intent): PendingIntent {
         return PendingIntent.getActivity(
             context,
             monitor.id.urgentNotificationId(),
@@ -366,6 +384,7 @@ class AlertCenter(private val context: Context) {
         downForMs: Long,
         pageCount: Int,
         respectRinger: Boolean = true,
+        failedChecks: Int = 1,
     ): Boolean = post(
         monitor.id.urgentNotificationId(),
         // Not silent: with no service there is no looping player, so the
@@ -378,6 +397,7 @@ class AlertCenter(private val context: Context) {
             pageCount = pageCount,
             respectRinger = respectRinger,
             silent = false,
+            failedChecks = failedChecks,
         ),
     )
 

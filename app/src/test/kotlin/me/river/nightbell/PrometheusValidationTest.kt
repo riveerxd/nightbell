@@ -5,6 +5,7 @@ import me.river.nightbell.domain.BodyAssertion
 import me.river.nightbell.domain.Monitor
 import me.river.nightbell.domain.MonitorKind
 import me.river.nightbell.domain.PromQueryRule
+import me.river.nightbell.domain.PrometheusCheck
 import me.river.nightbell.domain.PrometheusSource
 import me.river.nightbell.domain.PrometheusWatch
 import me.river.nightbell.domain.Validation
@@ -111,13 +112,19 @@ class PrometheusValidationTest {
     }
 
     @Test
-    fun `a password with no username is refused`() {
+    fun `a password with no username is allowed, and goes out as the password alone`() {
+        // This used to be refused. Uptime Kuma's /metrics takes an API key as the
+        // password and ignores the username, RFC 7617 allows an empty one, and
+        // the refusal made people type a name nothing would ever read.
         val watch = PrometheusWatch(
             source = PrometheusSource.METRICS,
-            metricName = "node_load1",
-            password = "hunter2",
+            metricName = "monitor_status",
+            password = "uk1_key",
         )
-        assertNotNull(errorOn(monitor(watch), Validation.Field.TOKEN))
+        assertNull(errorOn(monitor(watch), Validation.Field.TOKEN))
+        assertTrue(Validation.report(monitor(watch)).isValid)
+        val header = PrometheusCheck.basicAuthHeader(watch)!!
+        assertEquals(":uk1_key", String(java.util.Base64.getDecoder().decode(header.removePrefix("Basic "))))
     }
 
     @Test

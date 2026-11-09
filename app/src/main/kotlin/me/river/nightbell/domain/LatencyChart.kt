@@ -100,7 +100,7 @@ object LatencyChart {
      * success*. Every word of that was true and the sentence was nonsense: nothing
      * was inside the budget, nothing was measured at all.
      */
-    fun answered(samples: List<Sample>): Int = samples.count { it.ok }
+    fun answered(samples: List<Sample>): Int = samples.count { it.answered }
 
     private fun tallest(samples: List<Sample>): Long =
         maxOf(1L, samples.maxOfOrNull { it.latencyMs } ?: 1L)

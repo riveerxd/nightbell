@@ -1,5 +1,6 @@
 package me.river.nightbell.data.check
 
+import me.river.nightbell.domain.CheckProgress
 import me.river.nightbell.domain.CheckResult
 import me.river.nightbell.domain.FailureKind
 import me.river.nightbell.domain.Monitor
@@ -153,6 +154,7 @@ class UdpChecker(
         host: String,
         community: String,
         pinger: NetworkChecker.Pinger,
+        progress: (CheckProgress) -> Unit = {},
     ): CheckResult {
         val watch = monitor.udp
         val network = monitor.network
@@ -170,6 +172,7 @@ class UdpChecker(
             val nonce = ByteArray(16).also(random)
             val ctx = UdpCodec.Context(watch, nonce, network.cleanHost, nowMs(), community)
             lastSentAt = ctx.sentAtMs
+            progress(CheckProgress.UdpTry(attempt, tries, timeoutMs.toLong(), ctx.sentAtMs, watch.probe == UdpProbe.SILENT))
             var challenged = false
             var verdict: UdpCodec.Read? = null
             val exchange = datagrams.exchange(target, codec.request(ctx), timeoutMs) { bytes ->
@@ -218,7 +221,9 @@ class UdpChecker(
                 }
             }
         }
-        return if (watch.probe == UdpProbe.SILENT) silentVerdict(monitor, address, where, tries, pinger) else silence(where, tries, monitor)
+        if (watch.probe != UdpProbe.SILENT) return silence(where, tries, monitor)
+        progress(CheckProgress.UdpPing(tries, monitor.timeoutSeconds.coerceAtLeast(1) * 1000L, nowMs()))
+        return silentVerdict(monitor, address, where, tries, pinger)
     }
 
     private fun good(watch: UdpWatch, read: UdpCodec.Read.Good, reading: UdpReading, tries: Int): CheckResult {

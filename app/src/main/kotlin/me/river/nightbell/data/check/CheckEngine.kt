@@ -1370,6 +1370,7 @@ class CheckEngine(
                         policy = policy,
                         downForMs = at - since,
                         pageCount = runtime.urgentPageCount + 1,
+                        failedChecks = runtime.consecutiveFailures,
                         respectRinger = respectRinger,
                     )
                 }

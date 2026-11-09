@@ -242,6 +242,7 @@ class NightbellMonitorService : Service() {
                         policy = policy,
                         downForMs = System.currentTimeMillis() - since,
                         pageCount = runtime.urgentPageCount.coerceAtLeast(1),
+                        failedChecks = runtime.consecutiveFailures,
                         otherPending = others,
                         respectRinger = respectRinger,
                         // The loop below is making the noise; the channel must

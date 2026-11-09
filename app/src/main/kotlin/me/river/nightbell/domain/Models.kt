@@ -1038,7 +1038,20 @@ data class Sample(
     val ping: PingReading? = null,
     /** What a [MonitorKind.UDP_PORT] check got back. Null everywhere else. */
     val udp: UdpReading? = null,
-)
+) {
+    /**
+     * Whether the server answered, which is what makes [latencyMs] a round trip.
+     *
+     * Not the same as [ok]. A Prometheus value out of range, a body assertion or
+     * a 503 all failed on what the server said, and the time it took to say it
+     * is real. A timeout or a refused handshake never gets a status code, and
+     * its latency is only how long the phone waited.
+     */
+    val answered: Boolean get() = ok || code > 0
+}
+
+/** How far ahead of a screen's clock a sample may be stamped and still count. See [MonitorRuntime.uptimeWithin]. */
+private const val FRESH_SLACK_MS = 60_000L
 
 @Serializable
 data class MonitorRuntime(
@@ -1244,13 +1257,16 @@ data class MonitorRuntime(
      * monitor nobody has checked today is not a monitor that was down all day.
      */
     fun uptimeWithin(nowMs: Long, windowMs: Long): UptimeWindow? {
-        val inWindow = samples.filter { nowMs - it.at in 0..windowMs }
+        // A minute of slack ahead of now, because the screens hold a clock that
+        // ticks every twenty seconds and a fresh check is stamped after the last
+        // tick. Anything further ahead is a wall clock that jumped, and stays out.
+        val inWindow = samples.filter { nowMs - it.at in -FRESH_SLACK_MS..windowMs }
         if (inWindow.isEmpty()) return null
         val oldest = inWindow.minOf { it.at }
         return UptimeWindow(
             percent = inWindow.count { it.ok } * 100f / inWindow.size,
             checks = inWindow.size,
-            spanMs = nowMs - oldest,
+            spanMs = (nowMs - oldest).coerceAtLeast(0),
             // The window is only covered in full if the history reaches past its
             // far edge, or happens to start exactly on it. An install two hours
             // old cannot report twenty-four-hour uptime, and saying so is the
@@ -1260,16 +1276,19 @@ data class MonitorRuntime(
     }
 
     val averageLatencyMs: Long
-        get() = samples.filter { it.ok }.map { it.latencyMs }.average().let {
+        get() = samples.filter { it.answered }.map { it.latencyMs }.average().let {
             if (it.isNaN()) 0L else it.toLong()
         }
 
     val p95LatencyMs: Long
         get() {
-            val ok = samples.filter { it.ok }.map { it.latencyMs }.sorted()
-            if (ok.isEmpty()) return 0L
-            val idx = ((ok.size - 1) * 0.95).toInt()
-            return ok[idx]
+            val answered = samples.filter { it.answered }.map { it.latencyMs }.sorted()
+            if (answered.isEmpty()) return 0L
+            // Nearest rank: the smallest value at or above 95% of the checks.
+            // Rounding the index down picked the faster of two checks and put
+            // p95 under the average.
+            val rank = kotlin.math.ceil(answered.size * 0.95).toInt()
+            return answered[(rank - 1).coerceIn(0, answered.lastIndex)]
         }
 }
 

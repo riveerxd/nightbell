@@ -1,5 +1,8 @@
 package me.river.nightbell
 
+import me.river.nightbell.domain.CheckProgress
+import me.river.nightbell.data.check.ProgressSink
+import kotlinx.coroutines.withContext
 import java.net.InetAddress
 import java.net.UnknownHostException
 import kotlinx.coroutines.runBlocking
@@ -194,6 +197,36 @@ class UdpCheckerTest {
         assertFalse(result.ok)
         assertEquals(FailureKind.NO_REPLY, result.failureKind)
         assertEquals(false, result.udp!!.echo)
+    }
+
+    @Test
+    fun `test now hears every try and then the ping, in the order they happen`() = runBlocking {
+        // Silent mode waits out every try before it pings. Without this the setup
+        // screen showed "Running check..." for most of a minute and nothing else.
+        val seen = mutableListOf<CheckProgress>()
+        val result = withContext(ProgressSink { seen += it }) {
+            checker(Script()).check(udp(UdpWatch(probe = UdpProbe.SILENT, attempts = 3), port = 51820))
+        }
+        assertTrue(result.ok)
+        assertEquals(listOf(1, 2, 3), seen.filterIsInstance<CheckProgress.UdpTry>().map { it.attempt })
+        assertTrue(seen.filterIsInstance<CheckProgress.UdpTry>().all { it.silent && it.tries == 3 && it.timeoutMs == 2_000L })
+        assertTrue("the ping comes last", seen.last() is CheckProgress.UdpPing)
+    }
+
+    @Test
+    fun `a refusal ends the progress at the try that was refused`() = runBlocking {
+        val seen = mutableListOf<CheckProgress>()
+        withContext(ProgressSink { seen += it }) {
+            checker(Script({ Exchange.Silence }, { Exchange.Refused })).check(udp(UdpWatch(probe = UdpProbe.SILENT), port = 51820))
+        }
+        assertEquals(listOf(1, 2), seen.map { (it as CheckProgress.UdpTry).attempt })
+    }
+
+    @Test
+    fun `a check with no sink in its context reports nowhere and still works`() = runBlocking {
+        // Scheduled checks run like this, on the same engine as Test now.
+        val result = checker(Script()).check(udp(UdpWatch(probe = UdpProbe.SILENT, attempts = 1), port = 51820))
+        assertTrue(result.ok)
     }
 
     @Test

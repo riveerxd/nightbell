@@ -143,7 +143,9 @@ reach Alertmanager, because a list of what is firing is only true as of the
 moment it was read.
 
 **Signing in:** a username and password for HTTP basic auth, which is what
-Grafana Cloud, Mimir and a reverse proxy in front of Prometheus take. Anything
+Grafana Cloud, Mimir and a reverse proxy in front of Prometheus take. The
+username may be blank: Uptime Kuma's `/metrics` takes an API key as the
+password and ignores the name, so the form no longer asks for one. Anything
 else goes in the monitor's headers: a bearer token, a Mimir `X-Scope-OrgID`, an
 API gateway's own key. The password is never shown after it is typed, never
 logged, and is stripped from an export unless secrets were explicitly included.
@@ -330,6 +332,10 @@ down, saying it cannot tell. Its up is weaker than any other kind's and is
 worded that way: "Not refused, host answers ping". It cannot see a service that
 is hung but still holding the port.
 
+At the defaults that is up to a minute per check, so in silent mode the setup
+screen says how long Test now can take before it is tapped, and while it runs
+shows which try is in flight, how long is left and what it is listening for.
+
 The port shortcut chips in setup pick the matching probe as well, WireGuard and
 OpenVPN picking silent. Picking a probe fills its default port only when the
 port is empty or still the previous probe's default.
@@ -478,6 +484,12 @@ While an URGENT monitor is down, Nightbell re-posts **one** notification on a
 dedicated, DND-bypassing alarm channel every *N* minutes (default 5) until you
 acknowledge it, from the notification action or from the monitor screen. It is
 `ongoing`, so it cannot be swiped away.
+
+On a locked phone the page takes the screen. It is opened with everything it
+shows, the failure, how long the monitor has been down, how many checks failed,
+the HTTP code and the latency, because it can start into a cold process and must
+not wait on the store. Before 3.24.0 it was opened with the name and address
+alone and read "Not responding" whatever had happened.
 
 Acknowledging stops the repeats **for that outage only**. The monitor stays red,
 the ordinary down notification stays where it was, and recovery re-arms the
