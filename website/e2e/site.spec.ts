@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test"
 // The release the site hands out, read from the block every release edits, so a
 // version bump cannot leave these assertions describing the one before. 3.19.0
 // shipped with three of them still saying 3.18.0.
+import changelog from "../src/lib/changelog.json"
 import { CHANNELS, INDEXNOW_KEY, RELEASE, REPO } from "../src/lib/site"
 
 const ROUTES = [
@@ -9,6 +10,7 @@ const ROUTES = [
   "/faq",
   "/docs",
   "/docs/health-format",
+  "/changelog",
   "/android-background-limits",
   "/vs/uptimerobot",
   "/vs/uptime-kuma",
@@ -41,6 +43,10 @@ async function noHorizontalScroll(page: Page) {
 
 for (const route of ROUTES) {
   test(`${route} loads clean, has one h1, and fits the viewport`, async ({ page }) => {
+    // Every release on one page, 63,000 px tall: the walk below is ninety steps,
+    // and in WebKit with the failure trace recording a DOM snapshot per step that
+    // is more than the default 30 s on its own. More time, same assertions.
+    test.slow(route === "/changelog")
     const errors = watchErrors(page)
     await page.goto(route)
     await page.waitForLoadState("networkidle")
@@ -200,6 +206,35 @@ test("docs contents links land on their section", async ({ page }) => {
   const ids = await page.$$eval("nav[aria-label=Contents] a, details a", (as) => as.map((a) => a.getAttribute("href")))
   expect(ids.length).toBeGreaterThan(10)
   for (const id of ids) await expect(page.locator(`[id="${id!.slice(1)}"]`)).toHaveCount(1)
+})
+
+// The changelog is written from GitHub at build time, so what can go wrong is the
+// build keeping a stale file, or a version's anchor not being where the install
+// section and the index send people.
+test("the changelog leads with the release the site hands out, and every index link lands", async ({ page }) => {
+  await page.goto("/changelog")
+  const first = page.locator("main article").first()
+  await expect(first).toHaveAttribute("id", RELEASE.tag)
+  await expect(first.getByText("Latest", { exact: true })).toBeVisible()
+  await expect(page.locator("main article")).toHaveCount(changelog.length)
+  const ids = await page.$$eval("nav[aria-label=Releases] a, main details a", (as) => as.map((a) => a.getAttribute("href")))
+  expect(ids.length).toBe(changelog.length * 2)
+  for (const id of new Set(ids)) await expect(page.locator(`[id="${id!.slice(1)}"]`)).toHaveCount(1)
+})
+
+// Every installed copy opens this url from its What's new button, so it has to
+// land on an entry that exists, not on the top of the page or a missing anchor.
+test("the release manifest sends What's new to that release's changelog entry", async ({ request, page }) => {
+  const manifest = await (await request.get("/v1/release.json")).json()
+  expect(manifest.url).toBe(`https://nightbell.app/changelog#${RELEASE.tag}`)
+  await page.goto(`/changelog#${RELEASE.tag}`)
+  await expect(page.locator(`[id="${RELEASE.tag}"]`)).toHaveCount(1)
+})
+
+test("what changed in the release goes to its entry in the changelog", async ({ page }) => {
+  await page.goto("/")
+  const link = page.locator("#install").getByRole("link", { name: `What changed in ${RELEASE.version}` })
+  await expect(link).toHaveAttribute("href", `/changelog#${RELEASE.tag}`)
 })
 
 test("unknown paths get the 404 page", async ({ page }) => {

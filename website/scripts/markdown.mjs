@@ -168,7 +168,7 @@ for (const rel of readdirSync(out, { recursive: true })) {
 }
 
 // The order a newcomer would want them in, not the order readdir found them.
-const ORDER = ["/", "/faq", "/docs", "/docs/health-format", "/android-background-limits", "/vs/uptimerobot", "/vs/uptime-kuma", "/uptime-kuma-on-android", "/wireguard-server-monitoring", "/homelab-monitoring-on-android"]
+const ORDER = ["/", "/faq", "/docs", "/docs/health-format", "/changelog", "/android-background-limits", "/vs/uptimerobot", "/vs/uptime-kuma", "/uptime-kuma-on-android", "/wireguard-server-monitoring", "/homelab-monitoring-on-android"]
 const missing = ORDER.filter((p) => !pages.some((x) => x.path === p))
 if (missing.length) throw new Error(`no Markdown for ${missing.join(", ")}`)
 const extra = pages.filter((p) => !ORDER.includes(p.path))
@@ -191,7 +191,7 @@ ${["/", "/faq", "/docs"].map(entry).join("\n")}
 
 ## Reference
 
-${["/docs/health-format", "/android-background-limits"].map(entry).join("\n")}
+${["/docs/health-format", "/android-background-limits", "/changelog"].map(entry).join("\n")}
 - [Health format JSON Schema](${SITE_URL}/docs/health-format.schema.json): the schema a JSON health endpoint is validated against.
 - [Full reference on GitHub](${REPO.reference}): every setting, monitor type and alert rule the app has.
 

@@ -32,7 +32,7 @@ const COLUMNS = [
     title: "Source",
     links: [
       { href: REPO.url, label: "Repository", external: true },
-      { href: REPO.releases, label: "All releases", external: true },
+      { href: "/changelog", label: "Changelog" },
       { href: REPO.reference, label: "Reference docs", external: true },
       { href: REPO.license, label: "Licence, Apache 2.0", external: true },
     ],

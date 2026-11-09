@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "prebuild": "node scripts/stars.mjs && node scripts/media.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/release-files.mjs",
+    "prebuild": "node scripts/stars.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/changelog.mjs && node scripts/media.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/release-files.mjs",
     "dev": "next dev",
     "build": "next build",
     "postbuild": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/markdown.mjs && node scripts/csp.mjs && node scripts/precompress.mjs",

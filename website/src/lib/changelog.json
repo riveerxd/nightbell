@@ -1,0 +1,688 @@
+[
+ {
+  "version": "3.24.0",
+  "tag": "v3.24.0",
+  "name": "Nightbell",
+  "date": "2026-11-09",
+  "title": "",
+  "body": "Uptime Kuma can now wake you up. Point a Prometheus monitor at Kuma's `/metrics`, leave the username blank and put a Kuma API key in the password, then set `monitor_status` not equal to 0. Any Kuma monitor going down becomes an alarm on your phone, naming the monitor. There's a guide with screenshots at https://nightbell.app/uptime-kuma-on-android.\n\n**Silent UDP checks**, the kind WireGuard needs, take up to a minute because a healthy server says nothing. The setup screen now says how long Test now can take before you tap it, and while it runs shows which try is going, how long is left and what it's listening for.\n\n**Fixes:** on a locked phone the full-screen alarm now shows what actually failed, how long it's been down, how many checks failed, the HTTP code and the latency. Before, it said \"Not responding\" every time. A check that failed on the value it read, after the server answered, now counts toward response time. A new monitor no longer says \"no checks yet\" next to its first check, and p95 can't come out below the average any more.\n\nTested against Uptime Kuma 2.5.9 and a WireGuard server in Docker, on the emulator.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.24.0",
+  "apk": {
+   "name": "Nightbell-3.24.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.24.0/Nightbell-3.24.0-release.apk",
+   "bytes": 2929660
+  }
+ },
+ {
+  "version": "3.23.0",
+  "tag": "v3.23.0",
+  "name": "Nightbell",
+  "date": "2026-11-08",
+  "title": "",
+  "body": "Groups now name the problem. A shut group lists the monitors that are down or slow, with how long or how slow, and counts the rest in one line, like \"2 up, 1 paused\". Tap a named one to open it. Opened, the members are rows inside the group's card with pause, check now and acknowledge on each, and Edit group at the bottom.\n\n**Live card:** the strict monitoring notification has its own settings under Checks. It can follow everything, one group or one monitor, show the last 1, 6 or 24 hours or as far back as the history goes, and end the line with the next check, uptime or the slowest reply. A preview shows what you'll get, and every change is on the notification straight away. Following one monitor still says when something else is down.\n\n**Fixes:** on Samsung phones the countdown no longer runs into the title, and the title is just the verdict now, without \"Strict monitoring\" in front. When checks are paused, Settings says that's why there's no notification and offers to resume.\n\nTested on an S25 Ultra and on the emulator. One UI 9 only gives the status bar chip to apps on Samsung's own list, so there the card stays in the shade. Nothing about the chip changed on other phones.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.23.0",
+  "apk": {
+   "name": "Nightbell-3.23.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.23.0/Nightbell-3.23.0-release.apk",
+   "bytes": 2913276
+  }
+ },
+ {
+  "version": "3.22.0",
+  "tag": "v3.22.0",
+  "name": "Nightbell",
+  "date": "2026-11-07",
+  "title": "",
+  "body": "Nightbell can now watch UDP services. The new **UDP port** kind sends the service a real request and checks the reply, so a DNS server answering REFUSED is down, not up.\n\n**Probes:** DNS, NTP, STUN, SNMP v2c, SIP, HTTP/3, Source and Bedrock game servers, or your own payload in text or hex. The port chips in setup pick the probe too.\n\n**Closed and silent:** a port the host refuses is down at once as Port closed. WireGuard and the like never answer, so silent mode waits for a refusal and pings the host instead.\n\nThe SNMP community is kept encrypted on the phone, never in a backup. A TCP and a UDP check on the same port that disagree get called out on the monitor screen.\n\nTested on a phone, and on the emulator against Cloudflare DNS, Google NTP and STUN, and Cloudflare's QUIC. Whether a closed port's refusal makes it back over a real network is still unproven.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.22.0",
+  "apk": {
+   "name": "Nightbell-3.22.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.22.0/Nightbell-3.22.0-release.apk",
+   "bytes": 2896892
+  }
+ },
+ {
+  "version": "3.21.0",
+  "tag": "v3.21.0",
+  "name": "Nightbell",
+  "date": "2026-11-05",
+  "title": "",
+  "body": "Nightbell can now watch a mailbox. The new **Mailbox** kind signs in to an IMAP folder and tells you what arrived, with a louder alert for the senders or subjects you name, so a service that only reports problems by email still reaches your phone.\n\n**Find the server:** type the address and, if you have one, the webmail address. It reads the domain's autoconfig file, its SRV and MX records and the webmail's host, connects to each without signing in, and fills in the one whose certificate the phone trusts. Then it runs Test.\n\n**Folders** can be picked from the server's own list instead of typed.\n\n**What works:** your own server behind Roundcube, the usual hosting panels, and Gmail, iCloud, Yahoo or Fastmail with an app password. TLS or STARTTLS, no plain IMAP. Outlook, Hotmail, Microsoft 365, Proton and Tuta cannot be read this way, and setup says so as soon as the address is typed.\n\n**Gentle on the server:** the folder is opened read only, so nothing is ever marked read. The password is encrypted on the phone and never goes in a backup, a log or a webhook. A refused password is tried once and not again until you edit it. A mail server that stops answering is an outage like any other.\n\nTested on the emulator against Dovecot and GreenMail, and the server lookup against a real mailcow domain over the internet. Not tried yet against Gmail, iCloud, Yahoo or Fastmail for real, or on Android 8 and 9, which skip the DNS lookup.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.21.0",
+  "apk": {
+   "name": "Nightbell-3.21.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.21.0/Nightbell-3.21.0-release.apk",
+   "bytes": 2864124
+  }
+ },
+ {
+  "version": "3.20.0",
+  "tag": "v3.20.0",
+  "name": "Nightbell",
+  "date": "2026-11-03",
+  "title": "",
+  "body": "A host can now be watched as well as a service. Two new monitor kinds, **Ping** and **TCP port**, take an IPv4 or IPv6 address or a name and need no root. Asked for in #21.\n\n**Ping** sends 1 to 10 echo requests per check and shows the fastest, average and slowest reply and the packet loss. Every reply back is up, some lost is degraded, none back is down.\n\n**TCP port** connects to one port and hangs up. Refused, timed out and no route each get their own message.\n\n**This host:** put both on the same host and the monitor's screen reads them together, so you can tell the network from the service. Both kinds also list their recent outages and how long each lasted.\n\n**Passes before all-clear** works on every kind. Above one, an outage stands until that many checks pass in a row, so a flapping host no longer pages, clears and pages again. The default is 1, as before.\n\nDriven on the emulator against loopback, 1.1.1.1 and a server of mine. Packet loss was shown with faked replies. Ping on a real phone is the least proven part: if a phone refuses the socket, the monitor says so instead of calling the host down.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.20.0",
+  "apk": {
+   "name": "Nightbell-3.20.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.20.0/Nightbell-3.20.0-release.apk",
+   "bytes": 2814972
+  }
+ },
+ {
+  "version": "3.19.0",
+  "tag": "v3.19.0",
+  "name": "Nightbell",
+  "date": "2026-10-23",
+  "title": "",
+  "body": "A failing part of a **Health endpoint** report can now be marked as expected. A staging API that is down for a reason used to page on every check, and the only ways to stop it, mute or switching alerts off, also hid the next real change. Now the marked part is left out of the verdict while it keeps the status it had when you marked it, and nothing pages. The first report that shows it any other way, up included, drops the mark, so the next outage pages like any other.\n\n**Where it is:** Mark expected on the part's row on the monitor's screen, or in the sheet that opens when you tap the part. It comes with an undo, and Page me again takes it back later.\n\n**What still pages:** any other part that fails. A stale report, a status word Nightbell does not know, or a report that says down while no part says worse than degraded also stays down, whatever you have marked, because no part explains it. Only the status is compared, never the message, so a staging report whose message carries a latency or a count stays quiet.\n\n**The monitor's screen:** the verdict is one word with the reason under it and the parts counted in a strip. Below it the parts sit in three groups: Needs you, Expected, not paging, and Healthy, as names. A part's rules and log open in a sheet instead of expanding in the list. The last 24 checks replace the response time chart, because for a report the question is whether it passed, not how long it took.\n\n**Sign-in:** a monitor whose single sign-on session had once ended kept saying \"Not checking\" after you signed in again, even while its checks passed. 3.18.0 never cleared that state. The next check that gets through now clears it and takes the reminder notification down.\n\n**Webhooks** are not told when you mark a part. One that saw the outage gets its recovery on the next check.\n\nDriven on the emulator against a local server: marking, a still-failing part staying quiet, another part and the next outage paging, undo, and an old sign-in problem clearing. The sign-in fix through a real provider is covered by unit tests, not yet by a device test against one.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.19.0",
+  "apk": {
+   "name": "Nightbell-3.19.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.19.0/Nightbell-3.19.0-release.apk",
+   "bytes": 2782204
+  }
+ },
+ {
+  "version": "3.18.0",
+  "tag": "v3.18.0",
+  "name": "Nightbell",
+  "date": "2026-10-11",
+  "title": "",
+  "body": "A new monitor kind, **Health endpoint**, reads a report your service writes about itself. A status code only says the server answered. This says which part is in trouble, the rule that decided it with the value it measured, and what the service saw along the way. The overall verdict pages you; the rest is what you read when it does.\n\n**The format** is one JSON document, described in [docs/health-format.md](https://github.com/riveerxd/nightbell/blob/master/docs/health-format.md) with a JSON Schema beside it and a drop-in writer for ASP.NET Core. The body decides, not the status code, so a `503` carrying a report is read as that report. An existing ASP.NET health check that answers plain `Healthy`, `Degraded` or `Unhealthy` works before you write any JSON.\n\n**Signing in:** the endpoint stays behind whatever protects the rest of your API. Nightbell signs in the way your own clients do: a fixed header, basic auth, or single sign-on through your web app, a username and password, a service account or a pasted refresh token. Tokens and secrets are encrypted on the phone and never go into a backup. When you type the address, Nightbell tries it once without signing in, so setup can tell you whether it needs a sign-in at all.\n\n**What it claims, and what it does not:**\n\n| Situation | Card | Pages |\n| --- | --- | --- |\n| Nightbell's own sign-in ended, or its password was refused | Not checking · Sign in needed | No, a reminder once a day |\n| The sign-in server cannot be reached | Down, \"Sign-in server unreachable\" | Yes |\n| A fresh token and the API still refuses it | Down | Yes |\n\n**On the detail screen** the Components card is a bar of down, degraded and up parts, then one row per part. Only the worst part opens on its own, with its rules and its log; the rest are one tap away.\n\n**Also in this release:** a store this version cannot read, such as one written by a newer version, is kept instead of having an empty one written over it, so the monitors in it are still there for a version that can read them. The README now lists every monitor kind, Prometheus included.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.18.0",
+  "apk": {
+   "name": "Nightbell-3.18.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.18.0/Nightbell-3.18.0-release.apk",
+   "bytes": 2699560
+  }
+ },
+ {
+  "version": "3.17.0",
+  "tag": "v3.17.0",
+  "name": "Nightbell",
+  "date": "2026-10-10",
+  "title": "",
+  "body": "Failures before an alert are now confirmed 30 seconds apart, inside the same background run that saw the first one, instead of one scheduled check apart. A threshold of three used to mean half an hour of a site being down before the phone said anything. Now it is about a minute.\n\n| Failures before alerting | Before, at best | Now |\n| --- | --- | --- |\n| 2 | 15 min | 30 s |\n| 3 | 30 min | 1 min |\n| 5 | 1 h | 2 min |\n| 10 | 2 h 15 min | 4 min 30 s |\n\n**Where it is:** Retry right away, under Escalation next to Failures before alerting, both in Settings, Alerts and in a monitor's own alert settings. It only shows when the threshold is above one, because a single failure already alerts. It is on by default, including for monitors set up before this version.\n\n**What a failing card says:** \"1 of 3 failures before it alerts\", so a red card that has not paged you yet tells you why.\n\n**When it does not retry:** the phone is offline, monitoring is paused, the monitor is muted or alerts are switched off, since nothing would be posted at the end of it. A check that failed because the phone lost signal is not counted as a failure. GitHub repository monitors stay on their schedule, because they share a rate limit with everything else on the token.\n\n**When the phone is asleep:** Android decides, not Nightbell. Measured on Android 14 with the phone forced into deep Doze: with battery optimisation on, Android stops the background run the moment the phone goes idle and cuts its network, so the remaining retries wait for the next scheduled check, which is what happened before this release. With Nightbell exempt, the same run kept retrying 30 seconds apart through deep idle and paged on time. The exemption is one button under Settings, Checks, Checker health. In strict mode the service loop runs the retries itself.\n\nReported in #20.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.17.0",
+  "apk": {
+   "name": "Nightbell-3.17.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.17.0/Nightbell-3.17.0-release.apk",
+   "bytes": 2617640
+  }
+ },
+ {
+  "version": "3.16.0",
+  "tag": "v3.16.0",
+  "name": "Nightbell",
+  "date": "2026-10-07",
+  "title": "",
+  "body": "Outages can now be posted to a team, not only to this phone. Nightbell sends them to Microsoft Teams, Slack, Discord, Google Chat, ntfy, Gotify, Telegram, or any address with a body you write yourself, straight from the phone with nothing in between.\n\n| Service | What you paste |\n| --- | --- |\n| Microsoft Teams | the URL from the channel's Workflows, \"Send webhook alerts to a channel\" |\n| Slack, Mattermost, Rocket.Chat | an incoming webhook URL |\n| Discord | a channel webhook URL |\n| Google Chat | a space webhook URL |\n| ntfy | the topic URL, on ntfy.sh or your own server |\n| Gotify | the server URL with `?token=` |\n| Telegram | the bot token and a chat ID |\n| Anything else | your URL, method, headers and body, with `{{placeholders}}` |\n\n**When something is sent:** each webhook keeps the monitor's failure threshold, cooldown and repeat interval, so a flaky endpoint does not flood a channel. It ignores your quiet hours and mute unless you tell it to follow the phone. A pause from the dashboard stops every webhook, because a pause means the phone's own signal is not to be believed.\n\n**When the receiver is down:** messages wait on the phone and are retried in the order they happened, from 30 seconds up to every half hour, for a day. A recovery never arrives before the outage it ends. Every request carries a delivery id that stays the same across retries, so a receiver can drop a repeat.\n\n**For your own receiver:** a signing secret adds an HMAC-SHA256 signature over the timestamp and the body. The plain JSON body, the placeholders and the signature are documented in [docs/reference.md](https://github.com/riveerxd/nightbell/blob/master/docs/reference.md#webhooks).\n\n**Your addresses stay yours:** a saved address is shown redacted, never goes into the diagnostic log, and is left out of a backup unless you switch on \"Include tokens and webhook addresses\".\n\nTested end to end against real ntfy and Gotify servers. The Teams, Slack, Discord, Google Chat and Telegram bodies follow each service's documented format but have not been sent to a live workspace yet. If one does not show up right, open an issue with what the test button answered.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.16.0",
+  "apk": {
+   "name": "Nightbell-3.16.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.16.0/Nightbell-3.16.0-release.apk",
+   "bytes": 2617640
+  }
+ },
+ {
+  "version": "3.15.0",
+  "tag": "v3.15.0",
+  "name": "Nightbell",
+  "date": "2026-10-05",
+  "title": "",
+  "body": "Page element monitors now use a small fraction of the mobile data they did. They load from cache, skip fonts, video and trackers, and stop as soon as the element is found, while still asking the server for the page on every check. Settings shows what your monitors cost a month with the **data saver** on and off, measured from their own checks.\n\nIt started with ten page monitors on a fifteen minute interval costing one phone 7.14 GB of mobile data in a month. The WebView ran with its cache off, so every check downloaded the whole site again. Measured per check on five of those sites, with the selectors they really watch:\n\n| Site | Before | Data saver |\n| --- | --- | --- |\n| nightbell.app | 162 KB | 1.7 KB |\n| riveer.cz | 219 KB | 4.8 KB |\n\n**What still happens on every check:** the page itself is requested from the server, with a header that tells the browser to confirm it rather than trust a stored copy. A server that is down still fails the check exactly as before.\n\n**What changed:** scripts and stylesheets that have not changed come from the phone's cache. Fonts, video, analytics and ad tags are not fetched, because none of them can change whether an element is there or visible. The page is read while it is still loading, and once every element is found and passing, the rest of the load is cancelled. An element that is missing or failing gets the full wait it always had, so no check became easier to pass.\n\n**The trade:** a script or stylesheet that breaks without changing its filename keeps working from the cache until that monitor's next cold load, which happens once a day. Load times on page monitors also read lower, because they now measure a returning visitor rather than a first one. If either matters for a monitor, turn the saver off under Settings, Checks. The switch shows what that costs.\n\nAlso in this release: a repository monitor that counts downloads reads the counts at most once an hour while the saver is on. That call cannot be answered from cache, because the counts change on their own.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.15.0",
+  "apk": {
+   "name": "Nightbell-3.15.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.15.0/Nightbell-3.15.0-release.apk",
+   "bytes": 2535264
+  }
+ },
+ {
+  "version": "3.14.0",
+  "tag": "v3.14.0",
+  "name": "Nightbell",
+  "date": "2026-09-27",
+  "title": "",
+  "body": "A GitHub repository monitor can now count how many times the release files have been downloaded, on the newest release and as a running total across every release. Turn it on under **Downloads** when you add or edit one.\n\nIt costs no extra request. The counts live inside the release list the monitor was already reading, so the call is the same one asked for in full. That does make it a bigger response, roughly a quarter of a megabyte against five kilobytes, which is what the refresh setting is for: every check by default, or hourly or daily on a metered connection.\n\n**Which files count is up to you.** A project that publishes an APK beside a signature and a checksum can count the APKs alone. Because the filename carries the version, every release of the same file adds up under one line rather than thirty separate ones: `Nightbell-3.13.0-release.apk` and all its predecessors read as `nightbell-*-release.apk`. When a repository only ships one kind of file the app says so instead of offering a filter that could not change the answer.\n\nYou can be told when the count moves, on any increase or only at round numbers, or hold it back to one line an hour or a day. Nothing about a download wakes the phone.\n\n**What the number is**, stated on the card rather than left to be assumed: GitHub counts requests for the file, not people. Mirrors, build servers and crawlers that fetch a whole release are all in it, and it is not updated the moment somebody downloads. Past three hundred releases the total is shown as a floor with the number of releases it covers, rather than quietly undercounting.\n\nAlso in this release: releases, open issues and forks wear GitHub's own marks. A release used to wear the arrow that means a file arrives on this device, which is the mark a download count needs, and an open issue wore the warning triangle, which claims a fault where there is none.\n\nRequested as issue [#18](https://github.com/riveerxd/nightbell/issues/18).",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.14.0",
+  "apk": {
+   "name": "Nightbell-3.14.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.14.0/Nightbell-3.14.0-release.apk",
+   "bytes": 2535264
+  }
+ },
+ {
+  "version": "3.13.0",
+  "tag": "v3.13.0",
+  "name": "Nightbell",
+  "date": "2026-09-20",
+  "title": "",
+  "body": "Monitors are rearranged by holding a card and dragging it. No handle to find and no mode to turn on first: hold, move, let go, and the dashboard keeps that order from then on instead of re-ranking it by severity on the next check. A hold you release without moving still starts a selection, exactly as before.\n\nAdding a monitor no longer asks for a scheme. Type `status.example.com` and the URL field finishes it as https when you leave the field, saying that it did; type `http://` yourself and it is left alone. A `.onion` or `.i2p` address completes to http, because no CA issues certificates for those. Nothing turns red while you are still typing the host.\n\nThe SOCKS5 switch and the certificate rule now appear once, on the Target step, rather than on every screen of the wizard. The later steps show what the route and the trust setting are, and tap through to change them.\n\nAlso fixed:\n\n- a dragged card that appeared to swap twice before settling, and a drop that put the card down in a single cut rather than travelling the last few pixels\n- the \"Monitor not found\" warning that flashed when you deleted a monitor from its own screen\n- an imported backup whose monitor order was restored and then immediately sorted away, which made a backup look like it had lost the arrangement\n- entrance animations that played as each row was scrolled into view, so every screenful after the first arrived animating\n\nReported as issue [#16](https://github.com/riveerxd/nightbell/issues/16).",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.13.0",
+  "apk": {
+   "name": "Nightbell-3.13.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.13.0/Nightbell-3.13.0-release.apk",
+   "bytes": 2518876
+  }
+ },
+ {
+  "version": "3.12.0",
+  "tag": "v3.12.0",
+  "name": "Nightbell",
+  "date": "2026-09-17",
+  "title": "",
+  "body": "Every number in Nightbell can now be typed. Tap the interval, the timeout, the failure count or any other number sitting between a minus and a plus, and it turns into a field with a keypad: a 45 minute cadence or a 90 second timeout is one entry rather than thirty taps.\n\nAn open field says the range it takes, and says so in amber when what you have typed is outside it: \"Highest is 1440m\", naming the end it will land on rather than quietly rewriting your number after you have left. Clearing the field is not a request for zero, so it leaves the value where it was. The minus and plus still work, including out of a field you are part way through typing into.\n\nThis is every stepper in the app rather than the two the report named: the certificate warning thresholds, the default interval and timeout under Settings, how much history is kept, the latency budget, the escalation count and its cooldowns, the repeat interval, and the widget's monitor count, which now says that zero means auto instead of leaving you to type it and find out.\n\nReported as issue 15.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.12.0",
+  "apk": {
+   "name": "Nightbell-3.12.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.12.0/Nightbell-3.12.0-release.apk",
+   "bytes": 2502496
+  }
+ },
+ {
+  "version": "3.11.0",
+  "tag": "v3.11.0",
+  "name": "Nightbell",
+  "date": "2026-09-16",
+  "title": "",
+  "body": "Nightbell can now watch a Prometheus stack. Point it at an exporter's metrics endpoint and it reads one series, filtered by label the way PromQL filters, and pages you when the value leaves the range you set. Point it at a Prometheus, Mimir, Thanos or VictoriaMetrics server and it runs your own PromQL and treats the query as the alert condition. Point it at an Alertmanager and it lists what is firing, worst first, with each alert's severity and how long it has been going.\n\nYou do not have to remember the metric name. \"Browse this endpoint\" reads the URL and lists what is actually exposed, with a filter box over it, showing the current value beside a name with one series and the labels that separate them beside a name with several. Picking one fills the field in, and fills the label filter too when there is only one series to pick.\n\nThree things it refuses to be quiet about. A label filter that matches nothing fails the check, because a metric that has stopped being exported is not good news. A sample of NaN is never healthy whatever comparison you set, because NaN means the exporter had no reading rather than a reading of zero. And an alert whose severity Nightbell cannot rank comes through whatever severity floor you set, because hiding what it cannot rank would be hiding outages.\n\nBasic auth covers Grafana Cloud, Mimir and a Prometheus behind a reverse proxy. Anything else, a bearer token or a tenant header, goes in the monitor's own headers. The password is masked where you type it, never printed on the detail screen, never written to the diagnostic log, and left out of an export unless you asked for secrets.\n\nSeparately: a dead network no longer counts as an outage. The check that confirms the network is alive before paging you only ever covered plain status monitors, so a page monitor or an https one could page from a garage with no signal. Page loads now report which half broke, a socket dying inside a TLS handshake is no longer read as a certificate being refused, and the urgent repeat asks the last real verdict rather than the last attempt.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.11.0",
+  "apk": {
+   "name": "Nightbell-3.11.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.11.0/Nightbell-3.11.0-release.apk",
+   "bytes": 2502496
+  }
+ },
+ {
+  "version": "3.10.0",
+  "tag": "v3.10.0",
+  "name": "Nightbell",
+  "date": "2026-09-07",
+  "title": "",
+  "body": "Checking for an update no longer tells GitHub anything. Nightbell asks its own site which version is current, so the one request it makes on your behalf goes to the people who wrote it rather than to a stranger. The number of requests is unchanged: the check has always run at most four times a day and it still does. GitHub is still there in Settings, About, and so is F-Droid, if you would rather one of them was asked instead.\n\nThat request is also the only way this project can know how many people use it. The site's log holds a timestamp, a status and the version string the app sends, and nothing else. No address is recorded, and no identifier that could join one day of yours to the next, so retention curves are not something this design can produce, and that is the trade rather than an oversight. A fresh install says the word \"new\" once and never again, and counting that word is what makes the install number exact without anything having to be recognised.\n\nThe privacy answer on the site was wrong about this, and had been for as long as there has been an update check. It said the app talks to your monitors and to the connectivity probe, and beyond those two, nothing. It says three now, and describes what the third one sends.\n\n## The screen that asks for permission to page you is reachable again\n\nIt showed once. Tapping past it set a flag saying it had been seen, and that same flag decided whether to show it, so a single tap on the way past was permanent. The full-screen permission is granted from one Android settings page, and that page is reachable from this screen and nowhere else in the app, so a phone that skipped could never be woken by an urgent page again, and nothing anywhere said why. Its own footer promised it stayed reachable from Settings, which it never was.\n\nIt reads the grants now. A missing one brings it back at the next launch, because the thing it is asking for is still missing. Only \"Don't ask again\" stops it, and Settings, Alerts, Alert permissions turns that back on. Every install that ever skipped is asked once more, which is the point rather than a side effect.\n\nReached from Settings it looks like the rest of Settings: the same header, a Done button, and none of the first run copy, because \"are you sure you want this\" is a question nobody who navigated there on purpose has asked. Its colours mean what they mean elsewhere in the app, too. All four rows used to be rose, which spends the colour that means a monitor is down on a Do Not Disturb toggle. Rose is the notifications row alone now, because without notifications nothing is delivered at all, while the other three each degrade an urgent page in one survivable way.\n\n## A page stalled on a request that already failed stops being sent to the timeout\n\nThe renderer reports itself most of the way loaded, so \"raise the timeout\" looked like reasonable advice and could not work: taking sixty seconds to ninety does not resolve a hostname a firewall is blocking. A failed request outranks the progress figure now, because whatever the renderer claims, a load waiting on something that has already failed is not going to arrive later.\n\nTwo places said it, and the louder one was an amber line above the paragraph that stayed wrong after the paragraph was right. Both lead with the words that rule the timeout out. That paragraph is also an alert body, cut at 320 characters, and written with the reasoning first it was the verdict that fell off the end. The verdict comes first now, and the card gives it eight lines instead of six, which is what it takes to reach the sentence saying where the diagnostic log lives.\n\n## Also in this release\n\nEvery address this app chose for itself, the new one included, is pinned to HTTPS and to the certificates the phone shipped with. Your monitors are untouched and still trust whatever you have told the phone to trust, because a NAS behind a private certificate authority is half of what people watch. That pin is derived in a test from the constants the app actually uses, rather than written down in a comment and hoped for.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.10.0",
+  "apk": {
+   "name": "Nightbell-3.10.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.10.0/Nightbell-3.10.0-release.apk",
+   "bytes": 2469728
+  }
+ },
+ {
+  "version": "3.9.0",
+  "tag": "v3.9.0",
+  "name": "Nightbell",
+  "date": "2026-09-04",
+  "title": "",
+  "body": "Nightbell can keep a log of what it is doing, so a problem you cannot describe becomes a file you can send. Settings, About, Diagnostic log: switch it on, make the problem happen again, then read it and export it. It goes where you put it and nowhere else.\n\nThe log is written to be publishable. Addresses keep their scheme, host and port and lose the path and query to counts, so a link with a key in it cannot reach the file. Passwords, tokens, saved browser sessions, request headers, request bodies, page content and the names you gave your monitors are not in it at all: a monitor appears as the first eight characters of its id. Read it before you send it, in the app, which is why there is a viewer and not only an export button. Nothing is switched off in any build, because a setting that logs the real values is a setting that ships by accident.\n\nCrashes are recorded whether or not the switch is on, to a file of their own, with the minute that preceded them. A crash cannot be reproduced on request.\n\n## A page monitor that overruns now says which part overran\n\n\"Page did not finish loading in 15s\" was one sentence for every way of running out of time, including a page that had loaded perfectly well and then failed to produce the element you were watching, and that sentence sent a report looking in the wrong place. It names the stage it stopped at now, with the renderer's progress, what the document said about its own state, whether the load event ever arrived and how many requests were started.\n\nWhere a page reaches a usable document and never signals that it finished, it says so, and says that a longer timeout will not help, because that page is waiting on something that is never going to answer. The embedded browser had no way to report its progress, its console output or its failed sub-resources, so none of that was observable from a check. It is now.\n\n## The update notification opens the app that can install the update\n\nTapping \"Nightbell update available\", or the button inside it, opened a web page. Nightbell has been able to fetch and hand over the APK itself for several releases, and the dashboard has offered exactly that, so the notification was walking you out of the app to do by hand what the app already did for you. It opens Nightbell now, on the dashboard, with Install. A release with no APK behind it still opens its page, because that is the only route there is.\n\nNothing is downloaded until you press Install, and Android still asks before it replaces the app.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.9.0",
+  "apk": {
+   "name": "Nightbell-3.9.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.9.0/Nightbell-3.9.0-release.apk",
+   "bytes": 2469692
+  }
+ },
+ {
+  "version": "3.8.0",
+  "tag": "v3.8.0",
+  "name": "Nightbell",
+  "date": "2026-09-04",
+  "title": "",
+  "body": "An alert can now read itself out loud. Switch it on for a monitor and when that monitor goes down the phone says its name and what went wrong, in the voice already installed on it, so nothing is sent anywhere and it still works when the connection is the thing that failed. Off by default, per monitor, and never while the phone is on silent or vibrate.\n\nThe sentence is yours to change, with placeholders for the monitor's name, the reason it failed, how long it has been down and how many others are down with it. Thirty monitors do not have to be visited one at a time either: Settings, Alerts, Spoken alerts turns it on or off for all of them at once, and offers an undo, because that flattens whatever you had set per monitor. An urgent page speaks over its own siren, which mutes for the sentence and comes straight back.\n\nNightbell writes its alerts in English, and a voice pronounces rather than translates, so an English voice is used by default whatever language the phone is set to. Picking another language changes how the words sound and not what they say; to hear an alert in your own language, write the sentence yourself. If the phone's speech engine cannot produce any audio, which is what happens when its voice data was never downloaded, Settings says so rather than leaving you with a switch that does nothing.\n\nEvery message Nightbell shows you now says which of three things happened. Green when what you asked for worked, amber when it worked but left you with less cover than you had, red when it did not happen at all. They used to be one shape in one colour, so \"imported 12 monitors\" and \"couldn't read that file\" arrived looking identical, and both were hard to see: the old capsule was almost exactly the colour of the app behind it.\n\nNothing asks whether you are sure any more. A button that destroys something has to be held for a moment instead, with the fill showing how much longer, and letting go early cancels it. Nothing dies by accident and nothing makes you read a dialog you have already learned to dismiss.\n\nDeleting a monitor used to be final. Now the message that reports it offers an undo for five seconds, and taking it puts the monitor back where it was in the list, in the group it belonged to, with its uptime history. That history is the one thing in this app you cannot recreate by typing it again.\n\nLong-press a card and the bar that comes up leads with the thing you opened it for. It used to offer Pause and Resume side by side whatever you had selected, so a fleet that was running was handed a Resume that could not do anything, as the first control on the bar. Grouping had the full width at twice the size of everything else, and delete sat exactly where a right thumb rests. One button now says Pause or Resume depending on what you picked, mute and grouping share a line, and the delete is held and set apart below a rule.\n\nA monitor that watches an element on a page can now warn you before that page's certificate expires. It could not before, and it never said so: a page check runs the page in a browser, and Android only hands an app a certificate that the phone has already rejected, so a working certificate was invisible and no warning could be raised. Switch it on per monitor in the setup screen and Nightbell reads the expiry date once a day.\n\nA repository monitor stops offering to mark news as seen when there is no news. That button always appeared, and on a quiet repository the only thing it changed was a line recording when you last pressed it.\n\nThe opening animation is a little over a second and a half rather than nearly three seconds. It was the longer figure because it was timed on a phone whose animation speed was set to half, so it had always played twice as slowly for everyone else as for the person who chose the number.\n\nTwo smaller things in the setup screens. The Continue button reaches the right edge of its footer instead of stopping short, and the certificate section looks like every other section rather than three loose buttons floating between a heading and a paragraph.\n\nThe live preview you pick an element in now lays a page out for the size it is actually shown at. It had been telling every page it had no height, so anything a site sizes against the height of the window came out as nothing: on one wine shop the age gate drew as a white strip with its buttons pushed out of sight, and there was no way to press through it and reach the page behind. Any site with a dialog sized that way was affected, not just that one.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.8.0",
+  "apk": {
+   "name": "Nightbell-3.8.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.8.0/Nightbell-3.8.0-release.apk",
+   "bytes": 2436924
+  }
+ },
+ {
+  "version": "3.7.0",
+  "tag": "v3.7.0",
+  "name": "Nightbell",
+  "date": "2026-08-31",
+  "title": "",
+  "body": "Nightbell can watch something on a page that will not show itself until you have pressed a button, and the home screen widget fills the space you gave it.\n\n## A page behind a cookie banner or an age gate\n\nPlenty of sites put a wall in front of their content: accept cookies, confirm you are over 18, continue to site. Until now the live preview would let you press through that wall, and then the check would arrive at the same page having pressed nothing, see the wall, and report your element as missing.\n\nPress through it once in the preview. Whatever the browser is carrying afterwards, the cookies and the storage a site uses to remember you have been here, is saved with the monitor and put back before every check.\n\nThat saved session is treated as a password. It is never written to a log, never printed in a check result, and never included in an exported backup unless you tick the box for secrets in the same breath. The setup screen tells you a monitor is carrying one, because sites expire these and yours will eventually be asked again. When that happens the check says the page is showing a gate and quotes the button it can see, instead of telling you the element vanished. Nothing is ever clicked on your behalf.\n\n## The preview follows links, and now the monitor follows with it\n\nThis was the other half of the same report, and on its own it is the worse bug. Browse one page in from the address you typed, tap an element there, and Nightbell stored the selector while still watching the page you started on. Every check loaded the wrong page and called the element missing, and nothing on screen explained why, because the toolbar kept showing the address you had typed.\n\nThe toolbar now shows the page the preview is actually on. Confirming a pick made somewhere else points the monitor at that page, the bar tells you it is about to before you tap, and the button reads \"Watch this page\" rather than \"Use this element\". A monitor still watches one page, so if it already had elements captured elsewhere, the same line says how many are about to be looked for somewhere new.\n\n## The widget fills the size you dragged it to\n\nIt used to draw a fixed number of monitors and count the rest as \"+N more\", even with room to spare underneath. Now the list is measured against the space the launcher gave it. New widgets default to filling that space, and a widget where you had pinned a specific number keeps that number, so nothing on your home screen moves on its own.\n\n---\n\n**Verified:** 659 JVM tests and 365 on-device tests, both green. The whole journey in the first section is driven end to end by an on-device test through the real UI, and was checked by hand against the site from the report. Release build assembles under R8, launches, and the gated-page path was driven through a minified build including a check from a cold process. `docs/fdroid-preflight.sh` clean.\n\n`Nightbell-3.7.0-release.apk` is signed with the usual key. Verify with:\n\n```\napksigner verify --print-certs Nightbell-3.7.0-release.apk\n```",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.7.0",
+  "apk": {
+   "name": "Nightbell-3.7.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.7.0/Nightbell-3.7.0-release.apk",
+   "bytes": 2404088
+  }
+ },
+ {
+  "version": "3.6.0",
+  "tag": "v3.6.0",
+  "name": "Nightbell",
+  "date": "2026-08-29",
+  "title": "",
+  "body": "Nightbell updates itself now, and it will no longer go quiet about an outage because a check of its own could not get through.\n\n## Updating from inside the app\n\nAn update arrives as a notice on the dashboard, downloads inside the app and installs from there. No browser, no file to find, nothing fetched until you ask for it.\n\n## An unreachable reference no longer silences an outage\n\nTo tell \"this phone lost signal\" apart from \"the service is down\", Nightbell asks one reference endpoint whether it answers. If that endpoint was blocked by a network, mistyped, down, or simply slower than four seconds, the app read it as a dead connection and dropped the failure. It stopped paging, silently, in exactly the situation you installed it for.\n\nA reference now has to have answered your phone recently before it is allowed to vouch for anything. A phone in a car park still works, because it holds readings from before it went underground. A firewalled endpoint never earns one.\n\nThat endpoint is yours to choose. It defaults to GrapheneOS's connectivity check rather than an advertising company's, it is a text field so you can point it at your own always-up host, and it can be switched off entirely under Settings, Checks. The website used to say nothing left the device except your checks. That was never quite true, and it says what actually happens now.\n\n## The interface holds together at large text sizes\n\nAt 180 per cent a monitor card's pause button had shrunk until it could not be tapped, and the fleet banner set its monitor count one letter to a line down the side. Rows wrap and the controls keep their size. Two touch targets that were under the minimum are not any more, including the quiet hours controls that decide when the phone may wake you. Labels that used to shred into four lines beside a one line value now stack instead.\n\n## Smaller things\n\nTapping check twice no longer sends two requests to your service, and the same is true of saving a monitor and of deleting one. Latency columns line up. Screen readers are told which sort is selected, which kind of monitor a row is, and that a greyed out button is unavailable rather than simply text.\n\n---\n\n**Verified:** 637 JVM tests and 354 on-device tests, both green. Release build assembles under R8 and launches. `docs/fdroid-preflight.sh` clean.\n\n`Nightbell-3.6.0-release.apk` is signed with the usual key. Verify with:\n\n```\napksigner verify --print-certs Nightbell-3.6.0-release.apk\n```",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.6.0",
+  "apk": {
+   "name": "Nightbell-3.6.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.6.0/Nightbell-3.6.0-release.apk",
+   "bytes": 2387700
+  }
+ },
+ {
+  "version": "3.5.0",
+  "tag": "v3.5.0",
+  "name": "Nightbell",
+  "date": "2026-08-28",
+  "title": "",
+  "body": "Monitors can be grouped now, and a group is one card with one verdict.\n\n\"Is Nightbell up\" was never a question about the website or about the repository.\nIt was a question about both, and the dashboard could only answer it one row at a\ntime, with you doing the and-ing. A group answers it directly: All 2 operational,\nor 1 of 2 is down, in the line where a monitor card puts its host. The worst\nmember decides it. Pausing one member never decides it unless every member is\npaused, because a pause you set last week must not be able to hide an outage.\n\nLong-press monitors and pick a group, or make a new one. A group opens and shuts\nwith a tap, and its members are still ordinary cards inside it: same long-press,\nsame re-check, same drag handle. Grouping changes nothing about what gets checked\nor what gets announced.\n\nThe group's icon comes from a row of previews rather than a text field. Each\nmember site is offered once, and you can upload your own picture instead, which\ntravels in the backup rather than sitting in a file the next phone would not have.\nA photo picked from the camera roll now arrives the right way up.\n\nSettings is four tabs: Alerts, Checks, Look, About. Twenty cards on one scroll was\na screen nobody reached the bottom of. Each tab remembers where you scrolled it to\nand you can swipe between them.\n\nTwo smaller things that were wrong. Tapping outside a text field now unfocuses it\nand puts the keyboard away. And a section heading in Settings used to sit further\nfrom its own rows than two categories sat from each other, which is fixed\neverywhere.\n\nStill no account, no server and nothing leaving the phone except the checks you\nasked for.\n\n---\n\n`me.river.nightbell`, versionCode 34, minSdk 26 (Android 8.0), Apache-2.0.\nSigning certificate SHA-256 `20d8abdaa8416a9a751e3ea144ef1523d7ddbaaeee9ec6be01d63a65574a70de`.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.5.0",
+  "apk": {
+   "name": "Nightbell-3.5.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.5.0/Nightbell-3.5.0-release.apk",
+   "bytes": 2354912
+  }
+ },
+ {
+  "version": "3.4.0",
+  "tag": "v3.4.0",
+  "name": "Nightbell",
+  "date": "2026-08-27",
+  "title": "",
+  "body": "The repository monitor stopped borrowing a website monitor's screens. Everything\nin this release is about the kind of monitor that answers \"what happened\" rather\nthan \"is it up\".\n\n## The history is the repository's history\n\nA repository monitor recorded exactly what every other monitor records: ok, a\nlatency and a status code. Its detail screen was therefore sixty rows of\n`Healthy · 304 · 487 ms`, which times the round trip to api.github.com and says\nnothing whatsoever about the repository. The fact somebody added the monitor for,\nthe star count going from 11 to 13, was visible only as \"13 now\", with nothing\nable to say when it happened or in how many steps.\n\nEvery check now writes down what it saw of the repository, and the screen lists\nwhat changed between one check and the next:\n\n- `13 stars` · was 12 · **+1**\n- `#6 [Bug] self-signed https certs?` · Issue opened\n- `Released v3.3.0` · New release published\n- `1 issue closed` · 0 open now\n- `1 fork` · was 0 · **+1**\n- `Pushed to the repository`\n\nRuns of polls that found nothing collapse into one line, `5 checks · nothing\nchanged`, and a single quiet poll between two events gets no line at all: the\ntimestamps either side already say it. A failed poll never collapses. Being\nrefused by GitHub, or having a token rejected, is the one reason the counts on\nthe card above could be out of date, so it keeps its own row and says\n`Nothing learned about the repository`.\n\n`Every check` at the bottom of the list brings the old poll list back, which is\nthe answer to \"is this thing even running\", and `Activity` goes back.\n\nTwo decisions worth writing down. The rows are differenced from the samples\nrather than stored as events, so a history trim cannot leave a row behind\nclaiming something the samples can no longer support. And counts are carried\nforward whenever an endpoint answered 304, because a sample recording \"unknown\"\nfor a count that simply had not changed would read later as the repository losing\nits stars and getting them back.\n\nThe new fields all default, and are absent on every kind of monitor except this\none, so an old snapshot and an old backup both still restore.\n\n## The card leads with its numbers\n\nThe repository card stacked a caption over a count in each of three tiles, which\nspent a third of the card's height on three short numbers and put the word STARS\nabove a gold star that had already said it.\n\nOne line each now, three even tiles across the full width with the content\ncentred, count first and unit after, the way `491 ms` reads: `13 ★`,\n`0 open issues`, `0 forks`. The star is the only unit drawn as a glyph, because\nit is the only one anybody reads as a picture. `open issues` is the tightest\nlabel of the three and shrinks a point rather than truncating.\n\nThe hero line above it says what the repository is doing instead of\n`Last response 491 ms`, and it respects the watch configuration: a monitor set to\nreleases only is not given a star count it never asked for.\n\n## The star is a star\n\nIt was a stroke outline tinted amber. A hollow star is the \"not starred yet\"\nglyph on every site that has one, so an outline said the opposite of what a count\nof 13 means, and at the 11dp a dashboard tag draws it a 1.7px outline closes up\ninto a smudge.\n\nIt is filled now, the one filled glyph in a stroke set, and it has its own colour\nrather than borrowing amber: amber means degraded everywhere else in this app,\nand a star count is not a warning about anything. `#FFC53D` on dark, darkened for\nthe light scheme the same way every other accent there is. The stars section of\nthe setup screen follows it, which stops that section reading as a warning too.\n\n## The widget\n\nA repository row on the widget showed `491 ms`, which is how long api.github.com\ntook to answer, beside a dot that only meant the poll had worked. Between them\nthat was the whole row.\n\nIt shows the star count with a gold star after it now, and a detailed row's\nsecond line gives the open issue count and the latest tag instead of a host. A\nmonitor watching only issues or only releases shows that instead. A failure still\nwins the slot: when the poll is broken, how broken it is matters more than a count\nnothing is verifying.\n\nNarrow columns drop the trailing value on purpose, since the dot carries health\nand a latency reading is one tap away. A repository row has no such fallback, so\ntwo and three column widgets were leaving every repository showing a name and\nnothing else. Repository rows keep their value at any width, which costs the name\nvery little: \"13\" against \"4100 ms\".\n\nThe star is tinted per preset, so the white widget gets the dark gold instead of a\npale smudge.\n\n## Also in here\n\nA debug build paints its bell yellow and calls itself \"Nightbell debug\". It\ninstalls alongside a release build, and until now the launcher showed two\nidentical bells with no way to tell them apart short of opening one. The five\ndrawables that paint the mark all read one colour resource, which is what made\nthat possible.\n\nTwo bugs found on the way. The detail screen's history toggles were read inside\nthe `LazyColumn` content lambda, which is not a composable, so nothing\nrecomposed when they changed: the pre-existing \"Show all N checks\" button had the\nsame problem and is fixed with them. And `WidgetInstrumentedTest` was asserting a\nliteral \"Nightbell\" as the widget's wordmark, which the debug rename broke; it\nreads the resource now.\n\n581 JVM tests and 258 on device.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.4.0",
+  "apk": {
+   "name": "Nightbell-3.4.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.4.0/Nightbell-3.4.0-release.apk",
+   "bytes": 2272805
+  }
+ },
+ {
+  "version": "3.3.0",
+  "tag": "v3.3.0",
+  "name": "Nightbell",
+  "date": "2026-08-27",
+  "title": "",
+  "body": "Two reported issues, and a correction to something 3.2.0 shipped half done.\n\n## A monitor decides what its certificate has to prove (#6)\n\nNightbell could not watch a server with a self-signed certificate at all. Not a NAS, not a box behind a private CA, and not a Tor hidden service, where no certificate authority issues in the first place. The only way through was to stop using HTTPS.\n\nEach monitor now picks one of three:\n\n- **System CAs** is what every monitor did before, and is still the default.\n- **Pinned key** records the server's key on the first successful check and requires exactly that key afterwards. This is stronger than CA trust rather than weaker: nobody can talk a CA into issuing the key your monitor already recorded. It is the right answer for a machine you administer yourself.\n- **Any certificate** checks nothing. Off by default, and the detail screen says so on every visit rather than letting it be set once and forgotten.\n\nA pinned monitor that is answered by a different key fails the check instead of quietly adopting the new key, and **Trust the new key** on the detail screen is how you accept a certificate you replaced on purpose.\n\nThe report behind this was titled \"self-signed https certs?\" and the URL in it was plain `http://` on a `.onion` address. Both halves were true, and what joined them was a redirect: `Follow redirects` is on by default, so a service answering http with a 3xx to https turns an http monitor into a TLS check nobody asked for. That is now said out loud when it happens.\n\nWhile there: certificates from CAs you installed on the phone yourself are trusted, and `api.github.com`, `f-droid.org` and the connectivity probe are held to system anchors in the same change, so widening the first cannot put an MDM-installed certificate in front of the GitHub token.\n\nPage-element monitors and the element picker obey the same setting, so a self-signed host behaves the same whichever kind of monitor is watching it.\n\n## The latency budget, on the chart (#5)\n\nThe response time chart draws your latency budget across itself as a dashed line, and every check that answered slower than the budget is drawn in amber instead of green. Underneath, a count: `Budget 5.30 s, 3 of 8 over`.\n\nAmber is not a new colour here. Degraded already means \"answered, but slower than its budget\", so a slow bar reads the same as the alert it would have raised.\n\nA budget far above every sample would flatten the bars to nothing if the chart simply scaled to it, so the budget may claim a bounded amount of extra headroom and past that the line pins to the top edge, drawn dimmer, with the legend saying the budget is above the range. A capped line never looks like a placed one.\n\n## A new version is visible (#no issue)\n\n3.2.0 added an update check with one surface: a single notification, once per version, ever. Worse, it ran inside the background sweep, so turning background checks off silently turned the update check off with it.\n\nThere is now a banner on the dashboard, under the fleet verdict, until you dismiss it. Dismissing hides that version for good and the next release still speaks; Settings can undo it, and shows your installed version against the latest as two numbers rather than one sentence. The check also runs when you open the app, capped at once every six hours either way.\n\nNothing is downloaded or installed for you. Both the banner and the notification open a page.\n\n---\n\n567 tests on the JVM and 145 on a device.\n\nSigned with the same key as every release since 3.0.1, so this updates in place.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.3.0",
+  "apk": {
+   "name": "Nightbell-3.3.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.3.0/Nightbell-3.3.0-release.apk",
+   "bytes": 2255777
+  }
+ },
+ {
+  "version": "3.2.1",
+  "tag": "v3.2.1",
+  "name": "Nightbell",
+  "date": "2026-08-27",
+  "title": "",
+  "body": "A repository monitor's own screen no longer charts how fast GitHub answered.\n\n3.2.0 stopped the dashboard card reporting GitHub's uptime and gave it the star count, the open issue count and the latest tag instead. It left the detail screen's **Response time** card alone, so the same round trip to `api.github.com` was still plotted one screen further in, under a heading that made it look like the point of the monitor. That card is guarded on the monitor kind now, next to the Latency budget row that was already hidden for the same reason.\n\nEvery other kind of monitor keeps its response-time chart, because for those it is the measurement the monitor exists to make. Nothing else changed.\n\n---\n\nSigned with the same key as every release since 3.0.1, so this updates in place.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.2.1",
+  "apk": {
+   "name": "Nightbell-3.2.1-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.2.1/Nightbell-3.2.1-release.apk",
+   "bytes": 2255741
+  }
+ },
+ {
+  "version": "3.2.0",
+  "tag": "v3.2.0",
+  "name": "Nightbell",
+  "date": "2026-08-27",
+  "title": "",
+  "body": "Nightbell can watch a GitHub repository now. Add `owner/repo`, or paste any link to it, and you get told about every new star, every new issue and every new release. Stars can be quietened to milestones only, or to a daily summary. Issues can be filtered by keyword or by author. Pull requests are watched separately and are off unless you turn them on.\n\nThe polling is your phone talking to GitHub's API, with no server in between. GitHub allows 60 requests an hour to an address that has not identified itself, and one check spends up to three, so every request carries a cache validator and a check that finds nothing new costs nothing at all. Being turned away for going over that limit is shown as a rate limit rather than reported as an outage, because it says nothing about the repository. An optional read-only token raises the ceiling to 5,000 an hour. It is stored on the device and nowhere else, it is never written into a log or a notification, and it stays out of an exported backup unless you ask for it.\n\nA repository card shows what you asked to watch: the star count, the open issue count and the latest tag, instead of an uptime figure for GitHub. There is a new **Repos first** order that groups them above everything else, with worst first still applying inside each group.\n\nNightbell also looks for its own updates now, from GitHub releases, at most once every six hours. It says so once per version and offers open, remind me tomorrow, and ignore this one. Nothing is downloaded and nothing is installed: the notification opens a page, and Android still asks before any APK is installed. Switch it off in Settings if your installer already handles this.\n\nThe latency probe has moved off Google. It times a known-good endpoint so a slow phone is not reported as a slow website, and it pointed at a Google address by default, which had an app that keeps everything on your device pinging one every forty-five seconds. It now uses the GrapheneOS connectivity check. Installs that never picked an endpoint are moved across on upgrade, anything you typed yourself is left alone, and the field still takes whatever you want. Thanks to @shortwavesurfer2009 for raising it in #4.\n\nSmaller: the uptime ring on a monitor checked once says `1 check` rather than overflowing its own circle.\n\n---\n\nSigned with the same key as every release since 3.0.1, so this updates in place.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.2.0",
+  "apk": {
+   "name": "Nightbell-3.2.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.2.0/Nightbell-3.2.0-release.apk",
+   "bytes": 2255745
+  }
+ },
+ {
+  "version": "3.1.1",
+  "tag": "v3.1.1",
+  "name": "Nightbell",
+  "date": "2026-08-26",
+  "title": "",
+  "body": "Nightbell 3.1.1 closes the hole 3.1.0 left in its own routing, and does the two things the first report on that feature asked for.\n\n## The element picker was not routed\n\n3.1.0 routes a page-element check through your proxy. It did not route the **picker**, the live preview you tap an element in. So setting a monitor up on a `.onion` or `.i2p` address resolved that hostname through your phone's own DNS at pick time, once, on the screen where you typed it, before the feature that exists to prevent that had run at all.\n\nThe check being routed afterwards changed nothing. The name was already out.\n\nThe preview now loads through the same proxy the check uses. It holds the WebView proxy override for as long as it is open, because that setting belongs to the whole app rather than to one page, and a routed check finishing in the middle of a picking session would otherwise clear it under a live page.\n\n**It refuses rather than downgrading, both ways.** A monitor set to route with no usable proxy address gets no preview. An address that only resolves inside Tor or I2P gets no direct preview either, because the lookup leaks the name whether or not the page then loads. There is no quiet fallback to a direct load.\n\nRouted page loads run one at a time. A routed check that cannot have the override within fifteen seconds fails that check and says why, rather than stalling every check behind it.\n\n## The routing switch is where you can reach it\n\nThe Test panel appears on the screen where you type the name and the URL. The switch was two screens later under Cadence, so the first test anyone ran on a routed monitor failed and nothing on that screen explained why.\n\nIt now renders on every setup screen that offers Test, including the first one, with the address fields under it. So a routed monitor's first test can be made to pass on the screen where it fails.\n\nThe URL placeholder carries a port now. It read `https://example.com/health`, which implies ports are not a thing here.\n\n## Settings said the opposite of all of it\n\nThe privacy card claimed page-element monitors always go out directly, because Android's WebView cannot speak SOCKS at all. It can, the checks were already routed when that sentence shipped, and the store description said so on the same day. The text now says what the code does.\n\nThanks to @shortwavesurfer2009, who tested 3.1.0 against a real Monero node over Tor and found both usability problems in one sitting.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.1.1",
+  "apk": {
+   "name": "Nightbell-3.1.1-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.1.1/Nightbell-3.1.1-release.apk",
+   "bytes": 2185657
+  }
+ },
+ {
+  "version": "3.1.0",
+  "tag": "v3.1.0",
+  "name": "Nightbell",
+  "date": "2026-08-26",
+  "title": "",
+  "body": "Nightbell 3.1.0 answers the first three issues filed against 3.0.5, and adds the two features two of them turned into.\n\nCloses #1, #2 and #3.\n\n## Pause\n\nA button on the dashboard banner stops the whole fleet: 30 minutes, 1 hour, 4, 8, or until you turn it back on.\n\nNightbell has stopped checking while the device has no connectivity since 1.3.0, and that covers the wrong half of the problem. One bar of signal counts as online, so every check times out at once and every one of those alerts is about the walk rather than about your services.\n\nYou choose what a pause stops. **Stop checking** runs nothing, so nothing false lands in your uptime history. **Stay silent** keeps checking and keeps the dashboard live, and holds only the alerts. Which one the button uses is a setting, and it can ask you each time. A timed pause lifts itself, which an indefinite one cannot.\n\nA pause does not lock the app. The re-check button, the detail screen and a monitor's first check after saving all still work through one.\n\n## SOCKS5 routing\n\nA monitor can be routed through a SOCKS5 proxy on your own device, so a Tor or I2P hidden service can be watched without putting the whole phone into VPN mode.\n\nIt is per monitor. The shared address lives in Settings and any monitor can name its own, because Tor listens on 9050 and I2P's SOCKS proxy on 4447 and one address cannot serve both. Page-element monitors are routed too.\n\nThe proxy resolves the hostname, not your phone, so the name never reaches your own DNS. That is also the only reason an `.onion` address resolves at all.\n\nRouting fails closed: a monitor set to route with no usable proxy fails its check rather than quietly going out in the clear.\n\n## Fixes\n\n**Crash on Android 10 and below.** An urgent page built `VibrationAttributes`, which arrived in API 30, above the branch that used it. minSdk here is 26, so on Android 10 and older the class was not there to load.\n\n**False outages on a poor connection.** A keep-alive connection the far end had already reaped, and a fresh connection that broke while it was still being set up, both read as \"connection refused or dropped\" with nothing wrong at the other end. Each now earns one retry, and only for requests that are safe to send twice.\n\n**Importing a backup froze the screen.** The import was always quick. Checking every monitor before reporting anything was not, and that now happens afterwards.\n\nAlso: the response-time line on a card spans the card, so two checks look like two checks.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.1.0",
+  "apk": {
+   "name": "Nightbell-3.1.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.1.0/Nightbell-3.1.0-release.apk",
+   "bytes": 2185657
+  }
+ },
+ {
+  "version": "3.0.5",
+  "tag": "v3.0.5",
+  "name": "Nightbell",
+  "date": "2026-08-11",
+  "title": "Answering the security review",
+  "body": "No behaviour changes. This answers a security review of 3.0.4 posted on the F-Droid merge request by Ubaid ur Rehman, whose verdict was **pass with recommendations**. Nothing here was a defect. Three of the four recommendations were worth doing, and the fourth was worth writing down rather than changing.\n\n## Cleartext policy, out of the manifest\n\n`android:usesCleartextTraffic=\"true\"` was a single boolean meaning \"anything goes\". It is replaced by `res/xml/network_security_config.xml`, which supersedes the attribute and can say different things about different hosts.\n\nIt still permits cleartext, and it has to. A large share of what people point this app at has no certificate and never will: a NAS admin page on a LAN address, a service on a homelab box over Tailscale, a container on `http://192.168.1.20:8080`, a printer. Refusing cleartext would not make any of those safer. It would make them unmonitorable, and you would go back to not knowing when they break.\n\nThe review asked for cleartext to be scoped to user-configured domains. That is the right instinct and it cannot be done. The file is compiled into the APK at build time; the domains are typed months later on your phone, and Android has no runtime API to add one. The file says so at length so the next person reading it does not have to work it out.\n\nWhat did change: **www.gstatic.com is pinned to HTTPS**. That host is the 204 connectivity probe, which is the one endpoint the app contacts on its own behalf rather than yours, and it can no longer be downgraded even though the base config is permissive.\n\n## The element picker's WebView\n\nIt renders a URL you typed, with script enabled, with a bridge attached. Settings it never used are now off:\n\n| | |\n| --- | --- |\n| `allowFileAccess` | off. **The one that mattered**, because it defaults to *true* below Android 11 and this app supports Android 8, so a loaded page could reach `file://` |\n| `allowContentAccess` | off, same reasoning for `content://` |\n| `mixedContentMode` | never allow, stated rather than inherited |\n| geolocation | off. The app holds no location permission anyway |\n\n`javaScriptEnabled` stays on. It is how the picker works: it injects script so a tap can resolve to a selector.\n\nThe bridge is also documented now. It is three methods, each taking a String and returning nothing, with no Context, File or ClassLoader on the object to reach through. What it can still do, said plainly rather than glossed: a page can put a string of its choosing on screen through `onError`. That is a label, not a privilege boundary, and the page already controls everything else on that screen.\n\n## Logs\n\nR8 drops `Log.d` and `Log.v` from release builds now. Verified: zero `Log.d` strings left in the dex.\n\n`Log.i`, `Log.w` and `Log.e` stay, deliberately. When somebody reports that a monitor stopped firing after a reboot, the answer is usually a warning from the scheduler, and a build with no log cannot be diagnosed from a bug report.\n\n## BootReceiver, deliberately unchanged\n\nThe review asked to confirm it validates its intent, and to consider `directBootAware=true`.\n\nIt already returns unless the action is `BOOT_COMPLETED` or `MY_PACKAGE_REPLACED`, so the first half was already true.\n\n`directBootAware` stays false, and that is an answer rather than an omission. The receiver reads the monitor store to rebuild schedules, that store is credential-encrypted, and a direct-boot receiver runs *before* credential-encrypted storage is available. Setting the flag would produce a receiver that fires early and then cannot read what it needs.\n\n## Updating\n\nSame signing key, so **3.0.4 updates in place**. Coming from 3.0.0 still needs an uninstall first. Coming from Pulse 2.x still needs export and import.\n\n## Verified\n\n359 JVM tests green. Release build reproducible on openjdk 21.0.12, signing block carries the signature and padding only.\n\n`Nightbell-3.0.5-release.apk` 2152728 bytes\n`sha256  fe7c96643497bdad977b20d4752abd6a17c97e4e92c590e2df21eccd6a68aac8`",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.0.5",
+  "apk": {
+   "name": "Nightbell-3.0.5-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.0.5/Nightbell-3.0.5-release.apk",
+   "bytes": 2152728
+  }
+ },
+ {
+  "version": "3.0.4",
+  "tag": "v3.0.4",
+  "name": "Nightbell",
+  "date": "2026-08-10",
+  "title": "No Play dependency blob in the signing block",
+  "body": "No code changes. Like 3.0.3, this exists so F-Droid can publish the app signed with my key instead of theirs.\n\n## What was in the way this time\n\nAndroid Gradle Plugin writes a **Dependency metadata** block into the APK signing block by default, 6,486 bytes of it here, so that Google Play can report on the libraries a build pulled in. This app is not on Play.\n\nF-Droid's APK scan raises it as CRITICAL: `found extra signing block 'Dependency metadata'`. That is a fair call. A signing block no tool outside Google can read is a blob nobody reviewing the app can account for. The scan runs against the published APK, so it is not optional for a release meant to go there.\n\n`dependenciesInfo { includeInApk = false }`, and the same for the bundle this project does not build. Checked by parsing the signing block rather than trusting the setting:\n\n| | before | after |\n| --- | --- | --- |\n| APK Signature Scheme v2 | 2,551 B | 2,551 B |\n| Dependency metadata | 6,486 B | gone |\n| padding | 3,195 B | 1,497 B |\n\n## Why not just rebuild 3.0.3\n\nBecause the blob lives or dies by a build setting, and the setting is source. F-Droid builds the tag, so a tag without `dependenciesInfo` produces an APK with the blob regardless of what is attached to the release.\n\nMoving the v3.0.3 tag was the other option, and it breaks the thing 3.0.3 was for: the APK records the git revision it was built at, and that revision has to be the tag's own commit.\n\n## Releasing this app has three constraints now\n\nEach of them fails quietly. The app keeps working and simply stops being reproducible, at which point F-Droid signs with their key and that cannot be undone later.\n\n1. Build on the JDK F-Droid's buildserver runs. Currently `openjdk 21.0.12`.\n2. Commit the version bump before building the APK, so the recorded revision is the release commit rather than the one before it.\n3. Ship no signing block beyond the signature.\n\nAll three are written next to the version in `app/build.gradle.kts`.\n\n## Updating\n\nSame signing key as 3.0.1 through 3.0.3, so **3.0.3 updates in place**. Coming from 3.0.0 still needs an uninstall first. Coming from Pulse 2.x still needs export and import.\n\nIf you are already on 3.0.3 there is nothing in here for you.\n\n## Verified\n\n359 JVM tests and 173 on-device tests. minSdk 26 (Android 8.0), targetSdk 36.\n\n`Nightbell-3.0.4-release.apk` 2,152,244 bytes\n`sha256  3c0536468cb9fc6c7e1bec22b9a04e9defbd0d9e42fe408b84b6e9756ff8b2c9`",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.0.4",
+  "apk": {
+   "name": "Nightbell-3.0.4-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.0.4/Nightbell-3.0.4-release.apk",
+   "bytes": 2152244
+  }
+ },
+ {
+  "version": "3.0.3",
+  "tag": "v3.0.3",
+  "name": "Nightbell",
+  "date": "2026-08-10",
+  "title": "Reproducible, and signed with my key",
+  "body": "No code changes. This release exists so F-Droid can reproduce the build and ship the APK signed with my own key instead of theirs.\n\n## Why a release with no changes in it\n\nF-Droid can publish an app one of two ways. Either they build it and sign it with the F-Droid key, or they build it, confirm their result is identical to the APK I published, and then ship mine with my signature on it. The second one is what lets you move between the GitHub download and the F-Droid listing without uninstalling, and it is not a decision that can be revisited: an app published under their key stays under their key.\n\nTheir check builds from source in their container and compares the result against the APK attached to the release, file by file. Against 3.0.2 it failed on two of the 148 files: `classes.dex` and `assets/dexopt/baseline.prof`.\n\n## One cause, not two\n\nTheir container runs `openjdk 21.0.12+8`. 3.0.2 was built here on `21.0.11+10`. A different JDK hands R8 a different dex, and the baseline profile is compiled out of `app/src/main/baselineProfiles/*.txt` into dex method indices, so once the dex moves the profile moves with it. `baseline.profm` carries no indices and was identical throughout, which is the tell that this was one problem wearing two hats.\n\nChecked rather than assumed, in two steps:\n\n- Building the **v3.0.2 tree on both JDKs** gives two different `classes.dex`, so the JDK is genuinely the variable and not a guess.\n- Their failed job uploads its own build as an artifact, so that build could be fetched and compared against a local one on the matched JDK. **All 148 files identical**, including the two that had differed.\n\nThe whole-APK hash still differs between any two builds, because zip metadata is not content. That is why the comparison is per-file.\n\nOne more file had to be dealt with after the JDK: `META-INF/version-control-info.textproto`, which AGP fills with the git revision the build came from. The first APK attached here was built a moment before the release commit existed, so it recorded the previous revision and nothing else in the APK differed at all. Rebuilt at the tagged commit, all 148 files match their container's output.\n\n## What this means for later releases\n\nThe matching JDK is a standing constraint now, not a one-off. Any future release whose APK is built on a different JDK will fail verification, and the failure is quiet: the app keeps working and simply stops being reproducible. The note lives in `app/build.gradle.kts` next to the version.\n\n## Updating\n\nSame signing key as 3.0.1 and 3.0.2, so **3.0.2 updates in place**. Coming from 3.0.0 still needs an uninstall first, because 3.0.1 changed the key. Coming from Pulse 2.x still needs export and import, because 3.0.0 moved the package.\n\nIf you are already on 3.0.2 there is nothing in here for you.\n\n## Verified\n\n359 JVM tests and 173 on-device tests. minSdk 26 (Android 8.0), targetSdk 36.\n\n`Nightbell-3.0.3-release.apk` 2,160,440 bytes\n`sha256  2340bb6126b70996e82fbb35e2f6a4f4e1cfb1841b27dd4def395f6761167866`",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.0.3",
+  "apk": {
+   "name": "Nightbell-3.0.3-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.0.3/Nightbell-3.0.3-release.apk",
+   "bytes": 2160440
+  }
+ },
+ {
+  "version": "3.0.2",
+  "tag": "v3.0.2",
+  "name": "Nightbell",
+  "date": "2026-08-10",
+  "title": "The cutout on every surface, and a cold start that rings",
+  "body": "The icon is finally the same icon everywhere, and a cold start now rings.\n\n## Fixed: two surfaces had no heartbeat\n\nThe widget header and the status-bar glyph had shipped as solid bells since 3.0.0, while every other surface carried the trace knocked out of it. That is exactly why they looked wrong on a home screen: they disagreed with the launcher icon sitting next to them.\n\nThe reason I had given for it was wrong rather than merely cautious. The claim was that at 18dp the slot is \"under two pixels\", that was the **dp** figure read as **pixels**:\n\n| | 1x | 2x | 3x | 4x |\n|---|---|---|---|---|\n| widget header (18dp) | 1.0 px | 2.0 px | **3.0 px** | 4.0 px |\n| status bar (24dp) | 1.3 px | 2.7 px | **4.0 px** | 5.4 px |\n\nAll six drawables carry the trace now. The two 24dp canvases widen it by a third so the hole survives a 1x density and the antialiasing of a very small render.\n\n`docs/brand/verify-mark.png` is the check, and it is the artefact that would have caught this a release earlier: thirteen surfaces in one image, where two solid bells among eleven carved ones are obvious at a glance.\n\n## Added: the cold-start animation\n\nThe bell arrives, rings, and the word wipes in beside it, over 2.8 s, on cold start only. It draws the same Compose mark the dashboard header uses, so it cannot drift from the icon it is introducing.\n\nThree details worth knowing, because all three only showed up on a screen recording rather than in the code:\n\n- **Android draws its own splash first** from API 31, and the default puts the launcher icon on a white circle. The splash window is now themed with the app's void and its own mark, no plate, so the platform's screen is the *first frame* of ours instead of a competing one.\n- **The bell used to jump left** at the handoff, because the system centres the icon and the animation centres bell *and* word. It now starts where the platform left it and drifts into place as the word arrives.\n- **The last 0.7 s is the finished lockup sitting still.** That hold is the point, not padding: an opening that dissolves the instant it resolves reads as a glitch.\n\nSkipped entirely when the system says animations are off, and it does not replay when you rotate the device.\n\n## Updating\n\nSame signing key as 3.0.1, so **3.0.1 updates in place**. Coming from 3.0.0 still needs an uninstall first, because 3.0.1 changed the key; coming from Pulse 2.x still needs export/import, because 3.0.0 moved the package. See [docs/MIGRATION_3.0.0.md](https://github.com/riveerxd/nightbell/blob/master/docs/MIGRATION_3.0.0.md).\n\n## Verified\n\n359 JVM tests and 103 on-device tests green. minSdk 26 (Android 8.0), targetSdk 36.\n\n`Nightbell-3.0.2-release.apk` · 2,160,440 bytes\n`sha256  6a5a2a858ac3e245657b7c6a284596626a78f58eddf749f3af550f099be11115`\n\n`SHA-256  20:d8:ab:da:a8:41:6a:9a:75:1e:3e:a1:44:ef:15:23:d7:dd:ba:ae:ee:9e:c6:be:01:d6:3a:65:57:4a:70:de`",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.0.2",
+  "apk": {
+   "name": "Nightbell-3.0.2-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.0.2/Nightbell-3.0.2-release.apk",
+   "bytes": 2160440
+  }
+ },
+ {
+  "version": "3.0.1",
+  "tag": "v3.0.1",
+  "name": "Nightbell",
+  "date": "2026-08-08",
+  "title": "New signing key, and the certificate says Nightbell",
+  "body": "A signing-key change, and three things that were wrong in 3.0.0.\n\n## Read this if you installed 3.0.0\n\n**3.0.0 cannot update to 3.0.1.** 3.0.0 was still signed by a key whose certificate subject read `CN=Pulse Monitor`, and a certificate subject cannot be edited without issuing a new certificate. So the key is new:\n\n```\nCN=Nightbell, OU=river, O=river, L=Prague, C=CZ\nSHA-256  20:d8:ab:da:a8:41:6a:9a:75:1e:3e:a1:44:ef:15:23:d7:dd:ba:ae:ee:9e:c6:be:01:d6:3a:65:57:4a:70:de\n```\n\nAndroid refuses an update signed by a different key than the installed build, so a 3.0.0 install has to be **uninstalled** before 3.0.1 will install. Export your monitors from Settings first if you had already imported them.\n\nThis was done one day after 3.0.0 shipped, deliberately, because the cost of re-keying only ever grows. 3.0.1 onward updates in place as normal. The old key is archived and still verifies every release up to and including 3.0.0; it is never used again.\n\nComing from Pulse 2.x is unchanged and still needs export/import, since the application id moved in 3.0.0. See [docs/MIGRATION_3.0.0.md](https://github.com/riveerxd/nightbell/blob/master/docs/MIGRATION_3.0.0.md).\n\n## Fixed\n\n- **The promo video clipped the \"g\".** The title card masks the wordmark on, and `mask-image` clips to the element's box; at `line-height: 1` that box was exactly the font size, so the descender fell outside the mask and was shaved off flat for the whole scene. \"Pulse\" has no descender, which is why it only appeared after the rename.\n- **The promo video advertised 2.5.0**, a version that was never released. It now reads the shipped version.\n- **The site's update FAQ was wrong.** It claimed everything from 2.0.0 installs over the top, which had not been true since 3.0.0 moved the package.\n\n## Added\n\n- A **Star on GitHub** button in the hero, and the other two lost their articles so all three fit one row: \"Download APK\", \"Read source\", \"Star on GitHub\". It points at the repository root rather than `/stargazers`, which 404s for a signed-out visitor.\n- Every external link on the site opens in a new tab.\n\n## Verified\n\n359 JVM tests and 105 on-device tests green. minSdk 26 (Android 8.0), targetSdk 36. No app behaviour changed in this release.\n\n`Nightbell-3.0.1-release.apk` · 2,157,468 bytes\n`sha256  db1e7d79fcba532889fd27e89e13c0f9f9dc7a869009d44dacb96011f53ea21f`",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.0.1",
+  "apk": {
+   "name": "Nightbell-3.0.1-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.0.1/Nightbell-3.0.1-release.apk",
+   "bytes": 2157468
+  }
+ },
+ {
+  "version": "3.0.0",
+  "tag": "v3.0.0",
+  "name": "Nightbell",
+  "date": "2026-08-08",
+  "title": "New name, new icon, new package",
+  "body": "Pulse is now **Nightbell**, and the icon finally matches the name: a bell with the heartbeat trace knocked out of it. The trace is the same six points the old mark was drawn from, scaled and centred inside the bell rather than redrawn, so the old identity is still in there.\n\n## Read this before you install\n\n**3.0.0 does not update a 2.x install.** The application id moved with the name, from `me.river.pulse` to `me.river.nightbell`. Android identifies an app by that id, so 3.0.0 installs *beside* Pulse with an empty data directory. No signing key or manifest setting changes that.\n\nTo carry your monitors across:\n\n1. In **Pulse 2.4.3**, Settings → Export. It writes one JSON file.\n2. Install **Nightbell 3.0.0**.\n3. In Nightbell, Settings → Import, and pick that file.\n4. Check the monitors arrived, then uninstall Pulse.\n\nTwo things do not come across. **Placed widgets** need removing and re-placing, because a launcher stores a widget provider as a fully-qualified `ComponentName`. **Notification channel settings** and the four grants belong to the old package, so Nightbell asks for them again on first launch.\n\nBackups written by any 2.x build import fine. The reader validates the JSON envelope, never the filename, so a file still called `pulse-backup-….json` is read exactly as it always was.\n\nFull detail: [docs/MIGRATION_3.0.0.md](https://github.com/riveerxd/nightbell/blob/master/docs/MIGRATION_3.0.0.md)\n\n## Why the name changed\n\nPulse was unwinnable as a search term. Pulse Pager and Pulse UpTime both ship uptime monitoring under the same word, with two more products alongside them, so searching for this app returned four competitors first. Nightbell collides with nothing in software.\n\n## The mark\n\nThe cutout is a real hole rather than a dark line painted over the bell, which matters in the two places Android tints the icon flat from its alpha channel: the themed launcher icon and the status-bar glyph. A painted-on hole would vanish there and leave a solid bell. At 18dp the slot is under two pixels, so the widget header and the notification icon use the solid bell on purpose.\n\n## Also in this release\n\n- Persisted identifiers moved to `nightbell.*` alongside the package: DataStore names, notification channel ids, WorkManager unique names, the backup filename prefix, and the `nightbell://` deep links. Safe to do here precisely because a new package has no live install to orphan.\n- The baseline profile was renaming-sensitive in a way that fails silently: 105 of its rules still named the old package, which does not break a build, it just stops matching and takes startup speed with it. Fixed.\n- `MainActivity` was still checking for the `pulse` URI scheme after the manifest and widget had moved to `nightbell://`, which would have broken every widget row tap. Fixed.\n- The thirty Pulse-era logo directions are archived unchanged under `docs/brand/archive/pulse-directions/`.\n\n## Verified\n\n359 JVM tests and 105 on-device tests green on the new package. minSdk 26 (Android 8.0), targetSdk 36.\n\n`Nightbell-3.0.0-release.apk` · 2,157,468 bytes\n`sha256  4b9005869c2f7a05c609aed12555c0b63c4766fd4270d89a0ceb20a2764bcadf`\n\nSigned with the same key as every release since 2.0.0:\n`SHA-256  c4:c1:19:2f:06:10:be:6b:cc:8f:22:33:f7:a9:4b:06:4a:fa:40:19:7c:3b:60:8c:ca:4d:25:dc:09:66:6a:96`\n\nThe certificate subject still reads `CN=Pulse Monitor`. A DN cannot be edited without issuing a new certificate, and a new certificate would break updates, so it stays.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.0.0",
+  "apk": {
+   "name": "Nightbell-3.0.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.0.0/Nightbell-3.0.0-release.apk",
+   "bytes": 2157468
+  }
+ },
+ {
+  "version": "2.4.3",
+  "tag": "v2.4.3",
+  "name": "Pulse",
+  "date": "2026-08-07",
+  "title": "Blue pulse mark, cleaner urgent page, pager survives the power button",
+  "body": "**The mark loses its ring.** The heartbeat trace is the whole mark now, in the brand blue, everywhere it appears, launcher icon, dashboard header, widget mark, and the status-bar glyph, all regenerated from one geometry so the copies can't drift. Red still means failure in the data (charts, history strip, status orbs); it's just no longer the logo.\n\n**Status-bar icon** is the trace alone, a ring at 24dp collapses to a blob under the status-bar mask, so the heartbeat reads on its own.\n\n**Strict-monitoring card** gains the system chronometer counting down to the next check and a start-icon label for the window the line reaches back over. The \"Stop strict mode\" button is gone, strict mode is turned off in Settings, so a control on a permanent notice was clutter, not a shortcut.\n\n**Urgent page** action pills are re-coloured and carry a glyph each: ✓ Acknowledge on green, ↻ Re-check on the brand blue, and a crossed bell on white for mute. They're hidden when the card is collapsed, the collapsed row is height-capped by the shade and used to clip the pills into an unreadable strip, so the collapsed card now carries only the verdict.\n\n### Fixed\n- **The urgent alarm went silent when the screen turned off.** The system cancels an ongoing vibration on screen-off (the vibrator history logs it as `cancelled_by_screen_off`), so pressing the power button silenced a page set to vibrate, the one thing a pager must never allow by accident. A vibration re-issued while the screen is already off runs normally, so a screen-off receiver restarts it and it keeps buzzing until the page is acknowledged.\n\n---\n\n359 JVM tests and 173 on-device. Sideload the signed APK below; it's signed with a personal key, so Play Protect will ask you to confirm. Anything from 2.0.0 onward updates in place and keeps your monitors.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v2.4.3",
+  "apk": {
+   "name": "Pulse-2.4.3-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v2.4.3/Pulse-2.4.3-release.apk",
+   "bytes": 2156640
+  }
+ },
+ {
+  "version": "2.4.2",
+  "tag": "v2.4.2",
+  "name": "Pulse",
+  "date": "2026-08-06",
+  "title": "",
+  "body": "The wait until the next check, written on the line.\n\nUpdates in place from any 2.x and keeps your monitors.\n\n## What's new\n\nThe grey tail already showed how much of the wait was left, by its width. Now it says so\nin words at the end of the line, **`15m`**, **`4m`**, **`now`**, driven by the same\nvalue the tail's width comes from, so the number and the grey cannot disagree.\n\n`ProgressStyle` carries no text: a segment takes a colour, a point takes a colour, and\nthat is the entire vocabulary. It does take an icon at each end, and an icon is a bitmap,\nso the label is drawn into one.\n\n## Three things about that icon slot, found on a device\n\n**It centre-crops to a square.** A bitmap sized to its own text gets trimmed from both\nends, `1h20m` rendered as `h20`, `now` as `how`. The canvas is square now and the text\nis fitted into it, so a short label renders larger than a long one.\n\n**It renders in full colour**, not the alpha mask a status-bar icon gets. Established by\nposting a bitmap of red/green/blue stripes into it and getting three stripes back.\n\n**Filled glyphs, not knocked-out ones.** The first attempt punched the text out of a\npill, which put the card behind it, a colour the app neither chooses nor can measure,\non one side of the contrast ratio. It measured **2.5:1**, below the floor for a graphic\nand nowhere near the floor for text. It shipped, and was reported as unreadable, which it\nwas.\n\n## No container\n\nDropping the pill bought back its margin, so the glyphs draw larger, which is what\nlegibility actually turned on. With nothing between the text and the shade, the ink now\nfollows the system theme exactly as the line's colours do: dark slate on a light shade,\nlight grey on a dark one. Both checked at actual size in both themes, rather than at\nzoom, which is how the unreadable version got through the first time.\n\n## Known limit\n\nA *colourised* card is pinned to the app's near-black whatever the system theme is, so on\na light-themed phone whose card wins promotion the ink resolves the wrong way. The same\ninversion already affects the segment colours. Fixing it means deciding colourisation\nbefore the style is built rather than after, a larger change than this one.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v2.4.2",
+  "apk": {
+   "name": "Pulse-2.4.2-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v2.4.2/Pulse-2.4.2-release.apk",
+   "bytes": 2156892
+  }
+ },
+ {
+  "version": "2.4.1",
+  "tag": "v2.4.1",
+  "name": "Pulse",
+  "date": "2026-08-06",
+  "title": "",
+  "body": "A maintenance release for the strict-monitoring card on Android 16, four bugs in\nthe live line, all reported from a device and none of them visible from reading the\ncode.\n\nUpdates in place from any 2.x and keeps your monitors.\n\n## The line no longer opens with grey\n\nThe window was measured from the oldest retained check *of any age* and then clamped\nto a day, so a single check older than that stretched the line to a full day and was\nthen skipped for falling before the window's own start. Everything between the left\nedge and the first drawable check stayed blank, under a label claiming \"last 24h\".\n\nThe label now describes the line actually drawn: `last 16h 23m` rather than a day that\nwas two thirds empty.\n\n## The tracker moves\n\nIt could not before. The tail returned the shortest *interval* in the fleet, a\nconstant that read neither the clock nor the last check, and because the elapsed part\nof the bar is always exactly 48 buckets, a fixed tail pins the tracker with it.\n\nDrawing the real countdown to scale does not help either: a bucket is the span over 48,\nso on fifteen hours of history a bucket is nearly nineteen minutes and a fifteen-minute\ncountdown floors to the same value full and empty alike. The tail now spends a fixed\nsixth of the bar and empties across it as the next check falls due.\n\nIt is also paced by one monitor, the fastest, rather than by whichever is due\nsoonest. With eight monitors staggered on a fifteen-minute interval something is always\nnearly due, so the old value sat near its floor and reset every couple of minutes: it\nwas moving, in a sawtooth indistinguishable from stuck.\n\nMeasured on the reporter's phone across nine minutes: tail 5 buckets → 2, tracker\n90.2% → 95.7%.\n\n## Compressing a busy line no longer invents outages\n\nCapping the number of segments used to absorb the shortest non-outage band into a\nneighbour, and the neighbours of an up-band are outages by construction, so the\nabsorbed uptime could only ever be handed to an outage, and the two red runs were then\nfused into one. Every merge turned uptime into downtime.\n\nMeasured on a monitor that alternated pass/fail every half hour for a day: **24 buckets\ngenuinely failed, the line drew 40, and the longest drawn run was 33**, a claimed\nsixteen and a half hours of continuous downtime that never happened.\n\nThe drawn red total now matches the real one exactly.\n\n## A live outage can no longer be painted over\n\nCarry-forward ran on the fleet-merged tone, so a monitor checked every five minutes\nfilled every bucket after an hourly monitor's failure with green, the line drew green\nall the way to the right edge, under a red tracker and a \"1 DOWN\" chip. Each monitor\nnow carries its own last verdict before the fleet merge.\n\n## Reading the line\n\n| What you see | What it means |\n| --- | --- |\n| Green / red stretch | how **long** that outcome lasted, to scale |\n| Taller red block | where an outage **began**, so a single failed check is findable |\n| Grey tail past the dot | the wait until the next check |\n\n## Repository fix\n\n2.4.0 shipped `LiveCard`, `LiveTimeline`, their tests and the dark-scheme colours in\nits APK but left those six files untracked, so the `v2.4.0` tag does not compile. They\nare committed here. Nothing else was missing, and the published 2.4.0 APK itself was\nfine.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v2.4.1",
+  "apk": {
+   "name": "Pulse-2.4.1-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v2.4.1/Pulse-2.4.1-release.apk",
+   "bytes": 2156832
+  }
+ },
+ {
+  "version": "2.4.0",
+  "tag": "v2.4.0",
+  "name": "Pulse",
+  "date": "2026-08-05",
+  "title": "",
+  "body": "A new identity, an app icon that is no longer a black square, and a widget that\nuses the space you give it.\n\nUpdates in place from any 2.x build and keeps your monitors.\n\n## A new mark\n\nA blue ring with a red trace cutting through it, replacing the gradient\ncardiogram. It shows up in the launcher icon, the widget header, the dashboard\nheader, the widget's configuration preview, and the ongoing strict-mode\nnotification, which used to carry a refresh arrow and so read as a monitor being\nre-checked when it never was.\n\nThe ring is blue because green means something specific now: **blue is the app,\ngreen is the thing it measures, red is the moment it breaks.**\n\n## Colour means something\n\nCharts no longer take their colour from the per-monitor accent. The sparkline, the\nhistory strip under it and the detail screen's latency bars are all **operational\ngreen**, and still bleed to red at a failed check. Everything that is chrome, buttons,\nchips, badges, headers, stays blue.\n\n## The app icon has no black plate\n\nThe mark now sits on transparency instead of a dark square.\n\nWorth knowing why it took a rewrite rather than a colour change:\n`AdaptiveIconDrawable.draw()` fills its layer bitmap with `Color.BLACK` before it\ncomposites its layers, so an adaptive icon with a transparent `<background>` renders\nsolid black, in the launcher *and* in Settings' app-info screen. It is not a\nlauncher bug and not a stale icon cache. Android has no fully transparent app icon;\na legacy icon is the closest, and where a launcher insists on a plate you now get a\nlight one instead of a black one.\n\nThe ring is also two arcs with a real gap now, rather than a full circle with the gap\nfaked by a stroke painted in the plate colour, which is what made the plate\nimpossible to remove in the first place.\n\n## Widget: a header you can strip down\n\nThe mark, the app name, the fleet summary (\"1 of 6 is down\") and the settings cog each\nswitch off on their own. They used to be a single flag, so the only way to drop the\nsummary was to lose the branding with it.\n\nWidgets already on your home screen keep their current look, old configurations are\nmigrated.\n\n## Widget: columns\n\nA widget dragged flat has spare width and no height. It used to respond by pushing\nmonitors below the fold and counting them in \"+3 more\". Now they spill sideways.\n\nColumns are chosen from the size your launcher reports, and three rules keep it\nreadable:\n\n- **Width always caps the column count**, no number of monitors justifies a column\n  too narrow to read a name in, so a fixed count of 3 still collapses on a narrow\n  widget.\n- **Below about 150dp per column the trailing latency is dropped**, so names stop\n  truncating to \"Market…\". The dot already carries health and the number is one tap\n  away.\n- **A widget too short for both a footer and a monitor drops the footer**, rather than\n  clipping both.\n\nSet `Columns: Auto` or pin it to 1 to 3 in the widget's settings.\n\n## Under the hood\n\n- All five copies of the mark are generated from the brand drawing by\n  `docs/brand/android_assets.py`, after a hand-scaled set shipped a Compose mark whose\n  ring gap was half the width of the vectors'.\n- Thirty explored logo directions are in `docs/brand`, with `logos.html` as a contact\n  sheet.\n- **323 JVM tests and 157 on-device tests**, up from 299 and 146. The new ones cover\n  the widget's column arithmetic, which decides whether a monitor is visible at all,\n  and the launcher icon's transparency, both of which are invisible to code review.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v2.4.0",
+  "apk": {
+   "name": "Pulse-2.4.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v2.4.0/Pulse-2.4.0-release.apk",
+   "bytes": 2156372
+  }
+ },
+ {
+  "version": "2.3.0",
+  "tag": "v2.3.0",
+  "name": "Pulse",
+  "date": "2026-08-04",
+  "title": "",
+  "body": "Certificate warnings, a light theme, and a dashboard you can search, filter and arrange.\n\nInstalls over 2.2.x and keeps your monitors.\n\n## New\n\n**TLS certificate expiry.** Every HTTPS check already completes a handshake, and the handshake carries the expiry date, so watching it costs nothing and catches the one outage you can see coming. Warns at 14 days by default, escalates at 2, and says something once per threshold and then at most once a day. Never urgent, never during quiet hours: there is nothing to do at 3am about a certificate with nine days left. A renewal clears the notice on the next check.\n\n**A light theme.** Not an inversion, the glass system draws depth as white at low alpha over black, which means nothing on a light surface. Every one of those overlays is now scheme-aware, and the status hues were re-picked rather than reused: mint `#2FD98A` has a contrast ratio of 1.9:1 on white, so light gets `#07834B`. Settings → Appearance offers System, Dark or Light.\n\n**Search, filter and sort.** Behind two header icons rather than a permanent panel. Filter by problems, healthy, paused or unacknowledged; sort worst-first, by name, slowest, most or least recently checked. When a filter is hiding monitors a strip says so and offers a way out.\n\n**Drag to reorder.** Pick \"My order\" and a grip appears on every card. It is its own sort mode because dragging under a worst-first ranking would arrange something the next completed check undoes. TalkBack users get Move up / Move down instead of a drag.\n\n**Bulk actions.** Long-press a card to select several, then pause, resume, mute or delete them together.\n\n**Templates and in-app help.** The empty state offers four starting points that pre-fill the wizard instead of dropping you into a blank four-step form. Settings has answers to the nine things people ask about most, including the deliberately surprising ones.\n\n**Tablet and landscape.** The dashboard grows columns instead of stretching cards; everything else clamps to a readable measure.\n\n## Fixed\n\n- **System Back in the setup wizard threw away the whole draft**, including page elements that cost a load each to capture. It steps the wizard now, and asks before discarding.\n- **Relative times and mute windows were frozen.** A row could sit on \"just now\" for a full fifteen-minute interval, and an expired mute kept its amber rim until something unrelated redrew the card.\n- **\"93% UPTIME\" was not uptime.** It was passing-checks over retained-checks, over a span that varied with the check interval. It now reports a real 24 hours, or says how far back it can actually see.\n- **Auto Backup was uploading your API tokens.** The monitor store includes request headers, and Android's cloud backup was shipping it to Google Drive. Off now, Settings → Backup and transfer is the only way across, and it scrubs alert state on purpose.\n- **Touch targets were 34dp** throughout. The hit areas are 48dp; the visuals are unchanged.\n- **The system \"Remove animations\" setting was ignored.** Honoured now, and it genuinely stops: measured at 1.25M pixels of movement over five seconds with animations on, and exactly zero with the setting off.\n- Charts speak their values to a screen reader instead of announcing \"Response time trend\". The detail screen can show every stored check rather than 24 of them. Page-element monitors show the text they last saw.\n\n## Tests\n\n299 JVM + 146 on-device, all green. Every screen was driven on an emulator in both schemes; six of the fixes above were found by looking at the result rather than by reading the code.\n\nSideloaded and signed with my own key, so Play Protect will ask you to confirm.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v2.3.0",
+  "apk": {
+   "name": "Pulse-2.3.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v2.3.0/Pulse-2.3.0-release.apk",
+   "bytes": 2158168
+  }
+ },
+ {
+  "version": "2.2.2",
+  "tag": "v2.2.2",
+  "name": "Pulse",
+  "date": "2026-08-04",
+  "title": "",
+  "body": "Acknowledging is instant instead of taking up to a minute.\n\nReported from real use: tapping Ack on the page left the phone vibrating for about thirty seconds.\n\nThe ack itself was never slow. It cancelled the notification and persisted the state immediately. But the alarm is stopped by the service loop, and after posting a page that loop slept for between fifteen and sixty seconds. So the phone kept buzzing until the loop woke on its own schedule. The same sleep held the red card on screen.\n\nThe sleep is interruptible now, the alarm is a single shared instance so an ack can silence the player that is actually running (there were two), and both are driven from one place. Acknowledge, Mute 1h and recovery are all felt at once.\n\nThe regression test asserts the page stops within two seconds. I reverted the fix and re-ran it first to check it actually bites: it times out against the old code.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v2.2.2",
+  "apk": {
+   "name": "Pulse-2.2.2-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v2.2.2/Pulse-2.2.2-release.apk",
+   "bytes": 2076256
+  }
+ },
+ {
+  "version": "2.2.1",
+  "tag": "v2.2.1",
+  "name": "Pulse",
+  "date": "2026-08-04",
+  "title": "",
+  "body": "Fixes the setup screen button, which built its label by lowercasing the row title and so read \"Set up get through do not disturb\" on the Do Not Disturb step.\n\nEach step has its own wording now, and it says whether the tap opens a dialog (\"Allow ...\") or leaves for Settings (\"Open ...\"), which is the difference between one tap and a round trip.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v2.2.1",
+  "apk": {
+   "name": "Pulse-2.2.1-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v2.2.1/Pulse-2.2.1-release.apk",
+   "bytes": 2076260
+  }
+ },
+ {
+  "version": "2.2.0",
+  "tag": "v2.2.0",
+  "name": "Pulse",
+  "date": "2026-08-04",
+  "title": "",
+  "body": "Pages follow your ringer switch, and there is a setup screen that finds the permission toggles for you.\n\n2.1.0 looped the page on the alarm stream, which the platform exempts from the ringer on purpose. Right for an alarm clock, wrong here: a phone set to vibrate got a full volume siren. Now sound and haptics on Normal, haptics only on Vibrate and Silent, with the sound moved to the ringtone usage so ring volume applies. Silent still vibrates, because a page that makes no sound and no buzz cannot be told apart from a broken pager. There is a setting to go back to the always loud behaviour.\n\nUrgent needs four grants spread across three settings sections, so there is now a screen on first launch. Two of them show a system dialog in place. The other two are Special App Access toggles that Android exposes no API for, so the screen deep-links straight to each one and re-checks when you come back, which is four taps instead of hunting. It also reports ring volume at zero, which is not a permission and which nothing but the volume keys can fix.\n\nIt gates once and it skips. A monitoring app that hides your monitors behind four system toggles is worse than one with a degraded pager.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v2.2.0",
+  "apk": {
+   "name": "Pulse-2.2.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v2.2.0/Pulse-2.2.0-release.apk",
+   "bytes": 2076260
+  }
+ },
+ {
+  "version": "2.1.0",
+  "tag": "v2.1.0",
+  "name": "Pulse",
+  "date": "2026-08-04",
+  "title": "",
+  "body": "Urgent alerts actually page you now.\n\nUp to 2.0.0 the urgent switch posted an ordinary high importance notification. No screen wake, nothing on a locked phone beyond a normal row, one chime and then minutes of silence, and on any install that had ever run 1.1.0, no Do Not Disturb bypass at all, because a channel freezes its importance and DND flags at creation and the id had never changed.\n\n- red call style card with Ack, Re-check and Mute 1h\n- looping alarm that keeps going until you acknowledge\n- wakes the screen on a locked phone, if you grant full screen alerts\n- new channel family so the DND bypass reaches installs that ran older builds\n\nFour paging bugs went with it:\n\n- the repeat loop and the reconciliation sweep now also run from the periodic sweep worker, instead of only inside a service Android routinely refuses to start from the background. With strict mode off, the first page used to go out and nothing ever repeated it until you opened the app by hand.\n- a repeat re-checks instead of re-asserting a verdict up to a quarter of an hour old\n- pausing a monitor ends its page instead of leaving one that cannot be dismissed\n- the service no longer gets stopped before it has promoted itself, which was killing the process outright",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v2.1.0",
+  "apk": {
+   "name": "Pulse-2.1.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v2.1.0/Pulse-2.1.0-release.apk",
+   "bytes": 2076224
+  }
+ },
+ {
+  "version": "2.0.0",
+  "tag": "v2.0.0",
+  "name": "Pulse",
+  "date": "2026-08-04",
+  "title": "",
+  "body": "Renames the application id to `me.river.pulse`.\n\nThis is the one release that does not update an earlier install. Android identifies an app by its application id, so this installs alongside the old app with an empty data directory, and no signing key or manifest setting changes that. The only route across is the JSON export and import added in 1.7.0, driven by hand. Placed widgets do not survive either, because a launcher stores the provider as a fully qualified component name.\n\nThe store itself is untouched. Its name, key and schema version were never derived from the package, so an imported snapshot lands in exactly the shape it left.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v2.0.0",
+  "apk": {
+   "name": "Pulse-2.0.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v2.0.0/Pulse-2.0.0-release.apk",
+   "bytes": 2027936
+  }
+ },
+ {
+  "version": "1.7.0",
+  "tag": "v1.7.0",
+  "name": "Pulse",
+  "date": "2026-08-04",
+  "title": "",
+  "body": "Export and import in Settings. The whole store as one JSON file, to a destination you pick.\n\nShipped ahead of 2.0.0 on purpose. 2.0.0 changes the application id, which Android treats as a different app entirely, so this is the only route for carrying monitors across.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v1.7.0",
+  "apk": {
+   "name": "Pulse-1.7.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v1.7.0/Pulse-1.7.0-release.apk",
+   "bytes": 2027956
+  }
+ },
+ {
+  "version": "1.6.0",
+  "tag": "v1.6.0",
+  "name": "Pulse",
+  "date": "2026-08-04",
+  "title": "",
+  "body": "Stops reporting cancelled checks as crashed ones.\n\nA coroutine cancellation, which is Android working correctly (WorkManager replacing work, a foreground service stopping, a screen going away), was caught by a blanket `catch (Throwable)`, turned into a failed check called \"Checker crashed\", and escalated through the down track into the urgent nag loop. Reproduced from a real device: six simultaneous ongoing urgent notifications for six monitors that had all just passed.\n\nA cancelled check now records nothing, because it has no verdict. Background scheduling is rebuilt on periodic work with UPDATE so nothing cancels a check in flight in the first place, and faults inside Pulse get their own alert track and channel so a bug here is never reported as your website being down.\n\nWidgets:\n\n- a placed widget is reachable again, with a settings cog on the widget itself and a list in Settings\n- custom background and text colours, with a background opacity slider that goes all the way to transparent\n- a refetch button for site icons\n\nWidget configs are forward compatible, so widgets placed by 1.5.0 keep their exact look.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v1.6.0",
+  "apk": {
+   "name": "Pulse-1.6.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v1.6.0/Pulse-1.6.0-release.apk",
+   "bytes": 2011572
+  }
+ },
+ {
+  "version": "1.5.0",
+  "tag": "v1.5.0",
+  "name": "Pulse",
+  "date": "2026-08-01",
+  "title": "",
+  "body": "Times a known good endpoint alongside your checks and discounts whatever the phone connection is adding before calling a service slow.\n\nWithout it, bad wifi made every monitor breach its latency budget at once, and every one of those alerts was wrong. The compensation only ever informs the latency verdict. A bad connection is a reason to doubt a slow reading, never a reason to stay quiet about an outage.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v1.5.0",
+  "apk": {
+   "name": "Pulse-1.5.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v1.5.0/Pulse-1.5.0-release.apk",
+   "bytes": 1994152
+  }
+ },
+ {
+  "version": "1.4.0",
+  "tag": "v1.4.0",
+  "name": "Pulse",
+  "date": "2026-08-01",
+  "title": "",
+  "body": "Page-element monitors now show the site favicon on their card instead of a generic glyph, cached in memory and on disk, with ICO unwrapping for sites that still serve one.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v1.4.0",
+  "apk": {
+   "name": "Pulse-1.4.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v1.4.0/Pulse-1.4.0-release.apk",
+   "bytes": 1977768
+  }
+ },
+ {
+  "version": "1.3.0",
+  "tag": "v1.3.0",
+  "name": "Pulse",
+  "date": "2026-08-01",
+  "title": "",
+  "body": "Stops checking entirely while the device has no connectivity.\n\nLosing signal is not an outage. A check with no network fails for a reason that says nothing about the monitored service, and it fails for every monitor at once, so walking through a tunnel produced a screenful of false outages and poisoned the uptime history with them. Nothing is checked, recorded or alerted while offline, and coming back online triggers a pass immediately rather than waiting out an interval.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v1.3.0",
+  "apk": {
+   "name": "Pulse-1.3.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v1.3.0/Pulse-1.3.0-release.apk",
+   "bytes": 1977768
+  }
+ },
+ {
+  "version": "1.2.0",
+  "tag": "v1.2.0",
+  "name": "Pulse",
+  "date": "2026-08-01",
+  "title": "",
+  "body": "Dashboard rework.\n\n- the uptime dial is gone, replaced by a fleet banner that takes the colour of the worst monitor, so the top of the screen tells you the answer before you read anything\n- card sparklines carry failures in the stroke itself instead of as separate dots, and the tick strip underneath lines up with the chart above it",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v1.2.0",
+  "apk": {
+   "name": "Pulse-1.2.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v1.2.0/Pulse-1.2.0-release.apk",
+   "bytes": 1977768
+  }
+ },
+ {
+  "version": "1.1.2",
+  "tag": "v1.1.2",
+  "name": "Pulse",
+  "date": "2026-08-01",
+  "title": "",
+  "body": "Fixes alert notifications that outlived the outage they described, reported from real use with screenshots. Six monitors showed twelve standing notifications while the app itself said everything was operational, and urgent alerts are ongoing by design, so they could not be swiped away either.\n\nThree separate defects caused it:\n\n- the urgent state machine returned \"do nothing\" instead of \"clear\" when a monitor was healthy and its stored state was already idle, which trusted stored state to be a truthful record of what was on screen. It is not, because state is read before a check that takes seconds.\n- deleting a monitor only cancelled its down notification, never its urgent or degraded ones, and once the monitor was gone no loop would ever visit it again.\n- one throwing check pass took the reconciliation sweep down with it, because they shared a single catch.\n\nAlso adds a per-monitor mutex so two checks of the same monitor cannot interleave, collapses muting into a single write, and runs a one time repair on upgrade because orphans left by 1.1.0 and 1.1.1 cannot be found by reasoning about state.\n\nVerified on a Samsung S25 Ultra over wireless adb: twelve orphaned notifications before, zero after.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v1.1.2",
+  "apk": {
+   "name": "Pulse-1.1.2-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v1.1.2/Pulse-1.1.2-release.apk",
+   "bytes": 1977768
+  }
+ }
+]

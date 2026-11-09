@@ -1,7 +1,7 @@
 "use client"
 
 import { useRef, useState } from "react"
-import { ArrowUpRight, Check, Copy, Download, ShieldCheck } from "lucide-react"
+import { ArrowRight, ArrowUpRight, Check, Copy, Download, ShieldCheck } from "lucide-react"
 
 import { BlurFade } from "@/components/ui/blur-fade"
 import { BorderBeam } from "@/components/ui/border-beam"
@@ -113,13 +113,11 @@ export function Install() {
                   <span className="font-mono text-xs opacity-70">{APK_MB} MB</span>
                 </a>
                 <a
-                  href={REPO.latestRelease}
-                  target="_blank"
-                  rel="noopener"
+                  href={`/changelog#${RELEASE.tag}`}
                   className="bg-surface-2 shadow-elev-1 hover:bg-muted inline-flex h-12 items-center gap-2 rounded-full px-5 text-[15px] font-semibold transition-colors"
                 >
-                  Release notes
-                  <ArrowUpRight className="size-4" aria-hidden />
+                  What changed in {RELEASE.version}
+                  <ArrowRight className="size-4" aria-hidden />
                 </a>
               </div>
             </div>

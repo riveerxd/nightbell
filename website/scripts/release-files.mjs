@@ -13,14 +13,16 @@
 //                               /etc/nginx/snippets/nightbell/download-target.conf
 import { readFileSync, writeFileSync } from "node:fs"
 
-import { RELEASE, REPO } from "../src/lib/site.ts"
+import { RELEASE, SITE_URL } from "../src/lib/site.ts"
 
 const manifest = {
   schema: 1,
   version: RELEASE.version,
   versionCode: RELEASE.versionCode,
   tag: RELEASE.tag,
-  url: `${REPO.url}/releases/tag/${RELEASE.tag}`,
+  // What the app's What's new button opens. The changelog entry rather than the
+  // GitHub release: same notes, and the page an installed copy should land on.
+  url: `${SITE_URL}/changelog#${RELEASE.tag}`,
   notes: `Nightbell ${RELEASE.version}`,
   apkUrl: RELEASE.apkUrl,
   apkSize: RELEASE.apkBytes,

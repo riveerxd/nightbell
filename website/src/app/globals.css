@@ -576,3 +576,14 @@
 .hero-flat .phone-shadow {
   filter: none;
 }
+
+/* The changelog's release notes: the doc voice, with each release's opening
+   paragraph set as its lede, since that is where every release says what it is. */
+.notes > p:first-child {
+  font-size: 1.15rem;
+  line-height: 1.6;
+  color: var(--foreground);
+}
+.notes h3 { font-size: 1.15rem; margin-top: 2.25rem; }
+.notes h4, .notes h5 { font-weight: 700; color: var(--foreground); margin-top: 1.75rem; }
+.notes table { margin-top: 1.5rem; }

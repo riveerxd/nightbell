@@ -265,6 +265,38 @@ class WebsiteShotsInstrumentedTest {
         deviceShot("hd-calm-dashboard-device")
     }
 
+    /*
+      The banner a 3.23.0 install shows the day 3.24.0 ships, for the changelog.
+      Seeded the way the manifest would fill it, rather than fetched, so the shot
+      does not depend on what the site says today. run.sh builds this one with the
+      version set to 3.23.0 and no -debug suffix, or the second line says so.
+    */
+    @Test
+    fun updateBanner() {
+        seed(checkoutDown = false)
+        val now = System.currentTimeMillis()
+        runBlocking {
+            val store = Nightbell.install(appContext).store
+            store.replaceAll(
+                store.currentSnapshot().copy(
+                    update = me.river.nightbell.domain.UpdateState(
+                        lastCheckedAt = now,
+                        latestVersion = "3.24.0",
+                        latestUrl = "https://github.com/riveerxd/nightbell/releases/tag/v3.24.0",
+                        latestSource = UpdateSource.DIRECT,
+                        latestApkUrl = "https://nightbell.app/download",
+                        latestApkSize = 2_929_660L,
+                        notifiedVersion = "3.24.0",
+                        censusSent = true,
+                    ),
+                ),
+            )
+        }
+        launch()
+        composeRule.onNodeWithText("Nightbell 3.24.0 is available").assertExists()
+        deviceShot("update-banner")
+    }
+
     @Test
     fun calmDashboardLight() {
         seed(checkoutDown = false, theme = ThemeChoice.LIGHT)
