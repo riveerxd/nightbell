@@ -91,6 +91,13 @@ data class UpdateState(
     /** "Not now." Suppresses every version until this moment passes. */
     val remindAfter: Long = 0L,
     val etag: String = "",
+    /**
+     * The release that last opened the dashboard, as its plain number.
+     *
+     * What lets the first launch after an update say so. Written on every launch
+     * that differs, so it is never more than one launch behind.
+     */
+    val lastRunVersion: String = "",
 
     /**
      * Whether this install has ever completed a check against its own site.
@@ -149,6 +156,13 @@ object AppUpdate {
      * never changing anything.
      */
     const val MANIFEST_PATH = "/v1/release.json"
+
+    /**
+     * The site's changelog. Every release has an entry anchored by its tag, so a
+     * link can land on the notes for one version rather than on the top of a page
+     * of forty-nine.
+     */
+    const val CHANGELOG_URL = "$SITE_BASE/changelog"
 
     /** Shortest gap between two version checks. One a day is generous already. */
     const val CHECK_INTERVAL_MS = 6L * 60 * 60 * 1000
@@ -390,6 +404,38 @@ object AppUpdate {
         val suffix = if (notes.isEmpty()) "" else notes.joinToString(prefix = "; ", separator = "; ")
         return "Nightbell/$name (Android$suffix)"
     }
+
+    /**
+     * The release a version name belongs to: `3.24.0` from `v3.24.0` and from a
+     * debug build's `3.24.0-debug`. Empty when there is no number in it at all.
+     */
+    fun releaseName(version: String): String = segments(version).joinToString(".")
+
+    /**
+     * The changelog entry for [version]. The page has no entry for
+     * `3.24.0-debug`, so the suffix goes, and a name with no number in it gets
+     * the top of the page rather than an anchor that is not there.
+     */
+    fun changelogUrl(version: String): String {
+        val name = releaseName(version)
+        return if (name.isEmpty()) CHANGELOG_URL else "$CHANGELOG_URL#v$name"
+    }
+
+    /**
+     * Whether this launch is the first one on a newer version than the last.
+     *
+     * Nobody could find the notes after taking an update from the dashboard
+     * notice: the notice goes away the moment the new version is installed, and
+     * with it the only What's new button the app had.
+     *
+     * A blank [lastRun] is either a fresh install or the first launch of the
+     * release that started keeping the record. [censusSent] tells them apart,
+     * because it is only ever set by a check that completed on an earlier launch,
+     * and a fresh install has had none. A downgrade or a reinstall of the same
+     * version says nothing.
+     */
+    fun justUpdated(lastRun: String, installed: String, censusSent: Boolean): Boolean =
+        if (lastRun.isBlank()) censusSent && releaseName(installed).isNotEmpty() else isNewer(installed, lastRun)
 
     /** Undoes [ignore], for the Settings card. A mis-tap has to be recoverable. */
     fun unignore(state: UpdateState): UpdateState = state.copy(ignoredVersion = "")

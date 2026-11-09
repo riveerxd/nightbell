@@ -708,4 +708,43 @@ class AppUpdateTest {
             ),
         )
     }
+
+    // ---- the notes for the version on this phone ----------------------------
+
+    @Test
+    fun `the changelog link lands on the entry for the release, not the build`() {
+        assertEquals("https://nightbell.app/changelog#v3.24.0", AppUpdate.changelogUrl("3.24.0"))
+        assertEquals("https://nightbell.app/changelog#v3.24.0", AppUpdate.changelogUrl("3.24.0-debug"))
+        assertEquals("https://nightbell.app/changelog#v3.24.0", AppUpdate.changelogUrl("v3.24.0"))
+    }
+
+    @Test
+    fun `a version name with no number gets the top of the changelog`() {
+        assertEquals("https://nightbell.app/changelog", AppUpdate.changelogUrl("unknown"))
+        assertEquals("https://nightbell.app/changelog", AppUpdate.changelogUrl(""))
+    }
+
+    @Test
+    fun `the first launch on a newer version is an update`() {
+        assertTrue(AppUpdate.justUpdated(lastRun = "3.23.0", installed = "3.24.0", censusSent = true))
+        assertTrue(AppUpdate.justUpdated(lastRun = "3.23.0", installed = "3.24.0-debug", censusSent = false))
+    }
+
+    @Test
+    fun `the same version again, or an older one, is not`() {
+        assertFalse(AppUpdate.justUpdated(lastRun = "3.24.0", installed = "3.24.0", censusSent = true))
+        assertFalse(AppUpdate.justUpdated(lastRun = "3.24.0", installed = "3.23.0", censusSent = true))
+    }
+
+    @Test
+    fun `a fresh install has nothing to have been updated from`() {
+        assertFalse(AppUpdate.justUpdated(lastRun = "", installed = "3.25.0", censusSent = false))
+    }
+
+    // The release that starts keeping the record has no lastRun to compare with,
+    // but an install that already completed a version check ran an older one.
+    @Test
+    fun `the first release keeping the record still announces itself to an existing install`() {
+        assertTrue(AppUpdate.justUpdated(lastRun = "", installed = "3.25.0", censusSent = true))
+    }
 }

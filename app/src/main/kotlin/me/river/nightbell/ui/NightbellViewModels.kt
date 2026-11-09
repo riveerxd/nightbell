@@ -15,6 +15,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import android.content.Intent
+import android.net.Uri
 import me.river.nightbell.BuildConfig
 import me.river.nightbell.data.Nightbell
 import me.river.nightbell.data.diag.DiagnosticFacts
@@ -70,6 +72,7 @@ import me.river.nightbell.domain.Validation
 import me.river.nightbell.domain.UrlInput
 import me.river.nightbell.domain.isCancellation
 import me.river.nightbell.domain.runCatchingCancellable
+import me.river.nightbell.ui.components.ToastAction
 import me.river.nightbell.ui.components.ToastMessage
 import me.river.nightbell.ui.dashboard.DashboardRow
 import me.river.nightbell.ui.dashboard.GroupDraft
@@ -211,6 +214,30 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
         // every six hours whatever calls it, and a launch counter on top would be
         // two mechanisms disagreeing about the same number.
         graph.appScope.launch { graph.engine.checkForAppUpdate() }
+
+        viewModelScope.launch { announceUpdate() }
+    }
+
+    /**
+     * "Updated to 3.24.0", with the notes one tap away, on the first launch of a
+     * newer version. The record is written before the toast is raised, so a
+     * rotation or a second dashboard cannot say it twice.
+     */
+    private suspend fun announceUpdate() {
+        val installed = BuildConfig.VERSION_NAME
+        val name = AppUpdate.releaseName(installed)
+        val before = graph.store.currentSnapshot().update
+        if (before.lastRunVersion == name) return
+        graph.store.updateAppUpdate { it.copy(lastRunVersion = name) }
+        if (!AppUpdate.justUpdated(before.lastRunVersion, installed, before.censusSent)) return
+        toast = ToastMessage(
+            text = "Updated to $name",
+            action = ToastAction("What's new") {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(AppUpdate.changelogUrl(installed)))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                runCatching { graph.context.startActivity(intent) }
+            },
+        )
     }
 
     // ---- nightbell's own updates -------------------------------------------

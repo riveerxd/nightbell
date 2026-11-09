@@ -1591,6 +1591,24 @@ fun SettingsScreen(
                                 )
                             }
                         }
+                        // Outside the switch, because the notes for the version on
+                        // this phone are worth reading whether or not it looks for
+                        // the next one, and after an update this is where people
+                        // went looking for them.
+                        Spacer(Modifier.height(10.dp))
+                        NightbellButton(
+                            text = "What's new in ${AppUpdate.releaseName(viewModel.installedVersion)}",
+                            onClick = {
+                                val intent = Intent(
+                                    Intent.ACTION_VIEW,
+                                    AppUpdate.changelogUrl(viewModel.installedVersion).toUri(),
+                                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                runCatching { context.startActivity(intent) }
+                            },
+                            icon = NightbellIcons.Link,
+                            tone = ButtonTone.Secondary,
+                            modifier = Modifier.fillMaxWidth().testTag("installed-changelog"),
+                        )
                     }
                 }
             }
