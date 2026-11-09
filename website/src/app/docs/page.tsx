@@ -8,11 +8,11 @@ import { pageMeta } from "@/lib/seo"
 import { docsArticle } from "@/lib/structured"
 
 const description =
-  "The complete reference for Nightbell, the Android uptime monitor that runs on your phone. Every check type and its matching modes, the alert escalation matrix, the home-screen widget, the element picker, the diagnostic log, and the architecture behind them."
+  "Every check Nightbell runs on your phone, from HTTP and ping to Prometheus and UDP ports, and how an alert goes from a notification to a full-screen alarm."
 
 export const metadata: Metadata = pageMeta({
   path: "/docs",
-  title: "Nightbell reference: every check, alert and setting",
+  title: "Nightbell docs: what it can monitor and how it alerts",
   description,
 })
 

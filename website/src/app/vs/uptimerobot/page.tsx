@@ -21,9 +21,9 @@ import {
   type QA,
 } from "../_kit"
 
-const TITLE = "Nightbell vs UptimeRobot: phone or hosted service"
+const TITLE = "Nightbell vs UptimeRobot: an open source alternative"
 const DESCRIPTION =
-  "UptimeRobot keeps watching while your phone is off and holds the history; Nightbell runs every check on the device, needs no account, and pages you with a full-screen alarm instead of a push notification. Which one to pick, and why running both is reasonable."
+  "UptimeRobot watches while your phone is off. Nightbell is free and open source, needs no account, and pages you with a full-screen alarm. Which to pick."
 
 export const metadata: Metadata = pageMeta({ path: "/vs/uptimerobot", title: TITLE, description: DESCRIPTION })
 

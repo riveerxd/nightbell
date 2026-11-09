@@ -1,7 +1,7 @@
 // The site-wide structured data, ported from website/src/layouts/Base.astro so
 // the entities and their @ids are what search engines already have on record.
 import media from "@/lib/media.json"
-import { MEDIA, RELEASE, REPO, SEO, SITE_URL, APK_MB } from "@/lib/site"
+import { CHANNELS, MEDIA, RELEASE, REPO, SEO, SITE_URL, APK_MB } from "@/lib/site"
 
 const abs = (p: string) => new URL(p, SITE_URL).href
 
@@ -20,6 +20,9 @@ export const softwareApplication = {
   license: "https://www.apache.org/licenses/LICENSE-2.0",
   isAccessibleForFree: true,
   url: SITE_URL,
+  // "nightbell" on its own belongs to a horror game, an iOS sleepwalking alarm
+  // and a Roblox item. These are the listings that say which Nightbell this is.
+  sameAs: [CHANNELS.fdroid.url, REPO.url],
   description: SEO.description,
   softwareHelp: REPO.reference,
   codeRepository: REPO.url,

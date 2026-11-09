@@ -2,9 +2,20 @@ import { expect, test, type Page } from "@playwright/test"
 // The release the site hands out, read from the block every release edits, so a
 // version bump cannot leave these assertions describing the one before. 3.19.0
 // shipped with three of them still saying 3.18.0.
-import { RELEASE } from "../src/lib/site"
+import { CHANNELS, INDEXNOW_KEY, RELEASE, REPO } from "../src/lib/site"
 
-const ROUTES = ["/", "/faq", "/docs", "/docs/health-format", "/android-background-limits", "/vs/uptimerobot", "/vs/uptime-kuma"]
+const ROUTES = [
+  "/",
+  "/faq",
+  "/docs",
+  "/docs/health-format",
+  "/android-background-limits",
+  "/vs/uptimerobot",
+  "/vs/uptime-kuma",
+  "/uptime-kuma-on-android",
+  "/wireguard-server-monitoring",
+  "/homelab-monitoring-on-android",
+]
 
 function watchErrors(page: Page) {
   const errors: string[] = []
@@ -503,18 +514,35 @@ test("folded answers are in the static HTML, so the FAQPage data matches the pag
   }
 })
 
-test("every page keeps the old site's search title and a full share card", async ({ request }) => {
+// The titles are pinned because a search result is the first thing most visitors
+// read. /faq and /docs were renamed on 2026-11-08 after Search Console showed
+// both on page one with no clicks; change them here on purpose, not by accident.
+test("every page keeps its search title and a full share card", async ({ request }) => {
   const titles: Record<string, string> = {
     "/": "Nightbell: Android uptime monitoring with no server or account",
-    "/faq": "Nightbell FAQ: on-device uptime monitoring, answered",
-    "/docs": "Nightbell reference: every check, alert and setting",
+    "/faq": "Nightbell FAQ: battery, Do Not Disturb and 15 minute checks",
+    "/docs": "Nightbell docs: what it can monitor and how it alerts",
   }
-  for (const path of ["/", "/faq", "/docs", "/vs/uptimerobot", "/vs/uptime-kuma", "/android-background-limits"]) {
+  for (const path of ROUTES.filter((r) => r !== "/docs/health-format")) {
     const html = await (await request.get(path)).text()
     if (titles[path]) expect(html, path).toContain(`<title>${titles[path]}</title>`)
     for (const tag of ['property="og:image"', 'property="og:image:alt"', 'name="twitter:image"', 'name="twitter:image:alt"', 'rel="canonical"'])
       expect(html.includes(tag), `${tag} on ${path}`).toBe(true)
   }
+})
+
+test("the IndexNow key is served where the deploy step says it is", async ({ request }) => {
+  const res = await request.get(`/${INDEXNOW_KEY}.txt`)
+  expect(res.status()).toBe(200)
+  expect((await res.text()).trim()).toBe(INDEXNOW_KEY)
+})
+
+test("the app's structured data names its F-Droid and GitHub listings", async ({ request }) => {
+  const html = await (await request.get("/")).text()
+  const app = [...html.matchAll(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g)]
+    .map((m) => JSON.parse(m[1]))
+    .find((d) => d["@type"] === "SoftwareApplication")
+  expect(app.sameAs).toEqual([CHANNELS.fdroid.url, REPO.url])
 })
 
 test("structured data carries every entity the old site published, and parses", async ({ request }) => {
@@ -525,6 +553,9 @@ test("structured data carries every entity the old site published, and parses", 
     "/android-background-limits": ["TechArticle"],
     "/vs/uptimerobot": ["FAQPage"],
     "/vs/uptime-kuma": ["FAQPage"],
+    "/uptime-kuma-on-android": ["TechArticle", "FAQPage"],
+    "/wireguard-server-monitoring": ["TechArticle", "FAQPage"],
+    "/homelab-monitoring-on-android": ["TechArticle", "FAQPage"],
   }
   for (const [path, types] of Object.entries(want)) {
     const html = await (await request.get(path)).text()

@@ -23,6 +23,9 @@ const COLUMNS = [
       { href: "/android-background-limits", label: "Android background limits" },
       { href: "/vs/uptimerobot", label: "Nightbell vs UptimeRobot" },
       { href: "/vs/uptime-kuma", label: "Nightbell vs Uptime Kuma" },
+      { href: "/uptime-kuma-on-android", label: "Uptime Kuma on Android" },
+      { href: "/wireguard-server-monitoring", label: "Watching a WireGuard server" },
+      { href: "/homelab-monitoring-on-android", label: "Homelab monitoring" },
     ],
   },
   {

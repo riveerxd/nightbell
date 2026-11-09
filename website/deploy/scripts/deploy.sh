@@ -63,6 +63,10 @@ STAMP="$(date -u +%Y%m%d-%H%M%S)"
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 
+# Read before the switch, while the live site is still the old build: the pages
+# whose words, title or description differ go to IndexNow once this one is live.
+node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/indexnow.mjs changed https://nightbell.app > "$STAGE/indexnow.txt" || true
+
 if [ -z "$FILES_ONLY" ]; then
   echo "==> staging config"
   # The live snippet with only its CSP line swapped for this build's.
@@ -116,6 +120,9 @@ ssh "$HOST" "
   sudo nginx -t && sudo systemctl reload nginx
   cd '$BASE/releases' && ls -1dt */ | tail -n +$((KEEP + 1)) | xargs -r rm -rf
 "
+
+echo "==> telling IndexNow what changed"
+node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/indexnow.mjs submit "$STAGE/indexnow.txt" || true
 
 echo "==> done: $STAMP is live"
 echo "    roll back: ssh \$NIGHTBELL_HOST \"ln -sfnT $BASE/releases/<stamp> $BASE/.current.new && mv -T $BASE/.current.new $BASE/current\""

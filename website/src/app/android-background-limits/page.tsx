@@ -9,9 +9,9 @@ import { pageMeta } from "@/lib/seo"
 import { Block, JsonLd, PageActions, PageHero, Prose, Related } from "../vs/_kit"
 import { Cadence } from "./cadence"
 
-const TITLE = "Android's 15 minute background limit, explained"
+const TITLE = "Android background execution limits: the 15 minute floor"
 const DESCRIPTION =
-  "Android clamps PeriodicWorkRequest to a fifteen minute minimum, and it is a floor rather than an interval: the work arrives at that mark or later. What that means for watching a service from a phone, what a foreground service buys, and what it costs in battery, in a permanent notification and in a Play Store listing."
+  "Why Android runs periodic background work every fifteen minutes at best, often later, and what a foreground service buys you and what it costs."
 
 export const metadata: Metadata = pageMeta({ path: "/android-background-limits", title: TITLE, description: DESCRIPTION })
 

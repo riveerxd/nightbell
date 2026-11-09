@@ -1,5 +1,7 @@
 "use client"
 
+import type { ReactNode } from "react"
+import Link from "next/link"
 import { Globe, Server, Smartphone } from "lucide-react"
 import { motion } from "motion/react"
 
@@ -10,7 +12,9 @@ import { Deep, DeepGroup } from "./deep"
 import { PhoneFrame } from "./depth"
 import { SectionHeading, Serif } from "./section"
 
-const ROWS: [string, string, string, string][] = [
+const inline = "underline decoration-current/40 underline-offset-4 hover:decoration-current"
+
+const ROWS: [string, string, string, ReactNode][] = [
   ["Infrastructure", "Theirs. Nothing to run.", "A box, a container, a certificate, and monitoring for the monitor.", "The phone you already carry."],
   ["Account", "Required.", "Usually required, at least locally.", "None. There is nothing to sign up to."],
   ["Where tokens sit", "On their servers.", "On your server.", "On the device: monitors in one JSON document, sign-in secrets in an encrypted keystore vault."],
@@ -20,14 +24,20 @@ const ROWS: [string, string, string, string][] = [
     "It cannot",
     "Fail quietly. You will get a bill.",
     "Watch itself.",
-    "Check while the phone is off, or beat Android's 15 minute background floor without a foreground service.",
+    <>
+      Check while the phone is off, or beat{" "}
+      <Link href="/android-background-limits" className={inline}>
+        Android&apos;s 15 minute background floor
+      </Link>{" "}
+      without a foreground service.
+    </>,
   ],
 ]
 
 const COLS = [
-  { icon: Globe, name: "Hosted service", eg: "like UptimeRobot" },
-  { icon: Server, name: "Self-hosted", eg: "like Uptime Kuma" },
-  { icon: Smartphone, name: "Nightbell", eg: "on your own phone" },
+  { icon: Globe, name: "Hosted service", eg: "like", them: { name: "UptimeRobot", href: "/vs/uptimerobot" } },
+  { icon: Server, name: "Self-hosted", eg: "like", them: { name: "Uptime Kuma", href: "/vs/uptime-kuma" } },
+  { icon: Smartphone, name: "Nightbell", eg: "on your own phone", them: null },
 ]
 
 // "At 3am you get" is the whole argument, so it is the headline of each card
@@ -76,7 +86,17 @@ function Card({ i, wide = false }: { i: number; wide?: boolean }) {
             <c.icon className="size-5 shrink-0" strokeWidth={1.75} aria-hidden />
             {c.name}
           </h3>
-          <p className={cn("font-mono text-xs", last ? "text-white" : "text-muted-foreground")}>{c.eg}</p>
+          <p className={cn("font-mono text-xs", last ? "text-white" : "text-muted-foreground")}>
+            {c.eg}
+            {c.them && (
+              <>
+                {" "}
+                <Link href={c.them.href} className={inline}>
+                  {c.them.name}
+                </Link>
+              </>
+            )}
+          </p>
         </div>
         <dl className={cn("mt-6 grid gap-x-10 gap-y-5", wide ? "sm:grid-cols-2 lg:grid-cols-3 lg:pr-64" : "sm:grid-cols-2")}>
           <div className={cn(wide ? "sm:col-span-2 lg:col-span-3" : "sm:col-span-2", last && "pr-20 sm:pr-44 lg:pr-0")}>

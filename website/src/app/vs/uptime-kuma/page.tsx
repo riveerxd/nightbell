@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import Link from "next/link"
 
 import { Footer } from "@/components/site/footer"
 import { Nav } from "@/components/site/nav"
@@ -21,9 +22,9 @@ import {
   type QA,
 } from "../_kit"
 
-const TITLE = "Nightbell vs Uptime Kuma: the pager problem"
+const TITLE = "Nightbell vs Uptime Kuma, and why to run both"
 const DESCRIPTION =
-  "Uptime Kuma watches while you sleep and keeps the history, and it cannot tell you when it is the thing that is down. Nightbell runs on your phone, needs no machine, and pages you with a local alarm. Why running both is the setup, and how to point one at the other."
+  "Uptime Kuma keeps the history and the status page. It cannot page you when it is the thing that went down. A phone on another network can."
 
 export const metadata: Metadata = pageMeta({ path: "/vs/uptime-kuma", title: TITLE, description: DESCRIPTION })
 
@@ -167,6 +168,14 @@ export default function Page() {
               host that has gone away entirely, not for a slow response, and strict mode&apos;s
               permanent notification is not worth spending on a check that would catch the outage on
               its next pass anyway.
+            </p>
+            <p>
+              That monitor tells you Kuma is there. To have the phone also read which of Kuma&apos;s own
+              monitors are down, and page you about those, see{" "}
+              <Link href="/uptime-kuma-on-android" className="text-foreground underline underline-offset-4">
+                Uptime Kuma on Android
+              </Link>
+              .
             </p>
           </Prose>
         </Block>

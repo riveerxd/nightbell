@@ -168,7 +168,7 @@ for (const rel of readdirSync(out, { recursive: true })) {
 }
 
 // The order a newcomer would want them in, not the order readdir found them.
-const ORDER = ["/", "/faq", "/docs", "/docs/health-format", "/android-background-limits", "/vs/uptimerobot", "/vs/uptime-kuma"]
+const ORDER = ["/", "/faq", "/docs", "/docs/health-format", "/android-background-limits", "/vs/uptimerobot", "/vs/uptime-kuma", "/uptime-kuma-on-android", "/wireguard-server-monitoring", "/homelab-monitoring-on-android"]
 const missing = ORDER.filter((p) => !pages.some((x) => x.path === p))
 if (missing.length) throw new Error(`no Markdown for ${missing.join(", ")}`)
 const extra = pages.filter((p) => !ORDER.includes(p.path))
@@ -181,7 +181,7 @@ const llms = `# Nightbell
 
 > ${SEO.description}
 
-Nightbell is a free Android app, Apache-2.0, for Android ${RELEASE.minAndroid} and newer. The current version is ${RELEASE.version}. There is no server to run and no account to make: the phone runs the checks itself, on a schedule, and pages its owner when something goes down. It has six kinds of check: a status code, a full request with assertions on the response, elements picked by tapping them on a real page, a Prometheus metric, PromQL query or Alertmanager, a service's own health report, and activity on a GitHub repository. Alerts can also go out to webhooks such as Slack, Discord, Teams, ntfy and Gotify, sent from the phone.
+Nightbell is a free Android app, Apache-2.0, for Android ${RELEASE.minAndroid} and newer. The current version is ${RELEASE.version}. There is no server to run and no account to make: the phone runs the checks itself, on a schedule, and pages its owner when something goes down. It has ten kinds of check: a status code, a full request with assertions on the response, elements picked by tapping them on a real page, a Prometheus metric, PromQL query or Alertmanager, a service's own health report, activity on a GitHub repository, ping, a TCP port, a UDP port with a probe that speaks the service's own protocol, and new mail in an IMAP mailbox. Alerts can also go out to webhooks such as Slack, Discord, Teams, ntfy and Gotify, sent from the phone.
 
 Every page below is also served as Markdown at the address listed, and a request for the page itself with \`Accept: text/markdown\` gets the same Markdown back.
 
@@ -198,6 +198,10 @@ ${["/docs/health-format", "/android-background-limits"].map(entry).join("\n")}
 ## Comparisons
 
 ${["/vs/uptimerobot", "/vs/uptime-kuma"].map(entry).join("\n")}
+
+## Guides
+
+${["/uptime-kuma-on-android", "/wireguard-server-monitoring", "/homelab-monitoring-on-android"].map(entry).join("\n")}
 
 ## Getting it
 

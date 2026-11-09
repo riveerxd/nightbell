@@ -27,7 +27,7 @@ rsync -a --exclude build --exclude .gradle "$REPO/build.gradle.kts" "$REPO/setti
   "$REPO/gradle.properties" "$REPO/gradlew" "$REPO/local.properties" "$REPO/gradle" "$REPO/app" "$WORK/"
 mkdir -p "$WORK/website/public/v1" && cp "$REPO/website/public/v1/release.json" "$WORK/website/public/v1/"
 rm -f "$WORK/app/src/devMark/res/values/colors.xml" "$WORK/app/src/debug/res/values/strings.xml"
-cp "$HERE/WebsiteShotsInstrumentedTest.kt" "$WORK/app/src/androidTest/kotlin/me/river/nightbell/"
+cp "$HERE/WebsiteShotsInstrumentedTest.kt" "$HERE/GuideShotsInstrumentedTest.kt" "$WORK/app/src/androidTest/kotlin/me/river/nightbell/"
 (cd "$WORK" && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest -q)
 
 adb install -r -t "$WORK/app/build/outputs/apk/debug/app-debug.apk"

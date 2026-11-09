@@ -206,8 +206,9 @@ reach Alertmanager, because a list of what is firing is only true as of the
 moment it was read.
 
 **Signing in:** a username and password for HTTP basic auth, which is what
-Grafana Cloud, Mimir and a reverse proxy in front of Prometheus take. Anything
-else goes in the monitor's headers: a bearer token, a Mimir `X-Scope-OrgID`, an
+Grafana Cloud, Mimir and a reverse proxy in front of Prometheus take. The
+username may be blank: Uptime Kuma's `/metrics` takes an API key as the
+password and ignores the name. Anything else goes in the monitor's headers: a bearer token, a Mimir `X-Scope-OrgID`, an
 API gateway's own key. The password is never shown after it is typed, never
 logged, and is stripped from an export unless secrets were explicitly included.
 Basic auth over plain http gets a warning.
@@ -462,7 +463,8 @@ reply to an earlier try does not count.
 Silent mode is for services that never answer a stranger: WireGuard, OpenVPN
 with tls-crypt, syslog, StatsD. Its up is weaker than any other kind's and says
 so: "Not refused, host answers ping". It cannot see a service that is hung but
-still holds the port.
+still holds the port. A check takes up to a minute at the defaults, so Test now
+says so before it is tapped and shows each try while it waits.
 
 Port chips in setup pick the matching probe too. Like the other host kinds it
 never goes through the SOCKS proxy. When a TCP and a UDP check on the same port
@@ -781,7 +783,8 @@ While an URGENT monitor is down, Nightbell posts one page that loops its sound
 and vibration until you acknowledge it, and re-checks the monitor and re-asserts
 the page every *N* minutes (default 5, 1 to 120). It is `ongoing`, so it cannot
 be swiped away, and on a locked phone it opens a full-screen page when the
-full-screen alert permission is granted. The page in the shade carries **Ack**,
+full-screen alert permission is granted, showing the failure, how long it has
+been down, the failed checks, the HTTP code and the latency. The page in the shade carries **Ack**,
 **Re-check** and a mute-for-an-hour button; the full-screen page says
 **Acknowledge** and **Re-check now**. It can also be acknowledged from the monitor
 screen or from the dashboard.

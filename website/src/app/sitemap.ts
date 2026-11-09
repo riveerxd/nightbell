@@ -4,7 +4,7 @@ import { SITE_URL } from "@/lib/site"
 
 export const dynamic = "force-static"
 
-const PAGES = ["/", "/faq", "/docs", "/docs/health-format", "/android-background-limits", "/vs/uptimerobot", "/vs/uptime-kuma"]
+const PAGES = ["/", "/faq", "/docs", "/docs/health-format", "/android-background-limits", "/vs/uptimerobot", "/vs/uptime-kuma", "/uptime-kuma-on-android", "/wireguard-server-monitoring", "/homelab-monitoring-on-android"]
 
 // No lastmod: a date stamped at build time says "changed today" on every rebuild.
 export default function sitemap(): MetadataRoute.Sitemap {

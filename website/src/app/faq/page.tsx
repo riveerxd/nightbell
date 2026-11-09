@@ -11,9 +11,9 @@ import { pageMeta } from "@/lib/seo"
 
 export const metadata: Metadata = pageMeta({
   path: "/faq",
-  title: "Nightbell FAQ: on-device uptime monitoring, answered",
+  title: "Nightbell FAQ: battery, Do Not Disturb and 15 minute checks",
   description:
-    "Sixteen answers about Nightbell, the Android uptime monitor that runs every check on the phone. What leaves the device, why Android will not check faster than every fifteen minutes without a foreground service, whether the alarm beats Do Not Disturb, and where your monitors are stored.",
+    "Does it check while the phone is off, can it get through Do Not Disturb, what it does to the battery, and why Android holds it to every fifteen minutes.",
 })
 
 export default function FaqPage() {

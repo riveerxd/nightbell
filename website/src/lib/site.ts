@@ -78,6 +78,10 @@ export const CHANNELS = {
 
 export const DOWNLOAD_PATH = '/download';
 
+// IndexNow checks that whoever submits for nightbell.app controls it by fetching
+// /<key>.txt, which is public/<key>.txt. Changing this means renaming that file.
+export const INDEXNOW_KEY = '27ee1bc96e4b5b56e94e44aa3b5ed0f9';
+
 export const MEDIA = {
   promoUploaded: '2026-08-28T23:59:47+02:00',
   promoPoster: '/media/nightbell-promo-poster.webp',
