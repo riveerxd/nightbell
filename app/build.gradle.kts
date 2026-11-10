@@ -616,8 +616,12 @@ android {
         // 3.24.0 lets basic auth go out with a password alone, for Uptime Kuma's
         // API key, shows each try while a silent UDP test waits, and opens the
         // locked-screen page with what the check saw instead of "Not responding".
-        versionCode = 53
-        versionName = "3.24.0"
+        //
+        // 3.25.0 says "Updated to" on the first launch of a new version, with the
+        // release notes one tap away, and keeps a What's new button for the
+        // installed version in Settings, About. Both open nightbell.app/changelog.
+        versionCode = 54
+        versionName = "3.25.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

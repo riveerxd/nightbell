@@ -1,0 +1,3 @@
+Nightbell now says when it has been updated. The first launch on a new version shows "Updated to" with a What's new button, and Settings, About keeps a What's new button for the version you have installed. Both open the release notes for that version on nightbell.app/changelog.
+
+The What's new button on the update notice and the update notification opens the same page now, on the entry for the version being offered, instead of the GitHub release.
