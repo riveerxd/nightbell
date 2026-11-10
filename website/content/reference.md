@@ -1727,7 +1727,12 @@ its data.
 the check on (off reads "Off, your installer handles it"), and the card picks the
 source, shows the installed and latest versions and offers **Check now**. When a
 newer version exists the app says so twice: a notification, once per version,
-and a modal notice on the dashboard.
+and a modal notice on the dashboard. **What's new** on either opens that
+version's entry on [nightbell.app/changelog](https://nightbell.app/changelog).
+
+The first launch after an update says **Updated to** with a **What's new**
+button, once, and never on a fresh install. The card also keeps **What's new in**
+the installed version, whether or not the check is on.
 
 Three sources, at most one check every six hours:
 

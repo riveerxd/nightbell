@@ -1293,7 +1293,13 @@ alert state would suppress the first real outage on the new device, see the
 **Settings → About → Nightbell updates** switches the check on, picks the source
 and offers **Check now**. When a newer version exists the app says so twice: a
 notification, once per version, and a modal banner on the dashboard that keeps
-saying it until the user answers.
+saying it until the user answers. **What's new** on either opens that version's
+entry on `nightbell.app/changelog`, through the `url` in the site's manifest.
+
+The first launch on a newer version shows a toast, **Updated to** with a
+**What's new** action, once per version and never on a fresh install. It is
+decided by `AppUpdate.justUpdated` from `UpdateState.lastRunVersion`. The card
+also keeps **What's new in** the installed version, outside the update switch.
 
 Three sources, at most one check every six hours:
 

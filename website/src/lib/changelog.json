@@ -1,5 +1,19 @@
 [
  {
+  "version": "3.25.0",
+  "tag": "v3.25.0",
+  "name": "Nightbell",
+  "date": "2026-11-10",
+  "title": "",
+  "body": "Nightbell now says when it has been updated. The first launch on a new version shows \"Updated to 3.25.0\" with a **What's new** button, and **Settings → About** keeps a What's new button for the version you have installed. Before, the only What's new button was on the update notice, and it went away the moment you installed the update.\n\nBoth open the new changelog at https://nightbell.app/changelog, every release from Pulse 1.1.2 on, each with the notes it shipped with. The What's new button on the update notice and the update notification lands there too now, on the entry for the version being offered.\n\nComing from 3.24.0, the \"Updated to\" message shows if this copy checks nightbell.app for updates and has done so at least once, which is the default. Installs that follow GitHub or F-Droid for updates get it from the next release on.\n\nTested on the emulator: the message on the first launch after an update, nothing on a fresh install or a second launch of the same version, the link it opens, and the Settings button.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.25.0",
+  "apk": {
+   "name": "Nightbell-3.25.0-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.25.0/Nightbell-3.25.0-release.apk",
+   "bytes": 2929660
+  }
+ },
+ {
   "version": "3.24.0",
   "tag": "v3.24.0",
   "name": "Nightbell",
