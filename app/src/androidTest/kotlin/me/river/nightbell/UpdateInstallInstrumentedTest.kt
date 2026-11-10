@@ -1,6 +1,7 @@
 package me.river.nightbell
 
 import android.Manifest
+import android.os.ParcelFileDescriptor
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.hasTestTag
@@ -302,7 +303,30 @@ class UpdateInstallInstrumentedTest {
             )
         } finally {
             watcher.cancel()
+            closeInstallerPrompt()
         }
+    }
+
+    /**
+     * Android's install prompt is started by the session callback, after the
+     * handover this test waits for, and it used to land about 70 ms into the
+     * next test. On top of that test's freshly launched dashboard it took the
+     * window, and Compose reported no hierarchy at all. Waited for, then closed.
+     */
+    private fun closeInstallerPrompt() {
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        fun shell(command: String): String =
+            automation.executeShellCommand(command).let { fd ->
+                ParcelFileDescriptor.AutoCloseInputStream(fd).bufferedReader().use { it.readText() }
+            }
+        runCatching {
+            awaitTrue(timeoutMs = 10_000, description = "the install prompt is up") {
+                shell("dumpsys activity activities").lines()
+                    .any { "ResumedActivity" in it && "packageinstaller" in it }
+            }
+        }
+        shell("am force-stop com.google.android.packageinstaller")
+        shell("am force-stop com.android.packageinstaller")
     }
 
     @Test
