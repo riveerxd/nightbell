@@ -166,6 +166,28 @@ class UpdateCensusInstrumentedTest {
         store().updateAppUpdate { it.copy(lastCheckedAt = 0L) }
     }
 
+    /**
+     * The check reads the update state, waits on the network, then writes. The
+     * dashboard records which version last ran in exactly that window on every
+     * launch, and the check used to write back the whole state it had read before
+     * it, wiping the record. The next launch then announced "Updated to" again: on
+     * a fresh install's second launch, and twice after every real update.
+     */
+    @Test
+    fun aCheckInFlightKeepsTheVersionTheDashboardRecordedMeanwhile() {
+        resetApp(GlobalSettings(motionIntensity = 0f, updateSource = UpdateSource.DIRECT))
+        server.close()
+        server = TinyHttpServer {
+            runBlocking { store().updateAppUpdate { it.copy(lastRunVersion = "3.25.0") } }
+            TinyHttpServer.Response(body = manifest, contentType = "application/json")
+        }
+        runBlocking { engine().checkForAppUpdate() }
+        assertEquals(1, server.received.size)
+        val after = runBlocking { store().currentSnapshot().update }
+        assertEquals("3.25.0", after.lastRunVersion)
+        assertTrue(after.censusSent)
+    }
+
     @Test
     fun theFirstScheduledCheckSaysNewAndTheSecondDoesNot() {
         resetApp(GlobalSettings(motionIntensity = 0f, updateSource = UpdateSource.DIRECT))

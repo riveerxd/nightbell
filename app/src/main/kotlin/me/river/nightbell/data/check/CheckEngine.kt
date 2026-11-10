@@ -1566,8 +1566,15 @@ class CheckEngine(
         // warranted has nothing to do with whether this install has been seen
         // once. Only the site is counted, so only the site sets it.
         val counted = release != null && release.source == UpdateSource.DIRECT
+        // `state` was decided from a snapshot read before the request, and the
+        // dashboard records the version that last ran in that window on every
+        // launch. Writing the old record back made the next launch announce the
+        // same update again, so that field is taken from the store as it is now.
         withContext(NonCancellable) {
-            store.updateAppUpdate { if (counted) state.copy(censusSent = true) else state }
+            store.updateAppUpdate { current ->
+                (if (counted) state.copy(censusSent = true) else state)
+                    .copy(lastRunVersion = current.lastRunVersion)
+            }
         }
 
         if (!speaking) return false

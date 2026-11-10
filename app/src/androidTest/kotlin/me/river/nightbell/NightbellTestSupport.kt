@@ -67,6 +67,15 @@ object NightbellTestSupport {
                         updateSourceChosen = true,
                         updateSourceMigratedToSite = true,
                     ),
+                    // Already on this version, so no dashboard announces "Updated
+                    // to". Every dashboard here fires a real update check, and one
+                    // left over from the test before can land after this reset and
+                    // set `censusSent`, which with a blank record reads as an
+                    // install coming from 3.24.0. `UpdateAnnounceInstrumentedTest`
+                    // seeds its own record.
+                    update = me.river.nightbell.domain.UpdateState(
+                        lastRunVersion = me.river.nightbell.domain.AppUpdate.releaseName(BuildConfig.VERSION_NAME),
+                    ),
                 ),
             )
         }
