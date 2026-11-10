@@ -16,7 +16,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import android.content.Intent
-import android.net.Uri
+import androidx.core.net.toUri
 import me.river.nightbell.BuildConfig
 import me.river.nightbell.data.Nightbell
 import me.river.nightbell.data.diag.DiagnosticFacts
@@ -233,7 +233,7 @@ class DashboardViewModel(private val graph: Nightbell.Graph) : ViewModel() {
         toast = ToastMessage(
             text = "Updated to $name",
             action = ToastAction("What's new") {
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(AppUpdate.changelogUrl(installed)))
+                val intent = Intent(Intent.ACTION_VIEW, AppUpdate.changelogUrl(installed).toUri())
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 runCatching { graph.context.startActivity(intent) }
             },
