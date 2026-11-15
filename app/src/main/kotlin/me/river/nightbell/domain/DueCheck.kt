@@ -25,7 +25,21 @@ object DueCheck {
      * @param lastCheckedAt wall-clock millis of the last completed check; 0 means
      *   never checked, which is always due.
      */
-    fun isDue(intervalMinutes: Int, lastCheckedAt: Long, nowMs: Long): Boolean {
+    fun isDue(intervalMinutes: Int, lastCheckedAt: Long, nowMs: Long): Boolean =
+        isDueMillis(intervalMinutes.coerceAtLeast(1) * 60_000L, lastCheckedAt, nowMs)
+
+    /**
+     * Slack, scaled to the interval. The flat 30 seconds is right for a
+     * quarter-hour cadence but nonsense for a one-second one: subtract 30 seconds
+     * from a 1,000ms interval and the monitor is permanently due, so the loop
+     * would check it on every single tick no matter what the user chose. Half the
+     * interval is the most a check may land early, and for anything a minute or
+     * longer this is still the original 30 seconds.
+     */
+    fun slackFor(intervalMs: Long): Long = minOf(SLACK_MS, intervalMs / 2L)
+
+    /** The millisecond form, shared by minute and second cadences. */
+    fun isDueMillis(intervalMs: Long, lastCheckedAt: Long, nowMs: Long): Boolean {
         if (lastCheckedAt <= 0L) return true
         val since = nowMs - lastCheckedAt
         // A negative age means the wall clock moved *backwards* — someone changed
@@ -35,6 +49,7 @@ object DueCheck {
         // that window would never alert. A stamp in the future is due now; the
         // check that follows re-bases it.
         if (since < 0L) return true
-        return since >= intervalMinutes.coerceAtLeast(1) * 60_000L - SLACK_MS
+        val interval = intervalMs.coerceAtLeast(1_000L)
+        return since >= interval - slackFor(interval)
     }
 }

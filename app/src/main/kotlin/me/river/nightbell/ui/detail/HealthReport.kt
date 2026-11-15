@@ -28,7 +28,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Text
+import me.river.nightbell.ui.i18n.L10n
+import me.river.nightbell.ui.i18n.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -475,7 +476,12 @@ internal fun HealthChecksCard(monitor: Monitor, samples: List<Sample>) {
         }
         Spacer(Modifier.height(10.dp))
         Text(
-            text = "$passed of ${shown.size} passed · every ${monitor.intervalMinutes} min",
+            text = L10n.pick(
+                "$passed of ${shown.size} passed · " +
+                    (if (monitor.isSubMinute) "every ${monitor.intervalSeconds} s" else "every ${monitor.intervalMinutes} min"),
+                "$passed / ${shown.size} 项通过 · " +
+                    (if (monitor.isSubMinute) "每 ${monitor.intervalSeconds} 秒" else "每 ${monitor.intervalMinutes} 分钟"),
+            ),
             style = MaterialTheme.typography.bodySmall.tabular(),
             color = NightbellColors.TextTertiary,
         )

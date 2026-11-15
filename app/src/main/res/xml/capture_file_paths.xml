@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Only this directory is reachable through a content URI. The private key
+     and the request log live one level up and are never granted to anyone. -->
+<paths>
+    <files-path name="capture_export" path="capture/export" />
+</paths>

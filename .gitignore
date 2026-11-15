@@ -10,7 +10,10 @@ keystore/keystore.properties
 
 # Scratch
 *.log
-.idea/
+# IDE project files are machine-local, except the Gradle JDK pin below. Without
+# it Android Studio 2026.2.2 picks its bundled JBR 25 and Gradle 8.13 refuses.
+**/.idea/*
+!.idea/gradle.xml
 .DS_Store
 
 # Debug APKs are 14 MB each and rebuildable; releases and their R8 mapping
@@ -75,3 +78,8 @@ artifacts/dev/
 # Local credentials. Never committed: the key in here is live, and a secret that
 # reaches a public history is burned whether or not it is removed afterwards.
 .env
+
+# Chinese fork: generated build output and coverage reports.
+/dist/
+/tools/pending.txt
+/tools/orphans.txt

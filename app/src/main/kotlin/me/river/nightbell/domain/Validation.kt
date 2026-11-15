@@ -201,18 +201,19 @@ object Validation {
             )
         }
 
-        // Cadence
-        if (monitor.intervalMinutes < 1) {
-            notes += Note(Field.INTERVAL, Severity.ERROR, "Interval must be at least 1 minute")
-        } else if (monitor.intervalMinutes < 15) {
+        // Cadence. A sub-minute monitor deliberately keeps its minute field as
+        // a fallback for any older reader, so validity is decided by intervalMs.
+        if (monitor.intervalSeconds < 0 || (!monitor.isSubMinute && monitor.intervalMinutes < 1)) {
+            notes += Note(Field.INTERVAL, Severity.ERROR, "Interval must be at least 1 second")
+        } else if (monitor.intervalMs < 15 * 60_000L) {
             notes += Note(
                 Field.INTERVAL, Severity.HINT,
-                "Android may batch background work; sub-15-minute checks are best-effort",
+                "Sub-15-minute checks run from a foreground service; a one-second cadence uses more battery",
             )
         }
         if (monitor.timeoutSeconds < 1 || monitor.timeoutSeconds > 120) {
             notes += Note(Field.TIMEOUT, Severity.ERROR, "Timeout must be 1–120 seconds")
-        } else if (monitor.timeoutSeconds > monitor.intervalMinutes * 60) {
+        } else if (monitor.timeoutSeconds * 1000L > monitor.intervalMs) {
             notes += Note(Field.TIMEOUT, Severity.WARNING, "Timeout is longer than the check interval")
         }
 
@@ -340,7 +341,9 @@ object Validation {
         }
         if (watch.staleAfterMinutes < 0) {
             notes += Note(Field.STALE, Severity.ERROR, "The age limit can't be negative")
-        } else if (watch.staleAfterMinutes in 1 until monitor.intervalMinutes) {
+        } else if (watch.staleAfterMinutes >= 1 &&
+            watch.staleAfterMinutes * 60_000L < monitor.intervalMs
+        ) {
             notes += Note(
                 Field.STALE, Severity.HINT,
                 "Shorter than the check interval. Fine if the service refreshes its report more often than Nightbell reads it.",
@@ -458,7 +461,7 @@ object Validation {
                 "The author filter only applies to issues and pull requests",
             )
         }
-        if (watch.notifyOnComments && monitor.intervalMinutes >= 15) {
+        if (watch.notifyOnComments && monitor.intervalMs >= 15 * 60_000L) {
             // A hint rather than a warning: this configuration works, it just
             // costs, and the interval warning above already covers the case where
             // the cadence is the problem.
@@ -468,7 +471,7 @@ object Validation {
                     "gets 60 an hour, shared by every repository it watches.",
             )
         }
-        if (monitor.intervalMinutes < 15) {
+        if (monitor.intervalMs < 15 * 60_000L) {
             notes += Note(
                 Field.INTERVAL, Severity.WARNING,
                 "GitHub allows 60 requests an hour without a token, and one check spends up " +
@@ -514,7 +517,7 @@ object Validation {
                 "${literal.label} address, so the ${family.label} choice does not apply",
             )
         }
-        if (monitor.intervalMinutes in 1 until 15) {
+        if (monitor.intervalMs in 60_000L until 15 * 60_000L) {
             notes += Note(
                 Field.INTERVAL, Severity.HINT,
                 "Android may batch background work; sub-15-minute checks are best-effort",
@@ -648,7 +651,7 @@ object Validation {
         if (webmail.isNotEmpty() && !webmail.startsWith("https://") && !webmail.startsWith("http://")) {
             notes += Note(Field.WEBMAIL, Severity.ERROR, "Start with https://")
         }
-        if (monitor.intervalMinutes in 1 until 5) {
+        if (monitor.intervalMs in 60_000L until 5 * 60_000L) {
             notes += Note(
                 Field.INTERVAL, Severity.HINT,
                 "Every check signs in. Under 5 minutes fills the server's log and can trip its brute-force guard",
@@ -667,8 +670,8 @@ object Validation {
 
     private fun cadenceNotes(monitor: Monitor): List<Note> {
         val notes = mutableListOf<Note>()
-        if (monitor.intervalMinutes < 1) {
-            notes += Note(Field.INTERVAL, Severity.ERROR, "Interval must be at least 1 minute")
+        if (monitor.intervalSeconds < 0 || (!monitor.isSubMinute && monitor.intervalMinutes < 1)) {
+            notes += Note(Field.INTERVAL, Severity.ERROR, "Interval must be at least 1 second")
         }
         if (monitor.timeoutSeconds < 1 || monitor.timeoutSeconds > 120) {
             notes += Note(Field.TIMEOUT, Severity.ERROR, "Timeout must be 1 to 120 seconds")

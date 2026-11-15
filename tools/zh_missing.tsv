@@ -1,0 +1,1077 @@
+# 自动导出的未收录 UI 文案；补中文后即生效（gen_zh.py 会跳过空译文行）
+1 ms	
+Auto	
+Bell	
+Blue	
+Copy	
+Done	
+Down	
+Drag	
+Echo	
+Fork	
+Grip	
+Help	
+Info	
+Link	
+Look	
+Mail	
+Moon	
+More	
+Move	
+Mute	
+None	
+Play	
+Plug	
+Plus	
+Repo	
+Show	
+Slow	
+Star	
+Type	
+Undo	
+User	
+Wifi	
+About	
+Above	
+Again	
+Allow	
+Basic	
+Black	
+Chart	
+Check	
+Clock	
+Gauge	
+Globe	
+Group	
+HH:mm	
+Inbox	
+Order	
+Pause	
+Power	
+Probe	
+Query	
+Radar	
+Redis	
+Reply	
+Route	
+Sends	
+Sound	
+Stars	
+Trash	
+Tries	
+White	
+XPath	
+1 fork	
+1 hour	
+1 star	
+2d ago	
+3h ago	
+491 ms	
+4m ago	
+Alerts	
+Answer	
+Braces	
+Client	
+Create	
+Custom	
+Direct	
+Equals	
+Failed	
+Funnel	
+GitHub	
+Hidden	
+Import	
+Issues	
+Layers	
+Method	
+Motion	
+Pencil	
+PromQL	
+Report	
+Resume	
+Series	
+Server	
+Shield	
+Source	
+System	
+Target	
+Try it	
+Volume	
+Window	
+ else }	
++1 more	
++3 more	
++8 more	
++n more	
+, muted	
+1240 ms	
+4 hours	
+4100 ms	
+999 min	
+Account	
+Add to 	
+Android	
+Bedrock	
+BellOff	
+Cadence	
+Classes	
+Colours	
+Comment	
+Compact	
+Content	
+Counted	
+Decline	
+Down · 	
+Element	
+English	
+Expects	
+Failing	
+Fastest	
+Follows	
+Granted	
+Haptics	
+Healthy	
+History	
+Install	
+Latency	
+Mail · 	
+Move up	
+News · 	
+Offline	
+OpenVPN	
+Outages	
+Packets	
+Pattern	
+Pointer	
+Preview	
+Refresh	
+Request	
+Session	
+Sign-on	
+Sliders	
+Slow · 	
+Slowest	
+Sparkle	
+Storage	
+Timeout	
+Un-mute	
+Unacked	
+Version	
+Warning	
+WifiOff	
+not now	
+50 of 50	
+59 stars	
+Allowed.	
+Asks for	
+Checking	
+Contents	
+Counting	
+Datagram	
+Degraded	
+Detailed	
+Download	
+Expanded	
+HH:mm:ss	
+In stock	
+Interval	
+My order	
+New mail	
+No match	
+Pick one	
+Postgres	
+Problems	
+Provider	
+Re-check	
+Releases	
+Requests	
+Selected	
+Severity	
+Silenced	
+Test now	
+Use this	
+Watching	
+Webhooks	
+it moved	
+just now	
+none yet	
+0 percent	
+1 monitor	
+A monitor	
+Announces	
+ArrowLeft	
+Check now	
+ChevronUp	
+Collapsed	
+Downloads	
+Hex bytes	
+Inhibited	
+Installed	
+IssueOpen	
+Last push	
+Live card	
+Move down	
+Needs you	
+New group	
+Nightbell	
+Not equal	
+One group	
+Only from	
+Only some	
+SortLines	
+The query	
+This host	
+VolumeOff	
+WireGuard	
+check all	
+check now	
+one group	
+open this	
+the value	
+which one	
+\nDown for 	
+, expected	
+1 download	
+1 selected	
+30 minutes	
+Add widget	
+Appearance	
+ArrowRight	
+Body check	
+Escalation	
+GitHub API	
+Installing	
+Nightbell 	
+No Content	
+No preview	
+Once a day	
+Other ways	
+Show fewer	
+Site icons	
+Watch page	
+d MMM yyyy	
+empty slot	
+new issues	
+one column	
+open issue	
+\nReminder #	
+, group of 	
+, none lost	
+.apk, *.aab	
+AlertCircle	
+All of them	
+Already in 	
+Certificate	
+ChevronDown	
+ChevronLeft	
+Comments · 	
+Down alerts	
+Downloading	
+IssueClosed	
+Last failed	
+Log cleared	
+Marked seen	
+New comment	
+New monitor	
+New webhook	
+Not granted	
+Operational	
+PageSpeaker	
+Prereleases	
+Quiet hours	
+Recovery · 	
+Star digest	
+Status code	
+The request	
+UrgentAlarm	
+Watching it	
+am I behind	
+d MMM HH:mm	
+ff ff ff ff	
+first alert	
+no monitors	
+no response	
+open issues	
+ · down for 	
++7 downloads	
+0 of 4 ready	
+1 open issue	
+All releases	
+Already read	
+Another site	
+App password	
+Check failed	
+Check passed	
+ChevronRight	
+Clock offset	
+Counted over	
+Create group	
+Echo replies	
+Edit webhook	
+Expectations	
+For how long	
+Last refresh	
+Least recent	
+Mute · Group	
+Not checking	
+Not read yet	
+Not selected	
+Once an hour	
+Pause button	
+Remind later	
+SOCKS5 proxy	
+Save changes	
+Save webhook	
+Show details	
+Skip for now	
+Status check	
+This release	
+What to send	
+element text	
+rich ongoing	
+this account	
+this monitor	
+urgent below	
+} will speak	
+ failed check	
+ is available	
+305 downloads	
+5432 Postgres	
+Changes saved	
+Check all now	
+Checks paused	
+Configuration	
+Echo requests	
+Every release	
+Expires today	
+Extra lively.	
+Footer hidden	
+Global policy	
+Group updated	
+I've seen it.	
+Last answered	
+Mail alert · 	
+Notifications	
+Open download	
+Paste a token	
+Pause monitor	
+Recent checks	
+Replace token	
+Reply timeout	
+Response body	
+Response time	
+Spoken alerts	
+Stop checking	
+Tap to select	
+Text snapshot	
+Token removed	
+Up, but slow.	
+Webhook added	
+Webhook saved	
+What to watch	
+Where it goes	
+add a monitor	
+are you sure?	
+check all now	
+decide for me	
+every message	
+key is String	
+not announced	
+not signed in	
+\n\nLast error: 	
+ failed checks	
+, open details	
+1 alert firing	
+1 issue closed	
+1 of 3 is down	
+Address family	
+Alerts back on	
+Animations off	
+Certificate · 	
+Checker health	
+Create monitor	
+Delete monitor	
+Expected value	
+Global default	
+Group restored	
+Hold to delete	
+Host not found	
+How it behaves	
+Latency alerts	
+Latency budget	
+Marked as seen	
+Marketing site	
+Monitor paused	
+Not loaded yet	
+Not responding	
+Resume monitor	
+Strict cadence	
+Subtle motion.	
+Until I resume	
+Which monitors	
+a check passed	
+animations off	
+black vs white	
+checked 4m ago	
+don't place it	
+ff ff ff ff 54	
+firing for -3m	
+newest release	
+nothing chosen	
+nothing to see	
+raised surface	
+the last check	
+there are more	
+under a minute	
+, tap to expand	
+, tap to select	
+1 of 3 failures	
+Alerts un-muted	
+Any certificate	
+Capture element	
+Checker crashed	
+Continue anyway	
+Expected status	
+Hold to confirm	
+I'm done typing	
+Least privilege	
+Monitor created	
+Monitor deleted	
+Monitor resumed	
+NightbellWidget	
+No GitHub token	
+No monitors yet	
+Nothing watched	
+Pick an element	
+Preview monitor	
+Recovery alerts	
+Service account	
+Stays signed in	
+TLS certificate	
+Test alert sent	
+Watch this page	
+Webhook deleted	
+answer this now	
+match my accent	
+not checked yet	
+nothing changed	
+nothing matched	
+remind me later	
+save a selector	
+should I get up	
+which Nightbell	
+, token included	
+1 issue reopened	
+2 of 3, selected	
+Cadence & alerts	
+Checked just now	
+Configure widget	
+Create a monitor	
+Expires tomorrow	
+Export to a file	
+Found realm main	
+HTTP 200 in 41ms	
+Healthy while it	
+Hide log details	
+Label at the end	
+Monitor restored	
+Monitoring again	
+Pull to re-check	
+Report age limit	
+Runs on schedule	
+Show log details	
+Stored signature	
+TLS certificates	
+Use this element	
+append a new one	
+charts are green	
+get me past this	
+look at it first	
+running normally	
+select this card	
+settings changed	
+these 4 monitors	
+what\n * happened	
+what is going on	
+\nWhile checking: 	
+1 monitor checked	
+5 firing: A, B, C	
+Back to dashboard	
+Background checks	
+Hide site address	
+I have read this.	
+Nightbell updates	
+Open live preview	
+Remove animations	
+Remove from group	
+Reported degraded	
+SettingsViewModel	
+Strict monitoring	
+Updated to 3.24.0	
+UrgentPagePreview	
+WidgetConfigStore	
+Wireguard gateway	
+all 6 operational	
+finger still down	
+fully transparent	
+it did not happen	
+keep reminding me	
+node_load1 = 0.29	
+octocat, riveerxd	
+shown, not judged	
+that's the answer	
+the settings list	
+which app is this	
+, above this range	
+, none over budget	
+1 element captured	
+A host is required	
+Certificate alerts	
+Connection refused	
+Full-screen alerts	
+GitHub token saved	
+Group this monitor	
+Import from a file	
+Issues are ignored	
+No haptic feedback	
+Per-monitor health	
+Refetch site icons	
+Regular expression	
+Reported up in 4ms	
+The mark, top left	
+The series to read	
+Watch this element	
+always two columns	
+is something wrong	
+leave it as it was	
+no voice installed	
+saved, never shown	
+something is wrong	
+special app access	
+stop hiding things	
+the latest release	
+this needs you now	
+up{job="api"} == 0	
+your fleet is fine	
+{\n  "ping": true\n}	
+} on one page load	
+Add another element	
+Add this to a group	
+AlertActionReceiver	
+Allow notifications	
+Author not recorded	
+Backup and transfer	
+Delete your picture	
+Element expectation	
+Gemini Intelligence	
+Headers and signing	
+Home-screen widgets	
+Ignore this version	
+Only if it mentions	
+Page failed to load	
+Repository activity	
+Repository comments	
+Response time trend	
+Send a test message	
+The last six hours.	
+Through the web app	
+Waiting for a reply	
+rustbot, dependabot	
+splits into the app	
+which one is in use	
+1 of 15 is down02:36	
+Comments are ignored	
+DOWN, FIRING, urgent	
+Default alert policy	
+Expected, not paging	
+One alert per outage	
+Releases are ignored	
+Remove\n * animations	
+Remove from Payments	
+SetJavaScriptEnabled	
+Unrestricted battery	
+What silent mode saw	
+fixed key in headers	
+imported 12 monitors	
+ninety-three percent	
+nothing to check yet	
+stop showing me this	
+that one or that one	
+the one stored check	
+this can't be undone	
+your service is down	
+ down in total since 	
+, certificate expired	
+3 monitors will speak	
+3xx is reported as-is	
+Already in this group	
+Discard this monitor?	
+Discard this webhook?	
+Discard your changes?	
+Exact character match	
+Matched an alert term	
+Move to another group	
+No monitor will speak	
+Response time history	
+Route and certificate	
+Sending the first try	
+Username and password	
+Watch the expiry date	
+What counts as a page	
+is\n * anything broken	
+let the engine decide	
+mode="idle", cpu!="0"	
+so one extra interval	
+this thing is working	
+which page am I\n * on	
+Enter provider details	
+Everything is healthy.	
+GitHub answered slowly	
+Ignores capitalisation	
+Milestones are ignored	
+No checks recorded yet	
+Reply timeout, per try	
+Routed, no address yet	
+Sign-in did not finish	
+an update is available	
+compact vs\n * detailed	
+nobody downloaded this	
+nothing\n     * matched	
+you\n * really meant it	
+you've gone far enough	
+All set, open Nightbell	
+Couldn't read that file	
+Every monitor is listed	
+Every monitor is paused	
+Hide the alert's labels	
+Listening for a refusal	
+Monitors can notify you	
+No monitor was speaking	
+Paused until you resume	
+Show the alert's labels	
+couldn't read that file	
+preview the urgent page	
+)}, moving out of those.	
+100, 250, 500, 1k and up	
+13 stars · 0 open issues	
+Couldn't write that file	
+Last delivered 4 min ago	
+Offline, stays signed in	
+Remove from their groups	
+Star changes are ignored	
+Tap Sign in on this page	
+Waiting for a connection	
+are you\n         * sure?	
+crash, security, android	
+no icon for this one yet	
+not in the stored checks	
+store replaced by import	
+this costs you something	
+tools for the list below	
+what did the user choose	
+what does this look like	
+your site is\n     * down	
+1 check · nothing changed	
+Browsing — links are live	
+Empty sends one zero byte	
+Its only part reports up.	
+Only the milestones below	
+Ports run from 1 to 65535	
+Responding normally again	
+Silenced until you resume	
+Stop shouting for an hour	
+basic auth, password only	
+capture is\n     * running	
+firing for under a minute	
+inherit the global budget	
+where did the finger land	
+which option did I choose	
+which part, and do I care	
+, urgent, not acknowledged	
+-1001234567890 or @channel	
+3xx responses are followed	
+Allow unrestricted battery	
+Asking the host for a ping	
+Could not reach the server	
+Get through Do Not Disturb	
+Healthy while the value is	
+Nightbell update available	
+No offline voice installed	
+Nothing lifts this but you	
+Open Do Not Disturb access	
+Pick the elements to watch	
+Recovered after a failure.	
+Repository and update news	
+Saved. Type to replace it.	
+The test could not be sent	
+There is a newer Nightbell	
+Token saved on this device	
+are you sure you want this	
+is this mute still running	
+what kind of thing is this	
+widget stuck on stale data	
+you meant to\n * touch this	
+\n\nThis alert repeats every 	
+"Nightbell" beside the logo	
+, expanded, tap to collapse	
+Alerts can fire at any hour	
+Healthy monitors are hidden	
+Monitors that can't sign in	
+Paused — manual checks only	
+Silent — pages vibrate only	
+Stored. Type to replace it.	
+The engine would not say it	
+There is a newer Nightbell.	
+a file lands on this device	
+data.status  ·  items[0].id	
+nothing answered to measure	
+tell me about every release	
+this one is already handled	
+Announced as they are opened	
+Every monitor already speaks	
+For a receiver on Tor or I2P	
+No release file matches that	
+Tap any element to select it	
+Urgent alert\n * acknowledged	
+Vibrate — pages vibrate only	
+You won't be notified at all	
+You're on the newest version	
+tell me when a new one lands	
+this app has no proxy option	
+this phone produces no audio	
+. Read it before you send it.	
+Covered by a group you picked	
+Does anything leave my phone?	
+Not checking · Sign in needed	
+Once, when it first goes down	
+Release files are not counted	
+Solid panes — cheaper to draw	
+What does “24h uptime” count?	
+must NOT `setColorized(true)`	
+ min until you acknowledge it.	
+Could not remap widget configs	
+No speech engine on this phone	
+Off, nothing is being recorded	
+Off, your installer handles it	
+Only messages that match below	
+This monitor has its own rules	
+every series the query returns	
+3 of 3 replies, 0.28 ms average	
+Contents, Issues, Pull requests	
+Normal — pages ring and vibrate	
+Open full-screen alert settings	
+nothing is checked or announced	
+only if you watch pull requests	
+the reorder icons never go away	
+these belong to the group above	
+{"text": "{{title}}: {{text}}"}	
+A cert can lapse without warning	
+Ends with the provider's session	
+Fix the highlighted fields first	
+One latency alert per slow spell	
+Removed 1 monitor from its group	
+the launcher has not told us yet	
+the one that is currently broken	
+the thing you asked for happened	
+, open details, or hold to select	
+Checked straight from this device	
+Could not clean up widget configs	
+How do certificate warnings work?	
+Nightbell's own checker is broken	
+No monitors yet — tap to add one.	
+Set up get through do not disturb	
+Values go in exactly as they are.	
+You're offline, checks are paused	
+2 firing: DiskFillingUp (critical)	
+Betas and release candidates count	
+Changes apply as soon as you save.	
+Counted quietly, shown on the card	
+Footer shows how fresh the data is	
+Hold to delete this\n     * monitor	
+In use. It is the last tile above.	
+New messages in watched mailboxes.	
+Off, every check goes out directly	
+long-press → turn this channel off	
+A notice when the count has gone up	
+Alarm would not stop\n     * cleanly	
+An urgent page can wake the screen.	
+Check now, waiting for a connection	
+Checks carry on, nothing pages you.	
+I have read this repository's news.	
+Nightbell can't complete its checks	
+No special notice for round numbers	
+Only milestones or the digest below	
+Per-monitor health, nothing watched	
+Recording, nothing has happened yet	
+The speech engine produces no audio	
+Until the provider ends the session	
+image if there is one, glyph if not	
+10, 25, 50, 100, 250, 500, 1k and up	
+A separate notice when one is opened	
+Alerts arrive as sound and text only	
+Build bots and app comments page too	
+That version will be announced again	
+answered, but slower than its budget	
+what is the user actually looking at	
+Pasting host:port or a URL works too.	
+This is what a real alert looks like.	
+Using the global budget from Settings	
+Alerts on the very first failed check.	
+Leave it empty for the sentence above.	
+No website monitors to fetch icons for	
+Off — only up and down, never degraded	
+the launcher just dropped a new widget	
+wherever you can reach from your phone	
+A cog in the corner reopens this screen	
+Android is asking whether to install it	
+Keeping your order. Worst first is off.	
+Matched against the reply read as text.	
+Monitors are always listed worst first.	
+On, a permanent notification is showing	
+The file will carry working credentials	
+The last hour. Short outages read wide.	
+count what the old ones are still doing	
+is 443 open on the box behind this site	
+the user came\n     * back to change one	
+Checking the signature against your copy	
+Clients are refusing this connection now	
+Left empty, the plain JSON body is sent.	
+Off, and anything waiting is thrown away	
+The first passing check ends the outage.	
+Unrestricted. Checks keep their cadence.	
+Urgent pages get through Do Not Disturb.	
+Values are URL encoded, for a form body.	
+, open details, or hold to move or select	
+It answered, but not with a health report	
+One monitor selected. Pick where it goes.	
+Optional. Matches the alert's own labels.	
+Real backdrop blur behind floating sheets	
+Silent or vibrate: a page would not speak	
+, no answered checks to measure against it	
+Checks stop and start again by themselves.	
+Each increase is announced as it is found.	
+capture is on and nothing has happened yet	
+Acknowledged, no more pages for this outage	
+Comments posted by a GitHub app are skipped	
+Needs a host and a port between 1 and 65535	
+Set up a proxy under Settings, Checks first	
+Why is pull-to-refresh a two-stage gesture?	
+sysUpTime, how long the device has been up.	
+Alerts suppressed by a bigger one still page	
+Solid enough to stay readable over anything.	
+Animations off — everything snaps into place.	
+Everything is muted — nothing will notify you	
+Full Nightbell: aurora, sonar rings, the lot.	
+Normal alerting — one notification per outage	
+Speech is on, but no monitor can alert at all	
+Whichever address the name resolves to first.	
+An IPv4 or IPv6 address, or a name to look up.	
+Every monitor that is not paused, on one line.	
+No address yet. Add one below, or in Settings.	
+On for every webhook below that is switched on	
+Share of the checks in the window that passed.	
+Waits for the next scheduled check each time, 	
+An alert another one already covers stays quiet	
+Needs Android 12 — this device uses solid panes	
+On, but checks are paused, so it is not running	
+Opens the page in-app; tap what you care about.	
+Saving points the monitor at this page instead.	
+Degraded shows on the dashboard but stays silent	
+Escapes work: \\r \\n \\t \\0 and \\xNN for any byte.	
+Local only, your monitors never leave the device	
+Off — checks are best-effort, batched by Android	
+Scrolling still works. Turn off to follow links.	
+Shown in alerts so you know which element broke.	
+Why is my monitor checked less often than I set?	
+find four toggles across three settings sections	
+As far back as the stored checks go, up to a day.	
+The last day. Grey where nothing was checked yet.	
+The next successful check will record the new key	
+Leave empty to compare the element's visible text.	
+Left out, you'll paste them again on the new phone	
+Off — a slow connection will read as slow services	
+Off, a lost signal pages for every monitor at once	
+Only the name's IPv4 address. Down if it has none.	
+Raised when a monitor breaches its latency budget.	
+Stored encrypted on this phone, never in a backup.	
+. Renew it before then or the site stops answering.	
+No monitors yet, so the card has nothing to follow.	
+No monitors yet. Every one you add will be covered.	
+Slow readings are checked against a reference first	
+never more than three, however big I\n     * make it	
+their status is unchanged and no outage is implied.	
+} stay exactly as they are, only the grouping goes.	
+\n\nThis clears itself as soon as one check completes.	
+Any page on the site. Nightbell fetches its favicon.	
+Checked every time, against the count from last time	
+Hidden — long-press the widget instead (Android 12+)	
+Inherits sound, haptics and escalation from Settings	
+Star changes are held and sent as one line each day.	
+The button asks which one every time, then how long.	
+The server listed no folders. Type the name instead.	
+The service says it is working, worse than it should	
+What does acknowledging an urgent alert actually do?	
+Why did a slow response not trigger a latency alert?	
+Only full releases, which is what GitHub calls latest	
+Star changes are held and sent as one line each hour.	
+Turn on select mode when you've found the right view.	
+Acknowledged, no more urgent alerts for this\n * outage	
+An alert silenced in Alertmanager stays quiet here too	
+As the server names it. INBOX is the inbox everywhere.	
+One notification per increase, including a single star	
+Only for you, in this list. "Ops channel", "My phone".	
+No proxy is set up in Settings, so nothing will be sent	
+Notifications are blocked, enable them in\n * system ...	
+Off. Nothing is sent, and nothing is saved up for later	
+Reads the name and the reason through the phone's voice	
+Turn the switch on, then make the problem happen again.	
+it happened\n * and you now have less cover than you did	
+The next successful check will record this server's key.	
+. Every client that checks it is refusing the connection.	
+A quiet notification each. Several at once arrive as one.	
+Announced whether or not it was read somewhere else first	
+Every time the alert comes back, until it is acknowledged	
+Notifications are blocked, enable them in system settings	
+Silencing in Alertmanager no longer quietens this monitor	
+What is the difference between down, degraded and paused?	
+} already watched on this page — all checked in one load.	
+Alerts on a latency-budget breach, separately from outages	
+GitHub logins, comma separated. Their comments never page.	
+One running total across every release the repository has.	
+Optional. Same syntax as PromQL, including =~ for a regex.	
+The receiver's certificate has to be one this phone trusts	
+. Check the provider address, or try again when it is back.	
+Advisory only — never wakes you, never bypasses quiet hours	
+All checked on one page load. Any mismatch fails the check.	
+Mostly see-through. Check it against your actual wallpaper.	
+One extra HEAD request a day, just to read the expiry date.	
+. Check the path, or choose a sign-in if it sits behind one.	
+Notifications are blocked, enable them\n * in system settings	
+The sign-in was refused or cancelled on the provider's page.	
+Values are JSON escaped, so write "{{title}}" inside quotes.	
+Off. Nothing will tell you when one of these is switched off.	
+Raised when a TLS certificate is approaching its expiry date.	
+Waits for the next scheduled check each time it answers again	
+A refusal from the host is down: nothing listens on that port.	
+Encrypted from the first byte. What almost every provider uses.	
+On issues and pull requests, closed and merged threads included	
+On issues, closed ones included. Pull request threads stay out.	
+Required. Without it Nightbell cannot tell you anything at all.	
+A github.com link works too, including one pointing at an issue.	
+An element monitor says the element is missing, but I can see it.	
+No monitors yet. Add one and it can read its own alerts out loud.	
+Sends whatever the phone is doing, for a channel other people read	
+The slowest reply right now, from the monitors that are answering.	
+This is a fault in Nightbell, not in the sites you are watching — 	
+Where you normally sign in. Blank uses the endpoint's own address.	
+Reads the whole release list, about a quarter of a megabyte a check	
+60 API calls an hour for this device, shared by every repo you watch	
+Counted once a day, and the rest of the checks use the smaller call.	
+Degraded when the answer doesn't include it. Empty takes any answer.	
+Read on another device before the check found it, so nothing is said	
+Settings has no shared proxy, so this monitor needs its own address.	
+Counted once an hour, and the rest of the checks use the smaller call.	
+How long until the next check. The grey tail empties at the same pace.	
+Nothing has been saved yet, so everything filled in here goes with it.	
+A ping beside this check tells a dead service from an unreachable host.	
+For a self-signed receiver. Anyone in the middle could read the message	
+Kept on this phone. Never in a log, and not in a backup unless you ask.	
+The monitor keeps its current settings. Anything you changed here goes.	
+The webhook keeps its current settings. Anything you changed here goes.	
+Up when the server answers A2S_INFO. No answer after every try is down.	
+Kept encrypted on this phone. Never put in a backup, a log or a webhook.	
+Only sends when the phone would notify too, including the alert switches	
+Tor is 9050. I2P's SOCKS proxy is 4447, not the 4444 its HTTP proxy uses.	
+Usually the whole address. A few servers want only the part before the @.	
+Only the newest release, which starts again near zero each time one lands.	
+A port check beside this ping tells a filtered network from a dead service.	
+Shown on every message. Worth setting when two phones post into one channel.	
+The offset is shown, never judged. The phone's own clock can be the wrong one.	
+} already watched were picked on the old page and will be looked for here too.	
+Needs the reference endpoint, which is off under Checks, discount my connection	
+Nightbell can still check monitors, but it can't tell you when something breaks.	
+Once a test returns a report with checkedAt, a limit on its age can be set here.	
+Tor listens on 9050 by default, and Orbot on 9050 too. I2P's HTTP proxy is 4444.	
+Up when the binding request is answered. An error response or no answer is down.	
+Checked when you open the app and in the background, at most once every six hours	
+Fill in the address, password and server first: listing folders means signing in.	
+Hold any card on the dashboard and drag it to put the monitors in your own order.	
+Leave the switch on, use the app until the problem happens again, then come back.	
+Nightbell looks at these when it opens, and shows this screen when one is missing	
+Only the name's IPv6 address. Down if it has none, or if this network has no IPv6.	
+Nothing refused the port. A reply here means the host is up and something holds it.	
+Up when the server answers the ping with its MOTD. No answer after every try is down.	
+One notice a check saying how much it moved, which on a busy repository is most checks	
+Silence is the answer this service gives. A closed port would be refused straight away.	
+The monitor this followed is gone, so the card shows everything until you pick another.	
+The sign-in came back with a state Nightbell did not send, so it was stopped. Try again.	
+A monitor that cannot be reached at all is only paged once the reference endpoint answers	
+Off. GitHub returns pull requests from the issues endpoint and Nightbell filters them out.	
+One monitor and its own history. An outage anywhere else is still mentioned under the line.	
+Type the address and Nightbell tries it once without a sign-in, to see whether it needs one.	
+The group this followed is gone or empty, so the card shows everything until you pick another.	
+ Its certificate is not one this phone trusts. If it is your own server, pick Pinned key below.	
+Nothing answered IMAP for this address. Ask the provider for the IMAP server, or type it below.	
+Up when the server answers with the QUIC versions it speaks. No answer after every try is down.	
+GitHub logins, comma separated. Empty means anyone. Issues and pull requests only, not comments.	
+An IPv6 literal works here too, with or without brackets: ::1 and [::1] both dial the same place.	
+Fully transparent — just text on your wallpaper. Legibility is then entirely up to the wallpaper.	
+What the strict monitoring notification draws. A change here is on the notification straight away.	
+Your Roundcube, for example. Helps find the server, and a tap on a new-mail notification opens it.	
+For Roundcube and most hosting, the server webmail reads from. Often mail. or imap. and your domain.	
+No monitor speaks yet. Each one has its own switch under its alert settings, or turn them all on here.	
+An urgent page can wake the screen, get through Do Not Disturb, and keep repeating until you answer it.	
+Up when the reply comes back, down when it does not. With one packet, a single lost reply is an outage.	
+A fine-grained token with no permissions ticked is enough for a public repo. Stored on this device only.	
+Tries one after another, a second apart. The first good reply counts, so one lost packet is not an outage.	
+Lets checks keep their schedule, and lets an urgent page keep repeating while your phone is in your pocket.	
+New comments on issues and pull requests in watched repositories, including issues that are already closed.	
+As many as the widget's size holds. Drag it taller and more monitors appear instead of the space going empty.	
+Nothing has been saved yet, so everything you filled in — including any elements you captured — goes with it.	
+Wants to be always up and cheap to answer. If your network blocks it, latency is judged raw and nothing breaks.	
+Without it, Do Not Disturb and Bedtime mode silence urgent pages completely — the exact times you would want one.	
+Kept encrypted on this phone, never in a backup. SNMP v2c sends it unencrypted, so anyone on the path can read it.	
+The certificate was refused. If this server is one you know, set this monitor's certificate handling before picking.	
+. Nothing is sent to the endpoint until you sign in again from Edit. This says nothing about whether the service is up.	
+Counted on every check. It costs no extra request: it is the call the release watcher already makes, asked for in full.	
+Up when the agent returns the value. A wrong community gets no answer at all from most agents, so it shows as no reply.	
+Nightbell could not confirm which provider this sign-in goes to. Use Enter provider details under Other ways to sign in.	
+Up when any SIP response comes back, 401 and 405 included: the server is speaking SIP. No answer after every try is down.	
+Pages will still vibrate, but they will not make a sound. This is not a permission — nothing but the volume keys fixes it.	
+Lets an urgent page wake the screen instead of waiting on the lockscreen. Android only allows this from its own settings page.	
+Only this group's monitors, and the notification is titled with its name. An outage anywhere else is still mentioned under the line.	
+Comma separated, any case. A match makes a sound with this monitor's alert settings, and is announced even when every message is off.	
+Up when the server answers this query with NOERROR or NXDOMAIN. SERVFAIL is degraded. REFUSED, or no answer after every try, is down.	
+No groups yet. Hold two monitors on the dashboard and choose Group these 2, then pick it here. Until then the card follows everything.	
+Set one and every request carries X-Nightbell-Signature: sha256=HMAC of "timestamp.body", with the timestamp in X-Nightbell-Timestamp.	
+What the strict monitoring notification says. This phone is older than Android 16, which has no line to draw, so these change its text.	
+Checks are paused, so strict monitoring is not running and there is no notification. The preview shows what it will say once you resume.	
+Comma separated. A bare extension like .apk counts every file that ends in it, whatever the version in the name. Empty counts every file.	
+Stars, new issues, pull requests and releases on watched repositories, and Nightbell's own updates. Comments have a channel of their own.	
+Up when nothing refuses the datagram and the host answers ping. Down when the host refuses it, or when the host doesn't answer ping either.	
+What the strict monitoring notification shows. It appears once strict foreground monitoring above is on, and you can set it up before then.	
+Looks in the address's DNS records and its mail settings file, and at the webmail's host. Nothing is signed in to until the server is found.	
+. This web app signs in without PKCE, so its client probably needs a secret, which a browser sign-in cannot supply. Use a service account instead.	
+Starts plain and upgrades before signing in. A server that does not offer the upgrade fails the check rather than receive the password in the clear.	
+Comma separated, case insensitive. Matched against the title and body of an issue, and against the text of a comment. Empty means everything gets through.	
+Automatic spills monitors into a second column when the widget is too short to stack them — make it flatter and they move sideways instead of disappearing.	
+This phone has no speech engine, so nothing can be said. Most have one in the system's own speech settings; a de-Googled ROM may need one installing first.	
+A page check runs in a WebView, which only reports a certificate when the phone rejects it, so nothing here can warn you before a working certificate expires.	
+Up when the server answers with the time and knows it itself. An unsynchronized server is down, a kiss-o'-death is degraded. No answer after every try is down.	
+The engine has no voice it can use offline. It would speak on wifi and go silent during exactly the outage this is for, so install a voice for your language first.	
+Not possible: Outlook, Hotmail and Microsoft 365, which only accept a Microsoft sign-in Nightbell does not have, and Proton and Tuta, which offer no IMAP to a phone.	
+The report's own status is the verdict. Up, degraded and down page through the alert policy like any other monitor, and each part is listed with the reasons it gave.	
+Dragging is off while a filter or a search is narrowing the list, because a card's place in a filtered view says nothing about where it belongs. Show all to rearrange.	
+The speech engine on this phone accepted a voice and then produced no audio. Its voice data is most likely not downloaded, so nothing will be said until that is fixed.	
+For a client that allows direct sign-in. The password is stored encrypted and used again only when the session ends. A refused password is tried once, never on a schedule.	
+Something an urgent page needs is switched off. Two of these live behind Android's own settings screens and no app can turn them on for you, so this walks you to each one.	
+Android keeps two of these behind its own settings screens — no app can switch them on for you. Tapping a row jumps straight to the toggle, and this list updates itself when you come back.	
+Opens the web app. Tap its own Sign in button and log in as usual. Nightbell reads the provider and client from that sign-in. Google sign-in does not work inside an app; use Paste a token for that.	
+Anyone who opens the file can use them as you until you revoke them, and that stays true of every copy the file makes on the way to the other phone. Off is the right answer unless you are moving the file by hand and deleting it after.	
+The voice on this phone does not speak the language the sentence is written in, so it will read English words with that language's pronunciation. Either rewrite the sentence above in that language, or install an English voice in your system speech settings.	
+This costs real battery. Nightbell wakes up as often as your tightest interval needs and holds a persistent notification Android will not let you dismiss.\n\nBackground checks stay armed underneath as a repair sweep, so nothing is lost if the OS kills the service.	
+It stops the repeats for that outage and nothing else. The monitor stays down, its card stays red, and the ordinary down notification stays where it was. When the monitor recovers the loop re-arms, so the next outage shouts again. It means “I have seen this”, not “stop watching”.	
+The share of checks in the last twenty-four hours that passed. When the history does not reach back that far the label says how far it does reach instead — a monitor added an hour ago cannot report a day, and reporting one anyway would be the easiest number in the app to mislead yourself with.	
+Re-checking everything fires a real request at every endpoint you watch, all at once. That should not be reachable by an accidental over-scroll, so past the threshold you have to hold for a moment while a ring closes. Releasing early cancels. The banner's “Check all now” is the one-tap route when you actually mean it.	
+No. There is no account, no server and no telemetry; the checks are made by your phone directly to the things you pointed it at. Android's automatic cloud backup is switched off on purpose, because your monitors' request headers can contain API tokens and that backup would have uploaded them. Moving to a new phone is the JSON export in Backup and transfer.	
+Every HTTPS check completes a handshake, and the handshake carries the certificate's expiry date, so watching it is free. Nightbell says something once when a certificate crosses each threshold and then at most once a day, never urgently and never during quiet hours — there is nothing to do at 3am about a certificate with nine days left. A renewal clears the notice on the next check.	

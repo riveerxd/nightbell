@@ -1,0 +1,31 @@
+﻿# Text("字面量") 位置参数形式的短文案（字段名正则抓不到，单独补）
+Not read from the report	报告中未读取到
+Sign-in	登录
+Marked expected. Not paging until its status changes.	已标记为预期，状态变化前不再呼叫。
+Rules	规则
+The service reported no rules or log for this part.	服务未返回此部分的规则或日志。
+Log	日志
+Your ring volume is at zero	当前铃声音量为零
+Pages will still vibrate, but they will not make a sound. 	告警仍会震动，但不会发出声音。
+Don't ask again	不再询问
+Settings has all of this again, under Alerts.	这些在「设置 - 告警」里都能再次找到。
+Notifications are blocked	通知已被禁用
+A group covers whatever is in it at the time, including monitors added later.	分组以当前包含的内容为准，之后新增的监控也会算在内。
+MONITORS	监控
+No monitors yet. Add one first, or send for all of them.	还没有监控，请先添加一个，或发送给全部。
+THE SERVICE ANSWERED	服务已应答
+The preview was not opened	预览未打开
+No report at this address	此地址没有报告
+NIGHTBELL · URGENT	紧急告警
+Service not responding	服务无响应
+INCIDENT · OPEN	故障 · 未确认
+SERVICE DOWN	服务故障
+DOWN	故障
+URGENT	紧急
+IS DOWN	已故障
+URGENT MONITOR	紧急监控
+GROUPS	分组
+No sign-in needed	无需登录
+This endpoint needs a sign-in.	此接口需要登录。
+Before we start	开始之前
+Let Nightbell wake you when something breaks	让 Nightbell 在出问题时叫醒你

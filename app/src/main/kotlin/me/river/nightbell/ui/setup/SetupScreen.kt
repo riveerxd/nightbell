@@ -50,7 +50,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import me.river.nightbell.ui.i18n.L10n
+import me.river.nightbell.ui.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -1825,24 +1826,88 @@ private fun StepSchedule(
     accent: Color,
 ) {
     SectionHeader("Cadence", icon = NightbellIcons.Clock, accent = accent)
-    StepperRow(
-        title = "Check every",
-        value = draft.intervalMinutes,
-        onValueChange = { v -> viewModel.update { it.copy(intervalMinutes = v) } },
-        range = 1..1440,
-        step = 1,
-        suffix = "m",
-        icon = NightbellIcons.Clock,
-        accent = accent,
-        note = report.of(Validation.Field.INTERVAL),
-    )
-    ChipSelector(
-        options = listOf(1, 5, 15, 30, 60, 180, 720),
-        selected = draft.intervalMinutes,
-        onSelect = { v -> viewModel.update { it.copy(intervalMinutes = v) } },
-        label = { if (it >= 60) "${it / 60}h" else "${it}m" },
-        accent = accent,
-    )
+    // Two units for one number: a positive intervalSeconds overrides the minute
+    // field, which stays as a fallback any older reader can still understand.
+    val secondsAllowed = draft.kind.supportsSubMinute
+    val useSeconds = secondsAllowed && draft.isSubMinute
+    if (secondsAllowed) {
+        ChipSelector(
+            options = listOf(false, true),
+            selected = useSeconds,
+            onSelect = { seconds ->
+                viewModel.update {
+                    if (seconds) {
+                        it.copy(intervalSeconds = if (it.isSubMinute) it.intervalSeconds else 10)
+                    } else {
+                        it.copy(intervalSeconds = 0)
+                    }
+                }
+            },
+            label = { L10n.pick(if (it) "Seconds" else "Minutes", if (it) "秒" else "分钟") },
+            accent = accent,
+        )
+    }
+    if (useSeconds) {
+        StepperRow(
+            title = "Check every",
+            value = draft.intervalSeconds,
+            onValueChange = { v -> viewModel.update { it.copy(intervalSeconds = v) } },
+            range = 1..120,
+            step = 1,
+            suffix = "s",
+            icon = NightbellIcons.Clock,
+            accent = accent,
+            note = report.of(Validation.Field.INTERVAL),
+        )
+        ChipSelector(
+            options = listOf(1, 2, 5, 10, 15, 30, 60),
+            selected = draft.intervalSeconds,
+            onSelect = { v -> viewModel.update { it.copy(intervalSeconds = v) } },
+            label = { "${it}s" },
+            accent = accent,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = L10n.pick(
+                "A sub-minute interval is held by a foreground service. " +
+                    "One second is useful on a LAN endpoint and costs noticeably more battery.",
+                "秒级间隔由前台服务常驻维持。1 秒适合内网接口测试，耗电会明显增加。",
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = NightbellColors.TextTertiary,
+        )
+    } else {
+        StepperRow(
+            title = "Check every",
+            value = draft.intervalMinutes,
+            onValueChange = { v -> viewModel.update { it.copy(intervalMinutes = v) } },
+            range = 1..1440,
+            step = 1,
+            suffix = "m",
+            icon = NightbellIcons.Clock,
+            accent = accent,
+            note = report.of(Validation.Field.INTERVAL),
+        )
+        ChipSelector(
+            options = listOf(1, 5, 15, 30, 60, 180, 720),
+            selected = draft.intervalMinutes,
+            onSelect = { v -> viewModel.update { it.copy(intervalMinutes = v) } },
+            label = { if (it >= 60) "${it / 60}h" else "${it}m" },
+            accent = accent,
+        )
+        if (!secondsAllowed) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = L10n.pick(
+                    "This kind of check stays on a minute-scale interval: each run " +
+                        "is expensive enough that a one-second cadence would be rate-limited.",
+                    "此类监控保持分钟级间隔：每次检查成本较高，1 秒频率会触发限流。",
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = NightbellColors.TextTertiary,
+            )
+        }
+    }
     StepperRow(
         // For a ping it is how long each reply is waited for, and the name says
         // so: three packets at fifteen seconds is not a fifteen second check.

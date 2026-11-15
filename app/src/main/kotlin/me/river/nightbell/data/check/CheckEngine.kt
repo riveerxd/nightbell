@@ -1,5 +1,6 @@
 package me.river.nightbell.data.check
 
+import me.river.nightbell.data.capture.MonitorLogRepository
 import me.river.nightbell.data.diag.Diag
 import me.river.nightbell.domain.DataSaver
 import me.river.nightbell.domain.LogEvent
@@ -146,6 +147,21 @@ class CheckEngine(
      */
     var quickRetryGapMs: Long = QuickRetry.GAP_MS
     var quickRetryBudgetMs: Long = QuickRetry.BUDGET_MS
+
+    /**
+     * Wall clock of the last reference probe *attempt*.
+     *
+     * [NetworkBaseline.needsProbe] cannot apply its minimum interval to an empty
+     * window — it has no newest reading to compare against — and a failed probe
+     * contributes no reading either (by design: a blocked reference is not a
+     * measurement of latency). On a network where the reference URL is
+     * unreachable, which is the normal case on an intranet, that combination
+     * made it return true on *every* pass. A one-second monitor then paid a
+     * four-second reference timeout before each check, and its samples landed
+     * roughly five seconds apart. Gate the attempt itself, not just the reading.
+     */
+    @Volatile
+    private var lastReferenceProbeMs = 0L
 
     /**
      * Where webhook events are queued. Null switches webhooks off, which is what
@@ -471,7 +487,14 @@ class CheckEngine(
         run(monitorId, force, PassWitness())
 
     private suspend fun run(monitorId: String, force: Boolean, witness: PassWitness): CheckResult? =
-        locks.getOrPut(monitorId) { Mutex() }.withLock { runLocked(monitorId, force, witness) }
+        locks.getOrPut(monitorId) { Mutex() }.withLock {
+            runLocked(monitorId, force, witness).also { result ->
+                // Both the single-monitor path and runAllDue go through here, so
+                // every check leaves its status, timing and body preview behind
+                // for that monitor's request log in the detail screen.
+                if (result != null) MonitorLogRepository.recordCheck(monitorId, result)
+            }
+        }
 
     /**
      * One reading of whether this phone can reach anything, shared for as long
@@ -576,7 +599,7 @@ class CheckEngine(
             LogField.monitor(monitorId),
             LogField.of("kind", monitor.kind),
             LogField.of("forced", force),
-            LogField.of("interval_min", monitor.intervalMinutes),
+            LogField.of("interval_s", (monitor.intervalMs / 1000L).toInt()),
             LogField.of("urgent", monitor.urgent),
         )
         store.markChecking(monitorId, true)
@@ -1294,8 +1317,14 @@ class CheckEngine(
 
         referenceLock.withLock {
             val interval = REFERENCE_MIN_INTERVAL_MS shl referenceFailures.coerceAtMost(6)
+            val now = nowMs()
             val readings = store.currentSnapshot().reference
-            if (!NetworkBaseline.needsProbe(readings, nowMs(), interval)) return
+            if (!NetworkBaseline.needsProbe(readings, now, interval)) return
+            // Even with an empty (or permanently failing) window, never spend a
+            // multi-second probe more than once per interval. A sub-minute monitor
+            // must not have its cadence decided by a latency control it cannot use.
+            if (now - lastReferenceProbeMs < interval) return
+            lastReferenceProbeMs = now
             val rtt = probe.probe(settings.latencyReferenceUrl)
             referenceFailures = if (rtt == null) (referenceFailures + 1).coerceAtMost(6) else 0
             store.updateReference { NetworkBaseline.record(it, rtt, nowMs()) }
@@ -2020,7 +2049,16 @@ class CheckEngine(
      * flag exists so a human can say "check now", not "check even though it
      * cannot possibly succeed".
      */
-    suspend fun runAllDue(force: Boolean = false): Int {
+    suspend fun runAllDue(
+        force: Boolean = false,
+        /**
+         * The latency reference is an external round trip with a four-second
+         * timeout. The sub-minute loop fires every second and must not pay for
+         * it; the housekeeping loop and the workers still refresh it on their
+         * own (much slower) rhythm.
+         */
+        refreshLatencyReference: Boolean = true,
+    ): Int {
         if (!isOnline()) {
             Diag.log(LogEvent.CHECK_SKIPPED, LogField.tag("why", "offline_pass"))
             return 0
@@ -2034,7 +2072,7 @@ class CheckEngine(
             return 0
         }
         // Once, before the loop: the whole pass shares one reading of the control.
-        refreshReference()
+        if (refreshLatencyReference) refreshReference()
         val snapshot = store.currentSnapshot()
         val now = nowMs()
         var ran = 0
@@ -2069,7 +2107,7 @@ class CheckEngine(
         nowMs: Long = nowMs(),
     ): Boolean {
         if (!monitor.runs) return false
-        if (DueCheck.isDue(monitor.intervalMinutes, runtime?.lastCheckedAt ?: 0L, nowMs)) return true
+        if (DueCheck.isDueMillis(monitor.intervalMs, runtime?.lastCheckedAt ?: 0L, nowMs)) return true
         // A failure still short of its threshold is due again well before its
         // interval. Answered here rather than by each caller so the in-lock gate,
         // the worker's gate and the strict service all agree on it. No pause is
@@ -2202,7 +2240,8 @@ class CheckEngine(
                 val due = if (runtime == null || runtime.lastCheckedAt <= 0L) {
                     0L
                 } else {
-                    runtime.lastCheckedAt + monitor.intervalMinutes * 60_000L - DUE_SLACK_MS - now
+                    runtime.lastCheckedAt + monitor.intervalMs -
+                        DueCheck.slackFor(monitor.intervalMs) - now
                 }
                 soonest = minOf(soonest, due)
                 if (runtime != null) {
@@ -2393,7 +2432,6 @@ class CheckEngine(
 
         /** A detail line can be a response body. A channel gets the start of it. */
         private const val WEBHOOK_DETAIL_CHARS = 500
-        private const val DUE_SLACK_MS = DueCheck.SLACK_MS
 
         /** Never wake more often than this, however tight the configured cadence. */
         const val MIN_TICK_MS = 15_000L

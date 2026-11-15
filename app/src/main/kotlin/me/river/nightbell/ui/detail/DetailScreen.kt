@@ -32,7 +32,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import me.river.nightbell.data.capture.MonitorLogEntry
+import me.river.nightbell.data.capture.MonitorLogRepository
+import me.river.nightbell.ui.i18n.L10n
+import me.river.nightbell.ui.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -47,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -140,6 +144,7 @@ fun DetailScreen(
     val card by viewModel.card.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val offline by viewModel.offline.collectAsStateWithLifecycle()
+    val monitorLogs by MonitorLogRepository.state.collectAsStateWithLifecycle()
     var showAllChecks by remember { mutableStateOf(false) }
     /** Repository monitors show activity; this is the way back to the poll list. */
     var showRawChecks by remember { mutableStateOf(false) }
@@ -504,6 +509,16 @@ fun DetailScreen(
         item(key = "config") {
             StaggeredEntrance(index = 4, key = "config-${monitor.id}", log = entrance) {
                 ConfigCard(monitor, accent, webhooks, onOpenWebhook)
+            }
+        }
+
+        item(key = "request-logs") {
+            StaggeredEntrance(index = 5, key = "logs-${monitor.id}", log = entrance) {
+                RequestLogCard(
+                    monitorId = monitor.id,
+                    entries = MonitorLogRepository.forMonitor(monitor.id, monitorLogs),
+                    accent = accent,
+                )
             }
         }
 
@@ -1001,26 +1016,42 @@ private fun CertificateCard(
     }
     GlassCard(accent = if (tone == NightbellColors.Mint) Color.Transparent else tone) {
         SectionHeader("TLS certificate", icon = NightbellIcons.Shield, accent = tone)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = when {
-                        expired -> "Expired ${formatSpan(nowMs - runtime.certExpiresAt)} ago"
-                        days <= 0L -> "Expires today"
-                        days == 1L -> "Expires tomorrow"
-                        else -> "$days days left"
-                    },
-                    style = MaterialTheme.typography.titleLarge,
-                    color = tone,
-                )
-                Text(
-                    text = certDateFormat.format(Date(runtime.certExpiresAt)),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = NightbellColors.TextTertiary,
-                )
-            }
+        // The issuer used to sit in this Row as an unconstrained MicroTag. A CA
+        // name is a long single-line string (e.g. "GeoTrust G2 TLS CN RSA4096
+        // SHA256 2022 CA1"); a Row measures non-weighted children first, so it
+        // swallowed the whole width and the weighted column collapsed to a few
+        // dp — "161 days left" and the date rendered one character per line.
+        // Keep the numeric reading on its own full-width column and put the
+        // issuer below it, wrapped and ellipsised instead of competing for space.
+        Column(Modifier.fillMaxWidth()) {
+            Text(
+                text = when {
+                    expired -> "Expired ${formatSpan(nowMs - runtime.certExpiresAt)} ago"
+                    days <= 0L -> "Expires today"
+                    days == 1L -> "Expires tomorrow"
+                    else -> "$days days left"
+                },
+                style = MaterialTheme.typography.titleLarge,
+                color = tone,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = certDateFormat.format(Date(runtime.certExpiresAt)),
+                style = MaterialTheme.typography.bodySmall,
+                color = NightbellColors.TextTertiary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             if (runtime.certIssuer.isNotBlank()) {
-                MicroTag(runtime.certIssuer, color = NightbellColors.TextSecondary)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = L10n.pick("Issuer: ", "颁发者：") + runtime.certIssuer,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = NightbellColors.TextSecondary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
         if (expired) {
@@ -1510,7 +1541,13 @@ private fun ConfigCard(
                 }
             }
         }
-        ConfigRow("Interval", "every ${monitor.intervalMinutes} min")
+        ConfigRow(
+            "Interval",
+            L10n.pick(
+                if (monitor.isSubMinute) "every ${monitor.intervalSeconds} s" else "every ${monitor.intervalMinutes} min",
+                if (monitor.isSubMinute) "每 ${monitor.intervalSeconds} 秒" else "每 ${monitor.intervalMinutes} 分钟",
+            ),
+        )
         ConfigRow(
             when (monitor.kind) {
                 MonitorKind.PING -> "Reply timeout"
@@ -1616,8 +1653,241 @@ private fun ConfigRow(label: String, value: String) {
 
 private val certDateFormat = SimpleDateFormat("d MMM yyyy", Locale.getDefault())
 private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+/** Millisecond precision for the request log: a one-second cadence is invisible at HH:mm:ss. */
+private val logTimeFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault())
 private val dateFormat = SimpleDateFormat("d MMM", Locale.getDefault())
 private val alertStartFormat = SimpleDateFormat("d MMM HH:mm", Locale.getDefault())
+
+/** Collapsed by default — a monitor card should stay a card, not a wall of text. */
+@Composable
+private fun RequestLogCard(
+    monitorId: String,
+    entries: List<MonitorLogEntry>,
+    accent: Color,
+) {
+    var expanded by rememberSaveable(monitorId) { mutableStateOf(false) }
+    var openId by rememberSaveable(monitorId) { mutableStateOf<String?>(null) }
+    GlassCard(onClick = { expanded = !expanded }, contentPadding = 12.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = NightbellIcons.History,
+                contentDescription = null,
+                tint = accent,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = L10n.pick("Request log", "请求日志"),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = NightbellColors.TextPrimary,
+                )
+                Text(
+                    text = L10n.pick(
+                        "${entries.size} entries · tap to expand",
+                        "共 ${entries.size} 条 · 点开查看",
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = NightbellColors.TextTertiary,
+                )
+            }
+            Icon(
+                imageVector = if (expanded) NightbellIcons.ChevronUp else NightbellIcons.ChevronDown,
+                contentDescription = null,
+                tint = NightbellColors.TextTertiary,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        AnimatedVisibility(visible = expanded) {
+            Column {
+                Spacer(Modifier.height(8.dp))
+                if (entries.isEmpty()) {
+                    Text(
+                        text = L10n.pick(
+                            "No request recorded yet. Run a check to start the log.",
+                            "还没有请求记录，执行一次检查后即可查看。",
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = NightbellColors.TextTertiary,
+                    )
+                } else {
+                    val shown = entries.take(12)
+                    shown.forEachIndexed { index, entry ->
+                        // Entries are newest first. Printing the gap keeps the
+                        // configured cadence verifiable without mental arithmetic
+                        // on two HH:mm:ss timestamps rounded to whole seconds.
+                        val gapMs = shown.getOrNull(index + 1)
+                            ?.let { earlier -> entry.at - earlier.at }
+                            ?.takeIf { it >= 0L }
+                        MonitorLogRow(
+                            entry = entry,
+                            gapMs = gapMs,
+                            expanded = openId == entry.id,
+                            onToggle = { openId = if (openId == entry.id) null else entry.id },
+                        )
+                        if (index < shown.lastIndex) {
+                            GlassDivider(Modifier.padding(horizontal = 8.dp), alpha = 0.06f)
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    NightbellButton(
+                        text = L10n.pick("Clear this log", "清空此日志"),
+                        onClick = { MonitorLogRepository.clear(monitorId) },
+                        icon = NightbellIcons.Trash,
+                        tone = ButtonTone.Secondary,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MonitorLogRow(
+    entry: MonitorLogEntry,
+    gapMs: Long?,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onToggle)
+            .padding(horizontal = 8.dp, vertical = 9.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = logTimeFormat.format(Date(entry.at)),
+                style = MaterialTheme.typography.labelSmall,
+                fontFamily = FontFamily.Monospace,
+                color = NightbellColors.TextTertiary,
+            )
+            if (gapMs != null) {
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "Δ " + if (gapMs >= 1_000L) {
+                        String.format(Locale.US, "%.2fs", gapMs / 1_000.0)
+                    } else {
+                        "${gapMs}ms"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = if (gapMs > 2_000L) {
+                        NightbellColors.Amber
+                    } else {
+                        NightbellColors.TextTertiary
+                    },
+                )
+            }
+            Spacer(Modifier.width(10.dp))
+            val label = when {
+                entry.statusCode > 0 -> "HTTP ${entry.statusCode}"
+                entry.ok -> "OK"
+                else -> "FAILED"
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = if (entry.ok) NightbellColors.Mint else NightbellColors.Rose,
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                text = "${entry.latencyMs} ms",
+                style = MaterialTheme.typography.labelSmall,
+                color = NightbellColors.TextTertiary,
+            )
+        }
+        val collapsed = entry.message.ifBlank { "${entry.method} ${entry.url}".trim() }
+        if (collapsed.isNotBlank()) {
+            Text(
+                text = collapsed,
+                style = MaterialTheme.typography.bodySmall,
+                color = NightbellColors.TextSecondary,
+                maxLines = if (expanded) 6 else 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (expanded) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = if (entry.source == "capture") {
+                    L10n.pick("captured exchange", "抓包请求")
+                } else {
+                    L10n.pick("scheduled / manual check", "定时或手动检查")
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = NightbellColors.TextTertiary,
+            )
+            if (entry.requestHeaders.isNotEmpty()) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = L10n.pick("Request headers", "请求头"),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = NightbellColors.TextTertiary,
+                )
+                Text(
+                    text = entry.requestHeaders.joinToString("\n").take(4000),
+                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+                    color = NightbellColors.TextSecondary,
+                )
+            }
+            if (entry.requestBody.isNotBlank()) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = L10n.pick("Request body", "请求体"),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = NightbellColors.TextTertiary,
+                )
+                Text(
+                    text = entry.requestBody.take(4000),
+                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+                    color = NightbellColors.TextSecondary,
+                )
+            }
+            if (entry.responseHeaders.isNotEmpty()) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = L10n.pick("Response headers", "响应头"),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = NightbellColors.TextTertiary,
+                )
+                Text(
+                    text = entry.responseHeaders.joinToString("\n").take(4000),
+                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+                    color = NightbellColors.TextSecondary,
+                )
+            }
+            val response = entry.responseBody.ifBlank { entry.bodyPreview }
+            if (response.isNotBlank()) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = L10n.pick("Response", "响应"),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = NightbellColors.TextTertiary,
+                )
+                Text(
+                    text = response.take(4000),
+                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+                    color = NightbellColors.TextSecondary,
+                )
+            }
+            if (entry.detail.isNotBlank()) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = L10n.pick("Detail", "详情"),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = NightbellColors.TextTertiary,
+                )
+                Text(
+                    text = entry.detail.take(4000),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = NightbellColors.TextSecondary,
+                )
+            }
+        }
+    }
+}
 
 @Composable
 private fun EventRow(sample: Sample) {

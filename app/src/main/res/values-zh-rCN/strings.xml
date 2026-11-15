@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Nightbell</string>
+    <string name="notif_channel_group_alerts">监控告警</string>
+    <string name="widget_name">Nightbell 状态</string>
+    <string name="widget_description">一眼查看监控健康状态，最差的排在最前面。</string>
+    <string name="widget_settings">小组件设置</string>
+
+    <!-- 告警页按钮同时用作通知动作标签，两者必须保持一致 -->
+    <string name="urgent_action_acknowledge">确认</string>
+    <!-- 短版是页面药丸按钮上实际显示的文字；长版留给读屏与通知动作 -->
+    <string name="urgent_action_acknowledge_short">确认</string>
+    <string name="urgent_action_recheck">重新检查</string>
+    <string name="urgent_action_mute">静音 1 小时</string>
+</resources>

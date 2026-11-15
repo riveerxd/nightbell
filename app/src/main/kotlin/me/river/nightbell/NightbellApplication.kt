@@ -2,20 +2,57 @@ package me.river.nightbell
 
 import android.app.Application
 import me.river.nightbell.data.Nightbell
+import me.river.nightbell.data.capture.MonitorLogRepository
 import me.river.nightbell.data.diag.Diag
+import me.river.nightbell.domain.LanguageChoice
 import me.river.nightbell.domain.LogEvent
 import me.river.nightbell.domain.LogField
 import me.river.nightbell.domain.runCatchingCancellable
+import me.river.nightbell.ui.i18n.L10n
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class NightbellApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
         val graph = Nightbell.install(this)
+
+        // A scheduled check can run in a process with no Activity. Load the
+        // per-monitor request log before any worker can append to it.
+        MonitorLogRepository.init(this)
+
+        // Earliest possible: "follow system" needs an application context, and
+        // WorkManager can start a check (and post a notification) in a fresh
+        // process before any Activity exists.
+        L10n.install(this)
+        graph.appScope.launch {
+            // Wait for the real first read, like the Diag sink does. Collecting
+            // straight away would apply the in-memory default (SYSTEM) as if it
+            // were the persisted choice and could briefly show the wrong one.
+            graph.store.loadedFlow.first { it }
+            graph.store.snapshot
+                .map { it.settings.language }
+                .distinctUntilChanged()
+                .collect { choice ->
+                    // appScope runs on Dispatchers.Default. Compose reads this
+                    // state during composition, so publish it on the main thread
+                    // rather than writing a SnapshotState from a worker.
+                    withContext(Dispatchers.Main.immediate) {
+                        L10n.setLanguage(
+                            when (choice) {
+                                LanguageChoice.SYSTEM -> L10n.Lang.SYSTEM
+                                LanguageChoice.ZH -> L10n.Lang.ZH
+                                LanguageChoice.EN -> L10n.Lang.EN
+                            },
+                        )
+                    }
+                }
+        }
 
         // Before anything else in the process can log. The sink holds a ring in
         // memory from its first line whether or not the user has the switch on,

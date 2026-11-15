@@ -1,0 +1,146 @@
+﻿# 主页 / 详情 / 新建向导 / 告警页 / 检查引擎提示
+name, host or element	名称、主机或元素
+Monitors stay where you put them. Nothing re-sorts them behind your back while this is on.	开启后监控保持在你放的位置，不会在背后偷偷重新排序。
+Tap to add or remove, long-press anywhere to start over	点按增删，长按任意处重新开始
+Pull down and hold to re-check everything · long-press a card to select several	下拉并按住可重新检查全部 · 长按卡片可多选
+Pick a starting point and Nightbell fills in the cadence, the expectations and the alerting. You only need a URL — everything else is still yours to change before it saves.	选一个起点，Nightbell 会替你填好检查频率、判定条件和告警设置。你只需要给一个 URL，其余的在保存前都还能改。
+connection	连接
+IMAP	IMAP
+No monitors in this group. Add one by holding it on the dashboard and choosing Add to a group.	这个分组里还没有监控。在主页长按监控并选择「加入分组」即可添加。
+Shown on the group's card on the dashboard.	显示在主页该分组的卡片上。
+That picture could not be read. Try another one.	这张图片无法读取，请换一张。
+No monitor here has a site to borrow a mark from. Upload a picture, or name a site below.	此分组里的监控都没有可借用图标的站点。请上传图片，或在下面填一个站点地址。
+This group is empty. Long-press monitors on the dashboard to add them, or ungroup it below.	这个分组是空的。在主页长按监控加入，或在下面取消分组。
+Nothing pages you until it lifts. Pick what else stops.	暂停解除前不会有任何告警。请选择还要一并停止的项目。
+Made by a newer Nightbell	由更新版本的 Nightbell 创建
+This version cannot check a monitor of this kind. It is kept as it was and checked again once Nightbell is updated.	当前版本无法检查这种类型的监控。它会原样保留，等 Nightbell 更新后再重新检查。
+GitHub counts requests for the file, not people. Mirrors, build servers and crawlers that fetch a whole release are in this number, and it is not updated the moment somebody downloads.	GitHub 统计的是文件请求数而不是人数。镜像站、构建服务器和抓取整个发布包的爬虫都算在内，也不会在有人下载的瞬间更新。
+downloads	次下载
+Issue opened	新建 issue
+New release published	发布新版本
+Pushed to the repository	推送到仓库
+Code changed	代码有变动
+Nothing learned about the repository	尚未获取仓库信息
+Nothing recorded yet. The first check writes down where the repository stands and says nothing, so you are told about what happens next rather than about everything that already had.	暂无记录。第一次检查只会记下仓库当前状态、不发出通知，这样之后告诉你的是新发生的事，而不是早已存在的一切。
+GitHub is refusing requests until the budget resets. That is a limit on this device's address, not a problem with the repository, so nothing was recorded and no alert was raised. A token in Settings raises the ceiling from 60 an hour to 5,000.	GitHub 在配额重置前拒绝请求。这是本机 IP 的限制，不是仓库的问题，因此没有记录、也没有告警。在「设置」里填令牌可把上限从每小时 60 次提到 5000 次。
+Failing on purpose, like a staging service? Mark it expected and it stops paging until its status changes.	像预发布环境那样故意保持故障？把它标记为「预期」，状态变化前就不会再呼叫你。
+Any change in status pages you again.	状态一旦变化就会再次告警。
+Not read yet. The first check notes where the folder is and announces nothing, so what you hear about is mail that arrives after it.	尚未读取。第一次检查只记下文件夹当前状态、不发出通知，所以之后通知你的是新到达的邮件。
+Nothing has arrived since this monitor started watching.	开始监控以来还没有新邮件。
+No outages in 	近 
+Silent mode proves nothing refused the port and the host is there. It can't see a service that is hung but still holding the port.	静默模式只能证明端口没有被拒绝、主机还在。它看不出服务已经挂死但仍占着端口。
+Checks reuse the session from the preview, so pages behind a cookie or age prompt stay reachable. Open the preview again if the site starts asking a second time.	检查会复用预览时的会话，需要 Cookie 或年龄确认的页面仍可访问。站点再次要求确认时，重新打开预览即可。
+Checks reuse the session from the preview, so pages behind a cookie or age prompt stay reachable. Open the preview again if the site starts asking a second time.	检查会复用预览时的会话，需要 Cookie 或年龄确认的页面仍可访问。站点再次要求确认时，重新打开预览即可。
+Checks try id → CSS → XPath → text fingerprint, in that order, so small markup changes won't false-alarm.	检查按 id → CSS → XPath → 文本指纹的顺序尝试，页面结构的小改动不会误报。
+Acknowledge from the notification or the monitor screen. The card stays red until it recovers, and the next outage shouts again.\n\nWhile an urgent outage is unacknowledged Nightbell runs a foreground service to keep the interval — expect a persistent notification and extra battery use until you confirm it.	可在通知里或监控页面确认。卡片会一直显示红色直到恢复，下次故障仍会大声告警。\n\n紧急故障未被确认期间，Nightbell 会启动前台服务以维持检查间隔——确认之前会有一条常驻通知，并多耗一些电。
+On GitHub's page, pick a fine-grained token and tick nothing under Permissions: a public repository answers without a token at all. A private one needs Contents, Issues and Pull requests set to Read-only. Settings has the full version.	在 GitHub 页面选择细粒度令牌，「权限」里什么都不要勾：公开仓库根本不需要令牌。私有仓库需要把 Contents、Issues 和 Pull requests 设为只读。完整说明见「设置」。
+A milestone replaces the plain notice for the same stars rather than arriving beside it, so crossing 100 is one buzz and not two.	里程碑提醒会取代同一 star 数的普通提醒，而不是同时发两条，所以突破 100 只响一次。
+The issue row above only asks for open issues, so a thread closed months ago can still reach the phone. Pull request threads follow the Pull requests switch. Many automation accounts look like ordinary users to GitHub, so name those below.	上面的 issue 选项只请求未关闭的 issue，因此几个月前已关闭但仍被回复的帖子也会推到手机。合并请求的讨论跟随「合并请求」开关。很多自动化账号在 GitHub 看起来和普通用户一样，请在下面点名排除。
+GitHub counts requests for the file rather than people. Mirrors, build servers and crawlers are in the number, and it is not updated the moment somebody downloads.	GitHub 统计的是文件请求数而不是人数，镜像站、构建服务器和爬虫都算在内，也不会在有人下载的瞬间更新。
+Optional. Basic auth covers Grafana Cloud, Mimir and a Prometheus behind a reverse proxy. An Uptime Kuma API key goes in the password with the username left blank. A bearer token or a tenant header goes below instead.	可选。Basic 认证适用于 Grafana Cloud、Mimir 和反向代理后的 Prometheus。Uptime Kuma 的 API Key 填在密码里，用户名留空。Bearer 令牌或租户请求头填在下面。
+Blank if it only wants a key	只需要密钥时留空
+Every series that matches has to pass. A filter that matches nothing fails the check, because a metric that has stopped being exported is not good news.	所有匹配的序列都必须通过。筛选条件匹配不到任何结果会判定检查失败，因为指标不再导出绝不是好消息。
+Only if it mentions (optional)	仅当提到（可选）
+Only from (optional)	仅来自（可选）
+Never from (optional)	排除这些账号（可选）
+Expected answer (optional)	期望应答（可选）
+Send (optional)	发送内容（可选）
+This service won't answer a stranger	此服务不会应答陌生请求
+So Nightbell only listens for a refusal, and checks that the host answers ping. That catches a stopped service on a live host, and a host that's gone. It can't catch a service that's hung but still holding the port.	因此 Nightbell 只监听「被拒绝」的应答，并确认主机能 ping 通。这样能发现活主机上已停掉的服务，以及主机本身消失；但抓不到服务挂死却仍占着端口的情况。
+This host doesn't answer ping right now, so silent mode will report it down.	此主机当前不响应 ping，静默模式会把它判为故障。
+Up when the port accepts a connection.	端口能建立连接即视为正常。
+Nothing is sent over it, and it is closed straight away. A refused connection or no answer within the timeout is down. The time to connect is what the latency budget judges.	连接上不发送任何数据，随即关闭。连接被拒绝或超时无应答即为故障。延迟预算衡量的是建立连接所需的时间。
+A server that cannot be reached, a bad certificate or a refused password is down and alerts like any outage. A refused password is not tried again until it is edited, so a server's brute-force guard never blocks this phone. The first check only notes where the folder is, so you hear about what arrives after it, not your backlog. The folder is opened read only: nothing is ever marked read.	服务器不可达、证书错误或密码被拒都算故障，会像其他故障一样告警。密码被拒后在你修改之前不会重试，因此服务器的防暴力破解机制不会把这台手机拉黑。第一次检查只记下文件夹当前状态，所以通知你的是之后新到的邮件，而不是积压的旧邮件。文件夹以只读方式打开，不会把任何邮件标记为已读。
+Up when Nightbell can sign in and read the folder.	Nightbell 能登录并读取文件夹即视为正常。
+What counts as up	判定为正常的条件
+Packets per check	每次检查的包数
+Tries per check	每次检查的尝试次数
+Allowed clock offset	允许的时钟偏差
+Community	团体名
+OID	OID
+Name to ask for	要查询的名称
+Expected answer (optional)	期望应答（可选）
+Health endpoint URL	健康检查接口 URL
+Other ways to sign in	其他登录方式
+Choose a sign-in	选择登录方式
+Save and test	保存并测试
+Web app	Web 应用
+Client secret	客户端密钥
+Refresh token	刷新令牌
+Provider address	服务商地址
+Client ID	客户端 ID
+The client your web app uses	你的 Web 应用使用的客户端
+Sign in and test	登录并测试
+Sign in again	重新登录
+Sign out	退出登录
+Sign in	登录
+No sign-in needed	无需登录
+This endpoint needs a sign-in.	此接口需要登录。
+Treat as down if the report is older than	报告超过以下时长即判为故障
+Address or user name	地址或用户名
+Webmail address (optional)	网页邮箱地址（可选）
+Find the server	查找服务器
+IMAP server	IMAP 服务器
+Folder	文件夹
+Pick from the server	从服务器选择
+Every new message	每封新邮件
+Alert when the sender has	发件人包含时告警
+Alert when the subject has	主题包含时告警
+Skip messages already read	跳过已读邮件
+Use TLS on port 993 if the server has it.	如果服务器支持，请用 993 端口的 TLS。
+Folder names are the server's own. INBOX always exists.	文件夹名称由服务器决定，INBOX 一定存在。
+The provider answered without a token	服务商未返回令牌
+Write it the way PromQL does: mode=\"idle\", cpu!=\"0\".	按 PromQL 的写法填写：mode=\"idle\", cpu!=\"0\"。
+The query reached Prometheus and Prometheus would not run it. Try it in the expression browser first.	查询已到达 Prometheus，但 Prometheus 拒绝执行。请先在表达式浏览器里试一下。
+Check that the URL is a Prometheus-compatible query API.	请确认 URL 是兼容 Prometheus 的查询接口。
+Query matched nothing	查询没有匹配到任何结果
+This query is written as an alerting rule, so anything it returns is the alert. Check what changed on the series above.	此查询是作为告警规则写的，返回的任何结果都是告警。请查看上面序列发生了什么变化。
+Write it the way PromQL does: severity=\"critical\", team=\"platform\".	按 PromQL 的写法填写：severity=\"critical\", team=\"platform\"。
+This is Alertmanager's verdict, not Nightbell's. Silence it there and this monitor goes quiet with it.	这是 Alertmanager 的判定，不是 Nightbell 的。在它那边静音后，这个监控也会跟着安静下来。
+A health monitor whose own sign-in has ended. It is not checking until you sign in again. Never a claim that the service is down.	健康检查监控自身的登录已失效，重新登录前不会继续检查。这不代表服务故障。
+Raised only when Nightbell's own checking code repeatedly fails. Never raised for delayed background work, lost connectivity or battery saver.	仅在 Nightbell 自身的检查代码反复出错时触发。后台任务被延迟、断网或省电模式都不会触发。
+Repeats until acknowledged when an URGENT monitor goes down.	紧急监控故障时持续重复，直到被确认。
+Shown while Nightbell keeps a strict check cadence in the background.	Nightbell 在后台维持严格检查频率期间显示。
+Mailbox checks are not available in this build	此版本不支持邮箱检查
+Not signed in	未登录
+Nothing was sent to the endpoint. Sign in, then test again.	没有向接口发送任何内容。请先登录再重试。
+GitHub checks are not available in this build	此版本不支持 GitHub 检查
+GitHub is rate limiting this device	GitHub 正在限制此设备的请求
+No element captured yet	尚未抓取元素
+No repository set	未设置仓库
+GitHub sent something that isn't JSON	GitHub 返回的不是 JSON
+Signed in, but the API refused the token	已登录，但接口拒绝了令牌
+Access refused (403)	访问被拒绝（403）
+The account Nightbell signs in with may lack a role the API requires.	Nightbell 登录所用的账号可能缺少接口要求的角色。
+Could not build the request	无法构造请求
+Edit the monitor and enter the mailbox password.	编辑监控并填入邮箱密码。
+Edit the monitor and enter the password again.	编辑监控并重新填入密码。
+A server that says this at once is usually full, or has blocked this address after failed sign-ins.	服务器立刻这样回应，通常是连接数已满，或在多次登录失败后封了这个地址。
+The service may be down, or a firewall drops the packets. Some networks block outgoing UDP altogether.	服务可能已停，或防火墙丢弃了数据包。有些网络会完全禁止外发 UDP。
+The host may be down. If it filters ping on purpose, use a probe that gets an answer.	主机可能已宕。如果它故意过滤 ping，请换一个能收到应答的探测方式。
+This WebView cannot be routed	此 WebView 无法走代理
+This device's WebView cannot be pointed at a proxy, so the page was not loaded.	本机的 WebView 无法设置代理，因此页面没有加载。
+Another routed page load is in progress	已有另一个走代理的页面正在加载
+No proxy to route through	没有可用的代理
+No checks recorded yet. Run one now to start the history.	暂无检查记录，立即运行一次即可开始记录。
+Not read from the report	报告中未读取到
+This webhook was deleted. Close this screen and add it again if you still want it.	此 Webhook 已被删除。若仍需要，请关闭本页后重新添加。
+GROUPS	分组
+The default. Same 204, run by a project with no advertising business.	默认项。同样返回 204，由不涉及广告业务的项目运营。
+Canonical's connectivity check. A second opinion if the first is blocked.	Canonical 的连通性检查。第一个被墙时的第二参考。
+A website	一个网站
+Any 2xx counts as up. Checked every 15 minutes, urgent off.	任意 2xx 都算正常。每 15 分钟检查一次，不启用紧急告警。
+A health endpoint	一个健康检查接口
+Expects 200 and a JSON body that says it is ok. Pages you urgently.	要求返回 200 且 JSON 内容表示正常，会紧急呼叫你。
+An API, with a budget	带延迟预算的接口
+200 plus a 1.5 s latency budget, so slow shows up before broken does.	要求 200，并设 1.5 秒延迟预算，这样「变慢」会比「彻底坏掉」更早暴露。
+A GitHub repository	一个 GitHub 仓库
+Every new star, every new issue, every release. Checked every 15 minutes.	每颗新星、每个新 issue、每个新版本。每 15 分钟检查一次。
+Something on a page	页面上的某个元素
+Loads the real page so you can tap the element to watch.	加载真实页面，让你点选要盯的元素。
+Sent from the Nightbell settings screen	从 Nightbell 设置页发出
+What Android allows	Android 允许的范围
+URGENT MONITOR	紧急监控
+IS DOWN	已故障
+No outages in 	近 
+A server that answers badly still pages	服务端应答异常仍会告警

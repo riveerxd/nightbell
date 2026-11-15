@@ -54,7 +54,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import me.river.nightbell.ui.i18n.Text
 import androidx.compose.material3.ripple
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -186,6 +186,8 @@ fun DashboardScreen(
     onOpenSettings: () -> Unit,
     onToast: (ToastMessage) -> Unit,
     onPickTemplate: (String) -> Unit = { onAddMonitor() },
+    onOpenCapture: () -> Unit = {},
+    onOpenNetwork: () -> Unit = {},
 ) {
     val viewModel = rememberDashboardViewModel()
     val cards by viewModel.cards.collectAsStateWithLifecycle()
@@ -435,6 +437,8 @@ fun DashboardScreen(
                                 panel = if (panel == requested) DashboardPanel.NONE else requested
                             },
                             onOpenSettings = onOpenSettings,
+                            onOpenCapture = onOpenCapture,
+                            onOpenNetwork = onOpenNetwork,
                         )
                     }
 
@@ -754,6 +758,8 @@ private fun DashboardHeader(
     narrowing: Boolean,
     onTogglePanel: (DashboardPanel) -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenCapture: () -> Unit = {},
+    onOpenNetwork: () -> Unit = {},
 ) {
     Row(
         Modifier.fillMaxWidth(),
@@ -787,6 +793,20 @@ private fun DashboardHeader(
                 badged = narrowing,
             )
         }
+        GlassIconButton(
+            icon = NightbellIcons.Globe,
+            onClick = onOpenNetwork,
+            contentDescription = "Network info",
+            size = 34.dp,
+            accent = NightbellColors.TextSecondary,
+        )
+        GlassIconButton(
+            icon = NightbellIcons.Radar,
+            onClick = onOpenCapture,
+            contentDescription = "Interface capture",
+            size = 34.dp,
+            accent = NightbellColors.TextSecondary,
+        )
         GlassIconButton(
             icon = NightbellIcons.Sliders,
             onClick = onOpenSettings,
@@ -1889,7 +1909,11 @@ private fun MonitorRowCard(
                 ) {
                     MicroTag(text = monitor.method.name, color = NightbellColors.TextTertiary)
                 }
-                MicroTag(text = "${monitor.intervalMinutes}m", color = NightbellColors.TextTertiary, icon = NightbellIcons.Clock)
+                MicroTag(
+                    text = if (monitor.isSubMinute) "${monitor.intervalSeconds}s" else "${monitor.intervalMinutes}m",
+                    color = NightbellColors.TextTertiary,
+                    icon = NightbellIcons.Clock,
+                )
             }
             // Per-card actions step aside during selection: a re-check button that
             // fires a real request is the last thing that should be one mis-tap

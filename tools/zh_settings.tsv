@@ -1,0 +1,107 @@
+﻿# Settings / 告警策略 / Webhook / 权限引导 的说明文字
+All alerts	所有告警
+Check my connection first	先检查本机网络
+For a failure that never reached anything: no DNS, no route, no reply. A server that answers badly still pages, and so does everything else if the reference cannot be checked. The endpoint is the one under Checks, latency baseline.	只针对「请求根本没发出去」的失败：DNS 解析失败、无路由、无应答。服务端应答异常仍会告警；如果参考接口本身也检查不了，其他监控同样会告警。参考接口在「检查 - 延迟基线」里设置。
+Open alert permissions	打开告警权限
+Check at launch	启动时检查
+Applies to every monitor set to “use my global alert settings”.	适用于所有设置为「使用我的全局告警设置」的监控。
+The pause on the dashboard banner. Nightbell already stops checking when the phone has no connection at all, but one bar in a forest still counts as online: every check times out, every monitor goes down at once, and none of it is about your services.	即主页横幅上的暂停按钮。手机完全断网时 Nightbell 本就会停止检查，但「深山里只剩一格信号」仍算在线：每次检查都超时、所有监控同时报故障，而这与你的服务毫无关系。
+How long is always asked: 30 minutes up to 8 hours, or until you turn it back on. A timed pause lifts itself, which an indefinite one cannot, so it is the safer one to reach for at 2am.	暂停时长每次都会询问：30 分钟到 8 小时，或直到你手动恢复。定时暂停会自己解除，无限期暂停不会，所以凌晨两点选定时更安全。
+Every HTTPS check already completes a handshake, and the handshake carries the certificate's expiry date. Reading it costs nothing and catches the one outage you can see coming.	每次 HTTPS 检查本来就要完成握手，握手信息里带着证书到期时间。顺手读一下没有任何额外开销，却能提前发现唯一可预见的故障。
+Warn before certificates expire	证书到期前提醒
+Start warning	提前多久提醒
+Urgent below	剩余天数低于此值则紧急
+Said once when it crosses each threshold, then at most once a day. A renewal clears the notice on the next check. Plain-HTTP monitors have no certificate and are skipped.	每跨过一个阈值提醒一次，之后每天最多一次。续期后下一次检查会清除提醒。纯 HTTP 监控没有证书，会跳过。
+An alert can read itself out loud: the monitor's name and why it failed. The voice is the one already installed on this phone, so nothing is sent anywhere and it still works with no connection, which is the only time it has to.	告警可以把自己读出来：监控名称和失败原因。用的是手机里已有的语音引擎，不向任何地方发送数据，断网时也能用——而那正是最需要它的时候。
+Turn on for all	全部开启
+Unavailable, there are no monitors yet	不可用：还没有监控
+Unavailable, every monitor already speaks	不可用：所有监控都已开启播报
+Turn off for all	全部关闭
+Unavailable, no monitor speaks	不可用：没有监控开启播报
+Checking this phone's speech engine	正在检查本机语音引擎
+Open speech settings	打开语音设置
+Say it again on every repeat	每次重复提醒时都播报
+What it says	播报内容
+Nightbell writes its alerts in English. Picking another language changes how the words are pronounced, not what they say. To hear an alert in your own language, write the sentence above yourself and leave out {reason}, which is Nightbell's wording.	Nightbell 的告警文本是英文。选择另一种语言只改变发音，不改变内容。想听中文播报，请在上面自己写句子，并去掉 {reason}（那是 Nightbell 的英文措辞）。
+Say it now	立即播报
+An URGENT page speaks over its own siren, which mutes for the sentence and comes straight back. Quiet hours, mute and the ringer switch all apply first: an alert that would make no sound does not speak either.	紧急告警会在自己的警笛声之上播报：播报时警笛暂停，播完立刻恢复。免打扰、静音和响铃开关优先于播报：本来就不出声的告警也不会播报。
+Run checks in the background	后台运行检查
+Uses WorkManager; Android batches work to save battery	使用 WorkManager；Android 会合并任务以省电
+Wi-Fi only	仅 Wi-Fi
+Skip checks on metered mobile data	按流量计费的移动网络下跳过检查
+Data saver	省流量模式
+Default interval	默认间隔
+Default timeout	默认超时
+History kept	历史保留时长
+WorkManager is battery-friendly but Doze can defer a check for a long time, and its periodic minimum is 15 minutes. Strict mode runs a foreground service that keeps your intervals exactly.	WorkManager 省电，但低电耗模式可能把检查推迟很久，且周期任务最短为 15 分钟。严格模式会启动前台服务，精确保持你设定的间隔。
+Strict foreground monitoring	严格前台监控
+An unacknowledged URGENT outage starts the same service on its own, whatever this is set to, and stops it once you confirm.	未确认的紧急故障会自行启动同一前台服务（无论此开关如何），确认后即停止。
+The default for monitors that don't set their own. A successful check slower than this is DEGRADED — up, but not well.	未单独设置的监控使用此默认值。检查成功但慢于此值即为「性能下降」：服务还在，但状态不好。
+Flag slow responses	标记慢响应
+A latency measured from this phone is your connection plus the server. On bad wifi that makes everything look slow at once. Nightbell can time a known-good endpoint alongside the checks and subtract whatever your connection is adding.	从这台手机测到的延迟 = 你的网络 + 服务端。WiFi 差的时候所有监控会一起变慢。Nightbell 可以在检查的同时测一个已知正常的接口，把本机网络带来的部分扣掉。
+Discount my connection	扣除本机网络延迟
+Reference endpoint	参考接口
+The default is GrapheneOS's connectivity check rather than Google's. It answers the same empty 204, and an app that keeps everything on your device had no business handing an advertising company a timing signal from your phone. It goes out with your checks rather than on a clock of its own. Your own always-up endpoint is better still.	默认用 GrapheneOS 的连通性检查接口，而不是 Google 的。两者都返回空的 204；一个把所有数据留在本机的应用，没有理由把手机的时间信号交给广告公司。它随检查一起发出，不会自己按时钟单独请求。当然，用你自己那个永远在线的接口更好。
+Reach a Tor or I2P hidden service without putting the whole phone in VPN mode. Nothing is routed until a monitor asks for it: the switch is per monitor, on its Cadence step.	无需把整机切到 VPN 模式即可访问 Tor / I2P 隐藏服务。只有监控主动要求时才会走代理，开关在每个监控的「频率」步骤里。
+Offer a proxy to monitors	为监控提供代理
+Proxy host	代理主机
+Proxy port	代理端口
+Allow routed checks	允许走代理的检查
+Longer than an ordinary check on purpose. Most of the wait is Tor building a circuit to the service, which says nothing about whether the service is healthy, and 15 seconds reports a working hidden service as down. Tor itself waits 120.	这里故意比普通检查更长。大部分等待时间是 Tor 在建链路，与服务是否健康无关；15 秒会把正常的隐藏服务误判为故障。Tor 自己会等 120 秒。
+The proxy resolves the hostname, not this phone, which is what makes an .onion address work and keeps the name off the device's own DNS. Page-element monitors are routed as well, and so is the live preview you pick their elements in. Those loads run one at a time, because the WebView proxy setting belongs to the whole app rather than to one page, and a WebView too old to accept one at all refuses the check instead of loading it in the clear.	域名由代理解析，而不是这台手机——这正是 .onion 地址能生效、且域名不进入本机 DNS 的原因。页面元素监控以及选取元素时的实时预览也会走代理。这些加载一次只跑一个，因为 WebView 的代理设置是应用级的而不是页面级的；太旧、根本不接受代理的 WebView 会直接拒绝检查，而不是明文加载。
+Nightbell is built dark-first — the glass reads on depth, and depth is easiest to draw on black. The light scheme is a designed counterpart rather than an inversion: same layout, re-picked colours, and the status hues darkened until they stay legible.	Nightbell 以深色为首选：玻璃质感靠层次，而层次在黑色上最容易表现。浅色主题不是简单反转，而是重新设计的一套：布局相同、颜色重选，状态色加深到仍然清晰可读。
+Frosted glass	磨砂玻璃
+Website-element monitors are badged with the site's own favicon, cached for a month so the dashboard isn't hitting somebody else's server every time you scroll. If a site has changed its mark, this fetches them all again now.	网页元素监控会显示站点自己的 favicon，缓存一个月，避免每次滚动主页都去请求别人的服务器。站点换了图标时，这里可以立即全部重新拉取。
+An icon that can't be fetched keeps the one it had — you won't end up with blank badges because a site was briefly down.	拉取失败的图标会保留原来的那个——站点短暂宕机不会让图标变空白。
+Nightbell can look for a newer version of itself, notify you once and show a notice on the dashboard until you dismiss it. Nothing is fetched until you tap Install, and Android still asks before it replaces the app. The check reads one small file from the source below and says which version you are running. That is the whole of it, and this switch stops it.	Nightbell 可以检查自身的新版本，提醒一次，并在主页保留提示直到你关掉。点「安装」之前不会下载任何东西，替换应用前 Android 也会再问一次。检查只读取下面来源里的一个小文件，并回报当前版本号，仅此而已；关掉此开关即可完全停止。
+Tell me about new versions	有新版本时提醒我
+Latest	最新
+Show it again	再次显示
+Writes every monitor, its history and your settings to a JSON file, wherever you choose to put it. Nothing is uploaded — the file goes where you send it and nowhere else.	把所有监控、历史记录和设置写成一个 JSON 文件，存到你指定的位置。不会上传——文件只去你指定的地方。
+Include tokens and webhook addresses	包含令牌与 Webhook 地址
+Import replaces everything	导入会覆盖全部数据
+The monitors and history on this device are dropped and the file's take their place. Export first if you want to keep them. This can't be undone.	本机的监控和历史会被丢弃，由文件内容取代。想保留就先导出。此操作无法撤销。
+Choose file	选择文件
+Moving to another phone	迁移到另一台手机
+Export on the old phone, import on the new one. Android keeps each app's data to itself, so a file you carry across is the only route — and it has to be written before the old install goes away.	在旧手机上导出、新手机上导入。Android 把每个应用的数据彼此隔离，自带文件是唯一途径——而且必须在卸载旧应用之前写好。
+Nightbell checks HTTP endpoints, asserts on response bodies, and watches individual elements on real rendered pages. Background cadence is best-effort: Android may delay work in Doze.	Nightbell 检查 HTTP 接口、对响应体做断言，也能盯着真实渲染页面上的单个元素。后台频率是尽力而为：低电耗模式下 Android 可能延迟任务。
+Background checks run through WorkManager, whose shortest possible repeat is 15 minutes — a platform floor, not a Nightbell setting. A tighter interval than that is honoured at 15-minute granularity in the background, and exactly only while strict mode's foreground service is running. Doze can defer any of it further. None of that is an outage and Nightbell will never notify you about it.	后台检查走 WorkManager，最短重复周期是 15 分钟——这是系统下限，不是 Nightbell 的设置。比这更短的间隔在后台只能按 15 分钟粒度执行，只有严格模式的前台服务运行时才会精确执行。低电耗模式还可能进一步推迟。这些都不算故障，Nightbell 也不会因此告警。
+Optional, and it helps — but it is not a guarantee. Only the foreground service is.	可选项，有帮助，但不是保证。只有前台服务才是保证。
+None placed yet. Long-press your home screen, choose Widgets, and look for Nightbell.	尚未放置小组件。长按主屏幕，选择「小组件」，找到 Nightbell。
+Colours, transparency, density and which monitors appear are set per widget. You can also tap the cog on the widget itself.	颜色、透明度、密度和显示哪些监控按小组件分别设置，也可以直接点小组件上的齿轮。
+Repository monitors poll GitHub straight from this phone. Without a token that is 60 requests an hour for the whole device, and one check spends up to three of them, which is plenty for a few repositories on a quarter-hour cadence.	仓库监控由这台手机直接轮询 GitHub。没有令牌时整机每小时只有 60 次请求，一次检查最多消耗三次；按 15 分钟一次盯几个仓库仍然够用。
+A token raises that to 5,000 an hour and lets an unchanged check use GitHub's cache for free. Nightbell stores it only on this device.	令牌把上限提到每小时 5000 次，且内容未变的检查可以免费使用 GitHub 缓存。令牌只保存在本机。
+Token saved	令牌已保存
+Hold to remove	长按移除
+Making one	正在创建
+Choose a fine-grained token. Under Repository access pick \"Public repositories\", or \"Only select repositories\" and choose the ones you watch.	请选择细粒度令牌。在「仓库访问」里选「Public repositories」，或选「Only select repositories」并勾选你要监控的仓库。
+For a public repository, none. \"Metadata: Read-only\" is ticked for you and that is the whole list: a public repo answers Nightbell without any token at all, so yours is doing nothing but raising the limit.	公开仓库不需要任何权限。「Metadata: Read-only」是默认帮你勾好的全部内容：公开仓库根本不需要令牌就能应答，你的令牌只用于提高速率上限。
+For a private repository, set these to Read-only:	私有仓库请把以下权限设为只读：
+Nothing else on that list, and never write access to anything. If you are unsure, tick less: a token that cannot read something makes one check fail loudly rather than doing any harm.	列表里别的都不要勾，尤其不要给写权限。拿不准就少勾：读不到内容的令牌只会让一次检查明确失败，不会造成损害。
+Records what Nightbell is doing so you can send it to someone who can read it. Turn it on, make the problem happen again, then export. Nothing is uploaded: the file is written where you choose to put it and nowhere else.	记录 Nightbell 的运行过程，方便发给看得懂的人排查。打开开关、复现问题、再导出。不会上传：文件只写到你指定的位置。
+Record a log	记录日志
+Addresses are shortened to the host, so a link with a key in it never reaches the file. Passwords, tokens, saved sessions, request headers, monitor names and page content are left out entirely. Read the log before you send it anywhere.	地址只保留主机名，带密钥的链接不会进入文件。密码、令牌、已保存的会话、请求头、监控名称和页面内容全部不记录。发送前请先自己看一遍日志。
+Read log	查看日志
+Diagnostic log	诊断日志
+Reading…	读取中…
+Close	关闭
+Hold to delete the log	长按删除日志
+Post outages to Teams, Slack, Discord, Google Chat, ntfy, Gotify, Telegram or any address you choose. Sent straight from this phone, with nothing in between.	把故障推送到 Teams、Slack、Discord、Google Chat、ntfy、Gotify、Telegram 或任意地址。由这台手机直接发出，中间不经过任何服务。
+Placeholders work in the address and header values too. The address is URL encoded.	占位符在地址和请求头的值里同样有效，地址会做 URL 编码。
+Each monitor's failure threshold, cooldown and repeat interval apply here as they do on the phone, so a flapping endpoint does not flood the channel.	每个监控的失败阈值、冷却时间和重复间隔在这里同样生效（与手机端一致），反复抖动的接口不会刷屏。
+Close without saving	不保存并关闭
+None. Add one for a token, \"Authorization: Bearer …\" for ntfy or your own server.	默认没有。要用令牌就加一个，ntfy 或自建服务用「Authorization: Bearer …」。
+Sends one message now, marked as a test, using what is on this screen. Nothing is saved.	按当前页面配置立即发一条标记为「测试」的消息，不会保存任何内容。
+Check the other end: if the message is not there, the service accepted it and dropped it, which usually means the wrong channel or a format it ignores.	去接收端确认：如果消息没到，说明服务端收了但丢弃了，通常是渠道填错或格式不被接受。
+Send from this webhook	从此 Webhook 发送
+Follow this phone's quiet hours and mute	遵循本机的免打扰与静音设置
+Accept any certificate	接受任意证书
+Send through the SOCKS5 proxy	通过 SOCKS5 代理发送
+A pause from the dashboard stops webhooks as well, whichever way this is set. A pause means the phone's own signal is not to be believed.	主页上的暂停同样会停止 Webhook，无论此处怎么设置。暂停意味着本机信号本身不可信。
+Sign messages as	签名方式
+The behaviours people ask about most, including the deliberately surprising ones.	大家问得最多的行为说明，包括那些刻意设计得有点反直觉的地方。
+Android freezes sound and vibration onto a notification channel, so Nightbell creates one channel per combination. Long-press any Nightbell notification to fine-tune it in system settings.	Android 把声音和震动固定在通知渠道上，所以 Nightbell 为每种组合单独建一个渠道。长按任意一条 Nightbell 通知，即可在系统设置里细调。
+Never on silent or vibrate, and never during quiet hours. The sentence and the voice are under Settings, Alerts, Spoken alerts.	静音、震动和免打扰时段内一律不播报。播报句子和音色在「设置 - 告警 - 语音播报」里。
+Degraded is up-but-slow: the check passed, it just blew its latency budget. It has its own cooldown so a slow morning never eats the cooldown an outage needs.	「性能下降」指服务还通但慢：检查通过了，只是超出延迟预算。它有独立的冷却时间，一个慢吞吞的早晨不会吃掉真正故障需要的冷却额度。
+Before we start	开始之前
+Let Nightbell wake you when something breaks	让 Nightbell 在出问题时叫醒你

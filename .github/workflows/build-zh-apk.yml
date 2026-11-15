@@ -1,0 +1,44 @@
+name: build-zh-apk
+
+# Zero-local-environment build: push this fork and download the Chinese APK
+# from the run's Artifacts. No JDK / Android SDK needed on your own machine.
+on:
+  push:
+    branches: [master, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-36 build-tools;36.0.0'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Regenerate Zh.kt from the TSV tables
+        run: python3 tools/gen_zh.py
+
+      # assembleDebug is signed with the auto-generated debug key, so the APK
+      # is installable without shipping a release keystore.
+      - name: Build Chinese debug APK
+        run: ./gradlew :app:assembleDebug --console=plain
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nightbell-zh
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

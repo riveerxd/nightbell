@@ -491,6 +491,12 @@ data class MonitorCadence(
     val intervalMinutes: Int,
     /** Age of the last completed check. Monitors never checked are simply omitted. */
     val ageMs: Long,
+    /**
+     * The real cadence in milliseconds. Defaults from [intervalMinutes] so the
+     * callers (and tests) that only know about minutes keep working; the
+     * Android-side collector passes a sub-minute interval explicitly.
+     */
+    val intervalMs: Long = intervalMinutes.coerceAtLeast(1) * 60_000L,
 )
 
 /** The Android-side facts a limit verdict is derived from. Filled in by `SystemLimits`. */
@@ -555,7 +561,7 @@ object CheckerLimits {
 
     fun isLate(cadence: MonitorCadence): Boolean {
         if (cadence.ageMs <= 0L) return false
-        val interval = cadence.intervalMinutes.coerceAtLeast(1) * 60_000L
+        val interval = cadence.intervalMs.coerceAtLeast(1_000L)
         val tolerance = maxOf(interval * DELAY_TOLERANCE_FACTOR, DELAY_FLOOR_MS)
         return cadence.ageMs > tolerance
     }

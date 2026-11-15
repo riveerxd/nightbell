@@ -33,12 +33,14 @@ import androidx.navigation.NavType
 import androidx.navigation.navArgument
 import me.river.nightbell.domain.AppUpdate
 import me.river.nightbell.data.Nightbell
+import me.river.nightbell.ui.capture.CaptureScreen
 import me.river.nightbell.ui.components.AuroraBackground
 import me.river.nightbell.ui.components.DismissKeyboardOnOutsideTap
 import me.river.nightbell.ui.components.ToastHost
 import me.river.nightbell.ui.components.ToastMessage
 import me.river.nightbell.ui.dashboard.DashboardScreen
 import me.river.nightbell.ui.detail.DetailScreen
+import me.river.nightbell.ui.network.NetworkInfoScreen
 import me.river.nightbell.ui.settings.SettingsScreen
 import me.river.nightbell.ui.settings.WebhookEditorScreen
 import me.river.nightbell.ui.setup.SetupScreen
@@ -82,6 +84,12 @@ object Routes {
 
     /** A webhook target. An empty id is a new one, so one route serves both. */
     const val WEBHOOK = "webhook?id={id}"
+
+    /** Live interface capture -> pick a request -> turn it into a monitor. */
+    const val CAPTURE = "capture"
+
+    /** On-device readout of the connection the phone is actually using. */
+    const val NETWORK_INFO = "network-info"
 
     /**
      * Only ever called with false. The gate reaches the same destination as a
@@ -310,6 +318,22 @@ private fun NightbellNavHost(
                 onPickTemplate = { navController.navigate(Routes.setupNew(it)) },
                 onOpenMonitor = { navController.navigate(Routes.detail(it)) },
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                onOpenCapture = { navController.navigate(Routes.CAPTURE) },
+                onOpenNetwork = { navController.navigate(Routes.NETWORK_INFO) },
+                onToast = onToast,
+            )
+        }
+
+        composable(Routes.CAPTURE) {
+            CaptureScreen(
+                onBack = { navController.popBackStack() },
+                onToast = onToast,
+            )
+        }
+
+        composable(Routes.NETWORK_INFO) {
+            NetworkInfoScreen(
+                onBack = { navController.popBackStack() },
                 onToast = onToast,
             )
         }
@@ -370,6 +394,8 @@ private fun NightbellNavHost(
                 onToast = onToast,
                 onOpenPagerSetup = { navController.navigate(Routes.pagerSetup(gate = false)) },
                 onOpenWebhook = { navController.navigate(Routes.webhook(it)) },
+                onOpenCapture = { navController.navigate(Routes.CAPTURE) },
+                onOpenNetwork = { navController.navigate(Routes.NETWORK_INFO) },
             )
         }
 

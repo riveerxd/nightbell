@@ -620,8 +620,15 @@ android {
         // 3.25.0 says "Updated to" on the first launch of a new version, with the
         // release notes one tap away, and keeps a What's new button for the
         // installed version in Settings, About. Both open nightbell.app/changelog.
-        versionCode = 54
-        versionName = "3.25.0"
+        //
+        // 3.26.0 is the Chinese/intranet build, forked from the v3.25.0 tag. It
+        // adds a runtime EN/ZH language switch, one-second check intervals,
+        // interface capture (local HTTP proxy + optional allowlisted HTTPS
+        // inspection with an on-device CA), request/monitor logs and a current
+        // network information screen. Version bumps separately from upstream so
+        // the app's own update check never offers to "update" to 3.25.0.
+        versionCode = 55
+        versionName = "3.26.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -799,6 +806,11 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.okhttp)
+    // Used at runtime to mint the on-device root CA and per-host leaf
+    // certificates for optional HTTPS inspection. It is a pure-Kotlin DER
+    // codec over the JDK's Signature/KeyPairGenerator, so it works on Android
+    // without pulling in BouncyCastle.
+    implementation(libs.okhttp.tls)
     // ProxyController, so a page-element check can be routed through SOCKS5 too.
     implementation(libs.androidx.webkit)
     // Reads the orientation tag off a picked photo. `BitmapFactory` ignores it,

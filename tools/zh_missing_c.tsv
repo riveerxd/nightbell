@@ -1,0 +1,356 @@
+Stored. Type to replace it.	已存储。输入即可替换。
+The engine would not say it	语音引擎不会朗读它
+There is a newer Nightbell.	Nightbell 有新版本了。
+a file lands on this device	有文件下载到这台设备时
+data.status  ·  items[0].id	data.status  ·  items[0].id
+nothing answered to measure	没有任何应答可供测量
+tell me about every release	每次发布都通知我
+this one is already handled	这一条已处理
+Announced as they are opened	一有新开就播报
+Every monitor already speaks	每个监控都已开启朗读
+For a receiver on Tor or I2P	适用于 Tor 或 I2P 上的接收端
+No release file matches that	没有匹配的发布文件
+Tap any element to select it	点按任意元素即可选中
+Urgent alert\n * acknowledged	紧急告警\n * 已确认
+Vibrate — pages vibrate only	振动 —— 告警仅振动
+You won't be notified at all	你完全不会收到通知
+You're on the newest version	你使用的已是最新版本
+tell me when a new one lands	有新版本发布时通知我
+this app has no proxy option	此应用没有代理选项
+this phone produces no audio	这台手机不会发出声音
+. Read it before you send it.	发送前请先阅读。
+Covered by a group you picked	由你所选的分组覆盖
+Does anything leave my phone?	有数据会离开我的手机吗？
+Not checking · Sign in needed	未检查 · 需要登录
+Once, when it first goes down	仅在首次故障时告警一次
+Release files are not counted	发布文件不计入
+Solid panes — cheaper to draw	纯色面板 —— 绘制开销更低
+What does “24h uptime” count?	“24 小时可用率”统计的是什么？
+must NOT `setColorized(true)`	切勿调用 `setColorized(true)`
+ min until you acknowledge it.	分钟，直到你确认。
+Could not remap widget configs	无法重新映射微件配置
+No speech engine on this phone	这台手机没有语音引擎
+Off, nothing is being recorded	关闭，不录制任何内容
+Off, your installer handles it	关闭，交给安装器处理
+Only messages that match below	仅匹配下列条件的消息
+This monitor has its own rules	此监控有独立的规则
+every series the query returns	查询返回的每条序列
+3 of 3 replies, 0.28 ms average	应答 3/3，平均 0.28 ms
+Contents, Issues, Pull requests	内容、议题、拉取请求
+Normal — pages ring and vibrate	正常 —— 告警响铃并振动
+Open full-screen alert settings	打开全屏告警设置
+nothing is checked or announced	不检查也不播报任何内容
+only if you watch pull requests	仅当你关注拉取请求时
+the reorder icons never go away	排序图标始终显示
+these belong to the group above	这些属于上面的分组
+{"text": "{{title}}: {{text}}"}	{"text": "{{title}}: {{text}}"}
+A cert can lapse without warning	证书可能毫无预警地过期
+Ends with the provider's session	随服务商的会话结束而失效
+Fix the highlighted fields first	请先修正高亮的字段
+One latency alert per slow spell	每段缓慢期只发一次延迟告警
+Removed 1 monitor from its group	已从分组中移除 1 个监控
+the launcher has not told us yet	启动器尚未通知我们
+the one that is currently broken	当前出问题的那个
+the thing you asked for happened	你请求的操作已完成
+, open details, or hold to select	，打开详情，或长按选择
+Checked straight from this device	直接从这台设备发起检查
+Could not clean up widget configs	无法清理微件配置
+How do certificate warnings work?	证书提醒是如何工作的？
+Nightbell's own checker is broken	Nightbell 自身的检查器已损坏
+No monitors yet — tap to add one.	还没有监控 —— 点按添加一个。
+Set up get through do not disturb	设置让告警穿透勿扰模式
+Values go in exactly as they are.	值按原样原封不动地填入。
+You're offline, checks are paused	你已离线，检查已暂停
+2 firing: DiskFillingUp (critical)	2 条告警触发：DiskFillingUp（严重）
+Betas and release candidates count	测试版和候选发布版也计入
+Changes apply as soon as you save.	更改保存后立即生效。
+Counted quietly, shown on the card	静默计数，显示在卡片上
+Footer shows how fresh the data is	页脚显示数据的新鲜程度
+Hold to delete this\n     * monitor	长按删除此\n     * 监控
+In use. It is the last tile above.	使用中。它是上方最后一块磁贴。
+New messages in watched mailboxes.	被监控邮箱中的新邮件。
+Off, every check goes out directly	关闭，每次检查都直接发出
+long-press → turn this channel off	长按 → 关闭此渠道
+A notice when the count has gone up	计数上升时发出一条提醒
+Alarm would not stop\n     * cleanly	闹铃未能\n     * 正常停止
+An urgent page can wake the screen.	紧急告警可以唤醒屏幕。
+Check now, waiting for a connection	立即检查，正在等待网络连接
+Checks carry on, nothing pages you.	检查照常进行，但不会向你告警。
+I have read this repository's news.	我已阅读此仓库的动向。
+Nightbell can't complete its checks	Nightbell 无法完成检查
+No special notice for round numbers	整数不另发特别提醒
+Only milestones or the digest below	仅里程碑或下方摘要
+Per-monitor health, nothing watched	各监控的健康状态，暂无关注项
+Recording, nothing has happened yet	录制中，暂未发生任何事件
+The speech engine produces no audio	语音引擎不产生音频
+Until the provider ends the session	直到服务商结束会话
+image if there is one, glyph if not	有图片用图片，没有则用字形
+10, 25, 50, 100, 250, 500, 1k and up	10、25、50、100、250、500、1k 及以上
+A separate notice when one is opened	每新建一个就单独提醒一次
+Alerts arrive as sound and text only	告警仅以声音和文字形式到达
+Build bots and app comments page too	构建机器人和 GitHub App 的评论也会告警
+That version will be announced again	该版本会再次播报
+answered, but slower than its budget	有应答，但超出了延迟预算
+what is the user actually looking at	用户实际看到的是什么
+Pasting host:port or a URL works too.	粘贴 host:port 或 URL 也可以。
+This is what a real alert looks like.	真实告警就是这个样子。
+Using the global budget from Settings	使用设置中的全局预算
+Alerts on the very first failed check.	首次检查失败即告警。
+Leave it empty for the sentence above.	留空则使用上面那句话。
+No website monitors to fetch icons for	没有可获取图标的网站监控
+Off — only up and down, never degraded	关闭 —— 只分正常与故障，不出现降级
+the launcher just dropped a new widget	启动器刚放下了一个新微件
+wherever you can reach from your phone	手机上能访问到的任何地方
+A cog in the corner reopens this screen	角落里的齿轮可重新打开此界面
+Android is asking whether to install it	Android 正在询问是否安装
+Keeping your order. Worst first is off.	保持你的排序。最差优先已关闭。
+Matched against the reply read as text.	与按文本读取的应答内容匹配。
+Monitors are always listed worst first.	监控始终按最差优先排列。
+On, a permanent notification is showing	开启，正在显示一条常驻通知
+The file will carry working credentials	该文件将携带可用的凭据
+The last hour. Short outages read wide.	最近一小时。短暂故障显示得更宽。
+count what the old ones are still doing	把旧版本仍在产生的量一并计入
+is 443 open on the box behind this site	此站点背后的主机是否开放 443 端口
+the user came\n     * back to change one	用户回来\n     * 改动了其中一项
+Checking the signature against your copy	正在与你保存的副本核对签名
+Clients are refusing this connection now	客户端现在正拒绝此连接
+Left empty, the plain JSON body is sent.	留空则发送纯 JSON 正文。
+Off, and anything waiting is thrown away	关闭，所有等待中的内容都会被丢弃
+The first passing check ends the outage.	首次通过的检查即结束故障。
+Unrestricted. Checks keep their cadence.	不受限制。检查保持原有节奏。
+Urgent pages get through Do Not Disturb.	紧急告警可穿透勿扰模式。
+Values are URL encoded, for a form body.	值经过 URL 编码，用于表单正文。
+, open details, or hold to move or select	，打开详情，或长按移动或选择
+It answered, but not with a health report	有应答，但不是健康检查报告
+One monitor selected. Pick where it goes.	已选中 1 个监控。选择放置位置。
+Optional. Matches the alert's own labels.	可选。与告警自身的标签匹配。
+Real backdrop blur behind floating sheets	浮动面板背后使用真实背景模糊
+Silent or vibrate: a page would not speak	静音或振动：告警不会朗读
+, no answered checks to measure against it	，没有已应答的检查可供对照测量
+Checks stop and start again by themselves.	检查会自行停止并重新启动。
+Each increase is announced as it is found.	每次增加一经发现即播报。
+capture is on and nothing has happened yet	捕获已开启，暂未发生任何事件
+Acknowledged, no more pages for this outage	已确认，本次故障不再告警
+Comments posted by a GitHub app are skipped	GitHub App 发布的评论会被跳过
+Needs a host and a port between 1 and 65535	需要主机名和 1 到 65535 之间的端口
+Set up a proxy under Settings, Checks first	请先在「设置」的「检查」中配置代理
+Why is pull-to-refresh a two-stage gesture?	为什么下拉刷新要分两步操作？
+sysUpTime, how long the device has been up.	sysUpTime，设备已运行的时长。
+Alerts suppressed by a bigger one still page	已被更大告警抑制的告警仍会推送
+Solid enough to stay readable over anything.	足够实心，在任何背景上都清晰可读。
+Animations off — everything snaps into place.	动画关闭 —— 一切瞬间就位。
+Everything is muted — nothing will notify you	已全部静音 —— 不会有任何通知
+Full Nightbell: aurora, sonar rings, the lot.	完整版 Nightbell：极光、声呐环，一应俱全。
+Normal alerting — one notification per outage	常规告警 —— 每次故障一条通知
+Speech is on, but no monitor can alert at all	朗读已开启，但没有任何监控能触发告警
+Whichever address the name resolves to first.	该名称最先解析到的那个地址。
+An IPv4 or IPv6 address, or a name to look up.	一个 IPv4 或 IPv6 地址，或待查询的名称。
+Every monitor that is not paused, on one line.	所有未暂停的监控，排成一行。
+No address yet. Add one below, or in Settings.	还没有地址。在下方或「设置」中添加。
+On for every webhook below that is switched on	对下方所有已开启的 Webhook 生效
+Share of the checks in the window that passed.	该时间窗口内通过的检查所占比例。
+Waits for the next scheduled check each time, 	每次都等待下一次计划检查，
+An alert another one already covers stays quiet	已被其它告警覆盖的告警保持静默
+Needs Android 12 — this device uses solid panes	需要 Android 12 —— 此设备使用纯色面板
+On, but checks are paused, so it is not running	已开启，但检查已暂停，因此并未运行
+Opens the page in-app; tap what you care about.	在应用内打开页面；点按你关心的元素。
+Saving points the monitor at this page instead.	保存后监控将改为指向此页面。
+Degraded shows on the dashboard but stays silent	降级状态会显示在仪表盘上，但保持静默
+Escapes work: \\r \\n \\t \\0 and \\xNN for any byte.	转义可用：\\r \\n \\t \\0 和 \\xNN 表示任意字节。
+Local only, your monitors never leave the device	仅本地使用，你的监控数据不会离开设备
+Off — checks are best-effort, batched by Android	关闭 —— 检查为尽力而为，由 Android 批量处理
+Scrolling still works. Turn off to follow links.	仍可滚动。关闭后可点击链接。
+Shown in alerts so you know which element broke.	显示在告警中，便于你知道哪个元素出了问题。
+Why is my monitor checked less often than I set?	为什么我的监控检查频率比设定的低？
+find four toggles across three settings sections	在三个设置分区里找到四个开关
+As far back as the stored checks go, up to a day.	一直回溯到已保存的检查记录，最多一天。
+The last day. Grey where nothing was checked yet.	最近一天。尚未检查的时段显示为灰色。
+The next successful check will record the new key	下一次成功的检查将记录新密钥
+Leave empty to compare the element's visible text.	留空则比较元素的可见文本。
+Left out, you'll paste them again on the new phone	若不导出，换到新手机时就得重新粘贴它们
+Off — a slow connection will read as slow services	关闭 —— 连接慢会被读成服务变慢
+Off, a lost signal pages for every monitor at once	关闭，信号丢失会一次性对所有监控告警
+Only the name's IPv4 address. Down if it has none.	仅该名称的 IPv4 地址。没有则判为故障。
+Raised when a monitor breaches its latency budget.	当监控超出延迟预算时触发。
+Stored encrypted on this phone, never in a backup.	加密存储在这台手机上，绝不进入备份。
+. Renew it before then or the site stops answering.	请在那之前续期，否则站点将不再应答。
+No monitors yet, so the card has nothing to follow.	还没有监控，卡片没有可跟随的内容。
+No monitors yet. Every one you add will be covered.	还没有监控。你添加的每个监控都会被覆盖。
+Slow readings are checked against a reference first	较慢的读数会先与参考值比对
+never more than three, however big I\n     * make it	最多不超过三个，无论我把\n     * 它设得多大
+their status is unchanged and no outage is implied.	它们的状态不变，也不代表发生了故障。
+} stay exactly as they are, only the grouping goes.	} 保持原样，只是取消分组。
+\n\nThis clears itself as soon as one check completes.	\n\n只要有一次检查完成，它就会自行清除。
+Any page on the site. Nightbell fetches its favicon.	站点上的任意页面。Nightbell 会抓取它的 favicon。
+Checked every time, against the count from last time	每次都检查，与上一轮的计数比对
+Hidden — long-press the widget instead (Android 12+)	隐藏 —— 改为长按微件（Android 12+）
+Inherits sound, haptics and escalation from Settings	沿用「设置」中的声音、触感与升级设置
+Star changes are held and sent as one line each day.	星标变化会暂存，每天汇成一行发送。
+The button asks which one every time, then how long.	该按钮每次都会先问选哪一个，再问时长。
+The server listed no folders. Type the name instead.	服务器未列出任何文件夹。请手动输入名称。
+The service says it is working, worse than it should	服务自称正常，但状态比应有的更差
+What does acknowledging an urgent alert actually do?	确认紧急告警到底会做什么？
+Why did a slow response not trigger a latency alert?	为什么响应慢却没有触发延迟告警？
+Only full releases, which is what GitHub calls latest	仅正式发布版，即 GitHub 所称的 latest
+Star changes are held and sent as one line each hour.	星标变化会暂存，每小时汇成一行发送。
+Turn on select mode when you've found the right view.	找到合适的视图后，开启选择模式。
+Acknowledged, no more urgent alerts for this\n * outage	已确认，本次故障不再\n * 发出紧急告警
+An alert silenced in Alertmanager stays quiet here too	在 Alertmanager 中被静默的告警，这里也保持安静
+As the server names it. INBOX is the inbox everywhere.	按服务器的命名。INBOX 在任何地方都指收件箱。
+One notification per increase, including a single star	每次增加一条通知，哪怕只多一个星标
+Only for you, in this list. "Ops channel", "My phone".	仅你可见，只在此列表中。如「运维频道」「我的手机」。
+No proxy is set up in Settings, so nothing will be sent	「设置」中未配置代理，因此不会发送任何内容
+Notifications are blocked, enable them in\n * system ...	通知被拦截，请在\n * 系统设置中开启 ...
+Off. Nothing is sent, and nothing is saved up for later	关闭。不发送任何内容，也不暂存待发。
+Reads the name and the reason through the phone's voice	通过手机语音读出名称和原因
+Turn the switch on, then make the problem happen again.	打开开关，然后让问题再次出现。
+it happened\n * and you now have less cover than you did	它发生了\n * 而你现在覆盖的监控比之前更少
+The next successful check will record this server's key.	下一次成功的检查将记录此服务器的密钥。
+. Every client that checks it is refusing the connection.	所有检查它的客户端都在拒绝该连接。
+A quiet notification each. Several at once arrive as one.	每条一条安静通知。多条同时到达会合并为一条。
+Announced whether or not it was read somewhere else first	无论是否已在别处读过，都会播报
+Every time the alert comes back, until it is acknowledged	每次告警再次出现都会提醒，直到你确认
+Notifications are blocked, enable them in system settings	通知被拦截，请在系统设置中开启
+Silencing in Alertmanager no longer quietens this monitor	在 Alertmanager 中静默不再令此监控安静
+What is the difference between down, degraded and paused?	故障、降级和暂停有什么区别？
+} already watched on this page — all checked in one load.	} 本页已关注的监控，一次加载即可全部检查。
+Alerts on a latency-budget breach, separately from outages	延迟预算超限时告警，与故障分开计算
+GitHub logins, comma separated. Their comments never page.	GitHub 登录名，逗号分隔。它们的评论从不告警。
+One running total across every release the repository has.	该仓库所有版本发布的一个累计总数。
+Optional. Same syntax as PromQL, including =~ for a regex.	可选。语法与 PromQL 相同，包括用 =~ 匹配正则。
+The receiver's certificate has to be one this phone trusts	接收端的证书必须是这台手机信任的证书
+. Check the provider address, or try again when it is back.	请检查服务商地址，或等它恢复后再试。
+Advisory only — never wakes you, never bypasses quiet hours	仅作提醒 —— 不唤醒你，也不绕过静默时段
+All checked on one page load. Any mismatch fails the check.	一次页面加载中全部检查。任一不匹配即判检查失败。
+Mostly see-through. Check it against your actual wallpaper.	基本透明。请对照你实际的壁纸确认效果。
+One extra HEAD request a day, just to read the expiry date.	每天多一次 HEAD 请求，只为读取到期日期。
+. Check the path, or choose a sign-in if it sits behind one.	请检查路径，若其位于登录之后则选择登录方式。
+Notifications are blocked, enable them\n * in system settings	通知已被拦截，请在\n * 系统设置中开启
+The sign-in was refused or cancelled on the provider's page.	登录在服务商页面被拒绝或取消。
+Values are JSON escaped, so write "{{title}}" inside quotes.	值会做 JSON 转义，因此要把 "{{title}}" 写在引号内。
+Off. Nothing will tell you when one of these is switched off.	关闭。这些开关被关掉时不会有任何提示。
+Raised when a TLS certificate is approaching its expiry date.	当 TLS 证书临近到期时触发。
+Waits for the next scheduled check each time it answers again	每次重新有应答时，都等待下一次计划检查
+A refusal from the host is down: nothing listens on that port.	主机拒绝即判为故障：该端口上没有任何服务监听。
+Encrypted from the first byte. What almost every provider uses.	从第一个字节起就加密。几乎所有服务商都用这种方式。
+On issues and pull requests, closed and merged threads included	覆盖议题和拉取请求，含已关闭和已合并的会话
+On issues, closed ones included. Pull request threads stay out.	仅覆盖议题，含已关闭的。拉取请求会话排除在外。
+Required. Without it Nightbell cannot tell you anything at all.	必填。没有它，Nightbell 完全无法向你报告任何情况。
+A github.com link works too, including one pointing at an issue.	github.com 链接同样可用，包括指向某个议题的链接。
+An element monitor says the element is missing, but I can see it.	元素监控说元素缺失，但我明明能看到它。
+No monitors yet. Add one and it can read its own alerts out loud.	还没有监控。添加一个后，它就能朗读自己的告警。
+Sends whatever the phone is doing, for a channel other people read	把手机当前的状态发送出去，供其他人查看的渠道使用
+The slowest reply right now, from the monitors that are answering.	当前最慢的应答，来自那些有应答的监控。
+This is a fault in Nightbell, not in the sites you are watching — 	这是 Nightbell 自身的故障，不是你所监控站点的问题 ——
+Where you normally sign in. Blank uses the endpoint's own address.	你平时登录的地址。留空则使用端点自身的地址。
+Reads the whole release list, about a quarter of a megabyte a check	读取整个版本列表，每次检查约四分之一兆字节
+60 API calls an hour for this device, shared by every repo you watch	此设备每小时 60 次 API 调用，由你关注的所有仓库共享
+Counted once a day, and the rest of the checks use the smaller call.	每天统计一次，其余检查使用较小的调用。
+Degraded when the answer doesn't include it. Empty takes any answer.	应答中不含它时判为降级。留空则接受任意应答。
+Read on another device before the check found it, so nothing is said	在检查发现之前已在其他设备上读过，因此不予提示
+Settings has no shared proxy, so this monitor needs its own address.	「设置」中没有共享代理，此监控需要单独填写地址。
+Counted once an hour, and the rest of the checks use the smaller call.	每小时统计一次，其余检查使用较小的调用。
+How long until the next check. The grey tail empties at the same pace.	距下次检查还有多久。灰色尾部以同样速度清空。
+Nothing has been saved yet, so everything filled in here goes with it.	尚未保存任何内容，因此此处填写的一切都会一并带入。
+A ping beside this check tells a dead service from an unreachable host.	与此检查并列的 ping 可区分服务已死与主机不可达。
+For a self-signed receiver. Anyone in the middle could read the message	用于自签名的接收端。中间人可读取消息内容
+Kept on this phone. Never in a log, and not in a backup unless you ask.	仅保存在这台手机上。不写入日志，除非你要求也不进入备份。
+The monitor keeps its current settings. Anything you changed here goes.	监控保留其当前设置。你在此处所做的更改会一并应用。
+The webhook keeps its current settings. Anything you changed here goes.	Webhook 保留其当前设置。你在此处所做的更改会一并应用。
+Up when the server answers A2S_INFO. No answer after every try is down.	服务器应答 A2S_INFO 即为正常。所有重试都无应答则判为故障。
+Kept encrypted on this phone. Never put in a backup, a log or a webhook.	加密保存在这台手机上。绝不写入备份、日志或 Webhook。
+Only sends when the phone would notify too, including the alert switches	仅当手机本身也会通知时才发送，包括各告警开关的状态
+Tor is 9050. I2P's SOCKS proxy is 4447, not the 4444 its HTTP proxy uses.	Tor 是 9050。I2P 的 SOCKS 代理是 4447，不是其 HTTP 代理用的 4444。
+Usually the whole address. A few servers want only the part before the @.	通常是完整地址。少数服务器只要 @ 之前的部分。
+Only the newest release, which starts again near zero each time one lands.	仅最新的版本发布，每有新版本落地就从接近零重新计数。
+A port check beside this ping tells a filtered network from a dead service.	与此 ping 并列的端口检查可区分网络被过滤与服务已死。
+Shown on every message. Worth setting when two phones post into one channel.	显示在每条消息上。两台手机往同一渠道发消息时值得设置。
+The offset is shown, never judged. The phone's own clock can be the wrong one.	偏移量只显示、不判定。手机自身的时钟可能就不准。
+} already watched were picked on the old page and will be looked for here too.	} 已关注的项是在旧页面选的，也会在这里继续查找。
+Needs the reference endpoint, which is off under Checks, discount my connection	需要参考端点，它在「检查」下为关闭状态，用于扣除本机连接的影响
+Nightbell can still check monitors, but it can't tell you when something breaks.	Nightbell 仍能检查监控，但无法在出问题时通知你。
+Once a test returns a report with checkedAt, a limit on its age can be set here.	一旦测试返回带 checkedAt 的报告，即可在此设置其有效期上限。
+Tor listens on 9050 by default, and Orbot on 9050 too. I2P's HTTP proxy is 4444.	Tor 默认监听 9050，Orbot 同样是 9050。I2P 的 HTTP 代理是 4444。
+Up when the binding request is answered. An error response or no answer is down.	绑定请求得到应答即为正常。错误应答或无应答则判为故障。
+Checked when you open the app and in the background, at most once every six hours	打开应用时及后台都会检查，最多每六小时一次
+Fill in the address, password and server first: listing folders means signing in.	先填好地址、密码和服务器：列出文件夹就意味着要登录。
+Hold any card on the dashboard and drag it to put the monitors in your own order.	在仪表盘上长按任意卡片并拖动，即可按自己的顺序排列监控。
+Leave the switch on, use the app until the problem happens again, then come back.	保持开关开启，继续使用应用直到问题再次出现，然后再回来。
+Nightbell looks at these when it opens, and shows this screen when one is missing	Nightbell 启动时会查看这些项，缺任一项就显示此界面
+Only the name's IPv6 address. Down if it has none, or if this network has no IPv6.	仅该名称的 IPv6 地址。没有则判为故障，或此网络没有 IPv6 也算故障。
+Nothing refused the port. A reply here means the host is up and something holds it.	没有谁拒绝该端口。此处有应答说明主机在线且有服务占用该端口。
+Up when the server answers the ping with its MOTD. No answer after every try is down.	服务器以 MOTD 应答 ping 即为正常。所有重试都无应答则判为故障。
+One notice a check saying how much it moved, which on a busy repository is most checks	每次检查一条通知说明它变动了多少，在繁忙的仓库里几乎每次检查都有
+Silence is the answer this service gives. A closed port would be refused straight away.	沉默就是此服务给出的应答。关闭的端口会立刻被拒绝。
+The monitor this followed is gone, so the card shows everything until you pick another.	此卡片原本跟随的监控已不存在，因此它会显示所有内容，直到你另选一个。
+The sign-in came back with a state Nightbell did not send, so it was stopped. Try again.	登录返回了一个 Nightbell 并未发送的 state，因此已中止。请重试。
+A monitor that cannot be reached at all is only paged once the reference endpoint answers	完全无法连上的监控，只有在参考端点有应答后才会告警
+Off. GitHub returns pull requests from the issues endpoint and Nightbell filters them out.	关闭。GitHub 会从议题接口一并返回拉取请求，Nightbell 会把它们过滤掉。
+One monitor and its own history. An outage anywhere else is still mentioned under the line.	仅一个监控及其自身历史。其它地方的故障仍会在下方一行提及。
+Type the address and Nightbell tries it once without a sign-in, to see whether it needs one.	输入地址后，Nightbell 会不带登录信息尝试一次，以判断是否需要登录。
+The group this followed is gone or empty, so the card shows everything until you pick another.	此卡片原本跟随的分组已不存在或为空，因此它会显示所有内容，直到你另选一个。
+ Its certificate is not one this phone trusts. If it is your own server, pick Pinned key below.	其证书不是这台手机信任的证书。如果是你自己的服务器，请在下方选择「固定密钥」。
+Nothing answered IMAP for this address. Ask the provider for the IMAP server, or type it below.	该地址没有 IMAP 应答。请向服务商索要 IMAP 服务器，或在下方手动填写。
+Up when the server answers with the QUIC versions it speaks. No answer after every try is down.	服务器以其支持的 QUIC 版本应答即为正常。所有重试都无应答则判为故障。
+GitHub logins, comma separated. Empty means anyone. Issues and pull requests only, not comments.	GitHub 登录名，逗号分隔。留空表示任何人。仅议题和拉取请求，不含评论。
+An IPv6 literal works here too, with or without brackets: ::1 and [::1] both dial the same place.	这里也支持 IPv6 字面量，带不带方括号都行：::1 和 [::1] 连的是同一地址。
+Fully transparent — just text on your wallpaper. Legibility is then entirely up to the wallpaper.	完全透明 —— 只有壁纸上的文字。可读性就全看壁纸了。
+What the strict monitoring notification draws. A change here is on the notification straight away.	严格监控通知所绘制的内容。此处更改会立即体现在通知上。
+Your Roundcube, for example. Helps find the server, and a tap on a new-mail notification opens it.	例如你的 Roundcube。有助于找到服务器，点按新邮件通知即可打开它。
+For Roundcube and most hosting, the server webmail reads from. Often mail. or imap. and your domain.	对 Roundcube 和多数托管服务，是 webmail 读取邮件的服务器。通常是 mail. 或 imap. 加你的域名。
+No monitor speaks yet. Each one has its own switch under its alert settings, or turn them all on here.	还没有监控开启朗读。每个监控在其告警设置里都有独立开关，也可在此全部开启。
+An urgent page can wake the screen, get through Do Not Disturb, and keep repeating until you answer it.	紧急告警可唤醒屏幕、穿透勿扰模式，并持续重复直到你应答。
+Up when the reply comes back, down when it does not. With one packet, a single lost reply is an outage.	有应答即为正常，无应答即为故障。只发一个包时，丢一次应答就算一次故障。
+A fine-grained token with no permissions ticked is enough for a public repo. Stored on this device only.	对于公开仓库，一个未勾选任何权限的细粒度 token 就够了。仅保存在本设备。
+Tries one after another, a second apart. The first good reply counts, so one lost packet is not an outage.	逐个尝试，间隔一秒。第一个成功的应答就算数，因此丢一个包不算故障。
+Lets checks keep their schedule, and lets an urgent page keep repeating while your phone is in your pocket.	让检查保持原有节奏，也让紧急告警在手机放口袋里时持续重复。
+New comments on issues and pull requests in watched repositories, including issues that are already closed.	所关注仓库里议题和拉取请求的新评论，包括已关闭议题下的评论。
+As many as the widget's size holds. Drag it taller and more monitors appear instead of the space going empty.	数量取决于微件能容纳多少。把它拉高就会显示更多监控，而不是留出空白。
+Nothing has been saved yet, so everything you filled in — including any elements you captured — goes with it.	尚未保存任何内容，因此你填写的一切 —— 包括捕获到的元素 —— 都会一并带走。
+Wants to be always up and cheap to answer. If your network blocks it, latency is judged raw and nothing breaks.	它应尽量始终在线且应答开销低。若你的网络屏蔽了它，延迟就按原始值判定，不会出问题。
+Without it, Do Not Disturb and Bedtime mode silence urgent pages completely — the exact times you would want one.	没有它，勿扰模式和就寝模式会把紧急告警彻底静音 —— 偏偏正是你最需要它的时候。
+Kept encrypted on this phone, never in a backup. SNMP v2c sends it unencrypted, so anyone on the path can read it.	加密保存在这台手机上，绝不进入备份。SNMP v2c 以明文发送它，路径上任何人都能读取。
+The certificate was refused. If this server is one you know, set this monitor's certificate handling before picking.	证书被拒绝了。如果这是你熟悉的服务器，请先设置此监控的证书处理方式再选择。
+. Nothing is sent to the endpoint until you sign in again from Edit. This says nothing about whether the service is up.	在你从「编辑」重新登录之前，不会向该端点发送任何内容。这与服务是否正常无关。
+Counted on every check. It costs no extra request: it is the call the release watcher already makes, asked for in full.	每次检查都计数。不额外产生请求：它就是版本监视器本来就会发起的调用，只是请求了完整内容。
+Up when the agent returns the value. A wrong community gets no answer at all from most agents, so it shows as no reply.	代理返回该值即为正常。community 填错时多数代理根本不应答，因此显示为无应答。
+Nightbell could not confirm which provider this sign-in goes to. Use Enter provider details under Other ways to sign in.	Nightbell 无法确认此次登录指向哪个服务商。请使用「其他登录方式」下的「输入服务商信息」。
+Up when any SIP response comes back, 401 and 405 included: the server is speaking SIP. No answer after every try is down.	只要有任何 SIP 应答返回（含 401 和 405）即为正常：说明服务器在说 SIP。所有重试都无应答则判为故障。
+Pages will still vibrate, but they will not make a sound. This is not a permission — nothing but the volume keys fixes it.	告警仍会振动，但不会发出声音。这不是权限问题 —— 只有音量键能解决。
+Lets an urgent page wake the screen instead of waiting on the lockscreen. Android only allows this from its own settings page.	让紧急告警直接唤醒屏幕，而不必停在锁屏上等待。Android 只允许在它自己的设置页里开启。
+Only this group's monitors, and the notification is titled with its name. An outage anywhere else is still mentioned under the line.	仅此分组内的监控，通知标题用分组名。其它地方的故障仍会在下方一行提及。
+Comma separated, any case. A match makes a sound with this monitor's alert settings, and is announced even when every message is off.	逗号分隔，不区分大小写。命中时会按此监控的告警设置发声，并且即使所有消息都已关闭也会播报。
+Up when the server answers this query with NOERROR or NXDOMAIN. SERVFAIL is degraded. REFUSED, or no answer after every try, is down.	服务器以 NOERROR 或 NXDOMAIN 应答此查询即为正常。SERVFAIL 为降级。REFUSED 或所有重试都无应答则判为故障。
+No groups yet. Hold two monitors on the dashboard and choose Group these 2, then pick it here. Until then the card follows everything.	还没有分组。在仪表盘上长按两个监控并选择「将这 2 个分组」，然后在此选用。在此之前卡片会跟随所有内容。
+Set one and every request carries X-Nightbell-Signature: sha256=HMAC of "timestamp.body", with the timestamp in X-Nightbell-Timestamp.	设置后，每个请求都会带上 X-Nightbell-Signature: sha256=HMAC of "timestamp.body"，时间戳放在 X-Nightbell-Timestamp 中。
+What the strict monitoring notification says. This phone is older than Android 16, which has no line to draw, so these change its text.	严格监控通知所显示的文字。此手机低于 Android 16，没有可绘制的一行，因此这几项改的是它的文字。
+Checks are paused, so strict monitoring is not running and there is no notification. The preview shows what it will say once you resume.	检查已暂停，严格监控未运行，也没有通知。预览显示的是恢复后它将显示的内容。
+Comma separated. A bare extension like .apk counts every file that ends in it, whatever the version in the name. Empty counts every file.	逗号分隔。像 .apk 这样的裸扩展名会把所有以它结尾的文件都计入，不管名称里的版本。留空则计入所有文件。
+Stars, new issues, pull requests and releases on watched repositories, and Nightbell's own updates. Comments have a channel of their own.	所关注仓库的星标、新议题、拉取请求和版本发布，以及 Nightbell 自身的更新。评论另有独立渠道。
+Up when nothing refuses the datagram and the host answers ping. Down when the host refuses it, or when the host doesn't answer ping either.	没有拒绝数据报且主机应答 ping 即为正常。主机拒绝，或主机连 ping 也不应答，则判为故障。
+What the strict monitoring notification shows. It appears once strict foreground monitoring above is on, and you can set it up before then.	严格监控通知所显示的内容。上方的严格前台监控开启后它就会出现，你也可以在那之前先设置好。
+Looks in the address's DNS records and its mail settings file, and at the webmail's host. Nothing is signed in to until the server is found.	会查看该地址的 DNS 记录、邮件设置文件，以及 webmail 的主机。找到服务器之前不会登录任何东西。
+. This web app signs in without PKCE, so its client probably needs a secret, which a browser sign-in cannot supply. Use a service account instead.	此 Web 应用登录时不带 PKCE，因此其客户端很可能需要密钥，而浏览器登录无法提供。请改用服务账号。
+Starts plain and upgrades before signing in. A server that does not offer the upgrade fails the check rather than receive the password in the clear.	以明文开始，登录前再升级。不提供升级的服务器会直接判检查失败，而不会以明文接收密码。
+Comma separated, case insensitive. Matched against the title and body of an issue, and against the text of a comment. Empty means everything gets through.	逗号分隔，不区分大小写。与议题的标题和正文、以及评论的文本匹配。留空表示全部放行。
+Automatic spills monitors into a second column when the widget is too short to stack them — make it flatter and they move sideways instead of disappearing.	自动模式会在微件太矮、放不下时把监控溢到第二列 —— 把它压得更扁，它们会横向移动而不是消失。
+This phone has no speech engine, so nothing can be said. Most have one in the system's own speech settings; a de-Googled ROM may need one installing first.	这台手机没有语音引擎，因此什么都读不出来。多数手机在系统自带的语音设置里就有一个；去掉 Google 服务的 ROM 可能需要先装一个。
+A page check runs in a WebView, which only reports a certificate when the phone rejects it, so nothing here can warn you before a working certificate expires.	页面检查在 WebView 中运行，它只在手机拒绝证书时才上报证书，因此这里无法在有效证书到期前提醒你。
+Up when the server answers with the time and knows it itself. An unsynchronized server is down, a kiss-o'-death is degraded. No answer after every try is down.	服务器应答时间且自身时间已同步即为正常。未同步的服务器判为故障，kiss-o'-death 判为降级。所有重试都无应答则判为故障。
+The engine has no voice it can use offline. It would speak on wifi and go silent during exactly the outage this is for, so install a voice for your language first.	语音引擎没有可离线使用的声音。它会在 wifi 下朗读，却偏偏在本次告警要应对的断网期间沉默，因此请先安装对应语言的语音包。
+Not possible: Outlook, Hotmail and Microsoft 365, which only accept a Microsoft sign-in Nightbell does not have, and Proton and Tuta, which offer no IMAP to a phone.	做不到：Outlook、Hotmail 和 Microsoft 365 只接受 Nightbell 不具备的 Microsoft 登录，而 Proton 和 Tuta 不给手机提供 IMAP。
+The report's own status is the verdict. Up, degraded and down page through the alert policy like any other monitor, and each part is listed with the reasons it gave.	报告自身的状态就是结论。正常、降级和故障会像其它监控一样按告警策略推送，且每一部分都列出它给出的原因。
+Dragging is off while a filter or a search is narrowing the list, because a card's place in a filtered view says nothing about where it belongs. Show all to rearrange.	当筛选或搜索正在缩小列表时，拖动会关闭，因为卡片在筛选视图中的位置说明不了它该在哪。显示全部后才能重新排列。
+The speech engine on this phone accepted a voice and then produced no audio. Its voice data is most likely not downloaded, so nothing will be said until that is fixed.	这台手机上的语音引擎接受了某个声音却没有产生音频。多半是语音数据没下载，修好之前什么都读不出来。
+For a client that allows direct sign-in. The password is stored encrypted and used again only when the session ends. A refused password is tried once, never on a schedule.	用于允许直接登录的客户端。密码加密保存，仅在会话结束时再次使用。被拒绝的密码只试一次，绝不按计划反复尝试。
+Something an urgent page needs is switched off. Two of these live behind Android's own settings screens and no app can turn them on for you, so this walks you to each one.	紧急告警所需的某项设置被关掉了。其中两项藏在 Android 自己的设置页里，任何应用都无法替你打开，因此这里会逐项带你过去。
+Android keeps two of these behind its own settings screens — no app can switch them on for you. Tapping a row jumps straight to the toggle, and this list updates itself when you come back.	Android 把其中两项放在它自己的设置页里 —— 没有应用能替你打开。点按某一行会直接跳到对应开关，返回时此列表会自动更新。
+Opens the web app. Tap its own Sign in button and log in as usual. Nightbell reads the provider and client from that sign-in. Google sign-in does not work inside an app; use Paste a token for that.	打开 Web 应用。点按它自己的「登录」按钮照常登录。Nightbell 会从这次登录中读取服务商和客户端。Google 登录在应用内无法使用；那种情况请用「粘贴 token」。
+Anyone who opens the file can use them as you until you revoke them, and that stays true of every copy the file makes on the way to the other phone. Off is the right answer unless you are moving the file by hand and deleting it after.	打开该文件的任何人都能以你的身份使用它们，直到你撤销为止；文件在传到另一台手机途中产生的每一个副本也都如此。除非你是手动搬运文件且用完即删，否则应保持关闭。
+The voice on this phone does not speak the language the sentence is written in, so it will read English words with that language's pronunciation. Either rewrite the sentence above in that language, or install an English voice in your system speech settings.	这台手机上的声音不会说这句话所用的语言，因此会用该语言的发音去读英文单词。要么把上面那句话改写成该语言，要么在系统语音设置里安装一个英文声音。
+This costs real battery. Nightbell wakes up as often as your tightest interval needs and holds a persistent notification Android will not let you dismiss.\n\nBackground checks stay armed underneath as a repair sweep, so nothing is lost if the OS kills the service.	这会实打实地耗电。Nightbell 会按你最密集的间隔频繁唤醒，并持有一条 Android 不允许你划掉的常驻通知。\n\n后台检查仍作为兜底扫描在底层待命，因此即便系统杀掉服务也不会漏掉什么。
+It stops the repeats for that outage and nothing else. The monitor stays down, its card stays red, and the ordinary down notification stays where it was. When the monitor recovers the loop re-arms, so the next outage shouts again. It means “I have seen this”, not “stop watching”.	它只停止本次故障的重复告警，别无其它。监控仍处于故障，卡片仍是红色，普通的故障通知也还留在原处。监控恢复后循环会重新待命，下次故障会再次响个不停。它的意思是「我已看到」，不是「别再盯着了」。
+The share of checks in the last twenty-four hours that passed. When the history does not reach back that far the label says how far it does reach instead — a monitor added an hour ago cannot report a day, and reporting one anyway would be the easiest number in the app to mislead yourself with.	过去二十四小时里通过的检查所占比例。当历史记录不够久时，标签会改为说明它实际能回溯多远 —— 一小时前才添加的监控报不出一整天，而硬报一个恰恰是整个应用里最容易误导自己的数字。
+Re-checking everything fires a real request at every endpoint you watch, all at once. That should not be reachable by an accidental over-scroll, so past the threshold you have to hold for a moment while a ring closes. Releasing early cancels. The banner's “Check all now” is the one-tap route when you actually mean it.	重新检查所有内容会同时向你关注的每个端点发出真实请求。这不该被一次误触的过度滚动触发，所以超过阈值后你必须按住片刻等一个圆环走完。提前松手即取消。真要这么做时，横幅上的「立即全部检查」才是点一下就走的入口。
+No. There is no account, no server and no telemetry; the checks are made by your phone directly to the things you pointed it at. Android's automatic cloud backup is switched off on purpose, because your monitors' request headers can contain API tokens and that backup would have uploaded them. Moving to a new phone is the JSON export in Backup and transfer.	不会。没有账号、没有服务器、也没有遥测；检查都由你的手机直接发向你指定的目标。Android 的自动云备份被特意关闭，因为监控的请求头里可能含有 API token，而那次备份会把它们上传。换到新手机用的是「备份与转移」里的 JSON 导出。
+Every HTTPS check completes a handshake, and the handshake carries the certificate's expiry date, so watching it is free. Nightbell says something once when a certificate crosses each threshold and then at most once a day, never urgently and never during quiet hours — there is nothing to do at 3am about a certificate with nine days left. A renewal clears the notice on the next check.	每次 HTTPS 检查都会完成一次握手，握手里带着证书的到期日期，所以顺带监控它不花额外代价。证书每越过一个阈值时 Nightbell 会提醒一次，之后最多每天一次，从不紧急、也从不在静默时段打扰 —— 凌晨三点对着一张还剩九天的证书，本来就没什么可做的。续期后下一次检查就会清除提醒。

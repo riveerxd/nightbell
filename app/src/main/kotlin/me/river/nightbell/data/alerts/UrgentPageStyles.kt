@@ -15,6 +15,7 @@ import androidx.core.app.Person
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.drawable.IconCompat
 import me.river.nightbell.R
+import me.river.nightbell.ui.i18n.L10n
 
 /**
  * The five candidate looks for the URGENT heads-up — the container that drops
@@ -217,8 +218,8 @@ object UrgentPageStyles {
         val notification = callDarkRed(context, channelId, content, actions, silent)
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return notification
         val existing = notification.actions ?: return notification
-        val ack = context.getString(R.string.urgent_action_acknowledge_short)
-        val recheck = context.getString(R.string.urgent_action_recheck)
+        val ack = L10n.res(context, R.string.urgent_action_acknowledge_short, "确认")
+        val recheck = L10n.res(context, R.string.urgent_action_recheck, "重新检查")
         notification.actions = existing.mapIndexed { index, action ->
             val title = when (index) {
                 // CallStyle emits negative-then-positive, and appends the app's
@@ -245,26 +246,26 @@ object UrgentPageStyles {
         val builder = base(context, channelId, content, actions, silent)
             .setColor(DEEP_DOWN_COLOR)
             .setColorized(true)
-            .setContentTitle("${content.monitorName} is down")
+            .setContentTitle(L10n.pick("${content.monitorName} is down", "${content.monitorName} 已故障"))
             .setContentText(
                 buildString {
                     append(content.headline)
-                    if (content.downFor.isNotBlank()) append(" · down for ").append(content.downFor)
+                    if (content.downFor.isNotBlank()) append(L10n.pick(" · down for ", " · 已故障 ")).append(content.downFor)
                 },
             )
             .setStyle(NotificationCompat.BigTextStyle().bigText(bigText(content)))
             .addAction(
                 R.drawable.ic_stat_ok,
-                context.getString(R.string.urgent_action_acknowledge_short),
+                L10n.res(context, R.string.urgent_action_acknowledge_short, "确认"),
                 actions.acknowledge,
             )
             .addAction(
                 R.drawable.ic_stat_refresh,
-                context.getString(R.string.urgent_action_recheck),
+                L10n.res(context, R.string.urgent_action_recheck, "重新检查"),
                 actions.recheck,
             )
         actions.mute?.let {
-            builder.addAction(R.drawable.ic_stat_mute, "Mute 1h", it)
+            builder.addAction(R.drawable.ic_stat_mute, L10n.pick("Mute 1h", "静音 1 小时"), it)
         }
         return builder.build()
     }
@@ -285,12 +286,12 @@ object UrgentPageStyles {
         // have the height, carry the controls. Hiding the row rather than shipping a
         // second layout keeps the two from drifting.
         fun card(withActions: Boolean) = RemoteViews(context.packageName, R.layout.notification_urgent_call).apply {
-            setTextViewText(R.id.urgent_name, "${content.monitorName} is down")
+            setTextViewText(R.id.urgent_name, L10n.pick("${content.monitorName} is down", "${content.monitorName} 已故障"))
             setTextViewText(
                 R.id.urgent_detail,
                 buildString {
                     append(content.headline)
-                    if (content.downFor.isNotBlank()) append(" · down for ").append(content.downFor)
+                    if (content.downFor.isNotBlank()) append(L10n.pick(" · down for ", " · 已故障 ")).append(content.downFor)
                 },
             )
             if (!withActions) {
@@ -306,7 +307,7 @@ object UrgentPageStyles {
                 UrgentPills.iconLabel(
                     context = context,
                     iconRes = R.drawable.ic_stat_ok,
-                    text = context.getString(R.string.urgent_action_acknowledge_short),
+                    text = L10n.res(context, R.string.urgent_action_acknowledge_short, "确认"),
                     fill = ACK_PILL_COLOR,
                     textColor = 0xFFFFFFFF.toInt(),
                     tint = 0xFFFFFFFF.toInt(),
@@ -317,7 +318,7 @@ object UrgentPageStyles {
                 UrgentPills.iconLabel(
                     context = context,
                     iconRes = R.drawable.ic_stat_refresh,
-                    text = context.getString(R.string.urgent_action_recheck),
+                    text = L10n.res(context, R.string.urgent_action_recheck, "重新检查"),
                     fill = RECHECK_PILL_COLOR,
                     textColor = 0xFFFFFFFF.toInt(),
                     tint = 0xFFFFFFFF.toInt(),
@@ -351,7 +352,7 @@ object UrgentPageStyles {
         }
         val expanded = card(withActions = true)
         return base(context, channelId, content, actions, silent)
-            .setContentTitle("${content.monitorName} is down")
+            .setContentTitle(L10n.pick("${content.monitorName} is down", "${content.monitorName} 已故障"))
             .setContentText(content.headline)
             .setCustomContentView(card(withActions = false))
             .setCustomHeadsUpContentView(expanded)
@@ -380,7 +381,7 @@ object UrgentPageStyles {
         val builder = base(context, channelId, content, actions, silent)
             .setColor(DEEP_DOWN_COLOR)
             .setContentTitle(content.monitorName)
-            .setContentText("${content.headline} · down for ${content.downFor}")
+            .setContentText(L10n.pick("${content.headline} · down for ${content.downFor}", "${content.headline} · 已故障 ${content.downFor}"))
             .setColorized(true)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             builder.setStyle(
@@ -393,7 +394,7 @@ object UrgentPageStyles {
         }
         // CallStyle appends app actions after its own two, so the mute control can
         // ride along even though the style will not let its labels be changed.
-        actions.mute?.let { builder.addAction(R.drawable.ic_stat_mute, "Mute 1h", it) }
+        actions.mute?.let { builder.addAction(R.drawable.ic_stat_mute, L10n.pick("Mute 1h", "静音 1 小时"), it) }
         return builder.build()
     }
 
@@ -413,7 +414,7 @@ object UrgentPageStyles {
             .build()
         val builder = base(context, channelId, content, actions, silent)
             .setContentTitle(content.monitorName)
-            .setContentText("${content.headline} · down for ${content.downFor}")
+            .setContentText(L10n.pick("${content.headline} · down for ${content.downFor}", "${content.headline} · 已故障 ${content.downFor}"))
             // Only honoured when this is posted as a foreground-service
             // notification; harmless (and ignored) otherwise.
             .setColorized(true)
@@ -478,7 +479,7 @@ object UrgentPageStyles {
     ): Notification {
         val views = urgentViews(context, content)
         return base(context, channelId, content, actions, silent)
-            .setContentTitle("${content.monitorName} is down")
+            .setContentTitle(L10n.pick("${content.monitorName} is down", "${content.monitorName} 已故障"))
             .setContentText(content.headline)
             .setCustomContentView(views)
             .setCustomHeadsUpContentView(views)
@@ -531,7 +532,7 @@ object UrgentPageStyles {
         val person = monitorAsPerson(context, content)
         val builder = base(context, channelId, content, actions, silent)
             .setContentTitle(content.monitorName)
-            .setContentText("Down for ${content.downFor} · ${content.headline}")
+            .setContentText(L10n.pick("Down for ${content.downFor} · ${content.headline}", "已故障 ${content.downFor} · ${content.headline}"))
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             builder.setStyle(
                 NotificationCompat.CallStyle.forOngoingCall(person, actions.acknowledge),
@@ -553,11 +554,11 @@ object UrgentPageStyles {
         actions: UrgentPageActions,
         silent: Boolean,
     ): Notification = base(context, channelId, content, actions, silent)
-        .setContentTitle("${content.monitorName} is DOWN")
-        .setContentText("${content.headline} · down for ${content.downFor}")
+        .setContentTitle(L10n.pick("${content.monitorName} is DOWN", "${content.monitorName} 已故障"))
+        .setContentText(L10n.pick("${content.headline} · down for ${content.downFor}", "${content.headline} · 已故障 ${content.downFor}"))
         .setStyle(NotificationCompat.BigTextStyle().bigText(bigText(content)))
         .setColorized(true)
-        .setSubText("URGENT")
+        .setSubText(L10n.pick("URGENT", "紧急"))
         .addAction(R.drawable.ic_stat_ok, "Acknowledge", actions.acknowledge)
         .addAction(R.drawable.ic_stat_refresh, "Re-check", actions.recheck)
         .build()
@@ -571,10 +572,10 @@ object UrgentPageStyles {
         actions: UrgentPageActions,
         silent: Boolean,
     ): Notification = base(context, channelId, content, actions, silent)
-        .setContentTitle("🔴 ${content.monitorName} is down")
-        .setContentText("${content.headline} · ${content.failedChecks} failed checks")
+        .setContentTitle(L10n.pick("🔴 ${content.monitorName} is down", "🔴 ${content.monitorName} 已故障"))
+        .setContentText(L10n.pick("${content.headline} · ${content.failedChecks} failed checks", "${content.headline} · ${content.failedChecks} 次检查失败"))
         .setStyle(NotificationCompat.BigTextStyle().bigText(bigText(content)))
-        .setSubText("URGENT · repeats every ${content.repeatMinutes.coerceAtLeast(1)} min")
+        .setSubText(L10n.pick("URGENT · repeats every ${content.repeatMinutes.coerceAtLeast(1)} min", "紧急 · 每 ${content.repeatMinutes.coerceAtLeast(1)} 分钟重复一次"))
         .addAction(R.drawable.ic_stat_ok, "Acknowledge", actions.acknowledge)
         .addAction(R.drawable.ic_stat_refresh, "Re-check", actions.recheck)
         .build()
@@ -590,7 +591,7 @@ object UrgentPageStyles {
     ): Notification {
         val heads = urgentViews(context, content)
         return base(context, channelId, content, actions, silent)
-            .setContentTitle("${content.monitorName} is down")
+            .setContentTitle(L10n.pick("${content.monitorName} is down", "${content.monitorName} 已故障"))
             .setContentText(content.headline)
             .setStyle(NotificationCompat.DecoratedCustomViewStyle())
             .setCustomContentView(heads)
@@ -639,15 +640,19 @@ object UrgentPageStyles {
     /** The red band shared by the two custom-view variants. */
     private fun urgentViews(context: Context, content: UrgentPageContent): RemoteViews =
         RemoteViews(context.packageName, R.layout.notification_urgent).apply {
-            setTextViewText(R.id.urgent_name, "${content.monitorName} is DOWN")
+            setTextViewText(R.id.urgent_name, L10n.pick("${content.monitorName} is DOWN", "${content.monitorName} 已故障"))
             setTextViewText(
                 R.id.urgent_detail,
-                "${content.headline} · down for ${content.downFor}",
+                L10n.pick("${content.headline} · down for ${content.downFor}", "${content.headline} · 已故障 ${content.downFor}"),
             )
             setTextViewText(
                 R.id.urgent_meta,
-                "${content.failedChecks} failed checks · repeats every " +
-                    "${content.repeatMinutes.coerceAtLeast(1)} min",
+                L10n.pick(
+                    "${content.failedChecks} failed checks · repeats every " +
+                        "${content.repeatMinutes.coerceAtLeast(1)} min",
+                    "${content.failedChecks} 次检查失败 · 每隔 " +
+                        "${content.repeatMinutes.coerceAtLeast(1)} 分钟",
+                ),
             )
         }
 

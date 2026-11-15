@@ -1,6 +1,8 @@
 package me.river.nightbell
 
 import me.river.nightbell.domain.DueCheck
+import me.river.nightbell.domain.Monitor
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -66,5 +68,34 @@ class DueCheckTest {
         val daily = 1_440
         assertFalse(DueCheck.isDue(daily, now - 12 * 60 * minute, now))
         assertTrue(DueCheck.isDue(daily, now - 24 * 60 * minute, now))
+    }
+
+    @Test
+    fun `a one-second cadence is honoured and its slack is scaled down`() {
+        val second = 1_000L
+        // The flat 30-second slack would leave a one-second monitor permanently
+        // due, so the loop would check it on every tick regardless of the choice.
+        assertEquals(500L, DueCheck.slackFor(second))
+        assertEquals(DueCheck.SLACK_MS, DueCheck.slackFor(15 * minute))
+        assertFalse(DueCheck.isDueMillis(second, now, now))
+        assertFalse(DueCheck.isDueMillis(second, now - 400L, now))
+        assertTrue(DueCheck.isDueMillis(second, now - 500L, now))
+        assertTrue(DueCheck.isDueMillis(second, now - second, now))
+        // Minute-scale cadences keep the old tolerance untouched.
+        assertTrue(DueCheck.isDueMillis(15 * minute, now - (15 * minute - DueCheck.SLACK_MS), now))
+    }
+
+    @Test
+    fun `intervalMs selects the second override and keeps old stores on minutes`() {
+        val old = Monitor(id = "old", name = "old", url = "https://old.example", intervalMinutes = 15)
+        assertEquals(15 * minute, old.intervalMs)
+        assertFalse(old.isSubMinute)
+
+        val fast = old.copy(intervalSeconds = 1)
+        assertEquals(1_000L, fast.intervalMs)
+        assertTrue(fast.isSubMinute)
+        // The minute field stays as a fallback for any reader that predates the
+        // sub-minute field, rather than being zeroed into nonsense.
+        assertEquals(15, fast.intervalMinutes)
     }
 }

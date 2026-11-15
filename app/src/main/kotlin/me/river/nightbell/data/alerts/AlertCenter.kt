@@ -24,6 +24,7 @@ import androidx.core.content.ContextCompat
 import me.river.nightbell.MainActivity
 import me.river.nightbell.UrgentAlertActivity
 import me.river.nightbell.R
+import me.river.nightbell.ui.i18n.L10n
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -96,7 +97,7 @@ class AlertCenter(private val context: Context) {
             )
             .addAction(
                 R.drawable.ic_stat_mute,
-                "Mute 1h",
+                L10n.pick("Mute 1h", "静音 1 小时"),
                 AlertActionReceiver.pendingIntent(context, AlertActionReceiver.ACTION_MUTE_1H, monitor.id),
             )
             .build()
@@ -125,7 +126,7 @@ class AlertCenter(private val context: Context) {
         val style = NotificationCompat.InboxStyle()
         result.alerts.take(ALERT_LINES).forEach { style.addLine(it.line) }
         val hidden = result.alerts.size - ALERT_LINES
-        if (hidden > 0) style.setSummaryText("and $hidden more")
+        if (hidden > 0) style.setSummaryText(L10n.pick("and $hidden more", "另有 $hidden 条"))
         return style
     }
 
@@ -140,7 +141,7 @@ class AlertCenter(private val context: Context) {
         val style = NotificationCompat.InboxStyle()
         lines.take(ALERT_LINES).forEach { style.addLine(it) }
         val hidden = lines.size - ALERT_LINES
-        if (hidden > 0) style.setSummaryText("and $hidden more")
+        if (hidden > 0) style.setSummaryText(L10n.pick("and $hidden more", "另有 $hidden 条"))
         return style
     }
 
@@ -148,7 +149,7 @@ class AlertCenter(private val context: Context) {
         val channelId = channelFor(policy, Severity.RECOVERY, silent)
         val notification = baseBuilder(channelId, monitor, silent)
             .setSmallIcon(R.drawable.ic_stat_ok)
-            .setContentTitle("${monitor.displayName} is back")
+            .setContentTitle(L10n.pick("${monitor.displayName} is back", "${monitor.displayName} 已恢复"))
             .setContentText(result.message.ifBlank { "Responding normally again" })
             .setStyle(
                 NotificationCompat.BigTextStyle().bigText(
@@ -183,7 +184,7 @@ class AlertCenter(private val context: Context) {
         val body = result.message.ifBlank { result.failureKind.headline }
         val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_stat_alert)
-            .setContentTitle("URGENT · ${monitor.displayName} is down")
+            .setContentTitle(L10n.pick("URGENT · ${monitor.displayName} is down", "紧急 · ${monitor.displayName} 已故障"))
             .setContentText(body)
             .setStyle(
                 NotificationCompat.BigTextStyle().bigText(
@@ -490,7 +491,7 @@ class AlertCenter(private val context: Context) {
                 )
                 .addAction(
                     R.drawable.ic_stat_mute,
-                    "Mute 1h",
+                    L10n.pick("Mute 1h", "静音 1 小时"),
                     AlertActionReceiver.pendingIntent(context, AlertActionReceiver.ACTION_MUTE_1H, monitor.id),
                 )
                 .build()
@@ -519,7 +520,7 @@ class AlertCenter(private val context: Context) {
                 )
                 .addAction(
                     R.drawable.ic_stat_mute,
-                    "Mute 1h",
+                    L10n.pick("Mute 1h", "静音 1 小时"),
                     AlertActionReceiver.pendingIntent(context, AlertActionReceiver.ACTION_MUTE_1H, monitor.id),
                 )
                 .build()
@@ -535,7 +536,7 @@ class AlertCenter(private val context: Context) {
                     "${monitor.displayName} is slow"
                 },
             )
-            .setContentText("${result.latencyMs} ms — budget is $sloMs ms")
+            .setContentText(L10n.pick("${result.latencyMs} ms — budget is $sloMs ms", "${result.latencyMs} ms — 预算 $sloMs ms"))
             .setStyle(
                 NotificationCompat.BigTextStyle().bigText(
                     buildString {
@@ -556,7 +557,7 @@ class AlertCenter(private val context: Context) {
             )
             .addAction(
                 R.drawable.ic_stat_mute,
-                "Mute 1h",
+                L10n.pick("Mute 1h", "静音 1 小时"),
                 AlertActionReceiver.pendingIntent(context, AlertActionReceiver.ACTION_MUTE_1H, monitor.id),
             )
             .build()
@@ -699,8 +700,8 @@ class AlertCenter(private val context: Context) {
         val quiet = silent || repeat
         val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_stat_alert)
-            .setContentTitle("Nightbell can't complete its checks")
-            .setContentText("${state.consecutiveErrors} checks in a row failed inside Nightbell itself")
+            .setContentTitle(L10n.pick("Nightbell can't complete its checks", "Nightbell 无法完成检查"))
+            .setContentText(L10n.pick("${state.consecutiveErrors} checks in a row failed inside Nightbell itself", "Nightbell 内部连续 ${state.consecutiveErrors} 次检查失败"))
             .setStyle(
                 NotificationCompat.BigTextStyle().bigText(
                     buildString {
@@ -759,8 +760,8 @@ class AlertCenter(private val context: Context) {
     fun notifySignInNeeded(monitor: Monitor, problem: AuthProblem) {
         val notification = NotificationCompat.Builder(context, signInChannel())
             .setSmallIcon(R.drawable.ic_stat_brand)
-            .setContentTitle("${monitor.displayName} is not checking")
-            .setContentText("${problem.headline}. Open the monitor to sign in again.")
+            .setContentTitle(L10n.pick("${monitor.displayName} is not checking", "${monitor.displayName} 未在进行检查"))
+            .setContentText(L10n.pick("${problem.headline}. Open the monitor to sign in again.", "${problem.headline}。请打开监控重新登录。"))
             .setContentIntent(openMonitorIntent(monitor.id))
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -1057,8 +1058,8 @@ class AlertCenter(private val context: Context) {
         )
         val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_stat_brand)
-            .setContentTitle("Nightbell update available")
-            .setContentText("Version ${release.version} is ready")
+            .setContentTitle(L10n.pick("Nightbell update available", "Nightbell 有新版本"))
+            .setContentText(L10n.pick("Version ${release.version} is ready", "版本 ${release.version} 已就绪"))
             .setStyle(
                 NotificationCompat.BigTextStyle()
                     .bigText(AppUpdate.noticeBody(release, installedVersion)),
@@ -1226,8 +1227,8 @@ class AlertCenter(private val context: Context) {
         val channelId = channelFor(policy, Severity.DOWN, silent = false)
         val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_stat_alert)
-            .setContentTitle("$monitorName is down")
-            .setContentText("This is what a real alert looks like.")
+            .setContentTitle(L10n.pick("$monitorName is down", "$monitorName 已故障"))
+            .setContentText(L10n.pick("This is what a real alert looks like.", "这是一条真实告警的预览。"))
             .setStyle(
                 NotificationCompat.BigTextStyle()
                     .bigText("Sound: ${policy.sound.label}\nHaptics: ${if (policy.vibrate) policy.vibrationStyle.label else "off"}"),

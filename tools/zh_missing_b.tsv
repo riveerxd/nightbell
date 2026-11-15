@@ -1,0 +1,360 @@
+Response time	响应时间
+Spoken alerts	语音播报告警
+Stop checking	停止检查
+Tap to select	点按以选择
+Text snapshot	文本快照
+Token removed	令牌已移除
+Up, but slow.	在线，但偏慢。
+Webhook added	Webhook 已添加
+Webhook saved	Webhook 已保存
+What to watch	要监控的内容
+Where it goes	发送目标
+add a monitor	添加监控
+are you sure?	确定吗？
+check all now	立即检查全部
+decide for me	帮我决定
+every message	每条消息
+key is String	key is String
+not announced	未播报
+not signed in	未登录
+\n\nLast error: 	\n\n最近一次错误：
+ failed checks	 次检查失败
+, open details	，查看详情
+1 alert firing	1 条告警触发中
+1 issue closed	1 个问题已关闭
+1 of 3 is down	3 个中有 1 个宕机
+Address family	地址族
+Alerts back on	告警已重新开启
+Animations off	动画已关闭
+Certificate · 	证书 · 
+Checker health	检查器健康状态
+Create monitor	创建监控
+Delete monitor	删除监控
+Expected value	预期值
+Global default	全局默认
+Group restored	分组已恢复
+Hold to delete	长按删除
+Host not found	找不到主机
+How it behaves	运行行为
+Latency alerts	延迟告警
+Latency budget	延迟预算
+Marked as seen	已标记为已读
+Marketing site	官方网站
+Monitor paused	监控已暂停
+Not loaded yet	尚未加载
+Not responding	无响应
+Resume monitor	恢复监控
+Strict cadence	严格检查节奏
+Subtle motion.	轻微动效。
+Until I resume	直到我恢复
+Which monitors	哪些监控
+a check passed	一次检查通过
+animations off	动画关闭
+black vs white	黑色与白色
+checked 4m ago	4 分钟前检查过
+don't place it	不要放置
+ff ff ff ff 54	ff ff ff ff 54
+firing for -3m	已触发 -3 分钟
+newest release	最新版本
+nothing chosen	未选择任何内容
+nothing to see	暂无内容
+raised surface	凸起表面
+the last check	上次检查
+there are more	还有更多
+under a minute	不到一分钟
+, tap to expand	，点按展开
+, tap to select	，点按选择
+1 of 3 failures	3 次中有 1 次失败
+Alerts un-muted	告警已取消静音
+Any certificate	任意证书
+Capture element	捕获元素
+Checker crashed	检查器崩溃
+Continue anyway	仍要继续
+Expected status	预期状态码
+Hold to confirm	长按确认
+I'm done typing	我已输入完毕
+Least privilege	最小权限
+Monitor created	监控已创建
+Monitor deleted	监控已删除
+Monitor resumed	监控已恢复
+NightbellWidget	NightbellWidget
+No GitHub token	无 GitHub 令牌
+No monitors yet	还没有监控
+Nothing watched	未监控任何内容
+Pick an element	选择一个元素
+Preview monitor	预览监控
+Recovery alerts	恢复告警
+Service account	服务账号
+Stays signed in	保持登录
+TLS certificate	TLS 证书
+Test alert sent	测试告警已发送
+Watch this page	监控此页面
+Webhook deleted	Webhook 已删除
+answer this now	现在就回答
+match my accent	匹配我的强调色
+not checked yet	尚未检查
+nothing changed	没有变化
+nothing matched	没有匹配项
+remind me later	稍后提醒我
+save a selector	保存选择器
+should I get up	我该起床吗
+which Nightbell	哪个 Nightbell
+, token included	，含令牌
+1 issue reopened	1 个问题已重新打开
+2 of 3, selected	3 个中已选 2 个
+Cadence & alerts	检查节奏与告警
+Checked just now	刚刚检查过
+Configure widget	配置小组件
+Create a monitor	创建监控
+Expires tomorrow	明天到期
+Export to a file	导出到文件
+Found realm main	找到 realm main
+HTTP 200 in 41ms	HTTP 200，耗时 41ms
+Healthy while it	在线期间视为健康
+Hide log details	隐藏日志详情
+Label at the end	标签放在末尾
+Monitor restored	监控已恢复
+Monitoring again	重新开始监控
+Pull to re-check	下拉重新检查
+Report age limit	报告时效上限
+Runs on schedule	按计划运行
+Show log details	显示日志详情
+Stored signature	已存储的签名
+TLS certificates	TLS 证书
+Use this element	使用此元素
+append a new one	追加一个新的
+charts are green	图表为绿色
+get me past this	让我继续
+look at it first	先看一下
+running normally	运行正常
+select this card	选择此卡片
+settings changed	设置已更改
+these 4 monitors	这 4 个监控
+what\n * happened	发生了\n什么
+what is going on	怎么回事
+\nWhile checking: 	\n检查期间：
+1 monitor checked	已检查 1 个监控
+5 firing: A, B, C	5 条触发中：A、B、C
+Back to dashboard	返回仪表盘
+Background checks	后台检查
+Hide site address	隐藏站点地址
+I have read this.	我已阅读。
+Nightbell updates	Nightbell 更新
+Open live preview	打开实时预览
+Remove animations	移除动画
+Remove from group	从分组中移除
+Reported degraded	上报为降级
+SettingsViewModel	SettingsViewModel
+Strict monitoring	严格监控
+Updated to 3.24.0	已更新到 3.24.0
+UrgentPagePreview	UrgentPagePreview
+WidgetConfigStore	WidgetConfigStore
+Wireguard gateway	Wireguard 网关
+all 6 operational	全部 6 个正常
+finger still down	手指仍未抬起
+fully transparent	完全透明
+it did not happen	并未发生
+keep reminding me	持续提醒我
+node_load1 = 0.29	node_load1 = 0.29
+octocat, riveerxd	octocat, riveerxd
+shown, not judged	只展示，不评判
+that's the answer	这就是答案
+the settings list	设置列表
+which app is this	这是哪个应用
+, above this range	，超出此范围
+, none over budget	，均未超出预算
+1 element captured	已捕获 1 个元素
+A host is required	必须填写主机
+Certificate alerts	证书告警
+Connection refused	连接被拒绝
+Full-screen alerts	全屏告警
+GitHub token saved	GitHub 令牌已保存
+Group this monitor	为此监控分组
+Import from a file	从文件导入
+Issues are ignored	已忽略问题
+No haptic feedback	无触感反馈
+Per-monitor health	各监控的健康状态
+Refetch site icons	重新获取站点图标
+Regular expression	正则表达式
+Reported up in 4ms	上报在线，耗时 4ms
+The mark, top left	左上角的标记
+The series to read	要读取的序列
+Watch this element	监控此元素
+always two columns	始终两列
+is something wrong	是否出了问题
+leave it as it was	保持原样
+no voice installed	未安装语音包
+saved, never shown	已保存，从不显示
+something is wrong	出现了问题
+special app access	特殊应用访问权限
+stop hiding things	停止隐藏内容
+the latest release	最新版本
+this needs you now	现在需要你处理
+up{job="api"} == 0	up{job="api"} == 0
+your fleet is fine	你的监控目标一切正常
+{\n  "ping": true\n}	{\n  "ping": true\n}
+} on one page load	单次页面加载中的 }
+Add another element	添加另一个元素
+Add this to a group	将此添加到分组
+AlertActionReceiver	AlertActionReceiver
+Allow notifications	允许通知
+Author not recorded	未记录作者
+Backup and transfer	备份与迁移
+Delete your picture	删除你的图片
+Element expectation	元素预期条件
+Gemini Intelligence	Gemini Intelligence
+Headers and signing	请求头与签名
+Home-screen widgets	主屏幕小组件
+Ignore this version	忽略此版本
+Only if it mentions	仅当提及
+Page failed to load	页面加载失败
+Repository activity	仓库动态
+Repository comments	仓库评论
+Response time trend	响应时间趋势
+Send a test message	发送测试消息
+The last six hours.	最近六小时。
+Through the web app	通过 Web 应用
+Waiting for a reply	等待回复
+rustbot, dependabot	rustbot, dependabot
+splits into the app	分流到应用
+which one is in use	当前使用的是哪个
+1 of 15 is down02:36	15 个中有 1 个宕机02:36
+Comments are ignored	已忽略评论
+DOWN, FIRING, urgent	宕机、触发中、紧急
+Default alert policy	默认告警策略
+Expected, not paging	预期内，不寻呼
+One alert per outage	每次故障仅一条告警
+Releases are ignored	已忽略发布
+Remove\n * animations	移除\n动画
+Remove from Payments	从 Payments 中移除
+SetJavaScriptEnabled	SetJavaScriptEnabled
+Unrestricted battery	电池使用不受限制
+What silent mode saw	静音模式记录的内容
+fixed key in headers	请求头中的固定键
+imported 12 monitors	已导入 12 个监控
+ninety-three percent	百分之九十三
+nothing to check yet	暂无可检查的内容
+stop showing me this	不再向我显示此内容
+that one or that one	那个还是那个
+the one stored check	已存储的那次检查
+this can't be undone	此操作无法撤销
+your service is down	你的服务已宕机
+ down in total since 	 次宕机，自 
+, certificate expired	，证书已过期
+3 monitors will speak	3 个监控将语音播报
+3xx is reported as-is	3xx 按原样上报
+Already in this group	已在此分组中
+Discard this monitor?	舍弃此监控？
+Discard this webhook?	舍弃此 Webhook？
+Discard your changes?	舍弃你的更改？
+Exact character match	精确字符匹配
+Matched an alert term	匹配到告警关键词
+Move to another group	移至其他分组
+No monitor will speak	没有监控会语音播报
+Response time history	响应时间历史
+Route and certificate	路由与证书
+Sending the first try	正在进行首次尝试
+Username and password	用户名和密码
+Watch the expiry date	监控到期日期
+What counts as a page	什么算作一次寻呼
+is\n * anything broken	有\n异常吗
+let the engine decide	让引擎决定
+mode="idle", cpu!="0"	mode="idle", cpu!="0"
+so one extra interval	因此多一个检查间隔
+this thing is working	此功能运行正常
+which page am I\n * on	我在\n哪一页
+Enter provider details	输入提供商信息
+Everything is healthy.	一切正常。
+GitHub answered slowly	GitHub 响应缓慢
+Ignores capitalisation	忽略大小写
+Milestones are ignored	已忽略里程碑
+No checks recorded yet	暂无检查记录
+Reply timeout, per try	每次尝试的响应超时
+Routed, no address yet	已路由，尚无地址
+Sign-in did not finish	登录未完成
+an update is available	有可用更新
+compact vs\n * detailed	紧凑\n与详细
+nobody downloaded this	无人下载过此内容
+nothing\n     * matched	无\n匹配项
+you\n * really meant it	你\n是认真的
+you've gone far enough	你已经走得够远了
+All set, open Nightbell	一切就绪，打开 Nightbell
+Couldn't read that file	无法读取该文件
+Every monitor is listed	已列出所有监控
+Every monitor is paused	所有监控均已暂停
+Hide the alert's labels	隐藏告警的标签
+Listening for a refusal	正在监听拒绝响应
+Monitors can notify you	监控可向你发送通知
+No monitor was speaking	没有监控在语音播报
+Paused until you resume	已暂停，直到你恢复
+Show the alert's labels	显示告警的标签
+couldn't read that file	无法读取该文件
+preview the urgent page	预览紧急页面
+)}, moving out of those.	)}，移出这些范围。
+100, 250, 500, 1k and up	100、250、500、1k 及以上
+13 stars · 0 open issues	13 星标 · 0 个开放问题
+Couldn't write that file	无法写入该文件
+Last delivered 4 min ago	上次送达：4 分钟前
+Offline, stays signed in	离线，保持登录
+Remove from their groups	从各自的分组中移除
+Star changes are ignored	已忽略星标变动
+Tap Sign in on this page	点按此页面上的「登录」
+Waiting for a connection	正在等待连接
+are you\n         * sure?	你\n确定吗？
+crash, security, android	崩溃、安全、android
+no icon for this one yet	此项还没有图标
+not in the stored checks	不在已存储的检查中
+store replaced by import	存储已被导入替换
+this costs you something	这会产生一定开销
+tools for the list below	下方列表的工具
+what did the user choose	用户选择了什么
+what does this look like	它看起来是什么样
+your site is\n     * down	你的站点\n已宕机
+1 check · nothing changed	1 次检查 · 无变化
+Browsing — links are live	浏览中 — 链接可用
+Empty sends one zero byte	留空时发送一个零字节
+Its only part reports up.	其唯一组成部分上报为在线。
+Only the milestones below	仅以下里程碑
+Ports run from 1 to 65535	端口范围为 1 到 65535
+Responding normally again	已恢复正常响应
+Silenced until you resume	已静音，直到你恢复
+Stop shouting for an hour	暂停播报一小时
+basic auth, password only	basic auth，仅用密码
+capture is\n     * running	捕获\n正在进行
+firing for under a minute	触发时长不到一分钟
+inherit the global budget	继承全局预算
+where did the finger land	手指落在了哪里
+which option did I choose	我选了哪个选项
+which part, and do I care	哪一部分，我是否在乎
+, urgent, not acknowledged	，紧急，未确认
+-1001234567890 or @channel	-1001234567890 or @channel
+3xx responses are followed	跟随 3xx 响应
+Allow unrestricted battery	允许不受限制的电池使用
+Asking the host for a ping	正在向主机发起 ping
+Could not reach the server	无法连接服务器
+Get through Do Not Disturb	绕过勿扰模式
+Healthy while the value is	当该值满足条件时视为健康
+Nightbell update available	有可用的 Nightbell 更新
+No offline voice installed	未安装离线语音包
+Nothing lifts this but you	只有你能解除此状态
+Open Do Not Disturb access	打开「勿扰模式」访问权限
+Pick the elements to watch	选择要监控的元素
+Recovered after a failure.	故障后已恢复。
+Repository and update news	仓库与更新动态
+Saved. Type to replace it.	已保存。输入内容即可替换。
+The test could not be sent	测试消息发送失败
+There is a newer Nightbell	有更新版本的 Nightbell
+Token saved on this device	令牌已保存在此设备
+are you sure you want this	确定要这样吗
+is this mute still running	此静音仍在生效吗
+what kind of thing is this	这是什么类型的东西
+widget stuck on stale data	小组件停留在旧数据
+you meant to\n * touch this	你本想\n点按此项
+\n\nThis alert repeats every 	\n\n此告警每隔 
+"Nightbell" beside the logo	徽标旁的「Nightbell」
+, expanded, tap to collapse	，已展开，点按收起
+Alerts can fire at any hour	告警可能随时触发
+Healthy monitors are hidden	已隐藏正常的监控
+Monitors that can't sign in	无法登录的监控
+Paused — manual checks only	已暂停 — 仅可手动检查
+Silent — pages vibrate only	静音 — 仅寻呼时振动

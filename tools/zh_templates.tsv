@@ -1,0 +1,398 @@
+# 插值模板串（英文模板<TAB>中文模板），由 L10n 模板匹配使用
+$ms ms	
+over $it	
+Set $title	
+${it / 60}h	
+$bytes bytes	
+$label later	
+$minutes min	
+$title value	
+${index + 1}	
+$number $name	
+${it / 1000}s	
++$hidden more	
+Via $endpoint	
+ through $host	
+$label earlier	
+$size monitors	
+$count selected	
+$days days left	
+${minutes}m ago	
+${ms / 60_000}m	
+${row.to} forks	
+${row.to} stars	
+Decrease $title	
+Increase $title	
+was ${row.from}	
+⚠ ${entry.name}	
+$label · $detail	
+$minutes minutes	
+${minutes / 60}H	
+${tab.label} tab	
+, $failed failed	
+Sent via $target	
+Updated to $name	
+and $hidden more	
+by ${row.author}	
+\nand $hidden more	
+ + ${style.label}	
+Edit group $title	
+$what · $left LEFT	
+${bytes / 1024} KB	
+${lines.size} line	
+${row.to} open now	
+Add ${token.label}	
+Group these $count	
+all $answered over	
+}-${templateId ?: 	
+\n\nIssued by $issuer	
+$verdict · $summary	
+, $over over budget	
+$kind, no checks yet	
+$monitorName is down	
+$moved issues closed	
+$total alerts firing	
+$totalCount monitors	
+${minutes / 60}h ago	
+${result.sites} site	
+${row.to - row.from}	
+Also watching $host:	
+Element ${index + 1}	
+$minutes min ${rest}s	
+${entry.latencyMs} ms	
+${hours}h ${minutes}m	
+${minutes / 60} hours	
++${row.to - row.from}	
+HTTP ${ui.statusCode}	
+setup-${monitorId ?: 	
+these $count monitors	
+$moved issues reopened	
+${(ms + 999) / 1000} s	
+${delta / 60_000}m ago	
+${metric.count} series	
+${row.delta} downloads	
+${ui.lastLatencyMs} ms	
+: ${error.description}	
+Pause ${theseN(count)}	
+firing for ${minutes}m	
+webhook-${targetId ?: 	
+$count monitors checked	
+$over of $answered over	
+${minutes / 1_440}d ago	
+${minutes}m ${seconds}s	
+${stats.total} MONITORS	
+Exported $count monitor	
+Imported $count monitor	
+Resume ${theseN(count)}	
+Showing all $totalCount	
+Urgent · ${style.label}	
+all $answered inside it	
+\nReminder #$repeatCount.	
+ $more older not listed.	
+$what · UNTIL YOU RESUME	
+${entry.openIssues} open	
+${healths.size} monitors	
+${members.size} monitors	
+${row.from} to ${row.to}	
+${state.openIssues} open	
+Comment on #${row.issue}	
+HTTP ${runtime.lastCode}	
+no input stream for $uri	
+$count ${if (count == 1) 	
+${ui.failedChecks} failed	
+, ${formatLogSize(bytes)}	
+HTTP ${result.statusCode}	
+Show all ${activity.size}	
+Signed in as $who$through	
+no output stream for $uri	
+${monitor.latencySloMs} ms	
+Alerts muted for ${hours}h	
+Edit ${target.displayName}	
+Open ${target.displayName}	
+Remove header ${index + 1}	
+ since ${clock(part.since)}	
+#${row.number} ${row.title}	
+${event.count} new messages	
+, ${last.lossPercent}% lost	
+Add these $count to a group	
+Checked ${relative(newest)}	
+Remove element ${index + 1}	
+Show all ${all.size} checks	
+firing for ${minutes / 60}h	
+so $retries extra intervals	
+up to ${seconds(left)} left	
+  since ${clock(part.since)}	
+${kind.label}. ${kind.blurb}	
+${minutes}m ${seconds % 60}s	
+Move element ${index + 1} up	
+Nothing else watches $host. 	
+Pause ${monitor.displayName}	
+Re-pick element ${index + 1}	
+Removed 1 monitor from “$it”	
+Replacing: $existingSelector	
+Version $latest is available	
+alerts on ${it.joinToString(	
+$kind, ${samples.size} checks	
+${chosen.size} kinds of event	
+${element.matchCount} matches	
+Configure widget ${index + 1}	
+Resume ${monitor.displayName}	
+TRY $attempt OF ${plan.tries}	
+reminder ${ui.reminderNumber}	
+the last ${pings.size} checks	
+${content.monitorName} is DOWN	
+${content.monitorName} is down	
+${monitor.displayName} is back	
+${monitor.displayName} is down	
+${monitor.displayName} is slow	
+${part.status.label}, expected	
+${step + 1}/${stepTitles.size}	
+${ui.failedChecks} consecutive	
+1 monitor · ${rolled.headline}	
+Healthy${if (sample.code > 0) 	
+Move element ${index + 1} down	
+Not delivered. ${result.error}	
+PAGE #${ui.reminderNumber + 1}	
+alerts from ${it.joinToString(	
+ · ${megabytes(banner.apkSize)}	
+${it.label} · ${it.defaultPort}	
+${state.openIssues} open issues	
+Checked $sites, icons unchanged	
+Checker health · ${style.label}	
+Highest is ${range.last}$suffix	
+Hold to delete ${theseN(count)}	
+Last check: ${last.repliesLine}	
+Lowest is ${range.first}$suffix	
+Show all ${triage.healthy.size}	
+basic auth as ${watch.username}	
+median ${formatLatency(median)}	
+ · reminder ${ui.reminderNumber}	
+$shownCount of $totalCount match	
+${group.memberIds.size} monitors	
+${monitor.targets.size} elements	
+${monitor.udp.probe.label} reply	
+${ui.failedChecks} failed checks	
+Answering again · ${streak.line}	
+Check ${monitor.displayName} now	
+🔴 ${content.monitorName} is down	
+"${fleet.headline}" in the header	
+${minutes / 60}H ${minutes % 60}M	
+${records.size} monitors restored	
+${stats.avgText} average response	
+All $monitorCount monitors speak.	
+down for ${downFor(ui.downForMs)}	
+the last ${summary.checks} checks	
+$count ${health.label.lowercase()}	
+${draft.format.addressLabel} saved	
+${elements.size} elements captured	
+${monitor.displayName} is degraded	
+${udp.dnsName} ${udp.dnsType.name}	
+Could not save widget $appWidgetId	
+Move these $count to another group	
+Showing $shownCount of $totalCount	
+firing for ${minutes / (60 * 24)}d	
+${access.message}. ${access.detail}	
+${result.changed} of $sites updated	
+Until ${day(auth.refreshExpiresAt)}	
+Version ${release.version} is ready	
+$headline · +$otherPending more down	
+${monitor.displayName} is fast again	
+${monitor.displayName} is still down	
+${monitor.displayName} is still slow	
+${part.displayName}: ${part.message}	
+Paused for ${durationLabel(minutes)}	
+The provider answered ${error.error}	
+every ${monitor.intervalMinutes} min	
+over the ${sloMs} ms latency budget.	
+reported ${clock(report.reportedAt)}	
+\nResponded in ${result.latencyMs} ms.	
+${result.message}\n\n${monitor.address}	
+Use the icon from ${candidate.origin}	
+You are on ${banner.installedVersion}	
+You've moved to ${shortPage(movedTo)}	
+$passed of ${shown.size} checks passed	
+${ids.size} ${plural(ids.size)} paused	
+${monitor.displayName} is not checking	
+${row.checks} checks · nothing changed	
+${target.roundToInt()} percent, $label	
+Answering again · ${card.streak?.line}	
+Remove from “${holderTitles.single()}”	
+Silenced for ${durationLabel(minutes)}	
+degraded past ${udp.ntpMaxOffsetMs} ms	
+ on ${dateOf(claims.expiresAt * 1000L)}	
+${ids.size} ${plural(ids.size)} deleted	
+${ids.size} ${plural(ids.size)} resumed	
+${monitor.displayName} reports degraded	
+${monitor.health.staleAfterMinutes} min	
+${runtime.lastMessage} · ${streak.line}	
+, back to ${whenText(summary.sinceAt)}.	
+, latest ${formatLatency(it.latencyMs)}	
+Budget ${formatLatency(sloMs.toLong())}	
+URGENT · ${monitor.displayName} is down	
+${(bytes / 1_000L).coerceAtLeast(1L)} kB	
+${monitor.displayName} is losing packets	
+${monitor.displayName} is still degraded	
+${stats.uptimeText} ${stats.uptimeScope}	
+${watch.minimumSeverity.label} and above	
+Slower than $value ms counts as degraded	
+Until ${dateOf(status.refreshExpiresAt)}	
+basic auth as ${monitor.health.username}	
+}: ${UdpPayload.hexOf(parsed.value, 16)}	
+${runtime.lastMessage} · muted, no alerts	
+${udp.attempts} per check, a second apart	
+, budget ${formatLatency(sloMs.toLong())}	
+Log written, ${document.length / 1024} KB	
+Recording, ${formatLogSize(bytes)} so far	
+The TLS certificate for $host expired on 	
+$label: $value. Change on the Target step.	
+$name marked expected. A change pages you.	
+${other.kind.label} · ${otherHealth.label}	
+Last ${shown.size} ${if (shown.size == 1) 	
+${toastRole(message.kind)}: ${message.text}	
+All ${triage.healthy.size} parts report up.	
+Grouped ${group.size} ${plural(group.size)}	
+Repeats every $every min until acknowledged	
+Showing the worst ${alerts.size} of $total.	
+${(config.backgroundOpacity * 100).toInt()}%	
+${monitor.displayName} is no longer degraded	
+${result.latencyMs} ms — budget is $sloMs ms	
+${runtime.lastMessage} · ${card.streak.line}	
+Remove ${monitor.displayName} from the group	
+$count monitors selected. Pick where they go.	
+$name pages you again if it is still failing.	
+${formatRelative(at, nowMs)}, ${whenText(at)}	
+${monitor.displayName} still reports degraded	
+${monitor.kind.label} · ${monitor.prettyHost}	
+${state.grantedCount} of ${state.total} ready	
+API ${Build.VERSION.SDK_INT} · ${Build.MODEL}	
+Element ${index + 1}: ${element.displayLabel}	
+The TLS certificate for $host is valid until 	
+Ungrouped ${group.size} ${plural(group.size)}	
+couldn't reach ${settings.updateSource.label}	
+${monitor.displayName} is still losing packets	
+${ping.repliesLine}, ${ping.lossPercent}% lost	
+${runtime.alertsFiringLine} · muted, no alerts	
+${target.displayName} · ${target.format.label}	
+${element.displayLabel} · ${element.mode.label}	
+${formatMinuteOfDay(policy.quietStartMinute)} → 	
+Recent checks, $passed of ${samples.size} passed	
+#${state.lastIssueNumber} ${state.lastIssueTitle}	
+${content.headline} · down for ${content.downFor}	
+${ui.headline} · ${ui.failedChecks} failed checks	
+Degraded above ${settings.defaultLatencySloMs} ms	
+Delivered. HTTP ${result.code} in ${result.ms} ms	
+Down for ${content.downFor} · ${content.headline}	
+Expires ${certDateFormat.format(Date(expiresAt))}	
+Removed $moved ${plural(moved)} from their groups	
+Showing ${report.components.size} of $total parts	
+${monitor.displayName} is answering normally again	
+${udp.expect.label.lowercase()} ${udp.expectValue}	
+${ui.headline} · down for ${downFor(ui.downForMs)}	
+Newest from ${it.from}: ${it.subjectOrPlaceholder}	
+} of ${seconds(plan.timeoutMs)} each, then a ping.	
+${ids.size} ${plural(ids.size)} muted for ${hours}h	
+${parsed.value.size} ${if (parsed.value.size == 1) 	
+Checked ${NightbellWidgetProvider.relative(newest)}	
+Couldn't reach ${settings.value.updateSource.label}	
+every release, ${state.totalCoversReleases} of them	
+ · slowest ${formatLatency(rolled.slowestLatencyMs)}	
+${part.displayName} ${part.status.label.lowercase()}	
+${stats.uptimeText} ${stats.uptimeScope.lowercase()}	
+${udp.payloadFormat.label} · ${udp.payload.take(40)}	
+Across $span, all $sent echo requests were answered.	
+Anything from ${range.first} to ${range.last}$suffix	
+Newest from ${it.from}: ${it.subjectOrPlaceholder}\n\n	
+${monitor.body.length} chars · ${monitor.contentType}	
+, slowest ${formatLatency(ok.maxOf { it.latencyMs })}	
+All ${monitors.size} monitors, and any you add later.	
+Last response ${formatLatency(runtime.lastLatencyMs)}	
+The check succeeded but took ${result.latencyMs} ms, 	
+down ${Outages.span(outage.durationMs(nowMs))} so far	
+${monitor.network.packets} per check, one second apart	
+Per-monitor health, $monitors: ${counted.joinToString(	
+Repeating every $repeatMinutes min until acknowledged.	
+${pagerReady.grantedCount} of ${pagerReady.total} ready	
+${problem.headline}. Open the monitor to sign in again.	
+${result.latencyMs} ms, back under the $sloMs ms budget	
+Checked ${formatRelative(runtime.lastCheckedAt, nowMs)}	
+${elements.size} element${if (elements.size == 1)  else 	
+Available at ${proxyEndpoint.host}:${proxyEndpoint.port}	
+Expired ${formatSpan(nowMs - runtime.certExpiresAt)} ago	
+The service checked it in ${part.durationMs.toLong()} ms	
+${megabytes(stage.received)} of ${megabytes(stage.total)}	
+No metric here matches "${viewModel.browseQuery.trim()}".	
+Started ${alertStartFormat.format(Date(alert.startedAt))}	
+$alreadyWatching element${if (alreadyWatching == 1)  else 	
+${viewModel.githubTokenRedacted} · 5,000 API calls an hour	
+Already grouped under ${target.leavingGroups.joinToString(	
+Check ${monitor.displayName} now, waiting for a connection	
+${content.headline} · ${content.failedChecks} failed checks	
+${family.label} address. Checked over ${family.label} only.	
+${monitor.assertion.mode.label} · ${monitor.assertion.value}	
+Across $span, $loss% of $sent echo requests went unanswered.	
+Raised when a monitor recovers (${sound.label.lowercase()}).	
+Re-alerts every ${policy.degradedRepeatEveryMinutes} minutes	
+Pinned to ${runtime.certPin}. A different key fails the check.	
+Style: ${policy.vibrationStyle.label} — tap a style to feel it	
+${monitor.network.packets} ${if (monitor.network.packets == 1) 	
+Re-alerts every ${policy.repeatEveryMinutes} minutes while down	
+${mail.cleanHost}:${mail.effectivePort} · ${mail.security.label}	
+Added ${ids.size} ${plural(ids.size)} to “${group.displayTitle}”	
+Already in “${target.leavingGroups.single()}”, moving out of it.	
+Reported ${health.label.lowercase()}. The report lists no parts.	
+UPTIME, PAST ${UptimeWindows.shortSpan(uptimeSpanMs).uppercase()}	
+Ignores blips: needs ${policy.failureThreshold} failures in a row.	
+Raised when a monitor starts failing (${sound.label.lowercase()}).	
+What's new in ${AppUpdate.releaseName(viewModel.installedVersion)}	
+0 is ${zeroLabel.lowercase()}, and the most is ${range.last}$suffix	
+Found ${c.host}, ${c.security.label} ${c.port}, ${c.source.reason}.	
+repeats every ${monitor.urgentRepeatMinutes} min until acknowledged	
+Checked ${formatRelative(runtime.lastCheckedAt, LocalNowMs.current)}	
+M${cx - r} $cy A$r $r 0 1 0 ${cx + r} $cy A$r $r 0 1 0 ${cx - r} $cy	
+Repeats every $repeatMinutes min while down until you acknowledge it	
+URGENT · repeats every ${content.repeatMinutes.coerceAtLeast(1)} min	
+$passed of ${shown.size} passed · every ${monitor.intervalMinutes} min	
+Removed $moved ${plural(moved)} from “${holders.single().displayTitle}”	
+Up when anything comes back. No answer after every try is down. $closed	
+${state.consecutiveErrors} checks in a row failed inside Nightbell itself	
+${watch.comparison.symbol} ${PrometheusWatch.formatValue(watch.threshold)}	
+and ${folders.size - FOLDERS_SHOWN} more. Type the name for one not shown.	
+single sign-on, ${monitor.health.grant.name.lowercase().replace('_', ' ')}	
+History starts here · ${row.facts.stars} stars, ${row.facts.openIssues} open	
+${dateFormat.format(Date(sample.at))} · ${timeFormat.format(Date(sample.at))}	
+Responded in ${formatLatency(runtime.lastLatencyMs)}, over its latency budget	
+Ungroup “${group.displayTitle}”? The ${members.size} ${if (members.size == 1) 	
+Takes up to ${seconds(plan.worstCaseMs)}: ${plan.tries} ${if (plan.tries == 1) 	
+the newest ${state.totalCoversReleases} releases, so the total is at least this	
+Every release here ships one kind of file, $only, so there is nothing to narrow.	
+$subtitle · ${dateFormat.format(Date(row.at))} ${timeFormat.format(Date(row.at))}	
+Not showing ${appUpdate.ignoredVersion}. A later version will still be announced.	
+$subject ${watch.comparison.symbol} ${PrometheusWatch.formatValue(watch.threshold)}	
+Sign in needed: ${report.auth.problem.headline.replaceFirstChar { it.lowercase() }}	
+This monitor only. Its ordinary ${draft.timeoutSeconds}s applies when routing is off.	
+, certificate expires in ${CertificateWatch.daysLeft(runtime.certExpiresAt, now)} days	
+ ${found.renamedFrom} answers too, but its certificate is for ${c.host}, so that is used.	
+At most ${config.maxRows}, however big the widget is. The rest are counted in the footer.	
+Stops paging while it stays ${part.status.label.lowercase()}. Any change pages you again.	
+Sound: ${policy.sound.label}\nHaptics: ${if (policy.vibrate) policy.vibrationStyle.label else 	
+Saving points the monitor here. The $alreadyWatching element${if (alreadyWatching == 1)  else 	
+Degraded when the server's clock and this phone's differ by more than ${udp.ntpMaxOffsetMs} ms.	
+${content.failedChecks} failed checks · repeats every ${content.repeatMinutes.coerceAtLeast(1)} min	
+$speakingCount of $monitorCount monitors speak. The switch is per monitor, under its alert settings.	
+Fixed at ${config.columns}. Columns still collapse if the widget is dragged too narrow to read them.	
+New messages that matched a mailbox monitor's alert senders or subjects (${sound.label.lowercase()}).	
+No reply yet. Each try waits up to ${seconds(plan.timeoutMs)}, and the first good one ends the check.	
+Up when the reply ${udp.expect.label.lowercase()} what is set above. Any other reply, or none, is down.	
+Line covering the last ${line.spanLabel}, ${line.markers.size} outage starts, ending at ${line.endLabel}	
+Android has to allow Nightbell to install apps before it can hand you $version. Turn it on, then come back.	
+That is an access token. It expires in $minutes minutes. Paste the refresh token, or use a fixed key in Headers.	
+Stays down until ${policy.recoveryThreshold} checks pass in a row, so a host that flaps does not page, clear and page again.	
+Re-checks every ${QuickRetry.GAP_MS / 1000}s after a failure, so it alerts about ${quickRetryLead(retries)} after the first failed check	
+Deleting “${monitor.displayName}” takes its history and its scheduled checks with it. There is an undo for a few seconds afterwards, and then it is gone.	
+The ${config.theme.label.lowercase()} preset is a fixed surface with known contrast. Choose Custom above to set your own background, text colour and transparency.	
+Using the ${viewModel.proxiedTimeoutSeconds}s default from Settings. A circuit to a hidden service takes far longer to build than a clearnet request takes to answer.	
+Re-checks every ${QuickRetry.GAP_MS / 1000}s once it answers again, so the all-clear comes about ${quickRetryLead(policy.recoveryThreshold - 1)} after the first good check	
+Last internal error: ${health.lastSignature}. This is a fault in Nightbell, not in the sites you are watching — their status is unchanged. It clears as soon as one check completes.	
+Up when every reply comes back. Degraded when some are lost, down when all ${draft.network.packets} are. They go out one second apart, and each waits for its reply up to the timeout.	
+Blank uses the shared ${shared.host}:${shared.port} from Settings. Fill these in only to send this monitor somewhere else, which is what watching a Tor service and an I2P one at the same time takes.	
+This sign-in belongs to the browser session it came from. Signing out there, or that session ending$until, signs Nightbell out. If the provider rotates tokens, Nightbell's first refresh also ends the browser's copy.	

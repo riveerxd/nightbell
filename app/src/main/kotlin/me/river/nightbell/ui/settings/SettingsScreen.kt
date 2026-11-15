@@ -72,7 +72,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Text
+import me.river.nightbell.ui.i18n.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -103,6 +103,7 @@ import me.river.nightbell.domain.PauseScope
 import me.river.nightbell.domain.ProxyRoute
 import me.river.nightbell.domain.ConnectivityReference
 import me.river.nightbell.domain.GitHubWatch
+import me.river.nightbell.domain.LanguageChoice
 import me.river.nightbell.domain.ThemeChoice
 import me.river.nightbell.domain.UpdateSource
 import me.river.nightbell.ui.update.UpdateActions
@@ -133,6 +134,7 @@ import me.river.nightbell.ui.components.HoldToConfirmButton
 import me.river.nightbell.data.alerts.PageSpeaker
 import me.river.nightbell.domain.SpokenPage
 import me.river.nightbell.ui.icons.NightbellIcons
+import me.river.nightbell.ui.i18n.L10n
 import me.river.nightbell.ui.rememberSettingsViewModel
 import me.river.nightbell.ui.theme.Backdrop
 import me.river.nightbell.ui.theme.LocalNightbellMotion
@@ -157,6 +159,8 @@ fun SettingsScreen(
     onOpenPagerSetup: () -> Unit = {},
     /** Null opens a new one. */
     onOpenWebhook: (String?) -> Unit = {},
+    onOpenCapture: () -> Unit = {},
+    onOpenNetwork: () -> Unit = {},
 ) {
     val viewModel = rememberSettingsViewModel()
     val webhookRows by viewModel.webhookRows.collectAsStateWithLifecycle()
@@ -889,6 +893,57 @@ fun SettingsScreen(
             }
     }
     val checksItems: LazyListScope.() -> Unit = {
+            item(key = "interface-capture") {
+                StaggeredEntrance(index = 0, key = "interface-capture", log = entrance) {
+                    GlassCard(onClick = onOpenCapture) {
+                        SectionHeader(
+                            "Interface capture",
+                            icon = NightbellIcons.Radar,
+                            accent = NightbellColors.Aqua,
+                        )
+                        Text(
+                            text = "Discover the API endpoints your phone calls, then pick which ones to test or monitor.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NightbellColors.TextSecondary,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        NightbellButton(
+                            text = "Open capture",
+                            onClick = onOpenCapture,
+                            icon = NightbellIcons.Play,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+            }
+
+            item(key = "network-info") {
+                StaggeredEntrance(index = 0, key = "network-info", log = entrance) {
+                    GlassCard(onClick = onOpenNetwork) {
+                        SectionHeader(
+                            L10n.pick("NETWORK INFO", "网络信息"),
+                            icon = NightbellIcons.Globe,
+                            accent = NightbellColors.Sky,
+                        )
+                        Text(
+                            text = L10n.pick(
+                                "See the current connection: local IPs, DNS, gateway, Wi-Fi and cellular signal, bandwidth and traffic.",
+                                "查看当前连接：本机 IP、DNS、网关、Wi-Fi 与蜂窝信号、带宽和流量。",
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NightbellColors.TextSecondary,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        NightbellButton(
+                            text = L10n.pick("Open network info", "查看网络信息"),
+                            onClick = onOpenNetwork,
+                            icon = NightbellIcons.Globe,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+            }
+
             item(key = "scheduling") {
                 StaggeredEntrance(index = 0, key = "scheduling", log = entrance) {
                     GlassCard {
@@ -1320,6 +1375,35 @@ fun SettingsScreen(
             }
     }
     val lookItems: LazyListScope.() -> Unit = {
+            item(key = "language") {
+                StaggeredEntrance(index = 4, key = "language", log = entrance) {
+                    GlassCard {
+                        SectionHeader("Language", icon = NightbellIcons.Globe, accent = NightbellColors.Aqua)
+                        Text(
+                            text = "Pick the language Nightbell uses. Follow system tracks the phone; the switch takes effect immediately and travels with your backups.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NightbellColors.TextTertiary,
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        SegmentedSelector(
+                            options = LanguageChoice.entries.toList(),
+                            selected = settings.language,
+                            // updateText, not update: a language choice changes no
+                            // schedule, so rebuilding every monitor's work request
+                            // and clearing checker health would be pure collateral.
+                            onSelect = { choice -> viewModel.updateText { it.copy(language = choice) } },
+                            label = { choice ->
+                                when (choice) {
+                                    LanguageChoice.SYSTEM -> L10n.pick("System", "跟随系统")
+                                    LanguageChoice.ZH -> "中文"
+                                    LanguageChoice.EN -> "English"
+                                }
+                            },
+                            modifier = Modifier.testTag("language-selector"),
+                        )
+                    }
+                }
+            }
             item(key = "appearance") {
                 StaggeredEntrance(index = 0, key = "appearance", log = entrance) {
                     GlassCard {
@@ -1438,6 +1522,7 @@ fun SettingsScreen(
                     )
                 }
             }
+
     }
     val aboutItems: LazyListScope.() -> Unit = {
             item(key = "updates") {

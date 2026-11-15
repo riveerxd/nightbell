@@ -229,7 +229,11 @@ class MonitorScheduler(private val context: Context) {
             return
         }
         clearIfDead(periodicName(monitor.id))
-        val minutes = monitor.intervalMinutes.toLong().coerceAtLeast(MIN_PERIODIC_MINUTES)
+        // A sub-minute monitor lands on the 15-minute floor here. That is not a
+        // lost cadence: NightbellMonitorService's fast loop holds it, and this
+        // periodic work stays armed as the repair sweep if that service is
+        // killed. WorkManager simply cannot express an interval this short.
+        val minutes = (monitor.intervalMs / 60_000L).coerceAtLeast(MIN_PERIODIC_MINUTES)
         val request = PeriodicWorkRequestBuilder<MonitorWorker>(minutes, TimeUnit.MINUTES)
             .setInputData(workDataOf(MonitorWorker.KEY_MONITOR_ID to monitor.id))
             .setConstraints(constraints(settings))

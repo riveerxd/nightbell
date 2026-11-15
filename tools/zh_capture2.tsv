@@ -1,0 +1,40 @@
+﻿HTTPS decryption	HTTPS 解密
+HTTPS DECRYPTION	HTTPS 解密
+Request log	请求日志
+REQUEST LOG	请求日志
+Interfaces	接口列表
+INTERFACES	接口列表
+Logs	日志
+LOGS	日志
+Install root CA	安装根证书
+INSTALL ROOT CA	安装根证书
+Export PEM	导出证书
+EXPORT PEM	导出证书
+Export root CA	导出根证书
+Install	安装
+Export	导出
+Decrypt HTTPS for the hosts below	仅对下列主机解密 HTTPS
+CA SHA-256	根证书 SHA-256
+Back to interfaces	返回接口列表
+Clear current list	清空当前列表
+Request	请求
+Response	响应
+REQUEST HEADERS	请求头
+REQUEST BODY	请求体
+RESPONSE HEADERS	响应头
+RESPONSE BODY	响应体
+ERROR	错误
+captured · HTTPS decrypted	抓包 · HTTPS 已解密
+captured · plain HTTP	抓包 · 明文 HTTP
+monitor first check	监控首次检测
+manual test	手动测试
+no response	无响应
+TLS decrypted · full request visible	已解密 TLS · 完整请求可见
+TLS only — add the host to the allowlist to see the request	仅 TLS — 把主机加入白名单即可看到完整请求
+Tested	已测试
+Added	已创建
+Saved as a disabled monitor; no request was replayed	已保存为停用监控，未重放请求
+No result returned	未返回结果
+Could not open the certificate installer	无法打开证书安装界面
+Could not export	导出失败
+Kept only in this app's private storage	仅保存在本 App 私有目录

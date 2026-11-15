@@ -1,0 +1,112 @@
+﻿# 新建监控向导第 1 步：MonitorKind.label / blurb。
+# 这些字符串定义在 when 分支里（不是 text = "..." 赋值），gen_zh.py 的字段扫描
+# 抓不到，必须手工登记。文件名带 z 是为了排在其它 zh_*.tsv 之后，避免被覆盖。
+Status check	状态检查
+Request & response	请求与响应
+Page element	页面元素
+GitHub repo	GitHub 仓库
+Prometheus	Prometheus 监控
+Health endpoint	健康检查接口
+Ping	Ping 探测
+TCP port	TCP 端口
+UDP port	UDP 端口
+Mailbox	邮箱收件箱
+Made by a newer Nightbell	由更新版本的 Nightbell 创建
+Ping a URL and expect a status code.	请求 URL 并校验返回状态码。
+Send a crafted request, assert on what comes back.	自定义请求内容，并断言返回结果。
+Watch one element on a real rendered page.	监听真实渲染页面中的某个元素。
+Stars, issues, comments and releases on one repository.	跟踪单个仓库的 Star、Issue、评论与版本发布。
+Scrape metrics, run PromQL, or watch Alertmanager.	抓取指标、执行 PromQL，或监听 Alertmanager 告警。
+Read what a service says about each of its parts.	读取服务各组件上报的健康状态。
+ICMP echo to an IPv4 or IPv6 host. Latency and packet loss.	向 IPv4 / IPv6 主机发送 ICMP 回显，统计延迟与丢包。
+Connect to one port and hang up. No HTTP needed.	连接指定端口后立即断开，无需 HTTP。
+Send one datagram and check the reply. For DNS, NTP, game servers and more.	发送一个数据报并检查应答，适用于 DNS、NTP、游戏服务器等。
+New mail in an IMAP inbox. Alert on the senders that matter.	检查 IMAP 邮箱新邮件，可按重要发件人告警。
+Update Nightbell to check this monitor.	请升级 Nightbell 后再检查此监控。
+
+# 秒级检查间隔新增文案
+Seconds	秒
+Minutes	分钟
+Interval must be at least 1 second	检查间隔至少为 1 秒
+Sub-15-minute checks run from a foreground service; a one-second cadence uses more battery	低于 15 分钟的检查由前台服务执行；1 秒间隔会明显增加耗电
+A sub-minute interval is held by a foreground service. One second is useful on a LAN endpoint and costs noticeably more battery.	秒级间隔由前台服务常驻维持。1 秒适合内网接口测试，耗电会明显增加。
+This kind of check stays on a minute-scale interval: each run is expensive enough that a one-second cadence would be rate-limited.	此类监控保持分钟级间隔：每次检查成本较高，1 秒频率会触发限流。
+
+# 以下由脚本从源码 SectionHeader("...") 自动派生：SectionHeader 会把标题
+# uppercase() 后再交给 Text，所以每个分组标题还需要一条全大写词条。
+ABOUT	关于
+ADDRESS FAMILY	地址族
+ALERT PERMISSIONS	告警权限
+ALERTS	告警
+APPEARANCE	外观
+BACKGROUND CHECKS	后台检查
+BACKUP AND TRANSFER	备份与迁移
+CADENCE	频率
+CERTIFICATE	证书
+CHECKER HEALTH	检查器健康状态
+COLOURS	颜色
+CONFIGURATION	配置
+CONTENT	监控内容
+DEFAULT ALERT POLICY	默认告警策略
+DIAGNOSTIC LOG	诊断日志
+DOWNLOADS	下载
+ECHO REPLIES	回显应答
+ECHO REQUESTS	回显请求
+ESCALATION	告警升级
+GITHUB	GitHub 仓库监控
+HAPTICS	触感反馈
+HEADERS AND SIGNING	请求头与签名
+HEALTHY WHILE IT	在线期间视为健康
+HEALTHY WHILE THE VALUE IS	当该值满足条件时视为健康
+HELP	帮助
+HOME-SCREEN WIDGETS	主屏幕小组件
+HOW IT BEHAVES	运行行为
+ISSUES	Issue 列表
+LANGUAGE	语言
+LATENCY	延迟
+LATENCY BUDGET	延迟预算
+LIVE CARD	实时卡片
+LOOK	外观样式
+MOTION	动效
+NEW MAIL	新邮件
+NIGHTBELL UPDATES	Nightbell 更新
+ORDER	排序
+OUTAGES	服务中断
+PAUSE BUTTON	暂停按钮
+PREVIEW	预览
+PROBE	探测设置
+PROVIDER	服务商
+QUIET HOURS	免打扰时段
+RELEASES	版本发布
+REPLY	应答设置
+REPORT	健康报告
+REPOSITORY	仓库
+REQUEST	请求
+RESPONSE BODY	响应体
+RESPONSE TIME	响应时间
+SOCKS5 PROXY	SOCKS5 代理
+SERVER	服务器
+SHOW	显示内容
+SIGN IN	登录
+SIGN-IN	登录
+SITE ICONS	站点图标
+SOUND	声音
+SOURCE	数据来源
+SPOKEN ALERTS	语音播报告警
+STARS	星标
+STATUS CODE	状态码
+STORED SIGNATURE	已存储的签名
+STRICT CADENCE	严格检查节奏
+TLS CERTIFICATE	TLS 证书
+TLS CERTIFICATES	TLS 证书
+THE QUERY	该查询
+THE REQUEST	该请求
+THE SERIES TO READ	要读取的序列
+THIS HOST	此主机
+TRIES	尝试次数
+TRY IT	试一试
+WEBHOOKS	Webhook
+WHAT COUNTS AS A PAGE	什么算作一次寻呼
+WHAT TO SEND	发送内容
+WHERE IT GOES	发送目标
+WHICH MONITORS	哪些监控

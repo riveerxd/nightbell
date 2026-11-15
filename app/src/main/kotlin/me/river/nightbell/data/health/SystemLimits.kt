@@ -50,6 +50,7 @@ class SystemLimits(
             MonitorCadence(
                 intervalMinutes = monitor.intervalMinutes,
                 ageMs = (nowMs - last).coerceAtLeast(0L),
+                intervalMs = monitor.intervalMs,
             )
         }
         return CheckerFacts(

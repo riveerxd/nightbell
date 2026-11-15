@@ -3,6 +3,15 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!--
+        Network info page. ACCESS_WIFI_STATE is a normal permission (RSSI, link
+        speed, frequency). ACCESS_FINE_LOCATION is requested at runtime, only
+        when the user asks for the extra detail: Android 8+ withholds the SSID,
+        BSSID and cellular SignalStrength without it, but every other field on
+        the page works without any prompt.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
@@ -194,6 +203,26 @@
                 android:value="Shows the user what an URGENT outage page will look and sound like before they have to trust it with a real outage." />
         </service>
 
+        <!--
+            Interface capture. BIND_VPN_SERVICE is what lets the system hand the
+            app a TUN interface after the user grants VPN consent in
+            VpnService.prepare(). No user traffic is routed into that interface:
+            it exists so Android 10+ can announce a system HTTP proxy pointing at
+            Nightbell's own loopback proxy, which is where requests are read.
+        -->
+        <service
+            android:name=".data.capture.CaptureVpnService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VPN_SERVICE"
+            android:foregroundServiceType="specialUse">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Runs a local, on-device HTTP proxy so the user can discover the API endpoints their phone calls and turn them into uptime monitors. An optional, user-installed local CA decrypts only the hosts the user explicitly names. No traffic is sent off the device." />
+        </service>
+
         <receiver
             android:name=".data.alerts.AlertActionReceiver"
             android:exported="false">
@@ -230,5 +259,21 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_nightbell_info" />
         </receiver>
+
+        <!--
+            Shares the public capture CA certificate (PEM, no private key) so it
+            can be installed by hand on ROMs where the certificate installer
+            intent is unavailable. The authority follows applicationId so the
+            debug build can coexist with the release build.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.capturefiles"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/capture_file_paths" />
+        </provider>
     </application>
 </manifest>

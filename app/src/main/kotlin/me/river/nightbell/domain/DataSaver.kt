@@ -127,7 +127,7 @@ object DataSaver {
 
     /** (off, on) bytes a month for one monitor, each null until it has been measured. */
     internal fun perMonth(monitor: Monitor, runtime: MonitorRuntime): Pair<Long?, Long?> {
-        val checks = MONTH_DAYS * DAY_MS / (monitor.intervalMinutes.coerceAtLeast(1) * 60_000L)
+        val checks = MONTH_DAYS * DAY_MS / monitor.intervalMs
         val full = runtime.bytesFull.takeIf { it > 0L }
         val saver = runtime.bytesSaver.takeIf { it > 0L }
         // A ping or a bare connection is a few hundred bytes the platform may not

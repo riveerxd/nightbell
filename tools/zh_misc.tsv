@@ -1,0 +1,21 @@
+﻿# 补齐剩余常用标签；示例值、协议名、动画 key、专有名词刻意保留英文
+Chat ID	聊天 ID
+Create a GitHub token	创建 GitHub 令牌
+Export	导出
+Install a voice	安装语音引擎
+Label filter	标签筛选
+Password	密码
+Personal access token	个人访问令牌
+Save token	保存令牌
+Username	用户名
+stars	星标
+uptime	在线率
+What counts as up	判定为正常的条件
+Alert permissions	告警权限
+Open Nightbell	打开 Nightbell
+Open	打开
+Send	发送
+Close	关闭
+Optional	可选
+Language	语言
+Pick the language Nightbell uses. Follow system tracks the phone; the switch takes effect immediately and travels with your backups.	选择 Nightbell 使用的语言。「跟随系统」跟随手机设置，切换立即生效，并会随备份一起导出。

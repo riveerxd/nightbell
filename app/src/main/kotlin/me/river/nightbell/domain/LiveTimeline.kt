@@ -502,9 +502,9 @@ object LiveTimeline {
         runtimes: Map<String, MonitorRuntime>,
         nowMs: Long,
     ): Pacing {
-        val pacer = active.minWithOrNull(compareBy({ it.intervalMinutes }, { it.id }))
+        val pacer = active.minWithOrNull(compareBy({ it.intervalMs }, { it.id }))
             ?: return Pacing(waitMs = 0L, intervalMs = 60_000L)
-        val intervalMs = pacer.intervalMinutes.coerceAtLeast(1) * 60_000L
+        val intervalMs = pacer.intervalMs
         val last = runtimes[pacer.id]?.lastCheckedAt ?: 0L
         // Never checked, or a stamp in the future because the wall clock moved
         // backwards: due now, same as DueCheck decides.

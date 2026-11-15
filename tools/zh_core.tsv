@@ -1,0 +1,232 @@
+﻿# 核心界面：按钮、标签、状态、内网接口配置、告警
+Cancel	取消
+Settings	设置
+Back	返回
+Save	保存
+Delete	删除
+Add	添加
+Edit	编辑
+Close	关闭
+Continue	继续
+Clear	清除
+Show all	显示全部
+Select all	全选
+Search	搜索
+Search monitors	搜索监控
+Filter and sort	筛选与排序
+Clear search	清除搜索
+Close panel	关闭面板
+Leave selection mode	退出多选
+Not now	稍后
+Replace	替换
+Replace picture	更换图片
+Keep it	保留
+Keep editing	继续编辑
+Discard	放弃
+Upload	上传
+Upload a picture	上传图片
+Change	更改
+Try again	重试
+Send	发送
+Open	打开
+Open Nightbell	打开 Nightbell
+Optional	可选
+Active	启用
+Title	标题
+Name	名称
+Nickname	备注名
+Value	值
+From	从
+To	至
+Until	直到
+Body	请求体
+Filter	过滤
+Metric	指标
+Threshold	阈值
+Host	主机
+Port	端口
+URL	URL
+Headers	请求头
+Add header	添加请求头
+Header name	请求头名称
+Content type	内容类型
+Authorization	授权
+Expected code	期望状态码
+Expected text	期望文本
+JSON path	JSON 路径
+Case sensitive	区分大小写
+Check every	检查间隔
+Follow redirects	跟随重定向
+Custom latency budget	自定义延迟预算
+Use my global alert settings	使用我的全局告警设置
+Watch certificate expiry	监控证书到期
+Route through SOCKS5	通过 SOCKS5 代理
+Proxy host for this monitor	此监控的代理主机
+Timeout when routed	走代理时的超时
+URGENT	紧急
+Request body	请求体
+Enter a valid URL first.	请先输入有效的 URL。
+Compare an attribute instead (optional)	改为比较属性（可选）
+A response slower than this is DEGRADED — up, but not well. Turn on latency alerts under Alerts to hear about it.	响应慢于此值即为「性能下降」：服务还在，但状态不好。在「告警」里开启延迟告警后才会收到提醒。
+Every element has to match. One mismatch marks the whole monitor down, and the alert names the first thing that broke.	所有元素都必须匹配。任一不符即判定该监控故障，告警会指出第一处出错的元素。
+Go back a step and capture at least one element first.	请返回上一步，先抓取至少一个元素。
+No custom headers. Nightbell always sends a descriptive User-Agent.	暂无自定义请求头。Nightbell 始终会发送带有说明信息的 User-Agent。
+Checks try id → CSS → XPath → text fingerprint, in that order, so small markup changes won't false-alarm.	检查按 id → CSS → XPath → 文本指纹的顺序尝试，页面结构的小改动不会误报。
+This URL is http, and \"Follow redirects\" is on, so the server can send the check to https and its certificate will be judged by this setting.	此 URL 是 http，且已开启「跟随重定向」，服务端可能把检查重定向到 https，此时证书会按本设置判定。
+Pick the kind of check. You can change everything later.	选择检查类型，之后随时可以修改。
+Cancel setup	取消创建
+Start from scratch	从头开始
+Watch something	添加监控
+Add a monitor	添加监控
+Nothing here	暂无内容
+Resume monitoring	恢复监控
+Pause monitoring	暂停监控
+Edit monitor	编辑监控
+Monitor not found	找不到该监控
+It may have been deleted from another screen.	它可能已在其他页面被删除。
+Average	平均
+Checks	检查
+Every check	每次检查
+Activity	活动
+Hold to delete this monitor	长按删除此监控
+No checks recorded yet. Run one now to start the history.	暂无检查记录，立即运行一次即可开始记录。
+Not checked yet	尚未检查
+Rate limited	被限流
+Nothing recorded yet	暂无记录
+Nothing recorded yet.	暂无记录。
+Nothing here	暂无监控
+Urgent	紧急
+Urgent alert active	紧急告警进行中
+I've got it, acknowledge	我知道了，确认
+The monitor stays down until it recovers. Acknowledging only stops the repeats for this outage. The next one will shout again.	监控会一直保持故障状态直到恢复。确认只是停止本次故障的重复提醒，下次故障仍会告警。
+Trust the new key	信任新密钥
+Posts to	推送到
+Open repo	打开仓库
+Latest issue	最新 issue
+Latest release	最新版本
+Mark seen	标记已读
+Mute 24h	静音 24 小时
+Mute 1h	静音 1 小时
+Muted	已静音
+Open webmail	打开网页邮箱
+Add a check on this host	为此主机添加检查
+Sign in needed	需要登录
+Alert	告警
+Unread	未读
+In folder	文件夹内
+Last arrival	最近到达
+Arrived since watching	开始监控后到达
+Every client that verifies certificates is refusing this connection. A check that still passes is checking something that stopped being trustworthy.	所有校验证书的客户端都在拒绝此连接。若检查仍然通过，说明它检查的对象已经不再可信。
+Every new star	每颗新星
+New issues	新 issue
+Pull requests	合并请求
+New comments	新评论
+Comments from bots	机器人的评论
+New releases	新版本
+Include prereleases	包含预发布
+Count downloads	统计下载量
+Any increase	任意增长
+Round numbers	整百整千
+Milestones	里程碑
+Watch the star count	监控 star 数
+Repository	仓库
+Tell me when it moves	有变化时通知我
+Only these files (optional)	仅统计这些文件（可选）
+Never from (optional)	排除这些账号（可选）
+Only if it mentions (optional)	仅当提到（可选）
+Only from (optional)	仅来自（可选）
+Browse this endpoint	浏览此接口
+Close the metric list	关闭指标列表
+Reading the endpoint…	正在读取接口…
+Healthy while	判定健康的条件
+What this endpoint exposes	此接口暴露的内容
+Close sign-in	关闭登录
+Reading what this repository ships...	正在读取此仓库发布的文件…
+Count silenced alerts	统计已静音的告警
+Count inhibited alerts	统计被抑制的告警
+The lowest severity worth waking you. Anything at or above it fails this monitor.	值得叫醒你的最低严重级别。等于或高于此级别即判定该监控故障。
+Acknowledge	确认
+Acknowledge urgent alert	确认紧急告警
+Re-check now	立即重新检查
+Alerts for this monitor	此监控的告警
+Notify when it goes down	故障时通知
+Notify when it recovers	恢复时通知
+The main event	主要事件
+A quiet all-clear once it's healthy again	恢复健康后发一条安静的通知
+Notify when it goes slow	变慢时通知
+Notify when it speeds up again	恢复速度时通知
+All-clear when latency drops back under budget	延迟回到预算内时通知恢复
+Latency cooldown	延迟冷却时间
+Keep reminding me it's slow	变慢时持续提醒
+Say it out loud	语音播报
+Vibrate	震动
+Failures before alerting	告警前的失败次数
+Passes before all-clear	判定恢复前的成功次数
+Retry right away	立即重试
+Cooldown	冷却时间
+Minimum gap between two alerts for the same monitor.	同一监控两次告警之间的最小间隔。
+Keep reminding me	持续提醒我
+Silence overnight	夜间静音
+Still notify, but silently	仍发通知，但不响铃
+Posts the alert with no sound or vibration	发送无声音、无震动的告警
+Send a test alert	发送测试告警
+Repeat every	每隔
+Page me again	再次呼叫我
+Mark expected	标记为预期
+Degraded above	变慢阈值
+Widget	小组件
+Theme	主题
+Density	密度
+Background	背景
+Text	文字
+Background opacity	背景不透明度
+Logo	图标
+App name	应用名称
+Fleet summary	总览
+Settings button	设置按钮
+Last checked	上次检查
+Only show problems	仅显示异常
+Columns	列数
+Monitors	监控
+Group icon	分组图标
+Edit group	编辑分组
+Add to group	加入分组
+New group instead	改为新建分组
+Ungroup	取消分组
+Your picture	你的图片
+Use your own picture	使用自己的图片
+Site address	站点地址
+Keep the saved one	保留已保存的
+Close without saving	不保存并关闭
+Close preview	关闭预览
+Reload page	重新加载页面
+Back to setup	返回设置向导
+Select mode	选择模式
+Send from this webhook	从此 Webhook 发送
+Follow this phone's quiet hours and mute	遵循本机的免打扰与静音设置
+Accept any certificate	接受任意证书
+Send through the SOCKS5 proxy	通过 SOCKS5 代理发送
+Header name	请求头名称
+Signing secret	签名密钥
+Send webhooks	发送 Webhook
+Add a webhook	添加 Webhook
+Sign messages as	签名方式
+Hold to delete this webhook	长按删除此 Webhook
+TAP TO ADD	点按添加
+TAP TO ADD A PLACEHOLDER	点按添加占位符
+VOICE	语音
+PERMISSIONS TO TICK	需要勾选的权限
+WHAT TO COUNT	统计内容
+HOW OFTEN TO COUNT	统计频率
+FILES THIS REPOSITORY SHIPS	此仓库发布的文件
+SUMMARISE INSTEAD	改为汇总
+OR HOLD THEM AND SEND ONE LINE	或合并后只发一条
+NIGHTBELL	NIGHTBELL
+Preview · Nightbell	预览 · Nightbell
+Resume checks	恢复检查
+Alert permissions	告警权限
+What's new	更新内容
+What Android allows	Android 允许的范围
+Open notification settings	打开通知设置
+Exempt Nightbell from battery optimisation	将 Nightbell 加入电池优化白名单
+Engine default	引擎默认

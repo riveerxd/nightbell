@@ -33,7 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.material3.Text
+import me.river.nightbell.ui.i18n.Text
 import me.river.nightbell.domain.Health
 import me.river.nightbell.domain.MonitorCard
 import me.river.nightbell.domain.PauseScope

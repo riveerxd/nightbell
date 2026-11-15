@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Strict monitoring: a foreground service that keeps its own cadence instead of
@@ -149,6 +150,7 @@ class NightbellMonitorService : Service() {
 
         if (loop == null) {
             loop = scope.launch { runLoop() }
+            scope.launch { runFastLoop() }
             watcher = scope.launch { watchLiveCard() }
         } else {
             wake()
@@ -170,7 +172,12 @@ class NightbellMonitorService : Service() {
             // notification claiming the fleet was being watched, which is the one
             // lie a monitoring app cannot afford. Resuming starts it again, the
             // same way enabling a monitor does.
-            val strict = snapshot.settings.strictForegroundMonitoring &&
+            // A sub-minute monitor cannot be held by WorkManager's 15-minute
+            // floor, so it earns the foreground service on its own whether or
+            // not the global strict switch is on. Otherwise "every second" would
+            // be a promise the app could not keep.
+            val fast = snapshot.monitors.any { it.enabled && it.isSubMinute }
+            val strict = (snapshot.settings.strictForegroundMonitoring || fast) &&
                 snapshot.monitors.any { it.enabled } &&
                 !snapshot.pause.stopsChecks(System.currentTimeMillis())
             val nagging = snapshot.monitors.any { monitor ->
@@ -197,7 +204,10 @@ class NightbellMonitorService : Service() {
                 LogField.of("strict", strict),
                 LogField.of("paging", isPaging()),
             )
-            if (strict) {
+            // With a sub-minute monitor in the fleet the fast loop owns the due
+            // pass. Running it here too would double-check the same monitor on
+            // the ticks where both loops land together.
+            if (strict && !fast) {
                 runCatchingCancellable { graph.engine.runAllDue() }
                     .onFailure { Diag.logError(LogEvent.CHECK_FAILED, it, LogField.tag("at", "service_pass")) }
             }
@@ -306,6 +316,67 @@ class NightbellMonitorService : Service() {
             val delayMs = runCatchingCancellable { graph.engine.nextWakeDelayMs() }
                 .getOrDefault(CheckEngine_MIN_TICK)
             sleepUnlessWoken(delayMs)
+        }
+    }
+
+    /**
+     * Holds sub-minute cadences.
+     *
+     * WorkManager's periodic floor is fifteen minutes, and the housekeeping loop
+     * above has to stay on its fifteen-second rhythm: posting the live
+     * notification or speaking a page once a second gets updates dropped by
+     * NotificationManager and burns the battery for no extra checks. So the
+     * checks get their own small loop — one due pass per fastest interval and
+     * nothing else. It re-reads the store on every pass, so disabling the last
+     * sub-minute monitor, or pausing checks, puts it straight back to sleep.
+     */
+    private suspend fun runFastLoop() {
+        val graph = Nightbell.install(applicationContext)
+        // Fixed-rate tick. Sleeping *after* the pass added the pass duration to
+        // the interval: a 1s monitor whose pass took 4s ran every 5s. Start the
+        // pass on an absolute tick instead, and drop a tick rather than queueing
+        // another pass while the previous one is still working. The engine's
+        // per-monitor mutex already prevents two checks of one monitor at once.
+        val passBusy = AtomicBoolean(false)
+        var nextTick = 0L
+        while (scope.isActive) {
+            val snapshot = runCatchingCancellable { graph.store.currentSnapshot() }.getOrNull()
+            val fastest = snapshot
+                ?.takeIf { !it.pause.stopsChecks(System.currentTimeMillis()) }
+                ?.monitors
+                ?.filter { it.runs && it.isSubMinute }
+                ?.minOfOrNull { it.intervalMs }
+            if (fastest == null) {
+                nextTick = 0L
+                delay(FAST_IDLE_MS)
+                continue
+            }
+            val tick = fastest.coerceAtLeast(1_000L)
+            val now = System.currentTimeMillis()
+            if (nextTick == 0L || now >= nextTick) {
+                nextTick = now + tick
+                if (passBusy.compareAndSet(false, true)) {
+                    scope.launch {
+                        try {
+                            // No external latency reference on the fast path: its
+                            // 4-second timeout is a whole cadence at 1s.
+                            runCatchingCancellable {
+                                graph.engine.runAllDue(refreshLatencyReference = false)
+                            }
+                                .onFailure {
+                                    Diag.logError(
+                                        LogEvent.CHECK_FAILED,
+                                        it,
+                                        LogField.tag("at", "fast_pass"),
+                                    )
+                                }
+                        } finally {
+                            passBusy.set(false)
+                        }
+                    }
+                }
+            }
+            delay((nextTick - System.currentTimeMillis()).coerceIn(1L, tick))
         }
     }
 
@@ -588,6 +659,9 @@ class NightbellMonitorService : Service() {
 
         /** Four posts a second at most, under the platform's five. */
         private const val MIN_NOTICE_GAP_MS = 250L
+
+        /** How often the fast loop looks for a sub-minute monitor when there is none. */
+        private const val FAST_IDLE_MS = 2_000L
         const val ACTION_SYNC = "me.river.nightbell.action.SERVICE_SYNC"
 
         /**
@@ -610,7 +684,11 @@ class NightbellMonitorService : Service() {
                 // the loop knowing about the pause, this went on starting the
                 // service through one: promote to the foreground, notice there is
                 // nothing to do, stop, and do it again on the next state change.
-                val strict = snapshot.settings.strictForegroundMonitoring &&
+                // Same rule as the loop, including the sub-minute fleet: a
+                // one-second monitor needs this service engaged even when the
+                // global strict switch is off.
+                val fast = snapshot.monitors.any { it.enabled && it.isSubMinute }
+                val strict = (snapshot.settings.strictForegroundMonitoring || fast) &&
                     snapshot.monitors.any { it.enabled } &&
                     !snapshot.pause.stopsChecks(System.currentTimeMillis())
                 val nagging = snapshot.monitors.any { monitor ->

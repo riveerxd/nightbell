@@ -1302,6 +1302,7 @@ class SetupViewModel(
             } else {
                 draft = draft.copy(
                     intervalMinutes = snapshot.settings.defaultIntervalMinutes,
+                    intervalSeconds = 0,
                     timeoutSeconds = snapshot.settings.defaultTimeoutSeconds,
                     latencySloMs = 0,
                     accent = snapshot.monitors.size,
@@ -1951,6 +1952,10 @@ class SetupViewModel(
 
             MonitorKind.UNSUPPORTED -> draft
         }
+        // A GitHub poll, a mailbox sign-in and a WebView render cannot survive a
+        // one-second cadence. Drop the sub-minute override when switching to one
+        // of them rather than carrying it over and quietly hammering the service.
+        if (!kind.supportsSubMinute) draft = draft.copy(intervalSeconds = 0)
         thresholdInput = PrometheusWatch.formatValue(draft.prometheus.threshold)
         followSecret(secretBefore)
         testResult = null

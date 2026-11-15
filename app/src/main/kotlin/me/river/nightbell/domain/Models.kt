@@ -147,6 +147,17 @@ enum class MonitorKind {
 
     /** Reaches a host directly rather than fetching a URL. See [NetworkWatch]. */
     val isNetwork: Boolean get() = this == PING || this == TCP_PORT || this == UDP_PORT
+
+    /**
+     * Whether this kind may be given a sub-minute interval. A GitHub poll spends
+     * up to four requests against a 60/hour anonymous budget, a mailbox check
+     * signs in every time, and a page-element check boots a WebView. A one-second
+     * cadence on any of those is an invitation to be throttled or locked out, so
+     * they stay on the minute scale even though the engine can run faster.
+     */
+    val supportsSubMinute: Boolean
+        get() = this != GITHUB_REPO && this != MAILBOX && this != WEBSITE_ELEMENT &&
+            this != UNSUPPORTED
 }
 
 @Serializable
@@ -701,6 +712,18 @@ data class Monitor(
     val timeoutSeconds: Int = 15,
     val intervalMinutes: Int = 15,
     /**
+     * A cadence measured in seconds. Zero means "use [intervalMinutes]", which
+     * is what every store written before sub-minute checks decodes to, so old
+     * backups keep their interval exactly. A positive value overrides
+     * [intervalMinutes] rather than adding to it: one number owns the cadence,
+     * and the two can never disagree about what the user asked for.
+     *
+     * Android's periodic work has a 15-minute floor, so a sub-minute monitor is
+     * driven by the foreground service loop instead; see
+     * `NightbellMonitorService` and `CheckEngine.FAST_TICK_MS`.
+     */
+    val intervalSeconds: Int = 0,
+    /**
      * Follow 3xx responses.
      *
      * On by default, and worth knowing that this is what can change a monitor's
@@ -875,6 +898,21 @@ data class Monitor(
 
     fun withTargets(list: List<ElementTarget>): Monitor =
         copy(elements = list, element = list.firstOrNull())
+
+    /**
+     * Effective cadence in milliseconds, whichever unit the user picked. Every
+     * due calculation, wake-up estimate and cadence display reads this, so a
+     * sub-minute monitor cannot quietly fall back to a minute somewhere.
+     */
+    val intervalMs: Long
+        get() = if (intervalSeconds > 0) {
+            intervalSeconds.coerceAtLeast(1) * 1000L
+        } else {
+            intervalMinutes.coerceAtLeast(1) * 60_000L
+        }
+
+    /** True when this monitor needs the fast foreground loop to hold its cadence. */
+    val isSubMinute: Boolean get() = intervalSeconds > 0
 
     /** Effective latency budget, or 0 when neither monitor nor global sets one. */
     fun sloMs(settings: GlobalSettings): Int =
@@ -1619,8 +1657,30 @@ enum class ThemeChoice {
         }
 }
 
+/**
+ * 应用内界面语言。独立于系统 locale，因为「跟随系统」是其中一个选项：
+ * 系统中文时想看英文、系统英文时想看中文，都不该要求改整个手机的设置。
+ *
+ * 持久化在 GlobalSettings 而不是单独一个 DataStore key，这样导出/导入备份
+ * 会带着这个偏好走，也跟 theme 的处理方式一致。带默认值，旧备份缺这个
+ * 字段时反序列化会补 SYSTEM，不需要迁移。
+ */
+@Serializable
+enum class LanguageChoice {
+    @SerialName("system")
+    SYSTEM,
+
+    @SerialName("zh")
+    ZH,
+
+    @SerialName("en")
+    EN,
+}
+
 @Serializable
 data class GlobalSettings(
+    /** See [LanguageChoice]. SYSTEM keeps the behaviour the app always had. */
+    val language: LanguageChoice = LanguageChoice.SYSTEM,
     val masterAlertsEnabled: Boolean = true,
     val defaultAlert: AlertPolicy = AlertPolicy(),
     val backgroundChecksEnabled: Boolean = true,

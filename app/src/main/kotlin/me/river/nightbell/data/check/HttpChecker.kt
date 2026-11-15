@@ -1,6 +1,7 @@
 package me.river.nightbell.data.check
 
 import me.river.nightbell.data.auth.ProviderHttp
+import me.river.nightbell.data.capture.readableBody
 import me.river.nightbell.data.diag.Diag
 import me.river.nightbell.domain.LogEvent
 import me.river.nightbell.domain.LogField
@@ -132,11 +133,19 @@ class HttpChecker(
         // rendezvous circuit, which says nothing about the monitored service, and
         // the ordinary 15s reads a perfectly healthy hidden service as down.
         val timeout = monitor.effectiveTimeoutSeconds(settings, proxied = endpoint != null)
+        // A sub-minute cadence cannot afford the ordinary "+5s" call budget or a
+        // replayed connection: with a 1s interval and a 1s timeout, six seconds
+        // plus a retry is exactly what turned "every second" into "every five
+        // seconds". Cap the whole call at the timeout the user chose; a stale
+        // keep-alive socket fails this pass and the next one is only a second away.
+        val subMinute = monitor.isSubMinute
+        val callBudgetSeconds = if (subMinute) timeout.toLong() else (timeout + 5).toLong()
         val builder = base.newBuilder()
             .connectTimeout(timeout.toLong(), TimeUnit.SECONDS)
             .readTimeout(timeout.toLong(), TimeUnit.SECONDS)
             .writeTimeout(timeout.toLong(), TimeUnit.SECONDS)
-            .callTimeout((timeout + 5).toLong(), TimeUnit.SECONDS)
+            .callTimeout(callBudgetSeconds, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(!subMinute)
             .followRedirects(monitor.followRedirects)
             .followSslRedirects(monitor.followRedirects)
             .apply { if (endpoint != null) proxy(socksProxy(endpoint)) }
@@ -177,7 +186,8 @@ class HttpChecker(
         }
         attempt(
             client, request, monitor, timeout, tlsSession,
-            retriesLeft = 1, pinnedTo = certPin, previewChars = previewChars,
+            retriesLeft = if (subMinute) 0 else 1,
+            pinnedTo = certPin, previewChars = previewChars,
         )
     }
 
@@ -373,8 +383,16 @@ class HttpChecker(
         // PrometheusCheck.requestUrl for why the path is this app's business.
         val url = if (prometheus) PrometheusCheck.requestUrl(monitor) else monitor.url.trim()
         val builder = Request.Builder().url(url)
+        // A monitor created from a captured request inherits its headers. If the
+        // captured client asked for gzip/br itself, OkHttp stops doing transparent
+        // gunzip: byteStream() then hands us compressed bytes, and decoding those
+        // as UTF-8 is exactly the "response is gibberish" seen in per-second logs.
+        // Hop-by-hop and framing headers are the old connection's, not ours.
         monitor.headers.filterNot { it.isBlank }.forEach { header ->
-            builder.header(header.name.trim(), header.value.trim())
+            val name = header.name.trim()
+            if (name.lowercase() !in REPLAY_SKIP_HEADERS) {
+                builder.header(name, header.value.trim())
+            }
         }
         if (monitor.headers.none { it.name.equals("User-Agent", true) }) {
             builder.header("User-Agent", USER_AGENT)
@@ -452,7 +470,10 @@ class HttpChecker(
             try {
                 builder.build().newCall(call).execute().use { response ->
                     val bytes = readBoundedBytes(response, PROVIDER_BODY_BYTES)
-                    ProviderHttp.Answer(response.code, bytes.toString(Charsets.UTF_8))
+                    ProviderHttp.Answer(
+                        response.code,
+                        readableBody(bytes, response.header("Content-Encoding"), PROVIDER_BODY_BYTES),
+                    )
                 }
             } catch (cancellation: CancellationException) {
                 throw cancellation
@@ -475,7 +496,9 @@ class HttpChecker(
     ): CheckResult {
         val bytes = readBoundedBytes(response, HealthFormat.MAX_BODY_BYTES + 1)
         val oversize = bytes.size > HealthFormat.MAX_BODY_BYTES
-        val body = if (oversize) "" else bytes.toString(Charsets.UTF_8)
+        val body = if (oversize) "" else readableBody(
+            bytes, response.header("Content-Encoding"), HealthFormat.MAX_BODY_BYTES,
+        )
         val reading = HealthFormat.parse(
             status = response.code,
             body = body,
@@ -537,7 +560,10 @@ class HttpChecker(
             out.write(buffer, 0, allowed)
             total += allowed
         }
-        return out.toString("UTF-8")
+        // Decode from the bytes, not from a String: gzip/br payloads and legacy
+        // GBK responses both become readable instead of a wall of replacement
+        // characters in the per-second request log.
+        return readableBody(out.toByteArray(), response.header("Content-Encoding"), MAX_BODY_BYTES)
     }
 
     /**
@@ -767,5 +793,12 @@ class HttpChecker(
         private const val PROVIDER_BODY_BYTES = 64 * 1024
         private const val MAX_PREVIEW = 4_000
         const val USER_AGENT = "NightbellMonitor/1.0 (Android)"
+
+        /** Headers belonging to the captured connection, never to a live check. */
+        private val REPLAY_SKIP_HEADERS = setOf(
+            "accept-encoding", "content-length", "transfer-encoding", "host",
+            "connection", "proxy-connection", "proxy-authorization", "keep-alive",
+            "te", "trailer", "upgrade", "expect",
+        )
     }
 }

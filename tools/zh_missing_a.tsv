@@ -1,0 +1,360 @@
+1 ms	1 ms
+Auto	自动
+Bell	铃铛
+Blue	蓝色
+Copy	复制
+Done	完成
+Down	宕机
+Drag	拖动
+Echo	回显
+Fork	复刻
+Grip	拖动柄
+Help	帮助
+Info	信息
+Link	链接
+Look	查看
+Mail	邮件
+Moon	月亮
+More	更多
+Move	移动
+Mute	静音
+None	无
+Play	播放
+Plug	插头
+Plus	加号
+Repo	仓库
+Show	显示
+Slow	缓慢
+Star	星标
+Type	类型
+Undo	撤销
+User	用户
+Wifi	Wifi
+About	关于
+Above	上方
+Again	再次
+Allow	允许
+Basic	基本
+Black	黑色
+Chart	图表
+Check	检查
+Clock	时钟
+Gauge	仪表
+Globe	地球
+Group	分组
+HH:mm	HH:mm
+Inbox	收件箱
+Order	顺序
+Pause	暂停
+Power	电源
+Probe	探测
+Query	查询
+Radar	雷达
+Redis	Redis
+Reply	应答
+Route	路由
+Sends	发送
+Sound	声音
+Stars	星标
+Trash	垃圾桶
+Tries	尝试次数
+White	白色
+XPath	XPath
+1 fork	1 个复刻
+1 hour	1 小时
+1 star	1 个星标
+2d ago	2 天前
+3h ago	3 小时前
+491 ms	491 ms
+4m ago	4 分钟前
+Alerts	告警
+Answer	应答
+Braces	花括号
+Client	客户端
+Create	创建
+Custom	自定义
+Direct	直连
+Equals	等于
+Failed	失败
+Funnel	漏斗
+GitHub	GitHub
+Hidden	已隐藏
+Import	导入
+Issues	问题
+Layers	图层
+Method	方法
+Motion	动效
+Pencil	铅笔
+PromQL	PromQL
+Report	报告
+Resume	恢复
+Series	序列
+Server	服务器
+Shield	盾牌
+Source	来源
+System	系统
+Target	目标
+Try it	试一试
+Volume	音量
+Window	窗口
+ else }	 否则 }
++1 more	还有 1 项
++3 more	还有 3 项
++8 more	还有 8 项
++n more	还有 n 项
+, muted	，已静音
+1240 ms	1240 ms
+4 hours	4 小时
+4100 ms	4100 ms
+999 min	999 min
+Account	账号
+Add to 	添加到 
+Android	Android
+Bedrock	Bedrock
+BellOff	铃铛关闭
+Cadence	频率
+Classes	类别
+Colours	颜色
+Comment	评论
+Compact	紧凑
+Content	内容
+Counted	已计数
+Decline	拒绝
+Down · 	宕机 · 
+Element	元素
+English	英语
+Expects	预期
+Failing	持续失败
+Fastest	最快
+Follows	遵循
+Granted	已授予
+Haptics	触感反馈
+Healthy	健康
+History	历史
+Install	安装
+Latency	延迟
+Mail · 	邮件 · 
+Move up	上移
+News · 	新闻 · 
+Offline	离线
+OpenVPN	OpenVPN
+Outages	服务中断
+Packets	数据包
+Pattern	模式
+Pointer	指针
+Preview	预览
+Refresh	刷新
+Request	请求
+Session	会话
+Sign-on	登录
+Sliders	滑块
+Slow · 	缓慢 · 
+Slowest	最慢
+Sparkle	闪光
+Storage	存储
+Timeout	超时
+Un-mute	取消静音
+Unacked	未确认
+Version	版本
+Warning	警告
+WifiOff	Wifi 关闭
+not now	暂不
+50 of 50	50 / 50
+59 stars	59 个星标
+Allowed.	已允许。
+Asks for	申请
+Checking	检查中
+Contents	内容
+Counting	计数中
+Datagram	数据报
+Degraded	降级
+Detailed	详细
+Download	下载
+Expanded	已展开
+HH:mm:ss	HH:mm:ss
+In stock	有货
+Interval	间隔
+My order	我的订单
+New mail	新邮件
+No match	无匹配
+Pick one	选一个
+Postgres	Postgres
+Problems	问题
+Provider	服务商
+Re-check	重新检查
+Releases	版本
+Requests	请求
+Selected	已选
+Severity	严重程度
+Silenced	已静音
+Test now	立即测试
+Use this	使用此项
+Watching	关注中
+Webhooks	Webhook
+it moved	它移动了
+just now	刚刚
+none yet	暂无
+0 percent	0%
+1 monitor	1 个监控
+A monitor	一个监控
+Announces	播报
+ArrowLeft	左箭头
+Check now	立即检查
+ChevronUp	向上箭头
+Collapsed	已折叠
+Downloads	下载
+Hex bytes	十六进制字节
+Inhibited	已抑制
+Installed	已安装
+IssueOpen	未关闭问题
+Last push	上次推送
+Live card	实时卡片
+Move down	下移
+Needs you	需要你处理
+New group	新建分组
+Nightbell	Nightbell
+Not equal	不等于
+One group	一个分组
+Only from	仅来自
+Only some	仅部分
+SortLines	排序
+The query	该查询
+This host	此主机
+VolumeOff	音量关闭
+WireGuard	WireGuard
+check all	全部检查
+check now	立即检查
+one group	一个分组
+open this	打开此项
+the value	该值
+which one	哪一个
+\nDown for 	\n已宕机 
+, expected	，预期为
+1 download	1 次下载
+1 selected	已选 1 项
+30 minutes	30 分钟
+Add widget	添加小组件
+Appearance	外观
+ArrowRight	右箭头
+Body check	正文检查
+Escalation	告警升级
+GitHub API	GitHub API
+Installing	安装中
+Nightbell 	Nightbell 
+No Content	无内容
+No preview	无预览
+Once a day	每天一次
+Other ways	其他方式
+Show fewer	显示更少
+Site icons	站点图标
+Watch page	关注页面
+d MMM yyyy	d MMM yyyy
+empty slot	空位
+new issues	新问题
+one column	单列
+open issue	未关闭的问题
+\nReminder #	\n提醒 #
+, group of 	，一组 
+, none lost	，无丢失
+.apk, *.aab	.apk, *.aab
+AlertCircle	警示圆圈
+All of them	全部
+Already in 	已在 
+Certificate	证书
+ChevronDown	向下箭头
+ChevronLeft	向左箭头
+Comments · 	评论 · 
+Down alerts	宕机告警
+Downloading	下载中
+IssueClosed	已关闭问题
+Last failed	上次失败
+Log cleared	日志已清空
+Marked seen	已标记为已读
+New comment	新评论
+New monitor	新建监控
+New webhook	新建 Webhook
+Not granted	未授予
+Operational	正常运行
+PageSpeaker	页面朗读
+Prereleases	预发布版本
+Quiet hours	免打扰时段
+Recovery · 	恢复 · 
+Star digest	星标汇总
+Status code	状态码
+The request	该请求
+UrgentAlarm	紧急告警
+Watching it	正在关注
+am I behind	我落后了吗
+d MMM HH:mm	d MMM HH:mm
+ff ff ff ff	ff ff ff ff
+first alert	首次告警
+no monitors	暂无监控
+no response	无响应
+open issues	未关闭的问题
+ · down for 	 · 已宕机 
++7 downloads	还有 7 次下载
+0 of 4 ready	0 / 4 就绪
+1 open issue	1 个未关闭的问题
+All releases	所有版本
+Already read	已读
+Another site	另一站点
+App password	应用密码
+Check failed	检查失败
+Check passed	检查通过
+ChevronRight	向右箭头
+Clock offset	时钟偏移
+Counted over	统计区间
+Create group	创建分组
+Echo replies	回显应答
+Edit webhook	编辑 Webhook
+Expectations	预期条件
+For how long	持续多久
+Last refresh	上次刷新
+Least recent	最早
+Mute · Group	静音 · 分组
+Not checking	未检查
+Not read yet	未读
+Not selected	未选
+Once an hour	每小时一次
+Pause button	暂停按钮
+Remind later	稍后提醒
+SOCKS5 proxy	SOCKS5 代理
+Save changes	保存更改
+Save webhook	保存 Webhook
+Show details	显示详情
+Skip for now	暂时跳过
+Status check	状态检查
+This release	此版本
+What to send	发送内容
+element text	元素文本
+rich ongoing	富文本常驻
+this account	此账号
+this monitor	此监控
+urgent below	下方紧急项
+} will speak	} 将播报
+ failed check	 次检查失败
+ is available	 可用
+305 downloads	305 次下载
+5432 Postgres	5432 Postgres
+Changes saved	更改已保存
+Check all now	立即全部检查
+Checks paused	检查已暂停
+Configuration	配置
+Echo requests	回显请求
+Every release	每个版本
+Expires today	今日到期
+Extra lively.	格外活跃。
+Footer hidden	页脚已隐藏
+Global policy	全局策略
+Group updated	分组已更新
+I've seen it.	我看过了。
+Last answered	上次应答
+Mail alert · 	邮件告警 · 
+Notifications	通知
+Open download	打开下载
+Paste a token	粘贴令牌
+Pause monitor	暂停监控
+Recent checks	最近检查
+Replace token	替换令牌
+Reply timeout	应答超时
+Response body	响应体

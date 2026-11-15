@@ -1,0 +1,15 @@
+﻿# 接口抓包（Interface capture）新增文案
+# SectionHeader 会先 uppercase 再交给 Text，所以分组标题需要大写条目
+Interface capture	接口抓包
+INTERFACE CAPTURE	接口抓包
+Capture	抓包
+CAPTURE	抓包
+What can be seen	抓取范围说明
+WHAT CAN BE SEEN	抓取范围说明
+Start capture	开启抓包
+Stop capture	停止抓包
+Open capture	打开抓包
+Filter by host or path	按域名或路径筛选
+Hide HTTPS (CONNECT) entries	隐藏 HTTPS (CONNECT) 条目
+Discover the API endpoints your phone calls, then pick which ones to test or monitor.	发现手机实际调用的接口，再勾选要测试或监控的接口。
+Clear captured list	清空抓取列表

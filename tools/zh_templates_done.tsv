@@ -1,0 +1,397 @@
+$ms ms	$ms ms
+over $it	超过 $it
+Set $title	设置 $title
+${it / 60}h	${it / 60}h
+$bytes bytes	$bytes 字节
+$label later	$label 后
+$minutes min	$minutes 分钟
+$title value	$title 值
+${index + 1}	${index + 1}
+$number $name	$number $name
+${it / 1000}s	${it / 1000}s
++$hidden more	+$hidden 更多
+Via $endpoint	经由 $endpoint
+ through $host	经由 $host
+$label earlier	$label 前
+$size monitors	$size 个监控
+$count selected	$count 已选择
+$days days left	$days 天后到期
+${minutes}m ago	${minutes}分钟前
+${ms / 60_000}m	${ms / 60_000}m
+${row.to} forks	${row.to} forks
+${row.to} stars	${row.to} stars
+Decrease $title	减少 $title
+Increase $title	增加 $title
+was ${row.from}	曾为 ${row.from}
+⚠ ${entry.name}	⚠ ${entry.name}
+$label · $detail	$label · $detail
+$minutes minutes	$minutes 分钟
+${minutes / 60}H	${minutes / 60}H
+${tab.label} tab	${tab.label} 标签页
+, $failed failed	, $failed 失败
+Sent via $target	通过 $target
+Updated to $name	已更新为 $name
+and $hidden more	and $hidden more
+by ${row.author}	by ${row.author}
+\nand $hidden more	\nand $hidden more
+ + ${style.label}	+ ${style.label}
+Edit group $title	编辑分组 $title
+$what · $left LEFT	$what · $left 剩余
+${bytes / 1024} KB	${bytes / 1024} KB
+${lines.size} line	${lines.size} line
+${row.to} open now	${row.to} open now
+Add ${token.label}	添加 ${token.label}
+Group these $count	分组这些 $count
+all $answered over	all $answered over
+}-${templateId ?: 	}-${templateId ?: 
+\n\nIssued by $issuer	\n\nIssued by $issuer
+$verdict · $summary	$verdict · $summary
+, $over over budget	, $over 超出预算
+$kind, no checks yet	$kind, 尚无检查
+$monitorName is down	$monitorName 已故障
+$moved issues closed	$moved issues closed
+$total alerts firing	$total alerts firing
+$totalCount monitors	$totalCount 个监控
+${minutes / 60}h ago	${minutes / 60}h ago
+${result.sites} site	${result.sites} site
+${row.to - row.from}	${row.to - row.from}
+Also watching $host:	同时监控 $host:
+Element ${index + 1}	元素 ${index + 1}
+$minutes min ${rest}s	$minutes 分钟 ${rest}s
+${entry.latencyMs} ms	${entry.latencyMs} ms
+${hours}h ${minutes}m	${hours}h ${minutes}m
+${minutes / 60} hours	${minutes / 60} 小时
++${row.to - row.from}	+${row.to - row.from}
+HTTP ${ui.statusCode}	HTTP ${ui.statusCode}
+setup-${monitorId ?: 	setup-${monitorId ?: 
+these $count monitors	these $count monitors
+$moved issues reopened	$moved issues reopened
+${(ms + 999) / 1000} s	${(ms + 999) / 1000} s
+${delta / 60_000}m ago	${delta / 60_000}分钟前
+${metric.count} series	${metric.count} series
+${row.delta} downloads	${row.delta} downloads
+${ui.lastLatencyMs} ms	${ui.lastLatencyMs} ms
+: ${error.description}	: ${error.description}
+Pause ${theseN(count)}	暂停 ${theseN(count)}
+firing for ${minutes}m	firing for ${minutes}m
+webhook-${targetId ?: 	webhook-${targetId ?: 
+$count monitors checked	$count monitors checked
+$over of $answered over	$over of $answered over
+${minutes / 1_440}d ago	${minutes / 1_440}d ago
+${minutes}m ${seconds}s	${minutes}m ${seconds}s
+${stats.total} MONITORS	${stats.total} 监控
+Exported $count monitor	已导出 $count 个监控
+Imported $count monitor	已导入 $count 个监控
+Resume ${theseN(count)}	恢复 ${theseN(count)}
+Showing all $totalCount	Showing all $totalCount
+Urgent · ${style.label}	Urgent · ${style.label}
+all $answered inside it	all $answered inside it
+\nReminder #$repeatCount.	\nReminder #$repeatCount.
+ $more older not listed.	 $more older not listed.
+$what · UNTIL YOU RESUME	$what · UNTIL YOU RESUME
+${entry.openIssues} open	${entry.openIssues} open
+${healths.size} monitors	${healths.size} 个监控
+${members.size} monitors	${members.size} 个监控
+${row.from} to ${row.to}	${row.from} to ${row.to}
+${state.openIssues} open	${state.openIssues} open
+Comment on #${row.issue}	评论 #${row.issue}
+HTTP ${runtime.lastCode}	HTTP ${runtime.lastCode}
+no input stream for $uri	no input stream for $uri
+$count ${if (count == 1) 	$count ${if (count == 1) 
+${ui.failedChecks} failed	${ui.failedChecks} 失败
+, ${formatLogSize(bytes)}	, ${formatLogSize(bytes)}
+HTTP ${result.statusCode}	HTTP ${result.statusCode}
+Show all ${activity.size}	显示全部 ${activity.size}
+Signed in as $who$through	Signed in as $who$through
+no output stream for $uri	no output stream for $uri
+${monitor.latencySloMs} ms	${monitor.latencySloMs} ms
+Alerts muted for ${hours}h	告警静音 ${hours}h
+Edit ${target.displayName}	编辑 ${target.displayName}
+Open ${target.displayName}	打开 ${target.displayName}
+Remove header ${index + 1}	Remove header ${index + 1}
+ since ${clock(part.since)}	自 ${clock(part.since)}
+#${row.number} ${row.title}	#${row.number} ${row.title}
+${event.count} new messages	${event.count} new messages
+, ${last.lossPercent}% lost	, ${last.lossPercent}% lost
+Add these $count to a group	Add these $count to a group
+Checked ${relative(newest)}	已检查 ${relative(newest)}
+Remove element ${index + 1}	Remove element ${index + 1}
+Show all ${all.size} checks	显示全部 ${all.size} 次检查
+firing for ${minutes / 60}h	firing for ${minutes / 60}h
+so $retries extra intervals	so $retries extra intervals
+up to ${seconds(left)} left	up to ${seconds(left)} left
+  since ${clock(part.since)}	自 ${clock(part.since)}
+${kind.label}. ${kind.blurb}	${kind.label}. ${kind.blurb}
+${minutes}m ${seconds % 60}s	${minutes}m ${seconds % 60}s
+Move element ${index + 1} up	Move element ${index + 1} up
+Nothing else watches $host. 	没有其他监控在监视 $host.
+Pause ${monitor.displayName}	暂停 ${monitor.displayName}
+Re-pick element ${index + 1}	重新选择元素 ${index + 1}
+Removed 1 monitor from “$it”	Removed 1 monitor from “$it”
+Replacing: $existingSelector	Replacing: $existingSelector
+Version $latest is available	Version $latest is available
+alerts on ${it.joinToString(	alerts on ${it.joinToString(
+$kind, ${samples.size} checks	$kind, ${samples.size} 次检查
+${chosen.size} kinds of event	${chosen.size} kinds of event
+${element.matchCount} matches	${element.matchCount} matches
+Configure widget ${index + 1}	配置小组件 ${index + 1}
+Resume ${monitor.displayName}	恢复 ${monitor.displayName}
+TRY $attempt OF ${plan.tries}	TRY $attempt OF ${plan.tries}
+reminder ${ui.reminderNumber}	reminder ${ui.reminderNumber}
+the last ${pings.size} checks	the last ${pings.size} checks
+${content.monitorName} is DOWN	${content.monitorName} is DOWN
+${content.monitorName} is down	${content.monitorName} 已故障
+${monitor.displayName} is back	${monitor.displayName} is back
+${monitor.displayName} is down	${monitor.displayName} 已故障
+${monitor.displayName} is slow	${monitor.displayName} is slow
+${part.status.label}, expected	${part.status.label}, 预期
+${step + 1}/${stepTitles.size}	${step + 1}/${stepTitles.size}
+${ui.failedChecks} consecutive	${ui.failedChecks} consecutive
+1 monitor · ${rolled.headline}	1 个监控 · ${rolled.headline}
+Healthy${if (sample.code > 0) 	Healthy${if (sample.code > 0) 
+Move element ${index + 1} down	Move element ${index + 1} down
+Not delivered. ${result.error}	未送达。 ${result.error}
+PAGE #${ui.reminderNumber + 1}	第 # 页${ui.reminderNumber + 1}
+alerts from ${it.joinToString(	alerts from ${it.joinToString(
+ · ${megabytes(banner.apkSize)}	· ${megabytes(banner.apkSize)}
+${it.label} · ${it.defaultPort}	${it.label} · ${it.defaultPort}
+${state.openIssues} open issues	${state.openIssues} open issues
+Checked $sites, icons unchanged	Checked $sites, icons unchanged
+Checker health · ${style.label}	Checker health · ${style.label}
+Highest is ${range.last}$suffix	最高为 ${range.last}$suffix
+Hold to delete ${theseN(count)}	长按删除 ${theseN(count)}
+Last check: ${last.repliesLine}	上次检查： ${last.repliesLine}
+Lowest is ${range.first}$suffix	最低为 ${range.first}$suffix
+Show all ${triage.healthy.size}	显示全部 ${triage.healthy.size}
+basic auth as ${watch.username}	basic auth as ${watch.username}
+median ${formatLatency(median)}	median ${formatLatency(median)}
+ · reminder ${ui.reminderNumber}	 · reminder ${ui.reminderNumber}
+$shownCount of $totalCount match	$shownCount of $totalCount match
+${group.memberIds.size} monitors	${group.memberIds.size} 个监控
+${monitor.targets.size} elements	${monitor.targets.size} elements
+${monitor.udp.probe.label} reply	${monitor.udp.probe.label} reply
+${ui.failedChecks} failed checks	${ui.failedChecks} 失败 次检查
+Answering again · ${streak.line}	恢复响应 · ${streak.line}
+Check ${monitor.displayName} now	Check ${monitor.displayName} now
+🔴 ${content.monitorName} is down	🔴 ${content.monitorName} 已故障
+"${fleet.headline}" in the header	"${fleet.headline}" in the header
+${minutes / 60}H ${minutes % 60}M	${minutes / 60}H ${minutes % 60}M
+${records.size} monitors restored	${records.size} monitors restored
+${stats.avgText} average response	${stats.avgText} average response
+All $monitorCount monitors speak.	全部 $monitorCount 个监控 正常.
+down for ${downFor(ui.downForMs)}	已故障 ${downFor(ui.downForMs)}
+the last ${summary.checks} checks	the last ${summary.checks} checks
+$count ${health.label.lowercase()}	$count ${health.label.lowercase()}
+${draft.format.addressLabel} saved	${draft.format.addressLabel} saved
+${elements.size} elements captured	${elements.size} elements captured
+${monitor.displayName} is degraded	${monitor.displayName} is degraded
+${udp.dnsName} ${udp.dnsType.name}	${udp.dnsName} ${udp.dnsType.name}
+Could not save widget $appWidgetId	小组件保存失败 $appWidgetId
+Move these $count to another group	Move these $count to another group
+Showing $shownCount of $totalCount	Showing $shownCount of $totalCount
+firing for ${minutes / (60 * 24)}d	firing for ${minutes / (60 * 24)}d
+${access.message}. ${access.detail}	${access.message}. ${access.detail}
+${result.changed} of $sites updated	${result.changed} of $sites updated
+Until ${day(auth.refreshExpiresAt)}	直到 ${day(auth.refreshExpiresAt)}
+Version ${release.version} is ready	Version ${release.version} is ready
+$headline · +$otherPending more down	$headline · +$otherPending more down
+${monitor.displayName} is fast again	${monitor.displayName} is fast again
+${monitor.displayName} is still down	${monitor.displayName} is still down
+${monitor.displayName} is still slow	${monitor.displayName} is still slow
+${part.displayName}: ${part.message}	${part.displayName}: ${part.message}
+Paused for ${durationLabel(minutes)}	已暂停 ${durationLabel(minutes)}
+The provider answered ${error.error}	The provider answered ${error.error}
+every ${monitor.intervalMinutes} min	every ${monitor.intervalMinutes} min
+over the ${sloMs} ms latency budget.	over the ${sloMs} ms latency budget.
+reported ${clock(report.reportedAt)}	reported ${clock(report.reportedAt)}
+\nResponded in ${result.latencyMs} ms.	\nResponded in ${result.latencyMs} ms.
+${result.message}\n\n${monitor.address}	${result.message}\n\n${monitor.address}
+Use the icon from ${candidate.origin}	Use the icon from ${candidate.origin}
+You are on ${banner.installedVersion}	You are on ${banner.installedVersion}
+You've moved to ${shortPage(movedTo)}	You've moved to ${shortPage(movedTo)}
+$passed of ${shown.size} checks passed	$passed of ${shown.size} checks passed
+${ids.size} ${plural(ids.size)} paused	${ids.size} ${plural(ids.size)} paused
+${monitor.displayName} is not checking	${monitor.displayName} is not checking
+${row.checks} checks · nothing changed	${row.checks} checks · nothing changed
+${target.roundToInt()} percent, $label	${target.roundToInt()} percent, $label
+Answering again · ${card.streak?.line}	恢复响应 · ${card.streak?.line}
+Remove from “${holderTitles.single()}”	Remove from “${holderTitles.single()}”
+Silenced for ${durationLabel(minutes)}	Silenced for ${durationLabel(minutes)}
+degraded past ${udp.ntpMaxOffsetMs} ms	degraded past ${udp.ntpMaxOffsetMs} ms
+ on ${dateOf(claims.expiresAt * 1000L)}	 on ${dateOf(claims.expiresAt * 1000L)}
+${ids.size} ${plural(ids.size)} deleted	${ids.size} ${plural(ids.size)} deleted
+${ids.size} ${plural(ids.size)} resumed	${ids.size} ${plural(ids.size)} resumed
+${monitor.displayName} reports degraded	${monitor.displayName} reports degraded
+${monitor.health.staleAfterMinutes} min	${monitor.health.staleAfterMinutes} 分钟
+${runtime.lastMessage} · ${streak.line}	${runtime.lastMessage} · ${streak.line}
+, back to ${whenText(summary.sinceAt)}.	, back to ${whenText(summary.sinceAt)}.
+, latest ${formatLatency(it.latencyMs)}	, 最新 ${formatLatency(it.latencyMs)}
+Budget ${formatLatency(sloMs.toLong())}	预算 ${formatLatency(sloMs.toLong())}
+URGENT · ${monitor.displayName} is down	URGENT · ${monitor.displayName} is down
+${(bytes / 1_000L).coerceAtLeast(1L)} kB	${(bytes / 1_000L).coerceAtLeast(1L)} kB
+${monitor.displayName} is losing packets	${monitor.displayName} is losing packets
+${monitor.displayName} is still degraded	${monitor.displayName} is still degraded
+${stats.uptimeText} ${stats.uptimeScope}	${stats.uptimeText} ${stats.uptimeScope}
+${watch.minimumSeverity.label} and above	${watch.minimumSeverity.label} and above
+Slower than $value ms counts as degraded	Slower than $value ms counts as degraded
+Until ${dateOf(status.refreshExpiresAt)}	直到 ${dateOf(status.refreshExpiresAt)}
+basic auth as ${monitor.health.username}	basic auth as ${monitor.health.username}
+}: ${UdpPayload.hexOf(parsed.value, 16)}	}: ${UdpPayload.hexOf(parsed.value, 16)}
+${runtime.lastMessage} · muted, no alerts	${runtime.lastMessage} · 已静音，不告警
+${udp.attempts} per check, a second apart	${udp.attempts} per check, a second apart
+, budget ${formatLatency(sloMs.toLong())}	, budget ${formatLatency(sloMs.toLong())}
+Log written, ${document.length / 1024} KB	日志已写入, ${document.length / 1024} KB
+Recording, ${formatLogSize(bytes)} so far	Recording, ${formatLogSize(bytes)} so far
+The TLS certificate for $host expired on 	The TLS certificate for $host expired on 
+$label: $value. Change on the Target step.	$label: $value. Change on the Target step.
+$name marked expected. A change pages you.	$name marked expected. A change pages you.
+${other.kind.label} · ${otherHealth.label}	${other.kind.label} · ${otherHealth.label}
+Last ${shown.size} ${if (shown.size == 1) 	Last ${shown.size} ${if (shown.size == 1) 
+${toastRole(message.kind)}: ${message.text}	${toastRole(message.kind)}: ${message.text}
+All ${triage.healthy.size} parts report up.	全部 ${triage.healthy.size} 项均正常.
+Grouped ${group.size} ${plural(group.size)}	已分组 ${group.size} ${plural(group.size)}
+Repeats every $every min until acknowledged	Repeats every $every min until acknowledged
+Showing the worst ${alerts.size} of $total.	Showing the worst ${alerts.size} of $total.
+${(config.backgroundOpacity * 100).toInt()}%	${(config.backgroundOpacity * 100).toInt()}%
+${monitor.displayName} is no longer degraded	${monitor.displayName} is no longer degraded
+${result.latencyMs} ms — budget is $sloMs ms	${result.latencyMs} ms — budget is $sloMs ms
+${runtime.lastMessage} · ${card.streak.line}	${runtime.lastMessage} · ${card.streak.line}
+Remove ${monitor.displayName} from the group	Remove ${monitor.displayName} from the group
+$count monitors selected. Pick where they go.	$count monitors selected. Pick where they go.
+$name pages you again if it is still failing.	$name pages you again if it is still failing.
+${formatRelative(at, nowMs)}, ${whenText(at)}	${formatRelative(at, nowMs)}, ${whenText(at)}
+${monitor.displayName} still reports degraded	${monitor.displayName} still reports degraded
+${monitor.kind.label} · ${monitor.prettyHost}	${monitor.kind.label} · ${monitor.prettyHost}
+${state.grantedCount} of ${state.total} ready	${state.grantedCount} of ${state.total} ready
+API ${Build.VERSION.SDK_INT} · ${Build.MODEL}	API ${Build.VERSION.SDK_INT} · ${Build.MODEL}
+Element ${index + 1}: ${element.displayLabel}	元素 ${index + 1}: ${element.displayLabel}
+The TLS certificate for $host is valid until 	The TLS certificate for $host is valid until 
+Ungrouped ${group.size} ${plural(group.size)}	Ungrouped ${group.size} ${plural(group.size)}
+couldn't reach ${settings.updateSource.label}	couldn't reach ${settings.updateSource.label}
+${monitor.displayName} is still losing packets	${monitor.displayName} is still losing packets
+${ping.repliesLine}, ${ping.lossPercent}% lost	${ping.repliesLine}, ${ping.lossPercent}% lost
+${runtime.alertsFiringLine} · muted, no alerts	${runtime.alertsFiringLine} · 已静音，不告警
+${target.displayName} · ${target.format.label}	${target.displayName} · ${target.format.label}
+${element.displayLabel} · ${element.mode.label}	${element.displayLabel} · ${element.mode.label}
+${formatMinuteOfDay(policy.quietStartMinute)} → 	${formatMinuteOfDay(policy.quietStartMinute)} →
+Recent checks, $passed of ${samples.size} passed	Recent checks, $passed of ${samples.size} passed
+#${state.lastIssueNumber} ${state.lastIssueTitle}	#${state.lastIssueNumber} ${state.lastIssueTitle}
+${content.headline} · down for ${content.downFor}	${content.headline} · 已故障 ${content.downFor}
+${ui.headline} · ${ui.failedChecks} failed checks	${ui.headline} · ${ui.failedChecks} 失败 次检查
+Degraded above ${settings.defaultLatencySloMs} ms	超过 ${settings.defaultLatencySloMs} ms
+Delivered. HTTP ${result.code} in ${result.ms} ms	Delivered. HTTP ${result.code} in ${result.ms} ms
+Down for ${content.downFor} · ${content.headline}	Down for ${content.downFor} · ${content.headline}
+Expires ${certDateFormat.format(Date(expiresAt))}	到期 ${certDateFormat.format(Date(expiresAt))}
+Removed $moved ${plural(moved)} from their groups	Removed $moved ${plural(moved)} from their groups
+Showing ${report.components.size} of $total parts	Showing ${report.components.size} of $total parts
+${monitor.displayName} is answering normally again	${monitor.displayName} is answering normally again
+${udp.expect.label.lowercase()} ${udp.expectValue}	${udp.expect.label.lowercase()} ${udp.expectValue}
+${ui.headline} · down for ${downFor(ui.downForMs)}	${ui.headline} · 已故障 ${downFor(ui.downForMs)}
+Newest from ${it.from}: ${it.subjectOrPlaceholder}	最新来自 ${it.from}: ${it.subjectOrPlaceholder}
+} of ${seconds(plan.timeoutMs)} each, then a ping.	} of ${seconds(plan.timeoutMs)} each, then a ping.
+${ids.size} ${plural(ids.size)} muted for ${hours}h	${ids.size} ${plural(ids.size)} muted for ${hours}h
+${parsed.value.size} ${if (parsed.value.size == 1) 	${parsed.value.size} ${if (parsed.value.size == 1) 
+Checked ${NightbellWidgetProvider.relative(newest)}	已检查 ${NightbellWidgetProvider.relative(newest)}
+Couldn't reach ${settings.value.updateSource.label}	无法连接 ${settings.value.updateSource.label}
+every release, ${state.totalCoversReleases} of them	every release, ${state.totalCoversReleases} of them
+ · slowest ${formatLatency(rolled.slowestLatencyMs)}	· 最慢 ${formatLatency(rolled.slowestLatencyMs)}
+${part.displayName} ${part.status.label.lowercase()}	${part.displayName} ${part.status.label.lowercase()}
+${stats.uptimeText} ${stats.uptimeScope.lowercase()}	${stats.uptimeText} ${stats.uptimeScope.lowercase()}
+${udp.payloadFormat.label} · ${udp.payload.take(40)}	${udp.payloadFormat.label} · ${udp.payload.take(40)}
+Across $span, all $sent echo requests were answered.	Across $span, all $sent echo requests were answered.
+Anything from ${range.first} to ${range.last}$suffix	Anything from ${range.first} to ${range.last}$suffix
+Newest from ${it.from}: ${it.subjectOrPlaceholder}\n\n	最新来自 ${it.from}: ${it.subjectOrPlaceholder}\n\n
+${monitor.body.length} chars · ${monitor.contentType}	${monitor.body.length} chars · ${monitor.contentType}
+, slowest ${formatLatency(ok.maxOf { it.latencyMs })}	, 最慢 ${formatLatency(ok.maxOf { it.latencyMs })}
+All ${monitors.size} monitors, and any you add later.	All ${monitors.size} monitors, and any you add later.
+Last response ${formatLatency(runtime.lastLatencyMs)}	上次响应 ${formatLatency(runtime.lastLatencyMs)}
+The check succeeded but took ${result.latencyMs} ms, 	The check succeeded but took ${result.latencyMs} ms, 
+down ${Outages.span(outage.durationMs(nowMs))} so far	down ${Outages.span(outage.durationMs(nowMs))} so far
+${monitor.network.packets} per check, one second apart	${monitor.network.packets} per check, one second apart
+Per-monitor health, $monitors: ${counted.joinToString(	Per-monitor health, $monitors: ${counted.joinToString(
+Repeating every $repeatMinutes min until acknowledged.	Repeating every $repeatMinutes min until acknowledged.
+${pagerReady.grantedCount} of ${pagerReady.total} ready	${pagerReady.grantedCount} of ${pagerReady.total} ready
+${problem.headline}. Open the monitor to sign in again.	${problem.headline}. Open the monitor to sign in again.
+${result.latencyMs} ms, back under the $sloMs ms budget	${result.latencyMs} ms, back under the $sloMs ms budget
+Checked ${formatRelative(runtime.lastCheckedAt, nowMs)}	已检查 ${formatRelative(runtime.lastCheckedAt, nowMs)}
+${elements.size} element${if (elements.size == 1)  else 	${elements.size} element${if (elements.size == 1)  else 
+Available at ${proxyEndpoint.host}:${proxyEndpoint.port}	可用于 ${proxyEndpoint.host}:${proxyEndpoint.port}
+Expired ${formatSpan(nowMs - runtime.certExpiresAt)} ago	Expired ${formatSpan(nowMs - runtime.certExpiresAt)} ago
+The service checked it in ${part.durationMs.toLong()} ms	The service checked it in ${part.durationMs.toLong()} ms
+${megabytes(stage.received)} of ${megabytes(stage.total)}	${megabytes(stage.received)} of ${megabytes(stage.total)}
+No metric here matches "${viewModel.browseQuery.trim()}".	No metric here matches "${viewModel.browseQuery.trim()}".
+Started ${alertStartFormat.format(Date(alert.startedAt))}	Started ${alertStartFormat.format(Date(alert.startedAt))}
+$alreadyWatching element${if (alreadyWatching == 1)  else 	$alreadyWatching element${if (alreadyWatching == 1)  else 
+${viewModel.githubTokenRedacted} · 5,000 API calls an hour	${viewModel.githubTokenRedacted} · 5,000 API calls an hour
+Already grouped under ${target.leavingGroups.joinToString(	Already grouped under ${target.leavingGroups.joinToString(
+Check ${monitor.displayName} now, waiting for a connection	Check ${monitor.displayName} now, waiting for a connection
+${content.headline} · ${content.failedChecks} failed checks	${content.headline} · ${content.failedChecks} 失败 次检查
+${family.label} address. Checked over ${family.label} only.	${family.label} address. Checked over ${family.label} only.
+${monitor.assertion.mode.label} · ${monitor.assertion.value}	${monitor.assertion.mode.label} · ${monitor.assertion.value}
+Across $span, $loss% of $sent echo requests went unanswered.	Across $span, $loss% of $sent echo requests went unanswered.
+Raised when a monitor recovers (${sound.label.lowercase()}).	Raised when a monitor recovers (${sound.label.lowercase()}).
+Re-alerts every ${policy.degradedRepeatEveryMinutes} minutes	每隔 ${policy.degradedRepeatEveryMinutes} 分钟
+Pinned to ${runtime.certPin}. A different key fails the check.	Pinned to ${runtime.certPin}. A different key fails the check.
+Style: ${policy.vibrationStyle.label} — tap a style to feel it	Style: ${policy.vibrationStyle.label} — tap a style to feel it
+${monitor.network.packets} ${if (monitor.network.packets == 1) 	${monitor.network.packets} ${if (monitor.network.packets == 1) 
+Re-alerts every ${policy.repeatEveryMinutes} minutes while down	每隔 ${policy.repeatEveryMinutes} 分钟 （故障期间）重复告警
+${mail.cleanHost}:${mail.effectivePort} · ${mail.security.label}	${mail.cleanHost}:${mail.effectivePort} · ${mail.security.label}
+Added ${ids.size} ${plural(ids.size)} to “${group.displayTitle}”	Added ${ids.size} ${plural(ids.size)} to “${group.displayTitle}”
+Already in “${target.leavingGroups.single()}”, moving out of it.	Already in “${target.leavingGroups.single()}”, moving out of it.
+Reported ${health.label.lowercase()}. The report lists no parts.	Reported ${health.label.lowercase()}. The report lists no parts.
+UPTIME, PAST ${UptimeWindows.shortSpan(uptimeSpanMs).uppercase()}	UPTIME, PAST ${UptimeWindows.shortSpan(uptimeSpanMs).uppercase()}
+Ignores blips: needs ${policy.failureThreshold} failures in a row.	Ignores blips: needs ${policy.failureThreshold} failures in a row.
+Raised when a monitor starts failing (${sound.label.lowercase()}).	Raised when a monitor starts failing (${sound.label.lowercase()}).
+What's new in ${AppUpdate.releaseName(viewModel.installedVersion)}	What's new in ${AppUpdate.releaseName(viewModel.installedVersion)}
+0 is ${zeroLabel.lowercase()}, and the most is ${range.last}$suffix	0 is ${zeroLabel.lowercase()}, and the most is ${range.last}$suffix
+Found ${c.host}, ${c.security.label} ${c.port}, ${c.source.reason}.	找到 ${c.host}, ${c.security.label} ${c.port}, ${c.source.reason}.
+repeats every ${monitor.urgentRepeatMinutes} min until acknowledged	repeats every ${monitor.urgentRepeatMinutes} min until acknowledged
+Checked ${formatRelative(runtime.lastCheckedAt, LocalNowMs.current)}	已检查 ${formatRelative(runtime.lastCheckedAt, LocalNowMs.current)}
+M${cx - r} $cy A$r $r 0 1 0 ${cx + r} $cy A$r $r 0 1 0 ${cx - r} $cy	M${cx - r} $cy A$r $r 0 1 0 ${cx + r} $cy A$r $r 0 1 0 ${cx - r} $cy
+Repeats every $repeatMinutes min while down until you acknowledge it	Repeats every $repeatMinutes min while down until you acknowledge it
+URGENT · repeats every ${content.repeatMinutes.coerceAtLeast(1)} min	URGENT · repeats every ${content.repeatMinutes.coerceAtLeast(1)} min
+$passed of ${shown.size} passed · every ${monitor.intervalMinutes} min	$passed of ${shown.size} passed · every ${monitor.intervalMinutes} min
+Removed $moved ${plural(moved)} from “${holders.single().displayTitle}”	Removed $moved ${plural(moved)} from “${holders.single().displayTitle}”
+Up when anything comes back. No answer after every try is down. $closed	Up when anything comes back. No answer after every try is down. $closed
+${state.consecutiveErrors} checks in a row failed inside Nightbell itself	${state.consecutiveErrors} checks in a row failed inside Nightbell itself
+${watch.comparison.symbol} ${PrometheusWatch.formatValue(watch.threshold)}	${watch.comparison.symbol} ${PrometheusWatch.formatValue(watch.threshold)}
+and ${folders.size - FOLDERS_SHOWN} more. Type the name for one not shown.	and ${folders.size - FOLDERS_SHOWN} more. Type the name for one not shown.
+single sign-on, ${monitor.health.grant.name.lowercase().replace('_', ' ')}	single sign-on, ${monitor.health.grant.name.lowercase().replace('_', ' ')}
+History starts here · ${row.facts.stars} stars, ${row.facts.openIssues} open	History starts here · ${row.facts.stars} stars, ${row.facts.openIssues} open
+${dateFormat.format(Date(sample.at))} · ${timeFormat.format(Date(sample.at))}	${dateFormat.format(Date(sample.at))} · ${timeFormat.format(Date(sample.at))}
+Responded in ${formatLatency(runtime.lastLatencyMs)}, over its latency budget	Responded in ${formatLatency(runtime.lastLatencyMs)}, over its latency budget
+Ungroup “${group.displayTitle}”? The ${members.size} ${if (members.size == 1) 	Ungroup “${group.displayTitle}”? The ${members.size} ${if (members.size == 1) 
+Takes up to ${seconds(plan.worstCaseMs)}: ${plan.tries} ${if (plan.tries == 1) 	Takes up to ${seconds(plan.worstCaseMs)}: ${plan.tries} ${if (plan.tries == 1) 
+the newest ${state.totalCoversReleases} releases, so the total is at least this	the newest ${state.totalCoversReleases} releases, so the total is at least this
+Every release here ships one kind of file, $only, so there is nothing to narrow.	Every release here ships one kind of file, $only, so there is nothing to narrow.
+$subtitle · ${dateFormat.format(Date(row.at))} ${timeFormat.format(Date(row.at))}	$subtitle · ${dateFormat.format(Date(row.at))} ${timeFormat.format(Date(row.at))}
+Not showing ${appUpdate.ignoredVersion}. A later version will still be announced.	Not showing ${appUpdate.ignoredVersion}. A later version will still be announced.
+$subject ${watch.comparison.symbol} ${PrometheusWatch.formatValue(watch.threshold)}	$subject ${watch.comparison.symbol} ${PrometheusWatch.formatValue(watch.threshold)}
+Sign in needed: ${report.auth.problem.headline.replaceFirstChar { it.lowercase() }}	Sign in needed: ${report.auth.problem.headline.replaceFirstChar { it.lowercase() }}
+This monitor only. Its ordinary ${draft.timeoutSeconds}s applies when routing is off.	This monitor only. Its ordinary ${draft.timeoutSeconds}s applies when routing is off.
+, certificate expires in ${CertificateWatch.daysLeft(runtime.certExpiresAt, now)} days	, 证书在 ${CertificateWatch.daysLeft(runtime.certExpiresAt, now)} 天
+ ${found.renamedFrom} answers too, but its certificate is for ${c.host}, so that is used.	 ${found.renamedFrom} answers too, but its certificate is for ${c.host}, so that is used.
+At most ${config.maxRows}, however big the widget is. The rest are counted in the footer.	At most ${config.maxRows}, however big the widget is. The rest are counted in the footer.
+Stops paging while it stays ${part.status.label.lowercase()}. Any change pages you again.	Stops paging while it stays ${part.status.label.lowercase()}. Any change pages you again.
+Sound: ${policy.sound.label}\nHaptics: ${if (policy.vibrate) policy.vibrationStyle.label else 	Sound: ${policy.sound.label}\nHaptics: ${if (policy.vibrate) policy.vibrationStyle.label else 
+Saving points the monitor here. The $alreadyWatching element${if (alreadyWatching == 1)  else 	Saving points the monitor here. The $alreadyWatching element${if (alreadyWatching == 1)  else 
+Degraded when the server's clock and this phone's differ by more than ${udp.ntpMaxOffsetMs} ms.	Degraded when the server's clock and this phone's differ by more than ${udp.ntpMaxOffsetMs} ms.
+${content.failedChecks} failed checks · repeats every ${content.repeatMinutes.coerceAtLeast(1)} min	${content.failedChecks} failed checks · repeats every ${content.repeatMinutes.coerceAtLeast(1)} min
+$speakingCount of $monitorCount monitors speak. The switch is per monitor, under its alert settings.	$speakingCount of $monitorCount monitors speak. The switch is per monitor, under its alert settings.
+Fixed at ${config.columns}. Columns still collapse if the widget is dragged too narrow to read them.	Fixed at ${config.columns}. Columns still collapse if the widget is dragged too narrow to read them.
+New messages that matched a mailbox monitor's alert senders or subjects (${sound.label.lowercase()}).	New messages that matched a mailbox monitor's alert senders or subjects (${sound.label.lowercase()}).
+No reply yet. Each try waits up to ${seconds(plan.timeoutMs)}, and the first good one ends the check.	No reply yet. Each try waits up to ${seconds(plan.timeoutMs)}, and the first good one ends the check.
+Up when the reply ${udp.expect.label.lowercase()} what is set above. Any other reply, or none, is down.	Up when the reply ${udp.expect.label.lowercase()} what is set above. Any other reply, or none, is down.
+Line covering the last ${line.spanLabel}, ${line.markers.size} outage starts, ending at ${line.endLabel}	Line covering the last ${line.spanLabel}, ${line.markers.size} outage starts, ending at ${line.endLabel}
+Android has to allow Nightbell to install apps before it can hand you $version. Turn it on, then come back.	Android has to allow Nightbell to install apps before it can hand you $version. Turn it on, then come back.
+That is an access token. It expires in $minutes minutes. Paste the refresh token, or use a fixed key in Headers.	That is an access token. It expires in $minutes minutes. Paste the refresh token, or use a fixed key in Headers.
+Stays down until ${policy.recoveryThreshold} checks pass in a row, so a host that flaps does not page, clear and page again.	Stays down until ${policy.recoveryThreshold} checks pass in a row, so a host that flaps does not page, clear and page again.
+Re-checks every ${QuickRetry.GAP_MS / 1000}s after a failure, so it alerts about ${quickRetryLead(retries)} after the first failed check	Re-checks every ${QuickRetry.GAP_MS / 1000}s after a failure, so it alerts about ${quickRetryLead(retries)} after the first failed check
+Deleting “${monitor.displayName}” takes its history and its scheduled checks with it. There is an undo for a few seconds afterwards, and then it is gone.	Deleting “${monitor.displayName}” takes its history and its scheduled checks with it. There is an undo for a few seconds afterwards, and then it is gone.
+The ${config.theme.label.lowercase()} preset is a fixed surface with known contrast. Choose Custom above to set your own background, text colour and transparency.	The ${config.theme.label.lowercase()} preset is a fixed surface with known contrast. Choose Custom above to set your own background, text colour and transparency.
+Using the ${viewModel.proxiedTimeoutSeconds}s default from Settings. A circuit to a hidden service takes far longer to build than a clearnet request takes to answer.	Using the ${viewModel.proxiedTimeoutSeconds}s default from Settings. A circuit to a hidden service takes far longer to build than a clearnet request takes to answer.
+Re-checks every ${QuickRetry.GAP_MS / 1000}s once it answers again, so the all-clear comes about ${quickRetryLead(policy.recoveryThreshold - 1)} after the first good check	Re-checks every ${QuickRetry.GAP_MS / 1000}s once it answers again, so the all-clear comes about ${quickRetryLead(policy.recoveryThreshold - 1)} after the first good check
+Last internal error: ${health.lastSignature}. This is a fault in Nightbell, not in the sites you are watching — their status is unchanged. It clears as soon as one check completes.	Last internal error: ${health.lastSignature}. This is a fault in Nightbell, not in the sites you are watching — their status is unchanged. It clears as soon as one check completes.
+Up when every reply comes back. Degraded when some are lost, down when all ${draft.network.packets} are. They go out one second apart, and each waits for its reply up to the timeout.	Up when every reply comes back. Degraded when some are lost, down when all ${draft.network.packets} are. They go out one second apart, and each waits for its reply up to the timeout.
+Blank uses the shared ${shared.host}:${shared.port} from Settings. Fill these in only to send this monitor somewhere else, which is what watching a Tor service and an I2P one at the same time takes.	Blank uses the shared ${shared.host}:${shared.port} from Settings. Fill these in only to send this monitor somewhere else, which is what watching a Tor service and an I2P one at the same time takes.
+This sign-in belongs to the browser session it came from. Signing out there, or that session ending$until, signs Nightbell out. If the provider rotates tokens, Nightbell's first refresh also ends the browser's copy.	This sign-in belongs to the browser session it came from. Signing out there, or that session ending$until, signs Nightbell out. If the provider rotates tokens, Nightbell's first refresh also ends the browser's copy.
