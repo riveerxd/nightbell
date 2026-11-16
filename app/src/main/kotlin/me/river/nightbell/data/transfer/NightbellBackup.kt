@@ -213,10 +213,12 @@ fun NightbellSnapshot.withoutSecrets(): NightbellSnapshot =
  * stale verdicts. The last-check verdict fields are cleared for the same reason:
  * with health UNKNOWN they would be a message with nothing behind it.
  *
- * Two things are dropped rather than reset. `checkerStreak` is evidence about a
- * checker process that no longer exists, and the latency `reference` window is a
- * measurement of one device's connection; neither says anything about the user's
- * monitors, which is all a backup is for.
+ * Three things are dropped on import rather than reset. `checkerStreak` is
+ * evidence about a checker process that no longer exists, and the latency
+ * `reference` window and the `reach` times are measurements of one device's
+ * connection; none of them says anything about the user's monitors, which is all
+ * a backup is for. An export still carries them, as it always carried the
+ * window, and they are ignored on the way in.
  */
 fun NightbellBackup.toImportableSnapshot(): NightbellSnapshot {
     val monitors = snapshot.monitors.map { it.migrated }

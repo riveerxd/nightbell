@@ -26,6 +26,7 @@ import me.river.nightbell.domain.QuickRetry
 import me.river.nightbell.domain.SpokenPage
 import me.river.nightbell.domain.PauseState
 import me.river.nightbell.domain.ReferenceSample
+import me.river.nightbell.domain.ReachEvidence
 import me.river.nightbell.domain.UpdateState
 import me.river.nightbell.domain.WebhookState
 import me.river.nightbell.domain.WebhookTarget
@@ -67,6 +68,11 @@ data class NightbellSnapshot(
      * the minimum size and the compensation would silently never engage.
      */
     val reference: List<ReferenceSample> = emptyList(),
+    /**
+     * When the reference and the network last proved themselves. Persisted for
+     * the same reason as [reference], and outlives it on purpose.
+     */
+    val reach: ReachEvidence = ReachEvidence(),
     /**
      * The checker's own error streak, carried across processes.
      *
@@ -503,6 +509,9 @@ class NightbellStore(
 
     suspend fun updateReference(transform: (List<ReferenceSample>) -> List<ReferenceSample>) =
         mutate { snap -> snap.copy(reference = transform(snap.reference)) }
+
+    suspend fun updateReach(transform: (ReachEvidence) -> ReachEvidence) =
+        mutate { snap -> snap.copy(reach = transform(snap.reach)) }
 
     suspend fun updateCheckerStreak(transform: (CheckerStreak) -> CheckerStreak) =
         mutate { snap -> snap.copy(checkerStreak = transform(snap.checkerStreak)) }

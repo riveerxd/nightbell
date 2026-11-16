@@ -40,7 +40,9 @@ import me.river.nightbell.domain.TlsTrust
 import me.river.nightbell.domain.UpdateSource
 import me.river.nightbell.domain.UrgentAlerts
 import me.river.nightbell.domain.runCatchingCancellable
+import me.river.nightbell.domain.NetworkTarget
 import me.river.nightbell.domain.Reachability
+import me.river.nightbell.domain.ReachEvidence
 import me.river.nightbell.domain.QuickRetry
 import me.river.nightbell.domain.SpokenPage
 import me.river.nightbell.domain.StatusExpectation
@@ -720,19 +722,28 @@ class CheckEngine(
         } else {
             Reachability.Verdict.UNKNOWN
         }
-        val localOutage = Reachability.isLocalOutage(
-            probe = probe,
-            // Same readings the latency verdict below uses, and no new request:
-            // a reference that has not answered this phone in six hours does not
-            // get to claim the network is dead.
-            referenceHasVouched = Reachability.hasVouched(snapshot.reference, nowMs()),
-        )
+        if (probe == Reachability.Verdict.REACHABLE) noteReferenceAnswered()
+        if (result != null && Reachability.provesNetwork(result.ok, result.failureKind, NetworkTarget.hostOf(monitor))) {
+            noteNetworkProven()
+        }
+        // Same readings the latency verdict below uses, and no new request. Past
+        // six hours the reference keeps its say only on the terms in
+        // Reachability.stillVouches. Read fresh rather than from `snapshot`, so a
+        // monitor that passed earlier in this pass counts.
+        val vouch = when {
+            probe != Reachability.Verdict.UNREACHABLE -> Vouch.UNASKED
+            Reachability.hasVouched(snapshot.reference, nowMs()) -> Vouch.FRESH
+            Reachability.stillVouches(store.currentSnapshot().reach, nowMs()) -> Vouch.HELD
+            else -> Vouch.NONE
+        }
+        val localOutage = Reachability.isLocalOutage(probe = probe, referenceHasVouched = vouch.speaks)
         if (localOutage) {
             Diag.log(
                 LogEvent.CHECK_SKIPPED,
                 LogField.monitor(monitorId),
                 LogField.tag("why", "local_outage"),
                 LogField.of("probe", probe),
+                LogField.tag("vouch", vouch.name.lowercase()),
             )
         }
 
@@ -1299,8 +1310,46 @@ class CheckEngine(
             val rtt = probe.probe(settings.latencyReferenceUrl)
             referenceFailures = if (rtt == null) (referenceFailures + 1).coerceAtMost(6) else 0
             store.updateReference { NetworkBaseline.record(it, rtt, nowMs()) }
+            if (rtt != null) noteReferenceAnswered()
         }
     }
+
+    /**
+     * Both throttled to one write per [REACH_NOTE_INTERVAL_MS]. The times are
+     * only ever compared against windows of hours, so minutes of slack cost
+     * nothing, while a write per check would rewrite the whole store each time.
+     *
+     * The read outside the store is only a shortcut that saves the write. The
+     * decision is made again inside the transform, on the value the store hands
+     * over, so two checks finishing together cannot move a time backwards.
+     */
+    private suspend fun noteReferenceAnswered() {
+        val reach = store.currentSnapshot().reach
+        if (recentlyNoted(reach.referenceAnsweredAt) && recentlyNoted(reach.networkProvenAt)) return
+        store.updateReach { current ->
+            val now = nowMs()
+            ReachEvidence(
+                referenceAnsweredAt = if (recentlyNoted(current.referenceAnsweredAt)) current.referenceAnsweredAt else now,
+                networkProvenAt = if (recentlyNoted(current.networkProvenAt)) current.networkProvenAt else now,
+            )
+        }
+    }
+
+    private suspend fun noteNetworkProven() {
+        if (recentlyNoted(store.currentSnapshot().reach.networkProvenAt)) return
+        store.updateReach { current ->
+            if (recentlyNoted(current.networkProvenAt)) current else current.copy(networkProvenAt = nowMs())
+        }
+    }
+
+    // A time ahead of the clock counts as stale, not as recent. Caught on the
+    // emulator after setting the clock back: a plain `now - at < interval` is
+    // true for every negative gap, and the evidence froze until real time
+    // caught up with it.
+    private fun recentlyNoted(at: Long): Boolean = (nowMs() - at) in 0 until REACH_NOTE_INTERVAL_MS
+
+    /** Why the reference was or was not allowed to call this phone offline, for the log. */
+    private enum class Vouch(val speaks: Boolean) { UNASKED(false), FRESH(true), HELD(true), NONE(false) }
 
     /**
      * Whether the urgent loop is allowed to shout right now.
@@ -2403,5 +2452,6 @@ class CheckEngine(
 
         /** Shortest gap between two timings of the latency reference. */
         const val REFERENCE_MIN_INTERVAL_MS = 45_000L
+        const val REACH_NOTE_INTERVAL_MS = 5 * 60_000L
     }
 }

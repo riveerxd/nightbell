@@ -2,6 +2,7 @@ package me.river.nightbell
 
 import me.river.nightbell.domain.FailureKind
 import me.river.nightbell.domain.NetworkBaseline
+import me.river.nightbell.domain.ReachEvidence
 import me.river.nightbell.domain.ReferenceSample
 import me.river.nightbell.domain.Reachability
 import org.junit.Assert.assertFalse
@@ -160,5 +161,101 @@ class ReachabilityTest {
     @Test
     fun `a reference that answers badly still proves the network works`() {
         assertFalse(Reachability.isLocalOutage(Reachability.Verdict.REACHABLE, vouched))
+    }
+
+    /**
+     * Issue 23. Flight mode with Wi-Fi left on, nothing answering for seven
+     * hours. The window of readings is long gone, but the reference was working
+     * right up to the moment everything went quiet, so it still speaks for it.
+     */
+    @Test
+    fun `a reference that worked until the network went dark keeps vouching past six hours`() {
+        val now = 1_800_000_000_000L
+        val wentDark = now - 7 * HOUR
+        val evidence = ReachEvidence(referenceAnsweredAt = wentDark - 3 * 60_000, networkProvenAt = wentDark)
+        assertFalse("the window alone has aged out", Reachability.hasVouched(emptyList(), now))
+        assertTrue(Reachability.stillVouches(evidence, nowMs = now))
+        assertTrue(
+            Reachability.isLocalOutage(
+                Reachability.Verdict.UNREACHABLE,
+                Reachability.stillVouches(evidence, nowMs = now),
+            ),
+        )
+    }
+
+    /**
+     * The office that blocks the reference. Other monitors keep passing there,
+     * so the last proof keeps moving while the reference answer stays at home,
+     * and once that gap passes six hours the reference loses its say.
+     */
+    @Test
+    fun `a network that keeps working without the reference takes the vouch away`() {
+        val home = 1_800_000_000_000L
+        val stillPassing = home + NetworkBaseline.MAX_AGE_MS + 60_000
+        val evidence = ReachEvidence(referenceAnsweredAt = home, networkProvenAt = stillPassing)
+        assertFalse(Reachability.stillVouches(evidence, nowMs = stillPassing + 60_000))
+    }
+
+    @Test
+    fun `a reference that has never answered cannot be held over`() {
+        val t = 1_800_000_000_000L
+        assertFalse(Reachability.stillVouches(ReachEvidence(), nowMs = t))
+        assertFalse(Reachability.stillVouches(ReachEvidence(networkProvenAt = t), nowMs = t))
+    }
+
+    /**
+     * The bound. A network that blocks the reference while every monitor fails
+     * too looks exactly like a dead one, and must not be held quiet forever.
+     */
+    @Test
+    fun `the hold lapses two days after the network last proved itself`() {
+        val t = 1_800_000_000_000L
+        val evidence = ReachEvidence(t, t)
+        assertTrue(Reachability.stillVouches(evidence, nowMs = t + Reachability.MAX_HOLD_MS))
+        assertFalse(Reachability.stillVouches(evidence, nowMs = t + Reachability.MAX_HOLD_MS + 1))
+    }
+
+    @Test
+    fun `passes and answered failures prove the network, silence and our own mistakes do not`() {
+        val host = "example.com"
+        assertTrue(Reachability.provesNetwork(ok = true, kind = FailureKind.NONE, host = host))
+        listOf(
+            FailureKind.STATUS, FailureKind.TLS, FailureKind.BODY, FailureKind.PORT_CLOSED,
+            FailureKind.BAD_REPLY, FailureKind.ELEMENT, FailureKind.RENDER,
+        ).forEach {
+            assertTrue("$it came back from somewhere", Reachability.provesNetwork(ok = false, kind = it, host = host))
+        }
+        listOf(
+            FailureKind.DNS, FailureKind.CONNECT, FailureKind.TIMEOUT, FailureKind.NO_REPLY,
+            FailureKind.SIGN_IN_SERVER, FailureKind.UNKNOWN, FailureKind.BAD_CONFIG,
+        ).forEach {
+            assertFalse("$it proves nothing about the network", Reachability.provesNetwork(ok = false, kind = it, host = host))
+        }
+    }
+
+    /**
+     * The router still answers when the uplink is dead, so a monitor on it
+     * passing must not end a hold that the internet monitors depend on.
+     */
+    @Test
+    fun `a pass on the local network proves nothing about the internet`() {
+        listOf(
+            "192.168.1.1", "10.0.0.2", "172.16.5.4", "172.31.255.255", "127.0.0.1", "169.254.10.10",
+            "100.64.0.1", "::1", "fe80::1", "fd12:3456::1", "[fd00::2]", "nas.local", "router.lan",
+            "printer.home.arpa", "localhost", "pihole", "box.internal.",
+        ).forEach {
+            assertTrue("$it is local", Reachability.isLocalTarget(it))
+            assertFalse("a pass on $it is not internet proof", Reachability.provesNetwork(ok = true, kind = FailureKind.NONE, host = it))
+        }
+        listOf(
+            "example.com", "8.8.8.8", "172.32.0.1", "192.169.0.1", "100.128.0.1", "2606:4700::1",
+            "fdroid.org", "fc.example.com", "",
+        ).forEach {
+            assertFalse("$it is not local", Reachability.isLocalTarget(it))
+        }
+    }
+
+    private companion object {
+        const val HOUR = 60L * 60 * 1000
     }
 }

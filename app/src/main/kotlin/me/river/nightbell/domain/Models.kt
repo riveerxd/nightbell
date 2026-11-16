@@ -1991,3 +1991,18 @@ data class ReferenceSample(
     val at: Long = 0L,
     val rttMs: Long = 0L,
 )
+
+/**
+ * When this phone last reached the reference, and when it last reached anything,
+ * the reference included.
+ *
+ * Kept apart from the [ReferenceSample] window because that window is pruned to
+ * six hours on every probe, failed ones included, so a phone that has been off
+ * the network for longer than that has no reading left to show it ever had one.
+ * See [Reachability.stillVouches] for what the two times are compared for.
+ */
+@Serializable
+data class ReachEvidence(
+    val referenceAnsweredAt: Long = 0L,
+    val networkProvenAt: Long = 0L,
+)

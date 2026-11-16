@@ -13,6 +13,8 @@ import me.river.nightbell.domain.GlobalSettings
 import me.river.nightbell.domain.Health
 import me.river.nightbell.domain.Monitor
 import me.river.nightbell.domain.MonitorKind
+import me.river.nightbell.domain.NetworkWatch
+import me.river.nightbell.domain.ReachEvidence
 import me.river.nightbell.domain.ReferenceSample
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -476,5 +478,193 @@ class GarageFalseAlarmInstrumentedTest {
         } finally {
             service.close()
         }
+    }
+
+    /**
+     * Issue 23, as reported: a ping monitor on a phone in flight mode with Wi-Fi
+     * left on. Quiet for six hours, then "Can't resolve" for a domain that was
+     * fine, because the last reference reading had aged out of its window.
+     *
+     * Seven hours dark here. The reference answered until the phone went dark
+     * and nothing has reached anything since, so it still speaks for it.
+     */
+    @Test
+    fun a_phone_dark_for_seven_hours_still_pages_nobody() {
+        seedPing(referenceUrl = deadUrl)
+        val dark = System.currentTimeMillis() - 7 * HOUR
+        darkSince(dark)
+        runPing()
+
+        assertEquals("no page should have gone out", false, pinged())
+        assertEquals(Health.UNKNOWN, pingRuntime()?.health)
+        assertTrue("the attempt is still timestamped", (pingRuntime()?.lastCheckedAt ?: 0L) > 0L)
+    }
+
+    /**
+     * The office that blocks the reference. Its other monitors kept passing a
+     * minute ago, long after the reference last answered at home, so the
+     * reference has nothing to vouch with.
+     */
+    @Test
+    fun a_network_that_kept_working_without_the_reference_pages() {
+        seedPing(referenceUrl = deadUrl)
+        val now = System.currentTimeMillis()
+        runBlocking {
+            graph.store.updateReference { emptyList() }
+            graph.store.updateReach { ReachEvidence(referenceAnsweredAt = now - 7 * HOUR, networkProvenAt = now - 60_000) }
+        }
+        runPing()
+
+        awaitTrue(description = "the network kept carrying checks, so this failure is real") { pinged() }
+        assertEquals(Health.DOWN, pingRuntime()?.health)
+    }
+
+    /**
+     * The evidence is written by the engine itself, not only seeded by tests: a
+     * pass with an answering reference stamps both times. The reference answering
+     * is itself proof the network works; the healthy monitor is on loopback and
+     * adds nothing, see the local monitor test below.
+     */
+    @Test
+    fun a_working_pass_writes_down_that_the_network_works() {
+        val probes = TinyHttpServer { TinyHttpServer.Response(code = 204, reason = "No Content") }
+        val service = TinyHttpServer { TinyHttpServer.Response(body = "fine") }
+        try {
+            NightbellTestSupport.resetApp(
+                GlobalSettings(
+                    motionIntensity = 0f,
+                    masterAlertsEnabled = true,
+                    defaultAlert = AlertPolicy(),
+                    confirmOutagesEnabled = true,
+                    latencyReferenceUrl = probes.url("/generate_204"),
+                ),
+            )
+            val before = System.currentTimeMillis()
+            runBlocking {
+                graph.store.upsert(
+                    Monitor(id = "healthy", name = "Healthy", url = service.url("/ok"), timeoutSeconds = 5, useGlobalAlerts = true),
+                )
+                graph.engine.runAllDue(force = true)
+            }
+            val reach = runBlocking { graph.store.currentSnapshot().reach }
+            assertTrue("the reference answer is recorded, got $reach", reach.referenceAnsweredAt >= before)
+            assertTrue("the answer is recorded as proof, got $reach", reach.networkProvenAt >= before)
+        } finally {
+            probes.close()
+            service.close()
+        }
+    }
+
+    /** The hold is bounded: two days after the network last proved itself, failures page again. */
+    @Test
+    fun a_phone_dark_for_more_than_two_days_pages_again() {
+        seedPing(referenceUrl = deadUrl)
+        darkSince(System.currentTimeMillis() - 49 * HOUR)
+        runPing()
+
+        awaitTrue(description = "the hold has lapsed, so the failure pages") { pinged() }
+        assertEquals(Health.DOWN, pingRuntime()?.health)
+    }
+
+    /**
+     * A monitor on this side of the uplink passing is not proof of the internet.
+     * The fake service here listens on 127.0.0.1, which is exactly the router or
+     * NAS case: it keeps answering when the uplink is gone.
+     */
+    @Test
+    fun a_passing_local_monitor_does_not_count_as_proof() {
+        val service = TinyHttpServer { TinyHttpServer.Response(body = "fine") }
+        try {
+            NightbellTestSupport.resetApp(
+                GlobalSettings(motionIntensity = 0f, masterAlertsEnabled = true, defaultAlert = AlertPolicy(), confirmOutagesEnabled = true),
+            )
+            runBlocking {
+                graph.store.upsert(
+                    Monitor(id = "lan", name = "Router", url = service.url("/ok"), timeoutSeconds = 5, useGlobalAlerts = true),
+                )
+                graph.engine.run("lan")
+            }
+            val after = runBlocking { graph.store.currentSnapshot() }
+            assertEquals("the check itself passed", Health.UP, after.runtimes["lan"]?.health)
+            assertEquals("but it proved nothing about the internet", 0L, after.reach.networkProvenAt)
+        } finally {
+            service.close()
+        }
+    }
+
+    /**
+     * Evidence stamped by a clock that was later set back must not freeze. Found
+     * on the emulator: a throttle reading a future time as "noted a moment ago"
+     * skipped every write until the real clock caught up with it.
+     */
+    @Test
+    fun evidence_from_a_clock_that_was_set_back_is_rewritten() {
+        val probes = TinyHttpServer { TinyHttpServer.Response(code = 204, reason = "No Content") }
+        try {
+            NightbellTestSupport.resetApp(
+                GlobalSettings(
+                    motionIntensity = 0f,
+                    masterAlertsEnabled = true,
+                    defaultAlert = AlertPolicy(),
+                    confirmOutagesEnabled = true,
+                    latencyReferenceUrl = probes.url("/generate_204"),
+                ),
+            )
+            val tomorrow = System.currentTimeMillis() + 24 * HOUR
+            runBlocking {
+                graph.store.updateReach { ReachEvidence(referenceAnsweredAt = tomorrow, networkProvenAt = tomorrow) }
+                graph.engine.runAllDue(force = true)
+            }
+            val reach = runBlocking { graph.store.currentSnapshot().reach }
+            assertTrue("today's answer replaces tomorrow's, got $reach", reach.referenceAnsweredAt < tomorrow)
+            assertTrue("and so does today's proof, got $reach", reach.networkProvenAt < tomorrow)
+        } finally {
+            probes.close()
+        }
+    }
+
+    private fun seedPing(referenceUrl: String) {
+        NightbellTestSupport.resetApp(
+            GlobalSettings(
+                motionIntensity = 0f,
+                masterAlertsEnabled = true,
+                defaultAlert = AlertPolicy(),
+                confirmOutagesEnabled = true,
+                latencyReferenceUrl = referenceUrl,
+            ),
+        )
+        runBlocking {
+            graph.store.upsert(
+                Monitor(
+                    id = "ping",
+                    name = "Flight ping",
+                    kind = MonitorKind.PING,
+                    // .invalid never resolves, which is what every name does on a
+                    // network that carries nothing.
+                    network = NetworkWatch(host = "mydomain.invalid"),
+                    timeoutSeconds = 5,
+                    useGlobalAlerts = true,
+                ),
+            )
+        }
+    }
+
+    private fun darkSince(at: Long) {
+        runBlocking {
+            graph.store.updateReference { emptyList() }
+            graph.store.updateReach { ReachEvidence(referenceAnsweredAt = at - 3 * 60_000, networkProvenAt = at) }
+        }
+    }
+
+    private fun runPing() = runBlocking { graph.engine.run("ping") }
+
+    private fun pingRuntime() = runBlocking { graph.store.currentSnapshot().runtimes["ping"] }
+
+    private fun pinged(): Boolean = notifications.activeNotifications.any {
+        it.notification.extras.getCharSequence("android.title")?.contains("Flight ping") == true
+    }
+
+    private companion object {
+        const val HOUR = 60L * 60 * 1000
     }
 }

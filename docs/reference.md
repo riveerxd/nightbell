@@ -599,6 +599,21 @@ doublings, so a network that blocks it settles at one wasted request every 48
 minutes rather than one per pass. Absent readings are not an error: the baseline
 maths treats them as "judge the latency raw".
 
+The same endpoint settles **Check my connection first**. A check that reached
+nothing (DNS, connect, timeout, no reply) is only dropped as a local outage when
+the endpoint fails the same way *and* has earned the right to speak for the
+network. It earns that by answering within the last six hours, or, past that, by
+having answered within six hours of the last moment anything public reached the
+network, for at most two days after that moment (`Reachability.stillVouches`).
+The second rule is issue 23: a phone in flight mode with the network still up on
+paper stayed quiet for six hours and then paged "Can't resolve", because the
+readings had aged out. A network that blocks only the endpoint keeps passing its
+other monitors, and each pass moves that moment forward, so it still pages after
+six hours as before. Monitors on loopback, private, link local or `.local` style
+hosts do not count as passes for this, because a router answers when the uplink
+behind it is dead. The two times live in the store as `reach`, written at most
+once per five minutes.
+
 
 ### How background checks actually run
 

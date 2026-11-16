@@ -620,8 +620,12 @@ android {
         // 3.25.0 says "Updated to" on the first launch of a new version, with the
         // release notes one tap away, and keeps a What's new button for the
         // installed version in Settings, About. Both open nightbell.app/changelog.
-        versionCode = 54
-        versionName = "3.25.0"
+        //
+        // 3.25.1 keeps Check my connection first trusting the reference past six
+        // hours of silence, up to two days, so flight mode with Wi-Fi on no longer
+        // pages "Can't resolve" after six hours (issue 23).
+        versionCode = 55
+        versionName = "3.25.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
