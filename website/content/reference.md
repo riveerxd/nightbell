@@ -942,9 +942,15 @@ Settings, Alerts, on by default, covers the rest. When a check fails without
 reaching anything (no DNS answer, no route, no reply), the reference endpoint is
 asked as well, with a 4 s timeout. The failure is dropped, with no health change,
 no sample and no alert, only if the reference is unreachable too **and** has
-answered this phone within the last 6 hours. A reference that a network blocks,
-or that was mistyped, never earns the right to vouch for anything, so it cannot
-silence a real outage. The switch is greyed out while **Discount my connection**
+answered this phone within the last 6 hours. Past that, it keeps the right while
+it had answered within 6 hours of the last moment anything public reached the
+phone, for at most two days after that moment, so a phone left offline for
+longer than 6 hours stays quiet (since 3.25.1). A network that blocks only the
+reference keeps passing the other monitors, which moves that moment forward, so
+it still pages as before. Monitors on a local address such as a router or NAS do
+not count, because they answer while the uplink behind them is dead. A reference
+that a network blocks, or that was mistyped, never earns the right to vouch for
+anything, so it cannot silence a real outage. The switch is greyed out while **Discount my connection**
 is off, since it needs the same endpoint.
 
 ### How background checks actually run

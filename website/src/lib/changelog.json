@@ -1,5 +1,19 @@
 [
  {
+  "version": "3.25.1",
+  "tag": "v3.25.1",
+  "name": "Nightbell",
+  "date": "2026-11-16",
+  "title": "",
+  "body": "With Check my connection first on, a long stretch in flight mode or out of signal no longer ends in a false alarm. Before, once the phone had been cut off for more than six hours, Nightbell forgot that the connection check had ever worked. The next check that couldn't resolve its domain was then paged as a real outage. Now it keeps trusting the connection check for up to two days after the network last worked.",
+  "url": "https://github.com/riveerxd/nightbell/releases/tag/v3.25.1",
+  "apk": {
+   "name": "Nightbell-3.25.1-release.apk",
+   "url": "https://github.com/riveerxd/nightbell/releases/download/v3.25.1/Nightbell-3.25.1-release.apk",
+   "bytes": 2929660
+  }
+ },
+ {
   "version": "3.25.0",
   "tag": "v3.25.0",
   "name": "Nightbell",
